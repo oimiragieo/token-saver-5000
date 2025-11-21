@@ -93,9 +93,7 @@ class TestBasicFunctionality:
 
         assert graph is not None
         assert graph.number_of_nodes() > 0
-        assert (
-            graph.number_of_edges() >= 0
-        )  # May have no edges if chunks too dissimilar
+        assert graph.number_of_edges() >= 0  # May have no edges if chunks too dissimilar
 
         print(f"\n✅ Semantic Graph:")
         print(f"   Nodes: {graph.number_of_nodes()}")
@@ -157,9 +155,7 @@ class TestBasicFunctionality:
         )
 
         # Search without specifying file_id (searches all)
-        results = self.compressor.search_semantic(
-            query="quantum error correction", top_k=5
-        )
+        results = self.compressor.search_semantic(query="quantum error correction", top_k=5)
 
         assert len(results) > 0
 

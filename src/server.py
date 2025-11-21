@@ -379,9 +379,7 @@ Next steps:
             result_lines.append(f"   Importance: {node.importance:.3f}")
             result_lines.append(f"   Summary: {summary}\n")
 
-        result_lines.append(
-            f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content"
-        )
+        result_lines.append(f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content")
 
         return "\n".join(result_lines)
 
@@ -393,9 +391,7 @@ Next steps:
 
         logger.info(f"Checking blind spots for response about {file_id}")
 
-        report = self.blind_spot_detector.analyze_response(
-            ai_response, file_id, retrieved_nodes
-        )
+        report = self.blind_spot_detector.analyze_response(ai_response, file_id, retrieved_nodes)
 
         result = self.blind_spot_detector.format_report(report)
 
@@ -414,18 +410,14 @@ Next steps:
 
         logger.info(f"Checking for hallucination in response about {file_id}")
 
-        is_hallucinating, warnings = self.halo_detector.detect_hallucination(
-            ai_response, file_id
-        )
+        is_hallucinating, warnings = self.halo_detector.detect_hallucination(ai_response, file_id)
 
         if is_hallucinating:
             result = "🚨 HALLUCINATION ALERT 🚨\n\n"
             result += "The response may contain fabricated information:\n"
             for warning in warnings:
                 result += f"  • {warning}\n"
-            result += (
-                "\nRecommendation: Re-examine source material and regenerate response."
-            )
+            result += "\nRecommendation: Re-examine source material and regenerate response."
         else:
             result = "✅ Response appears grounded in source material.\n"
             result += "No hallucination detected."
@@ -467,9 +459,7 @@ Files: {', '.join(stats['files'])}
     async def run(self):
         """Run the MCP server"""
         logger.info("🚀 Starting Semantic Modulator MCP Server")
-        logger.info(
-            "   Combining Semantic Communication + Fidelity-Preserving Encoding"
-        )
+        logger.info("   Combining Semantic Communication + Fidelity-Preserving Encoding")
         logger.info("   Model: all-MiniLM-L6-v2 (local)")
         logger.info("   Mode: Adaptive Semantic Fidelity\n")
 

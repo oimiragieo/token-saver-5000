@@ -19,7 +19,7 @@ Get up and running with Semantic Modulator in 5 minutes!
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/token-saver-5000.git
+git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
 
 # Install dependencies
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/token-saver-5000.git
+git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
 
 # Install with uv
@@ -383,7 +383,7 @@ See [SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) for implementation detai
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/token-saver-5000/issues)
+- **Issues:** [GitHub Issues](https://github.com/oimiragieo/token-saver-5000/issues)
 - **Documentation:** [README.md](README.md)
 - **Examples:** [examples/](examples/)
 

@@ -178,9 +178,7 @@ class TestTokenSavings:
 
     def setup_method(self):
         """Initialize compressor for each test"""
-        self.compressor = SemanticCompressor(
-            similarity_threshold=0.75, skeleton_ratio=0.2
-        )
+        self.compressor = SemanticCompressor(similarity_threshold=0.75, skeleton_ratio=0.2)
 
     def test_small_document_savings(self):
         """Test token savings on small document (~100 tokens)"""
@@ -219,9 +217,7 @@ class TestTokenSavings:
         result = self.compressor.ingest_file(LARGE_DOCUMENT, "large_doc")
 
         # Large docs should achieve 15-20x compression
-        assert (
-            result.compression_ratio >= 10.0
-        ), "Should achieve at least 10x compression"
+        assert result.compression_ratio >= 10.0, "Should achieve at least 10x compression"
         savings_percent = (1 - 1 / result.compression_ratio) * 100
 
         print(f"\n📊 Large Document Results:")
@@ -272,9 +268,7 @@ class TestTokenSavings:
 
         # Retrieve only top 20% at RAW fidelity
         top_nodes = all_nodes[: max(1, len(all_nodes) // 5)]
-        selective_content = self.compressor.modulate_region(
-            top_nodes, FidelityLevel.RAW
-        )
+        selective_content = self.compressor.modulate_region(top_nodes, FidelityLevel.RAW)
         selective_tokens = self.compressor._count_tokens(selective_content)
 
         progressive_total = skeleton_tokens + selective_tokens
@@ -287,9 +281,7 @@ class TestTokenSavings:
         print(f"   Progressive total: {progressive_total} tokens")
         print(f"   Progressive savings: {progressive_savings:.1f}%")
 
-        assert (
-            progressive_savings >= 70
-        ), "Progressive retrieval should save at least 70%"
+        assert progressive_savings >= 70, "Progressive retrieval should save at least 70%"
 
     def test_semantic_search_efficiency(self):
         """Test that semantic search reduces retrieval token usage"""
@@ -315,9 +307,7 @@ class TestTokenSavings:
         print(f"   Search (top 3): {search_tokens} tokens")
         print(f"   Search savings: {search_savings:.1f}%")
 
-        assert (
-            search_savings >= 50
-        ), "Semantic search should reduce tokens by at least 50%"
+        assert search_savings >= 50, "Semantic search should reduce tokens by at least 50%"
 
 
 class TestSCARTokenSavings:
@@ -383,9 +373,7 @@ class TestSCARTokenSavings:
         print(f"\n📊 SCAR Alignment Search Comparison:")
         print(f"   Query: '{query}'")
         print(f"\n   Baseline top result: {baseline_results[0]}")
-        print(
-            f"   SCAR top result: {scar_results[0][0]} (score: {scar_results[0][1]:.3f})"
-        )
+        print(f"   SCAR top result: {scar_results[0][0]} (score: {scar_results[0][1]:.3f})")
 
         # Verify we got results
         assert len(baseline_results) == 5
@@ -444,15 +432,11 @@ class TestEndToEndSavings:
         relevant_nodes = compressor.search_semantic(query, "qa_doc", top_k=3)
 
         # Step 3: System retrieves relevant sections at STRUCTURE level first
-        structure_content = compressor.modulate_region(
-            relevant_nodes, FidelityLevel.STRUCTURE
-        )
+        structure_content = compressor.modulate_region(relevant_nodes, FidelityLevel.STRUCTURE)
         total_tokens_used += compressor._count_tokens(structure_content)
 
         # Step 4: User asks for more detail on one section
-        detailed_content = compressor.modulate_region(
-            [relevant_nodes[0]], FidelityLevel.RAW
-        )
+        detailed_content = compressor.modulate_region([relevant_nodes[0]], FidelityLevel.RAW)
         total_tokens_used += compressor._count_tokens(detailed_content)
 
         # Calculate savings vs reading full document
@@ -463,12 +447,8 @@ class TestEndToEndSavings:
         print(f"   Full document: {full_doc_tokens} tokens")
         print(f"   Step 1 (skeleton): {compressor._count_tokens(skeleton)} tokens")
         print(f"   Step 2 (search): 0 tokens (computation only)")
-        print(
-            f"   Step 3 (structure): {compressor._count_tokens(structure_content)} tokens"
-        )
-        print(
-            f"   Step 4 (detailed): {compressor._count_tokens(detailed_content)} tokens"
-        )
+        print(f"   Step 3 (structure): {compressor._count_tokens(structure_content)} tokens")
+        print(f"   Step 4 (detailed): {compressor._count_tokens(detailed_content)} tokens")
         print(f"   Total workflow: {total_tokens_used} tokens")
         print(f"   Workflow savings: {workflow_savings:.1f}%")
 

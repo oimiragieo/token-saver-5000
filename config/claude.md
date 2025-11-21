@@ -5,7 +5,7 @@ Configuration templates for integrating the Semantic Modulator MCP server with A
 
 ## Files
 
-### 1. **`claude_desktop_config.example.json`** (268 bytes)
+### 1. **`claude_desktop_config.example.json`**
 **Purpose**: Example configuration for Claude Desktop MCP integration
 
 **File Content**:

@@ -349,16 +349,12 @@ Confusion matrix shows good performance across all classes.
     print(f"\n📊 Token Usage Comparison:")
     print(f"   Full project (text): {total_text_tokens:,} tokens")
     print(f"   Full project (images): ~{int(total_image_tokens):,} tokens (base64)")
-    print(
-        f"   Total if sent raw: ~{int(total_text_tokens + total_image_tokens):,} tokens"
-    )
+    print(f"   Total if sent raw: ~{int(total_text_tokens + total_image_tokens):,} tokens")
     print(f"\n   With compression:")
     print(f"     Summary only: {summary_tokens:,} tokens")
     print(f"     Typical workflow: ~{int(workflow_tokens):,} tokens")
     print(f"\n   Savings:")
-    print(
-        f"     Summary: {(1 - summary_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%"
-    )
+    print(f"     Summary: {(1 - summary_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%")
     print(
         f"     Workflow: {(1 - workflow_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%"
     )

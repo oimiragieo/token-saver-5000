@@ -210,9 +210,7 @@ class MultiModalCompressor:
         print(f"  Created {len(nodes)} nodes:")
         print(f"    Text: {sum(1 for n in nodes if n.modality == ModalityType.TEXT)}")
         print(f"    Code: {sum(1 for n in nodes if n.modality == ModalityType.CODE)}")
-        print(
-            f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}"
-        )
+        print(f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}")
 
         # Build cross-modal semantic graph
         print(f"  Building cross-modal graph...")
@@ -379,20 +377,12 @@ class MultiModalCompressor:
 
         # Get nodes by modality
         project_nodes = [
-            (nid, self.nodes[nid])
-            for nid in graph.nodes()
-            if nid.startswith(project_id)
+            (nid, self.nodes[nid]) for nid in graph.nodes() if nid.startswith(project_id)
         ]
 
-        text_nodes = [
-            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.TEXT
-        ]
-        code_nodes = [
-            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.CODE
-        ]
-        image_nodes = [
-            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.IMAGE
-        ]
+        text_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.TEXT]
+        code_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.CODE]
+        image_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.IMAGE]
 
         lines = []
         lines.append(f"=== MULTI-MODAL PROJECT: {project_id} ===")
@@ -405,9 +395,7 @@ class MultiModalCompressor:
             text_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in text_nodes[:3]:
                 preview = node.content[:80].replace("\n", " ")
-                lines.append(
-                    f"  {nid}: {preview}... (importance: {node.importance:.3f})"
-                )
+                lines.append(f"  {nid}: {preview}... (importance: {node.importance:.3f})")
             if len(text_nodes) > 3:
                 lines.append(f"  ... and {len(text_nodes) - 3} more")
             lines.append("")
