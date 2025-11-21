@@ -6,12 +6,10 @@ Tests the dialogue memory management system described in:
 """
 
 import pytest
-import numpy as np
 from src.afm import (
     FocusManager,
     AFMConfig,
     Message,
-    FidelityLevel,
     ImportanceLevel,
     TokenCounter,
     HeuristicCompressor,
@@ -49,11 +47,7 @@ class TestMessage:
 
     def test_message_creation(self):
         """Test creating a message"""
-        msg = Message(
-            role="user",
-            content="Hello world",
-            turn_index=0
-        )
+        msg = Message(role="user", content="Hello world", turn_index=0)
         assert msg.role == "user"
         assert msg.content == "Hello world"
         assert msg.turn_index == 0
@@ -61,12 +55,7 @@ class TestMessage:
 
     def test_message_with_custom_id(self):
         """Test message with custom ID"""
-        msg = Message(
-            role="assistant",
-            content="Hi there",
-            turn_index=1,
-            message_id="custom_id"
-        )
+        msg = Message(role="assistant", content="Hi there", turn_index=1, message_id="custom_id")
         assert msg.message_id == "custom_id"
 
 
@@ -79,7 +68,7 @@ class TestImportanceClassifier:
         msg = Message(
             role="user",
             content="I have a severe peanut allergy that is life-threatening.",
-            turn_index=0
+            turn_index=0,
         )
         importance = classifier.classify(msg)
         assert importance == ImportanceLevel.CRITICAL
@@ -87,22 +76,14 @@ class TestImportanceClassifier:
     def test_relevant_classification(self):
         """Test relevant classification"""
         classifier = ImportanceClassifier(use_llm=False)
-        msg = Message(
-            role="user",
-            content="I prefer vegetarian food.",
-            turn_index=0
-        )
+        msg = Message(role="user", content="I prefer vegetarian food.", turn_index=0)
         importance = classifier.classify(msg)
         assert importance == ImportanceLevel.RELEVANT
 
     def test_trivial_classification(self):
         """Test trivial classification"""
         classifier = ImportanceClassifier(use_llm=False)
-        msg = Message(
-            role="user",
-            content="ok",
-            turn_index=0
-        )
+        msg = Message(role="user", content="ok", turn_index=0)
         importance = classifier.classify(msg)
         assert importance == ImportanceLevel.TRIVIAL
 
@@ -214,10 +195,7 @@ class TestFocusManager:
         manager.add_message("user", "Hello")
         manager.add_message("assistant", "Hi there!")
 
-        context, stats = manager.build_context(
-            current_query="How are you?",
-            budget_tokens=100
-        )
+        context, stats = manager.build_context(current_query="How are you?", budget_tokens=100)
 
         assert len(context) > 0
         assert stats.total_messages == 2
@@ -231,9 +209,7 @@ class TestFocusManager:
         manager.add_message("user", "Hello")
 
         context, stats = manager.build_context(
-            current_query="Hi",
-            budget_tokens=100,
-            system_preamble="You are a helpful assistant."
+            current_query="Hi", budget_tokens=100, system_preamble="You are a helpful assistant."
         )
 
         # First message should be system preamble
@@ -257,14 +233,14 @@ class TestFocusManager:
 
         # Ask about food
         context, stats = manager.build_context(
-            current_query="What street food should I try?",
-            budget_tokens=500
+            current_query="What street food should I try?", budget_tokens=500
         )
 
         # Check that allergy is in context
         context_text = " ".join(content for _, content in context)
-        assert "allergy" in context_text.lower() or "peanut" in context_text.lower(), \
-            "Allergy information should be retained in context"
+        assert (
+            "allergy" in context_text.lower() or "peanut" in context_text.lower()
+        ), "Allergy information should be retained in context"
 
     def test_allergy_retention_medium_conversation(self):
         """
@@ -277,7 +253,9 @@ class TestFocusManager:
         # Add early allergy
         manager.add_message("user", "I'm planning a trip to Thailand")
         manager.add_message("user", "I have a severe peanut allergy that is life-threatening")
-        manager.add_message("assistant", "Noted, I'll keep that in mind for all food recommendations")
+        manager.add_message(
+            "assistant", "Noted, I'll keep that in mind for all food recommendations"
+        )
 
         # Add many intervening messages (like in the paper)
         intervening = [
@@ -296,14 +274,14 @@ class TestFocusManager:
 
         # Now ask about food (should trigger allergy memory)
         context, stats = manager.build_context(
-            current_query="What Thai street food should I try?",
-            budget_tokens=800
+            current_query="What Thai street food should I try?", budget_tokens=800
         )
 
         # Check that allergy is still in context despite distance
         context_text = " ".join(content for _, content in context)
-        assert "allergy" in context_text.lower() or "peanut" in context_text.lower(), \
-            "Allergy information should be retained even with intervening turns"
+        assert (
+            "allergy" in context_text.lower() or "peanut" in context_text.lower()
+        ), "Allergy information should be retained even with intervening turns"
 
     def test_token_budget_respected(self):
         """Test that token budget is strictly respected"""
@@ -318,8 +296,7 @@ class TestFocusManager:
         # Build context with tight budget
         budget = 200
         context, stats = manager.build_context(
-            current_query="Tell me everything",
-            budget_tokens=budget
+            current_query="Tell me everything", budget_tokens=budget
         )
 
         # Should respect budget
@@ -336,10 +313,7 @@ class TestFocusManager:
         manager.add_message("assistant", "Second message")
         manager.add_message("user", "Third message")
 
-        context, stats = manager.build_context(
-            current_query="Fourth message",
-            budget_tokens=500
-        )
+        context, stats = manager.build_context(current_query="Fourth message", budget_tokens=500)
 
         # Extract turn indices from context
         # Messages should appear in chronological order
@@ -371,8 +345,7 @@ class TestFocusManager:
 
         # Query about food (similar to middle message)
         context, stats = manager.build_context(
-            current_query="What food should I eat?",
-            budget_tokens=1000
+            current_query="What food should I eat?", budget_tokens=1000
         )
 
         # Should have different fidelity representations
@@ -387,17 +360,16 @@ class TestFocusManager:
         for i in range(10):
             manager.add_message(
                 "user",
-                f"This is a longer message number {i} with quite a bit of content that needs to be compressed"
+                f"This is a longer message number {i} with quite a bit of content that needs to be compressed",
             )
             manager.add_message(
                 "assistant",
-                f"This is a detailed response to message {i} with lots of information that takes up space"
+                f"This is a detailed response to message {i} with lots of information that takes up space",
             )
 
         # Build with moderate budget
         context, stats = manager.build_context(
-            current_query="Tell me about everything we discussed",
-            budget_tokens=500
+            current_query="Tell me about everything we discussed", budget_tokens=500
         )
 
         # Should achieve some compression
@@ -488,9 +460,7 @@ class TestScoring:
 
         # Score should still be 1.0 for critical
         score = manager._calculate_relevance_score(
-            critical_msg,
-            query_embedding,
-            manager.turn_counter
+            critical_msg, query_embedding, manager.turn_counter
         )
 
         assert score == 1.0, "Critical messages should always get score of 1.0"

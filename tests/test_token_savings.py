@@ -7,7 +7,6 @@ maintaining semantic accuracy.
 Run with: pytest tests/test_token_savings.py -v
 """
 
-import pytest
 import sys
 import os
 
@@ -15,7 +14,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.scar_compressor import SCAREnhancedCompressor
-import numpy as np
 
 
 # Sample test documents of varying sizes
@@ -188,7 +186,7 @@ class TestTokenSavings:
         assert result.compression_ratio > 2.0, "Should achieve at least 2x compression"
         savings_percent = (1 - 1 / result.compression_ratio) * 100
 
-        print(f"\n📊 Small Document Results:")
+        print("\n📊 Small Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
         print(f"   Skeleton tokens: {result.skeleton_tokens}")
         print(f"   Compression: {result.compression_ratio:.1f}x")
@@ -204,7 +202,7 @@ class TestTokenSavings:
         assert result.compression_ratio >= 5.0, "Should achieve at least 5x compression"
         savings_percent = (1 - 1 / result.compression_ratio) * 100
 
-        print(f"\n📊 Medium Document Results:")
+        print("\n📊 Medium Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
         print(f"   Skeleton tokens: {result.skeleton_tokens}")
         print(f"   Compression: {result.compression_ratio:.1f}x")
@@ -220,7 +218,7 @@ class TestTokenSavings:
         assert result.compression_ratio >= 10.0, "Should achieve at least 10x compression"
         savings_percent = (1 - 1 / result.compression_ratio) * 100
 
-        print(f"\n📊 Large Document Results:")
+        print("\n📊 Large Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
         print(f"   Skeleton tokens: {result.skeleton_tokens}")
         print(f"   Compression: {result.compression_ratio:.1f}x")
@@ -243,7 +241,7 @@ class TestTokenSavings:
             tokens = self.compressor._count_tokens(content)
             fidelity_results[fidelity.name] = tokens
 
-        print(f"\n📊 Fidelity Level Token Usage (3 nodes):")
+        print("\n📊 Fidelity Level Token Usage (3 nodes):")
         for fidelity_name, tokens in fidelity_results.items():
             print(f"   {fidelity_name}: {tokens} tokens")
 
@@ -255,7 +253,7 @@ class TestTokenSavings:
 
     def test_progressive_retrieval_savings(self):
         """Test token savings with progressive retrieval strategy"""
-        result = self.compressor.ingest_file(LARGE_DOCUMENT, "progressive_doc")
+        self.compressor.ingest_file(LARGE_DOCUMENT, "progressive_doc")
 
         # Strategy 1: Retrieve everything at once (baseline)
         all_nodes = list(self.compressor.chunks.keys())
@@ -274,7 +272,7 @@ class TestTokenSavings:
         progressive_total = skeleton_tokens + selective_tokens
         progressive_savings = (1 - progressive_total / full_tokens) * 100
 
-        print(f"\n📊 Progressive Retrieval Analysis:")
+        print("\n📊 Progressive Retrieval Analysis:")
         print(f"   Full retrieval: {full_tokens} tokens")
         print(f"   Skeleton only: {skeleton_tokens} tokens")
         print(f"   Selective retrieval (top 20%): {selective_tokens} tokens")
@@ -302,7 +300,7 @@ class TestTokenSavings:
 
         search_savings = (1 - search_tokens / baseline_tokens) * 100
 
-        print(f"\n📊 Semantic Search Efficiency:")
+        print("\n📊 Semantic Search Efficiency:")
         print(f"   Baseline (all nodes): {baseline_tokens} tokens")
         print(f"   Search (top 3): {search_tokens} tokens")
         print(f"   Search savings: {search_savings:.1f}%")
@@ -343,7 +341,7 @@ class TestSCARTokenSavings:
         compression_ratio = original_size / compressed_size
         memory_savings = (1 - compressed_size / original_size) * 100
 
-        print(f"\n📊 SCAR Embedding Compression:")
+        print("\n📊 SCAR Embedding Compression:")
         print(f"   Original dimension: {original_embeddings.shape[1]}")
         print(f"   Compressed dimension: {compressed_embeddings.shape[1]}")
         print(f"   Original memory: {original_size:,} bytes")
@@ -370,7 +368,7 @@ class TestSCARTokenSavings:
             query=query, file_id="alignment_test", top_k=5, alignment_weight=0.5
         )
 
-        print(f"\n📊 SCAR Alignment Search Comparison:")
+        print("\n📊 SCAR Alignment Search Comparison:")
         print(f"   Query: '{query}'")
         print(f"\n   Baseline top result: {baseline_results[0]}")
         print(f"   SCAR top result: {scar_results[0][0]} (score: {scar_results[0][1]:.3f})")
@@ -405,7 +403,7 @@ class TestEndToEndSavings:
         overall_compression = total_original_tokens / total_skeleton_tokens
         overall_savings = (1 - 1 / overall_compression) * 100
 
-        print(f"\n📊 Multi-Document Analysis:")
+        print("\n📊 Multi-Document Analysis:")
         print(f"   Total documents: {len(docs)}")
         print(f"   Total original tokens: {total_original_tokens:,}")
         print(f"   Total skeleton tokens: {total_skeleton_tokens:,}")
@@ -443,10 +441,10 @@ class TestEndToEndSavings:
         full_doc_tokens = result.total_tokens
         workflow_savings = (1 - total_tokens_used / full_doc_tokens) * 100
 
-        print(f"\n📊 Realistic Q&A Workflow:")
+        print("\n📊 Realistic Q&A Workflow:")
         print(f"   Full document: {full_doc_tokens} tokens")
         print(f"   Step 1 (skeleton): {compressor._count_tokens(skeleton)} tokens")
-        print(f"   Step 2 (search): 0 tokens (computation only)")
+        print("   Step 2 (search): 0 tokens (computation only)")
         print(f"   Step 3 (structure): {compressor._count_tokens(structure_content)} tokens")
         print(f"   Step 4 (detailed): {compressor._count_tokens(detailed_content)} tokens")
         print(f"   Total workflow: {total_tokens_used} tokens")

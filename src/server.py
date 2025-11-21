@@ -14,20 +14,18 @@ Architecture:
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     Tool,
     TextContent,
-    EmbeddedResource,
 )
 
 from .semantic_compressor import SemanticCompressor, FidelityLevel
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
 from .adaptive_rate_allocator import (
-    AdaptiveRateAllocator,
     ContextWindowAdapter,
     MultiLevelSemanticEncoder,
 )
@@ -659,7 +657,7 @@ Next steps:
 
         # If critical blind spots found, auto-suggest retrieval
         if report.auto_inject:
-            result += f"\n\n🔧 AUTO-CORRECTION SUGGESTED:\n"
+            result += "\n\n🔧 AUTO-CORRECTION SUGGESTED:\n"
             result += f"Retrieve these nodes: {report.auto_inject}\n"
             result += f"Command: modulate_region({report.auto_inject}, 'RAW')"
 
@@ -762,7 +760,9 @@ Files: {', '.join(stats['files'])}
         self._validate_file_id(file_id, must_exist=True)
         self._validate_token_count(available_tokens)
 
-        logger.info(f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available")
+        logger.info(
+            f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available"
+        )
 
         try:
             result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
@@ -781,9 +781,7 @@ Files: {', '.join(stats['files'])}
 
         # Validation
         if role not in ["user", "assistant", "system"]:
-            raise ValueError(
-                f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'"
-            )
+            raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
 
         logger.info(f"AFM: Adding {role} message (turn {self.focus_manager.turn_counter})")
 
@@ -814,19 +812,15 @@ Dialogue Stats:
 
         # Validation
         if budget_tokens <= 0:
-            raise ValueError(
-                f"budget_tokens must be positive, got {budget_tokens}"
-            )
+            raise ValueError(f"budget_tokens must be positive, got {budget_tokens}")
 
-        logger.info(
-            f"AFM: Building context for query (budget: {budget_tokens} tokens)"
-        )
+        logger.info(f"AFM: Building context for query (budget: {budget_tokens} tokens)")
 
         # Build context
         context, stats = self.focus_manager.build_context(
             current_query=current_query,
             budget_tokens=budget_tokens,
-            system_preamble=system_preamble
+            system_preamble=system_preamble,
         )
 
         # Format context for display
@@ -834,6 +828,8 @@ Dialogue Stats:
         for i, (role, content) in enumerate(context):
             preview = content[:150] + "..." if len(content) > 150 else content
             context_display.append(f"  [{i+1}] {role}: {preview}")
+
+        context_display_text = "\n".join(context_display)
 
         result = f"""
 🧠 AFM Context Built Successfully
@@ -851,7 +847,7 @@ Query: {current_query[:100]}{'...' if len(current_query) > 100 else ''}
   Budget utilization:       {stats.compression_ratio:.1%}
 
 📝 Context Messages ({len(context)} total):
-{'\\n'.join(context_display)}
+{context_display_text}
 
 ✅ Ready to send to LLM
 💡 AFM achieved ~{100 * (1 - stats.compression_ratio):.0f}% token savings vs naive replay

@@ -1,7 +1,7 @@
 # tests/ Directory
 
 ## Overview
-Comprehensive test suite validating token reduction (80-95% target), functional correctness, blind spot detection, multi-modal support, and SCAR implementation.
+Comprehensive test suite validating token reduction (80-95% document compression, 48-66% dialogue compression), functional correctness, blind spot detection, multi-modal support, SCAR implementation, and AFM dialogue memory.
 
 ## Files
 
@@ -191,6 +191,117 @@ Overall: 80-95% token reduction achieved ✅
 
 ---
 
+### 4. **`test_afm.py`** (14,300 bytes) ✨ NEW!
+**Purpose**: Test Adaptive Focus Memory (AFM) dialogue compression
+
+**Test Coverage**:
+
+#### TestAFMBasic
+- `test_focus_manager_initialization`: FocusManager setup
+  - Validates configuration parameters
+  - Checks embedder initialization
+
+- `test_add_message`: Message addition to history
+  - Importance classification (CRITICAL/RELEVANT/TRIVIAL)
+  - Embedding generation
+  - Turn indexing
+
+- `test_importance_classification`: Heuristic classifier
+  - CRITICAL: Allergies, medical info, safety warnings
+  - RELEVANT: Preferences, constraints, contextual info
+  - TRIVIAL: Greetings, acknowledgments, small talk
+
+#### TestAFMContextBuilding
+- `test_build_context_simple`: Basic context window building
+  - Validates message selection
+  - Checks fidelity assignment
+  - Verifies token budget adherence
+
+- `test_recency_weighting`: Temporal decay validation
+  - Recent messages get higher scores
+  - Half-life decay function: w = 0.5^(k/h)
+  - Older messages compressed more aggressively
+
+- `test_fidelity_assignment`: 3-level fidelity
+  - FULL: Original message text (100% tokens)
+  - COMPRESSED: 1-2 sentence summary (~33% tokens)
+  - PLACEHOLDER: Brief stub (~10 tokens)
+
+#### TestAFMSafetyContext
+- `test_allergy_retention_short_conversation`: 3-turn conversation
+  - Validates allergy info retained at FULL fidelity
+  - Checks context coherence
+
+- `test_allergy_retention_medium_conversation`: 9-turn conversation
+  - **Critical Test**: Allergy mentioned turn 1, query at turn 9
+  - Validates CRITICAL context never lost
+  - Checks token savings while preserving safety
+
+- `test_medical_info_preservation`: Medical context retention
+  - Validates sensitive info always FULL fidelity
+  - Tests across long conversations (15+ turns)
+
+#### TestAFMTokenSavings
+- `test_token_savings_vs_full`: Baseline comparison
+  - Baseline: All messages at FULL fidelity
+  - AFM: Adaptive fidelity based on relevance + recency
+  - Target: 48-66% token reduction
+
+- `test_token_savings_scaling`: Scales with conversation length
+  - Longer conversations → Higher savings
+  - Short (3 turns): ~20-30% savings
+  - Medium (9 turns): ~40-50% savings
+  - Long (20+ turns): ~60-70% savings
+
+#### TestAFMScoring
+- `test_scoring_function`: Exact paper implementation
+  - CRITICAL: score = 1.0 (force-elevated)
+  - RELEVANT: score = sim × (0.5 + 0.5 × w_recency)
+  - TRIVIAL: score = sim × (0.25 × w_recency)
+
+- `test_packing_algorithm`: Chronological packing
+  - Messages packed in chronological order
+  - Budget managed via running token count
+  - Fidelity downgraded if budget tight
+
+**Sample Conversation** (from paper benchmark):
+```python
+# Turn 1: User mentions peanut allergy (CRITICAL)
+"I have a severe peanut allergy that is life-threatening"
+
+# Turns 2-8: Various topics (travel, hotels, activities)
+"What's the best time to visit Thailand?"
+"Can you recommend hotels in Bangkok?"
+...
+
+# Turn 9: Query related to allergy
+"What Thai street food should I try?"
+
+# Expected: Allergy context retained at FULL fidelity!
+```
+
+**Run Command**:
+```bash
+pytest tests/test_afm.py -v
+python tests/test_afm.py  # Detailed output with scenarios
+```
+
+**Expected Output**:
+```
+test_allergy_retention_short_conversation PASSED
+test_allergy_retention_medium_conversation PASSED
+test_token_savings PASSED
+✅ All AFM tests passed!
+
+Key Results:
+- Critical context retained across 9+ turns
+- ~48-66% token reduction
+- Recency weighting working as expected
+- Safety context never lost
+```
+
+---
+
 ## Running All Tests
 
 ### Quick Test
@@ -237,12 +348,20 @@ pip install pytest pytest-asyncio pytest-cov
 ✅ Blind spot detection catches critical misses
 ✅ SCAR enhancements improve quality
 
-### Token Savings Tests
+### Token Savings Tests (Document Compression)
 ✅ Small docs: > 60% reduction
 ✅ Medium docs: > 70% reduction
 ✅ Large docs: > 80% reduction
 ✅ Overall target: 80-95% reduction
 ✅ SSIM scores: > 0.7 (good quality)
+
+### AFM Tests (Dialogue Compression) ✨ NEW!
+✅ Critical context (allergies) retained across 9+ turns
+✅ Short conversations (3 turns): ~20-30% savings
+✅ Medium conversations (9 turns): ~40-50% savings
+✅ Long conversations (20+ turns): ~60-70% savings
+✅ Overall target: 48-66% reduction
+✅ Safety context never lost
 
 ---
 

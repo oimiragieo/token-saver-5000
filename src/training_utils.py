@@ -189,7 +189,7 @@ class SCARTrainer:
             Training history with losses
         """
         print(f"\n{'='*70}")
-        print(f"Training Learnable Semantic Compressor (SCAR Section 3.2)")
+        print("Training Learnable Semantic Compressor (SCAR Section 3.2)")
         print(f"{'='*70}")
 
         train_loader = DataLoader(
@@ -293,7 +293,7 @@ class SCARTrainer:
             Training history
         """
         print(f"\n{'='*70}")
-        print(f"Training Semantic Alignment Module (SCAR Section 3.3)")
+        print("Training Semantic Alignment Module (SCAR Section 3.3)")
         print(f"{'='*70}")
 
         train_loader = DataLoader(
@@ -454,7 +454,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     # Import SCAR modules
-    from scar_compressor import LearnableSemanticCompressor, SemanticAlignmentModule
+    from scar_compressor import LearnableSemanticCompressor
 
     # Training config
     config = TrainingConfig(
@@ -465,7 +465,7 @@ if __name__ == "__main__":
         alignment_weight=0.5,
     )
 
-    print(f"\nTraining Configuration:")
+    print("\nTraining Configuration:")
     print(f"  Batch size: {config.batch_size}")
     print(f"  Learning rate: {config.learning_rate}")
     print(f"  Epochs: {config.num_epochs}")
@@ -480,7 +480,7 @@ if __name__ == "__main__":
     train_dataset = SemanticCompressionDataset(train_embeddings)
     eval_dataset = SemanticCompressionDataset(eval_embeddings)
 
-    print(f"\nDataset sizes:")
+    print("\nDataset sizes:")
     print(f"  Train: {len(train_dataset)}")
     print(f"  Eval: {len(eval_dataset)}")
 
@@ -495,7 +495,7 @@ if __name__ == "__main__":
     history = trainer.train_compressor(train_dataset, eval_dataset)
 
     print(f"\n{'='*70}")
-    print(f"Training Complete!")
+    print("Training Complete!")
     print(f"{'='*70}")
     print(f"Final train loss: {history['train_losses'][-1]:.6f}")
     print(f"Final eval loss: {history['eval_losses'][-1]:.6f}")

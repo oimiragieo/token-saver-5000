@@ -14,10 +14,9 @@ This prevents hallucination by ensuring fidelity preservation.
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-from .semantic_compressor import SemanticCompressor, SemanticNode
+from .semantic_compressor import SemanticCompressor
 
 
 @dataclass
@@ -219,20 +218,20 @@ class BlindSpotDetector:
         lines.append("=" * 60)
         lines.append(f"\nAnalyzed Response: {report.response_analyzed}\n")
 
-        lines.append(f"📊 Summary:")
+        lines.append("📊 Summary:")
         lines.append(f"  • Total blind spots detected: {report.total_blind_spots}")
         lines.append(f"  • Critical blind spots: {report.critical_blind_spots}")
 
         if report.auto_inject:
             lines.append(f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n")
 
-        lines.append(f"\n💡 Recommendations:")
+        lines.append("\n💡 Recommendations:")
         for rec in report.recommendations:
             lines.append(rec)
 
         if report.auto_inject:
-            lines.append(f"\n🔧 Auto-Injection:")
-            lines.append(f"The following nodes should be retrieved immediately:")
+            lines.append("\n🔧 Auto-Injection:")
+            lines.append("The following nodes should be retrieved immediately:")
             for node_id in report.auto_inject:
                 lines.append(f"  • {node_id}")
             lines.append(f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')")
@@ -256,7 +255,7 @@ class BlindSpotDetector:
         report = self.analyze_response(ai_response, file_id, retrieved_node_ids)
 
         if report.critical_blind_spots > 0:
-            correction = f"⚠️  WARNING: Response may be incomplete or inaccurate!\n"
+            correction = "⚠️  WARNING: Response may be incomplete or inaccurate!\n"
             correction += f"Found {report.critical_blind_spots} critical blind spots.\n"
             correction += f"Recommend retrieving: {report.auto_inject}\n"
             return False, correction

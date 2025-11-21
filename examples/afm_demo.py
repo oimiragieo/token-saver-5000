@@ -18,14 +18,9 @@ import sys
 import os
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.afm import (
-    FocusManager,
-    AFMConfig,
-    FidelityLevel,
-    ImportanceLevel
-)
+from src.afm import FocusManager, AFMConfig
 
 
 def print_separator(title: str = ""):
@@ -84,31 +79,31 @@ def run_short_conversation_demo():
 
     manager.add_message(
         "assistant",
-        "That's wonderful! Thailand is an amazing destination. What would you like to know about planning your trip?"
+        "That's wonderful! Thailand is an amazing destination. What would you like to know about planning your trip?",
     )
     print_message(
         "assistant",
-        "That's wonderful! Thailand is an amazing destination. What would you like to know about planning your trip?"
+        "That's wonderful! Thailand is an amazing destination. What would you like to know about planning your trip?",
     )
 
     # Turn 2: Critical allergy declaration
     manager.add_message(
         "user",
-        "Before we get into details, I need to mention that I have a severe peanut allergy. It's life-threatening."
+        "Before we get into details, I need to mention that I have a severe peanut allergy. It's life-threatening.",
     )
     print_message(
         "user",
         "Before we get into details, I need to mention that I have a severe peanut allergy. It's life-threatening.",
-        prefix="⚠️  "
+        prefix="⚠️  ",
     )
 
     manager.add_message(
         "assistant",
-        "Thank you for letting me know about your severe peanut allergy. I'll make sure all my recommendations are safe for you. Thai cuisine does use peanuts frequently, so we'll need to be very careful."
+        "Thank you for letting me know about your severe peanut allergy. I'll make sure all my recommendations are safe for you. Thai cuisine does use peanuts frequently, so we'll need to be very careful.",
     )
     print_message(
         "assistant",
-        "Thank you for letting me know about your severe peanut allergy. I'll make sure all my recommendations are safe for you. Thai cuisine does use peanuts frequently, so we'll need to be very careful."
+        "Thank you for letting me know about your severe peanut allergy. I'll make sure all my recommendations are safe for you. Thai cuisine does use peanuts frequently, so we'll need to be very careful.",
     )
 
     # Turn 3: Food question (should trigger allergy memory)
@@ -120,7 +115,7 @@ def run_short_conversation_demo():
     context, stats = manager.build_context(
         current_query=current_query,
         budget_tokens=800,
-        system_preamble="You are a helpful travel assistant."
+        system_preamble="You are a helpful travel assistant.",
     )
 
     print_stats(stats)
@@ -133,7 +128,9 @@ def run_short_conversation_demo():
     print(f"{'─'*70}\n")
 
     # Check if allergy was retained
-    allergy_retained = any("allergy" in content.lower() or "peanut" in content.lower() for _, content in context)
+    allergy_retained = any(
+        "allergy" in content.lower() or "peanut" in content.lower() for _, content in context
+    )
     if allergy_retained:
         print("✅ SUCCESS: Allergy information RETAINED in context!")
     else:
@@ -170,33 +167,45 @@ def run_medium_conversation_demo():
     # Turn 2: Critical allergy (early)
     manager.add_message(
         "user",
-        "Before we start planning, you should know I have a severe peanut allergy. It's life-threatening and I need to be extremely careful."
+        "Before we start planning, you should know I have a severe peanut allergy. It's life-threatening and I need to be extremely careful.",
     )
     print_message(
         "user",
         "Before we start planning, you should know I have a severe peanut allergy. It's life-threatening and I need to be extremely careful.",
-        prefix="⚠️  "
+        prefix="⚠️  ",
     )
 
     manager.add_message(
         "assistant",
-        "Thank you for sharing that critical information about your severe peanut allergy. I will keep this in mind for all recommendations, especially regarding Thai cuisine which frequently uses peanuts."
+        "Thank you for sharing that critical information about your severe peanut allergy. I will keep this in mind for all recommendations, especially regarding Thai cuisine which frequently uses peanuts.",
     )
     print_message(
         "assistant",
-        "Thank you for sharing that critical information about your severe peanut allergy. I will keep this in mind for all recommendations, especially regarding Thai cuisine which frequently uses peanuts."
+        "Thank you for sharing that critical information about your severe peanut allergy. I will keep this in mind for all recommendations, especially regarding Thai cuisine which frequently uses peanuts.",
     )
 
     # Turn 3-8: Intervening topics (destinations, transport, activities, culture, Muay Thai, temples)
     intervening_topics = [
         ("user", "What are the best destinations in Thailand?"),
-        ("assistant", "Popular destinations include Bangkok (vibrant city), Chiang Mai (cultural hub), Phuket (beaches), and Krabi (islands). Each offers unique experiences."),
+        (
+            "assistant",
+            "Popular destinations include Bangkok (vibrant city), Chiang Mai (cultural hub), Phuket (beaches), and Krabi (islands). Each offers unique experiences.",
+        ),
         ("user", "How do I get around between cities?"),
-        ("assistant", "You can use domestic flights (fastest), trains (scenic), or buses (budget-friendly). Many travelers enjoy the overnight train from Bangkok to Chiang Mai."),
+        (
+            "assistant",
+            "You can use domestic flights (fastest), trains (scenic), or buses (budget-friendly). Many travelers enjoy the overnight train from Bangkok to Chiang Mai.",
+        ),
         ("user", "I'd love to try Muay Thai!"),
-        ("assistant", "Muay Thai is Thailand's national sport! You can watch matches at Lumpinee or Rajadamnern stadiums in Bangkok, or take classes at many gyms throughout the country."),
+        (
+            "assistant",
+            "Muay Thai is Thailand's national sport! You can watch matches at Lumpinee or Rajadamnern stadiums in Bangkok, or take classes at many gyms throughout the country.",
+        ),
         ("user", "What about temples? I want to see the cultural side."),
-        ("assistant", "Thailand has stunning temples! Must-sees include Wat Phra Kaew (Grand Palace), Wat Pho (Reclining Buddha), and Wat Arun in Bangkok. Remember to dress modestly."),
+        (
+            "assistant",
+            "Thailand has stunning temples! Must-sees include Wat Phra Kaew (Grand Palace), Wat Pho (Reclining Buddha), and Wat Arun in Bangkok. Remember to dress modestly.",
+        ),
     ]
 
     for role, content in intervening_topics:
@@ -212,7 +221,7 @@ def run_medium_conversation_demo():
     context, stats = manager.build_context(
         current_query=current_query,
         budget_tokens=800,
-        system_preamble="You are a helpful travel assistant specializing in Thailand."
+        system_preamble="You are a helpful travel assistant specializing in Thailand.",
     )
 
     print_stats(stats)
@@ -227,7 +236,9 @@ def run_medium_conversation_demo():
     print(f"{'─'*70}\n")
 
     # Check if allergy was retained
-    allergy_retained = any("allergy" in content.lower() or "peanut" in content.lower() for _, content in context)
+    allergy_retained = any(
+        "allergy" in content.lower() or "peanut" in content.lower() for _, content in context
+    )
     if allergy_retained:
         print("✅ SUCCESS: Allergy information RETAINED across 9 turns!")
         print("   AFM correctly identified and preserved safety-critical information.")
@@ -252,13 +263,25 @@ def run_token_savings_comparison():
         ("user", "I have a severe peanut allergy."),
         ("assistant", "Noted. I'll keep that in mind."),
         ("user", "What's the weather like in Thailand?"),
-        ("assistant", "Thailand has tropical weather, hot and humid year-round with a rainy season from June to October."),
+        (
+            "assistant",
+            "Thailand has tropical weather, hot and humid year-round with a rainy season from June to October.",
+        ),
         ("user", "Tell me about Bangkok."),
-        ("assistant", "Bangkok is Thailand's vibrant capital with temples, markets, and amazing food."),
+        (
+            "assistant",
+            "Bangkok is Thailand's vibrant capital with temples, markets, and amazing food.",
+        ),
         ("user", "What about Chiang Mai?"),
-        ("assistant", "Chiang Mai is a cultural hub in northern Thailand with temples, mountains, and a relaxed vibe."),
+        (
+            "assistant",
+            "Chiang Mai is a cultural hub in northern Thailand with temples, mountains, and a relaxed vibe.",
+        ),
         ("user", "Is public transport good?"),
-        ("assistant", "Yes! Bangkok has BTS Skytrain, MRT subway, and boats. Grab (like Uber) is also popular."),
+        (
+            "assistant",
+            "Yes! Bangkok has BTS Skytrain, MRT subway, and boats. Grab (like Uber) is also popular.",
+        ),
     ]
 
     for role, content in messages:
@@ -268,6 +291,7 @@ def run_token_savings_comparison():
 
     # Naive replay: All messages verbatim
     from src.afm import TokenCounter
+
     counter = TokenCounter()
 
     naive_context = [(role, content) for role, content in messages]

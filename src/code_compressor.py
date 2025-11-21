@@ -81,7 +81,7 @@ class CodeSemanticCompressor:
         # Try code-specific model, fallback to general model
         try:
             self.model = SentenceTransformer(model_name)
-        except Exception as e:
+        except Exception:
             print(f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2")
             self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -130,7 +130,7 @@ class CodeSemanticCompressor:
 
         try:
             tree = ast.parse(code)
-        except SyntaxError as e:
+        except SyntaxError:
             print(f"Warning: Syntax error in {file_id}, falling back to line-based chunking")
             return self._chunk_by_lines(code, file_id)
 
@@ -247,7 +247,7 @@ class CodeSemanticCompressor:
 
         for match in re.finditer(func_pattern, code, re.MULTILINE | re.DOTALL):
             func_name = match.group(1)
-            func_body = match.group(2)
+            match.group(2)
 
             # Extract docstring (JSDoc)
             jsdoc_pattern = r"/\*\*([^*]|\*(?!/))*\*/"
@@ -338,7 +338,7 @@ class CodeSemanticCompressor:
         print(f"  Created {len(chunks)} code chunks")
 
         # Generate embeddings
-        print(f"  Generating embeddings...")
+        print("  Generating embeddings...")
         chunk_texts = []
         for chunk in chunks:
             # Combine code + docstring for better semantic representation
@@ -350,7 +350,7 @@ class CodeSemanticCompressor:
         embeddings = self.model.encode(chunk_texts, show_progress_bar=False)
 
         # Build dependency graph
-        print(f"  Building dependency graph...")
+        print("  Building dependency graph...")
         graph = nx.DiGraph()  # Directed graph for code dependencies
 
         for i, chunk in enumerate(chunks):
@@ -398,7 +398,7 @@ class CodeSemanticCompressor:
                     )
 
         # Calculate importance using PageRank
-        print(f"  Calculating importance scores...")
+        print("  Calculating importance scores...")
         if len(graph.nodes) > 0:
             # Convert to undirected for PageRank
             undirected = graph.to_undirected()
@@ -568,10 +568,10 @@ class CodeSemanticCompressor:
         output.append(f"Lines: {chunk.start_line}-{chunk.end_line}")
 
         if chunk.docstring:
-            output.append(f"\nDocumentation:")
+            output.append("\nDocumentation:")
             output.append(chunk.docstring)
 
-        output.append(f"\nCode:")
+        output.append("\nCode:")
         output.append(chunk.code)
 
         if chunk.dependencies:

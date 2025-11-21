@@ -246,7 +246,7 @@ def main():
         hallucinated_response, "quantum_paper"
     )
 
-    print(f"\nTesting potentially hallucinated response...")
+    print("\nTesting potentially hallucinated response...")
     if is_hallucinating:
         print("🚨 HALLUCINATION DETECTED:")
         for warning in warnings:

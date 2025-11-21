@@ -4,20 +4,31 @@
 
 **Name**: Token Saver 5000 (Semantic Modulator)
 **Type**: Python-based MCP (Model Context Protocol) Server
-**Purpose**: Adaptive Semantic Fidelity Compression for AI interactions
-**Token Reduction**: 80-95% compression while preserving semantic structure
-**Version**: 0.1.0
+**Purpose**: Dual-mode compression for AI interactions (Documents + Dialogue)
+**Token Reduction**:
+- Document Compression: 80-95% reduction
+- Dialogue Compression (AFM): 48-66% reduction
+**Version**: 0.2.0
 
 ## What This Project Does
 
-The Semantic Modulator is a research-backed compression system that reduces token usage in AI conversations by 80-95% while maintaining semantic accuracy. Instead of sending full documents, it:
+Token Saver 5000 provides **two complementary compression systems** through a unified MCP server with 13 tools:
 
+### 1. Document Compression (SemanticCompressor)
+Compresses long documents by 80-95% while maintaining semantic accuracy:
 1. **Ingests** documents into semantic graphs (embeddings + structure)
 2. **Compresses** via importance-ranked skeletons (PageRank)
 3. **Retrieves** content adaptively at 5 fidelity levels (ABSTRACT → RAW)
 4. **Validates** responses for blind spots to prevent hallucination
 
-**Key Innovation**: Adapts three academic papers (JSCCM, FPQE, SCAR) to text/code compression.
+### 2. Dialogue Compression (AFM - Adaptive Focus Memory)
+Manages multi-turn conversations with adaptive fidelity:
+1. **Classifies** message importance (CRITICAL/RELEVANT/TRIVIAL)
+2. **Compresses** older messages based on relevance + recency
+3. **Applies** 3 fidelity levels (FULL/COMPRESSED/PLACEHOLDER)
+4. **Preserves** critical context (allergies, safety info) at full fidelity
+
+**Key Innovation**: Adapts four academic papers (JSCCM, FPQE, SCAR, AFM) to text/code compression and dialogue management.
 
 ---
 
@@ -43,16 +54,33 @@ python -m src.server
 
 ```
 token-saver-5000/
-├── src/                    # Core source code (10 modules, 157K lines)
-├── tests/                  # Test suite (3 files, comprehensive coverage)
-├── examples/               # Usage examples (4 runnable demos)
+├── src/                    # Core source code (10 modules, ~180K total)
+│   ├── semantic_compressor.py     # Document compression (base)
+│   ├── code_compressor.py         # Code-specific compression
+│   ├── multimodal_compressor.py   # Text + Code + Images
+│   ├── scar_compressor.py         # Learnable compression (SCAR)
+│   ├── afm.py                     # Dialogue memory (AFM) ✨ NEW!
+│   ├── adaptive_rate_allocator.py # JSCCM-inspired adaptation
+│   ├── blind_spot_detector.py     # Hallucination prevention
+│   ├── semantic_ssim.py           # Quality metrics (SSIM)
+│   ├── training_utils.py          # Training utilities
+│   └── server.py                  # MCP server (13 tools)
+├── tests/                  # Test suite (4 files, comprehensive coverage)
+│   ├── test_functional.py         # Feature tests
+│   ├── test_token_savings.py      # Benchmark tests
+│   ├── test_afm.py                # AFM dialogue tests ✨ NEW!
+│   └── ...
+├── examples/               # Usage examples (5 runnable demos)
+│   ├── example_usage.py           # Basic document compression
+│   ├── afm_demo.py                # Dialogue memory demo ✨ NEW!
+│   ├── scar_demo.py               # SCAR enhancements
+│   ├── code_compression_example.py
+│   └── multimodal_example.py
 ├── docs/                   # Research paper analyses (4 papers)
 ├── config/                 # MCP server configuration
 ├── README.md               # Main project documentation
-├── ARCHITECTURE.md         # System architecture deep dive
 ├── GETTING_STARTED.md      # Step-by-step setup guide
-├── QUICKSTART.md           # Fast-track installation
-├── RESEARCH_SYNTHESIS.md   # Academic foundations
+├── QUICKSTART.md           # Fast-track installation (5 min)
 └── claude.md               # This file (codebase index)
 ```
 
@@ -87,30 +115,39 @@ token-saver-5000/
    - Semantic alignment guidance for better search
    - Adaptive fidelity based on alignment scores
 
-5. **`adaptive_rate_allocator.py`** (14.8 KB) - JSCCM-inspired adaptation
+5. **`afm.py`** (30.5 KB) - Adaptive Focus Memory (AFM paper) ✨ NEW!
+   - Dialogue memory management with adaptive fidelity
+   - 3 fidelity levels: FULL, COMPRESSED, PLACEHOLDER
+   - Importance classification: CRITICAL, RELEVANT, TRIVIAL
+   - Recency weighting with half-life decay
+   - ~48-66% token savings while preserving safety context
+   - Based on research paper arXiv:2511.12712v1
+
+6. **`adaptive_rate_allocator.py`** (14.8 KB) - JSCCM-inspired adaptation
    - Dynamic skeleton ratio based on complexity
    - Context window adapter (like channel SNR)
    - Multi-level encoding (main + auxiliary branches)
 
-6. **`blind_spot_detector.py`** (11.6 KB) - Hallucination prevention
+7. **`blind_spot_detector.py`** (11.6 KB) - Hallucination prevention
    - Detects when AI misses critical context
    - Urgency = similarity × importance
    - Auto-injection of critical nodes
 
-7. **`semantic_ssim.py`** (13.7 KB) - Quality metrics (FPQE paper)
+8. **`semantic_ssim.py`** (13.7 KB) - Quality metrics (FPQE paper)
    - Semantic SSIM (Structural Similarity Index for graphs)
    - Measures: luminance, contrast, structure preservation
    - Validates compression quality (target: SSIM > 0.7)
 
-8. **`training_utils.py`** (17.6 KB) - Training utilities
+9. **`training_utils.py`** (17.6 KB) - Training utilities
    - Train learnable SCAR modules
    - Synthetic data generation
    - Model checkpointing
 
-9. **`server.py`** (19.7 KB) - MCP server implementation
-   - Exposes 8+ tools via MCP protocol
+10. **`server.py`** (25.0 KB) - MCP server implementation
+   - Exposes 13 tools via MCP protocol (9 document + 4 dialogue)
    - stdio transport
    - Context window monitoring
+   - Integrates both SemanticCompressor and AFM
 
 **Tech Stack**:
 - sentence-transformers (embeddings)
@@ -331,6 +368,31 @@ Text → Chunks → Embeddings → Similarity Graph → PageRank → Skeleton
 
 **Implementation**: `LearnableSemanticCompressor`, `SemanticAlignmentModule`
 
+### AFM (Adaptive Focus Memory) ✨ NEW!
+**Key Idea**: Dialogue memory with adaptive fidelity based on relevance + recency
+
+**Paper**: arXiv:2511.12712v1 (November 2024)
+
+**Our Adaptation**:
+- 3 fidelity levels (FULL, COMPRESSED, PLACEHOLDER)
+- Importance classification (CRITICAL/RELEVANT/TRIVIAL)
+- Recency weighting: w = 0.5^(k/h) where k=turns since message, h=half_life
+- Scoring function (from paper):
+  - CRITICAL → score = 1.0 (force-elevated)
+  - RELEVANT → score = sim × (0.5 + 0.5 × w_recency)
+  - TRIVIAL → score = sim × (0.25 × w_recency)
+- ~48-66% token reduction while preserving safety context
+
+**Implementation**: `FocusManager`, `HeuristicImportanceClassifier`, `HeuristicCompressor`
+
+**Key Difference from Document Compression**:
+- Documents: Static importance (PageRank)
+- Dialogue: Dynamic importance (relevance + recency)
+- Documents: 5 fidelity levels
+- Dialogue: 3 fidelity levels
+- Documents: No temporal component
+- Dialogue: Recency decay with half-life
+
 ---
 
 ## Performance Characteristics
@@ -536,32 +598,67 @@ black >= 23.0.0                   # Code formatting
 
 When running as MCP server, these tools are available:
 
-### All Implemented Tools (9 tools total)
+### All Implemented Tools (13 tools total)
 
-**Core Compression & Retrieval**:
-1. **`ingest_context`** - Ingest document into semantic graph
-2. **`read_skeleton`** - Get compressed skeleton view (80-95% reduction)
-3. **`modulate_region`** - Retrieve sections at chosen fidelity
+**Document Compression & Retrieval (9 tools)**:
 
-**Search & Discovery**:
-4. **`search_semantic`** - Semantic search across documents
+1. **`ingest_context`** 📄 - Ingest document into semantic graph
+   - Compresses documents 80-95%
+   - Creates PageRank-weighted skeleton
 
-**Quality & Validation**:
-5. **`check_blind_spots`** 🔍 - Detect missed context in AI response (blind spot detection)
-6. **`detect_hallucination`** 🛡️ - Validate response is grounded in source material
+2. **`read_skeleton`** 📋 - Get compressed skeleton view
+   - Shows top 20% most important nodes
+   - Hides details for progressive retrieval
 
-**Analytics**:
-7. **`get_stats`** - Document statistics
+3. **`modulate_region`** 🎚️ - Retrieve sections at chosen fidelity
+   - 5 levels: ABSTRACT, OUTLINE, STRUCTURE, DETAILED, RAW
+   - Adaptive detail based on context window
 
-**JSCCM-Inspired Adaptive Features** ✨ NEW!:
-8. **`adapt_to_context_window`** 🔧 - Dynamically adjust compression based on context window availability
-   - Uses learned rate allocator to determine optimal skeleton ratio
-   - Inspired by JSCCM's channel adaptation strategy
+4. **`search_semantic`** 🔍 - Semantic search across documents
+   - Embedding-based similarity search
+   - Cross-document search support
 
-9. **`multilevel_encode`** 📊 - Multi-level encoding with priority branches
-   - Main branch (15%, always included) + Auxiliary (25%, if space) + Detail (remaining)
-   - Progressively adds levels based on available tokens
-   - Inspired by JSCCM's parallel encoder architecture
+5. **`check_blind_spots`** 🛡️ - Detect missed context in AI response
+   - Compares AI response to document
+   - Auto-suggests critical missed nodes
+
+6. **`detect_hallucination`** ⚠️ - Validate response is grounded in source
+   - Verifies AI statements match document
+   - Flags ungrounded claims
+
+7. **`get_stats`** 📊 - Document statistics
+   - Token counts, compression ratios
+   - SSIM quality scores
+
+8. **`adapt_to_context_window`** 🔧 - Dynamically adjust compression
+   - JSCCM-inspired channel adaptation
+   - Optimal skeleton ratio for available tokens
+
+9. **`multilevel_encode`** 📦 - Multi-level encoding with priority
+   - Main + Auxiliary + Detail branches
+   - Progressive detail based on budget
+
+**Dialogue Memory (AFM) Tools (4 tools)** ✨ NEW!:
+
+10. **`afm_add_message`** 💬 - Add message to dialogue history
+    - Auto-classifies importance (CRITICAL/RELEVANT/TRIVIAL)
+    - Assigns fidelity level
+    - Returns message statistics
+
+11. **`afm_build_context`** 🧠 - Build context window with adaptive fidelity
+    - Applies 3 fidelity levels (FULL/COMPRESSED/PLACEHOLDER)
+    - Recency weighting (favors recent messages)
+    - Critical context always FULL fidelity
+    - ~48-66% token savings
+
+12. **`afm_get_stats`** 📈 - View dialogue statistics
+    - Message counts by importance
+    - Fidelity distribution
+    - Token usage summary
+
+13. **`afm_clear_history`** 🗑️ - Clear dialogue history
+    - Resets AFM state
+    - Prepares for new conversation
 
 ---
 
@@ -597,6 +694,35 @@ detector.analyze_response(ai_answer, "doc_id", retrieved_nodes)
 # Detects if AI missed critical content
 ```
 
+### 5. Manage Multi-Turn Conversations (AFM) ✨ NEW!
+```python
+from src.afm import FocusManager
+
+# Initialize AFM
+manager = FocusManager()
+
+# Add messages to history
+manager.add_message("user", "I have a severe peanut allergy")
+manager.add_message("assistant", "I'll remember that for any food recommendations")
+# ... several more turns ...
+manager.add_message("user", "What Thai street food should I try?")
+
+# Build context with adaptive fidelity
+context, stats = manager.build_context(
+    current_query="What Thai street food should I try?",
+    budget_tokens=2000
+)
+
+# Critical allergy info retained at FULL fidelity!
+# ~48-66% token savings overall
+```
+
+**Use Cases**:
+- Customer support (retain user preferences, history)
+- Planning sessions (preserve decisions, constraints)
+- Medical consultations (critical info never compressed)
+- Long conversations (exceed context windows)
+
 ---
 
 ## Design Principles
@@ -604,9 +730,10 @@ detector.analyze_response(ai_answer, "doc_id", retrieved_nodes)
 1. **Local-first**: No external API calls, runs entirely local
 2. **Fidelity preservation**: SSIM-based quality validation
 3. **Adaptive**: Adjusts to context window availability
-4. **Research-backed**: Implements 3 peer-reviewed papers
+4. **Research-backed**: Implements 4 peer-reviewed papers
 5. **Self-correcting**: Blind spot detection prevents hallucination
 6. **Modular**: Each compressor can be used independently
+7. **Safety-first**: Critical context (AFM) never compressed
 
 ---
 
@@ -642,6 +769,12 @@ If you use this work, please cite the foundational papers:
 @article{scar2024,
   title={Semantic Context Matters: Improving Conditioning for Autoregressive Models},
   journal={arXiv preprint arXiv:2511.14063v1},
+  year={2024}
+}
+
+@article{afm2024,
+  title={Adaptive Focus Memory for Language Models},
+  journal={arXiv preprint arXiv:2511.12712v1},
   year={2024}
 }
 ```

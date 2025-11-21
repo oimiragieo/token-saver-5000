@@ -33,6 +33,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # Try to import sentence_transformers, fall back to hash-based embedder
 try:
     from sentence_transformers import SentenceTransformer
+
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
@@ -51,6 +52,7 @@ class FidelityLevel(enum.Enum):
     """
     Three fidelity levels as described in the AFM paper (Section 3.3)
     """
+
     FULL = "full"  # Include message verbatim
     COMPRESSED = "compressed"  # Include compressed summary
     PLACEHOLDER = "placeholder"  # Include short stub only
@@ -61,6 +63,7 @@ class ImportanceLevel(enum.Enum):
     Importance classification levels (Section 3.2)
     Used by LLM-based classifier or heuristics
     """
+
     CRITICAL = "critical"  # Safety-critical, force-elevated score
     RELEVANT = "relevant"  # Semantically relevant
     TRIVIAL = "trivial"  # Low importance
@@ -76,6 +79,7 @@ class Message:
     """
     Represents a single dialogue turn with metadata
     """
+
     role: str  # "user", "assistant", "system"
     content: str
     turn_index: int  # Position in dialogue (0-indexed)
@@ -104,9 +108,10 @@ class AFMConfig:
     """
     Configuration for Adaptive Focus Memory
     """
+
     # Scoring thresholds (Section 3.3)
     tau_high: float = 0.45  # Threshold for FULL fidelity
-    tau_mid: float = 0.25   # Threshold for COMPRESSED fidelity
+    tau_mid: float = 0.25  # Threshold for COMPRESSED fidelity
 
     # Recency weighting (Section 3.2)
     half_life: int = 12  # Turns until weight decays to 50%
@@ -130,6 +135,7 @@ class PackingStats:
     """
     Statistics from context packing
     """
+
     total_messages: int
     full_count: int
     compressed_count: int
@@ -213,15 +219,15 @@ class HeuristicCompressor(Compressor):
         """
         # Split into sentences (simple heuristic)
         sentences = []
-        for chunk in content.split('. '):
+        for chunk in content.split(". "):
             chunk = chunk.strip()
             if chunk:
-                if not chunk.endswith('.'):
-                    chunk += '.'
+                if not chunk.endswith("."):
+                    chunk += "."
                 sentences.append(chunk)
 
         if not sentences:
-            return content[:target_tokens * 4]  # Fallback: char truncation
+            return content[: target_tokens * 4]  # Fallback: char truncation
 
         # Rank sentences
         scored_sentences = []
@@ -236,9 +242,22 @@ class HeuristicCompressor(Compressor):
             position_score = 1.0 - (i / len(sentences)) * 0.3
 
             # Simple keyword boost
-            keyword_boost = 1.2 if any(kw in sent.lower() for kw in [
-                'critical', 'important', 'allergy', 'severe', 'warning', 'must', 'never'
-            ]) else 1.0
+            keyword_boost = (
+                1.2
+                if any(
+                    kw in sent.lower()
+                    for kw in [
+                        "critical",
+                        "important",
+                        "allergy",
+                        "severe",
+                        "warning",
+                        "must",
+                        "never",
+                    ]
+                )
+                else 1.0
+            )
 
             score = length_score * position_score * keyword_boost
             scored_sentences.append((score, i, sent, tokens))
@@ -266,7 +285,7 @@ class HeuristicCompressor(Compressor):
             return first[:max_chars] + "..." if len(first) > max_chars else first
 
         # Join selected sentences
-        summary = ' '.join(sent for _, sent in selected)
+        summary = " ".join(sent for _, sent in selected)
 
         # Ensure we didn't exceed budget
         actual_tokens = self.token_counter.count(summary)
@@ -374,7 +393,9 @@ class ImportanceClassifier:
         self.use_llm = use_llm
         self.api_key = api_key
         if use_llm and not api_key:
-            logger.warning("LLM importance classification requested but no API key, using heuristic")
+            logger.warning(
+                "LLM importance classification requested but no API key, using heuristic"
+            )
             self.use_llm = False
 
     def classify(self, message: Message) -> ImportanceLevel:
@@ -396,16 +417,38 @@ class ImportanceClassifier:
 
         # Critical keywords (safety-sensitive)
         critical_keywords = [
-            'allergy', 'allergic', 'severe', 'life-threatening', 'critical',
-            'emergency', 'danger', 'fatal', 'deadly', 'poisonous', 'toxic',
-            'medical condition', 'cannot eat', 'cannot have', 'avoid',
-            'never', 'must not', 'forbidden'
+            "allergy",
+            "allergic",
+            "severe",
+            "life-threatening",
+            "critical",
+            "emergency",
+            "danger",
+            "fatal",
+            "deadly",
+            "poisonous",
+            "toxic",
+            "medical condition",
+            "cannot eat",
+            "cannot have",
+            "avoid",
+            "never",
+            "must not",
+            "forbidden",
         ]
 
         # Relevant keywords
         relevant_keywords = [
-            'important', 'prefer', 'like', 'dislike', 'want', 'need',
-            'requirement', 'constraint', 'limitation', 'restriction'
+            "important",
+            "prefer",
+            "like",
+            "dislike",
+            "want",
+            "need",
+            "requirement",
+            "constraint",
+            "limitation",
+            "restriction",
         ]
 
         # Check for critical keywords
@@ -475,17 +518,14 @@ class FocusManager:
         # Compressor
         if self.config.use_llm_compression and self.config.llm_api_key:
             self.compressor = LLMCompressor(
-                self.token_counter,
-                self.config.llm_api_key,
-                self.config.llm_model
+                self.token_counter, self.config.llm_api_key, self.config.llm_model
             )
         else:
             self.compressor = HeuristicCompressor(self.token_counter)
 
         # Importance classifier
         self.importance_classifier = ImportanceClassifier(
-            use_llm=self.config.use_llm_importance,
-            api_key=self.config.llm_api_key
+            use_llm=self.config.use_llm_importance, api_key=self.config.llm_api_key
         )
 
         # Dialogue history
@@ -510,7 +550,7 @@ class FocusManager:
             role=role,
             content=content,
             turn_index=self.turn_counter,
-            message_id=f"{role}_{self.turn_counter}"
+            message_id=f"{role}_{self.turn_counter}",
         )
 
         # Classify importance (done eagerly)
@@ -545,16 +585,15 @@ class FocusManager:
         weight = math.pow(0.5, k / h)
         return weight
 
-    def _calculate_similarity(self, msg_embedding: np.ndarray, query_embedding: np.ndarray) -> float:
+    def _calculate_similarity(
+        self, msg_embedding: np.ndarray, query_embedding: np.ndarray
+    ) -> float:
         """Calculate cosine similarity between embeddings"""
         sim = cosine_similarity([msg_embedding], [query_embedding])[0][0]
         return float(sim)
 
     def _calculate_relevance_score(
-        self,
-        message: Message,
-        query_embedding: np.ndarray,
-        current_turn: int
+        self, message: Message, query_embedding: np.ndarray, current_turn: int
     ) -> float:
         """
         Calculate relevance score for message
@@ -661,7 +700,7 @@ class FocusManager:
         self,
         messages_with_scores: List[Tuple[Message, float]],
         budget_tokens: int,
-        system_preamble: Optional[str] = None
+        system_preamble: Optional[str] = None,
     ) -> Tuple[List[Tuple[str, str]], PackingStats]:
         """
         Pack messages chronologically under token budget
@@ -742,7 +781,9 @@ class FocusManager:
             # If even placeholder doesn't fit, drop
             if not added:
                 dropped_count += 1
-                logger.debug(f"Dropped message {message.message_id} (no space even for placeholder)")
+                logger.debug(
+                    f"Dropped message {message.message_id} (no space even for placeholder)"
+                )
 
         # Calculate stats
         total_tokens_used = budget_tokens - budget_left
@@ -756,16 +797,13 @@ class FocusManager:
             dropped_count=dropped_count,
             total_tokens=total_tokens_used,
             budget_tokens=budget_tokens,
-            compression_ratio=compression_ratio
+            compression_ratio=compression_ratio,
         )
 
         return packed, stats
 
     def build_context(
-        self,
-        current_query: str,
-        budget_tokens: int,
-        system_preamble: Optional[str] = None
+        self, current_query: str, budget_tokens: int, system_preamble: Optional[str] = None
     ) -> Tuple[List[Tuple[str, str]], PackingStats]:
         """
         Build context for current query under token budget
@@ -808,11 +846,7 @@ class FocusManager:
             )
 
         # Pack messages under budget
-        context, stats = self._pack_messages(
-            messages_with_scores,
-            budget_tokens,
-            system_preamble
-        )
+        context, stats = self._pack_messages(messages_with_scores, budget_tokens, system_preamble)
 
         logger.info(
             f"Context built: {stats.total_messages} messages → "
@@ -836,8 +870,12 @@ class FocusManager:
             "total_messages": len(self.messages),
             "current_turn": self.turn_counter,
             "importance_breakdown": {
-                "critical": sum(1 for m in self.messages if m.importance == ImportanceLevel.CRITICAL),
-                "relevant": sum(1 for m in self.messages if m.importance == ImportanceLevel.RELEVANT),
+                "critical": sum(
+                    1 for m in self.messages if m.importance == ImportanceLevel.CRITICAL
+                ),
+                "relevant": sum(
+                    1 for m in self.messages if m.importance == ImportanceLevel.RELEVANT
+                ),
                 "trivial": sum(1 for m in self.messages if m.importance == ImportanceLevel.TRIVIAL),
-            }
+            },
         }

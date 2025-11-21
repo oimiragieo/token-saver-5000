@@ -17,7 +17,6 @@ from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 import numpy as np
 import networkx as nx
@@ -213,7 +212,7 @@ class MultiModalCompressor:
         print(f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}")
 
         # Build cross-modal semantic graph
-        print(f"  Building cross-modal graph...")
+        print("  Building cross-modal graph...")
         graph = nx.Graph()
 
         from sklearn.metrics.pairwise import cosine_similarity
@@ -237,7 +236,7 @@ class MultiModalCompressor:
                     )
 
         # Calculate importance
-        print(f"  Calculating importance...")
+        print("  Calculating importance...")
         if len(graph.nodes) > 0:
             pagerank = nx.pagerank(graph)
             for node_id, score in pagerank.items():
@@ -264,7 +263,7 @@ class MultiModalCompressor:
             "cross_modal_connections": edge_types,
         }
 
-        print(f"  ✅ Created unified graph:")
+        print("  ✅ Created unified graph:")
         print(f"     Nodes: {stats['total_nodes']}")
         print(f"     Edges: {stats['graph_edges']}")
         print(f"     Cross-modal connections: {edge_types}")
@@ -437,7 +436,7 @@ class MultiModalCompressor:
 
         if cross_modal:
             cross_modal.sort(key=lambda x: x[2], reverse=True)
-            lines.append(f"🔗 TOP CROSS-MODAL CONNECTIONS:")
+            lines.append("🔗 TOP CROSS-MODAL CONNECTIONS:")
             for u, v, weight in cross_modal[:5]:
                 u_mod = self.nodes[u].modality.value
                 v_mod = self.nodes[v].modality.value
@@ -510,7 +509,7 @@ def train_model(model, data_loader, epochs=10):
     )
 
     print(f"\nQuery: '{query}'")
-    print(f"Filter: Show only CODE")
+    print("Filter: Show only CODE")
     print("\nResults:")
     for node_id, score, modality in results:
         node = compressor.nodes[node_id]

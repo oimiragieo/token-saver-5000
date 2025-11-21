@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import networkx as nx
-from typing import List, Tuple, Dict
+from typing import Tuple, Dict
 
 
 class AdaptiveRateAllocator(nn.Module):
