@@ -263,6 +263,67 @@ class SemanticModulatorServer:
                         },
                     },
                 ),
+                Tool(
+                    name="adapt_to_context_window",
+                    description=(
+                        "🔧 ADAPTIVE CONTEXT ALLOCATION (JSCCM-inspired): "
+                        "Dynamically adjust compression based on available context window. "
+                        "Low availability (like low SNR in wireless) → More compression. "
+                        "High availability → Less compression, more detail. "
+                        "Uses learned rate allocator to determine optimal skeleton ratio. "
+                        "Inspired by JSCCM paper's channel adaptation strategy."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_id": {
+                                "type": "string",
+                                "description": "Document to generate adaptive skeleton for",
+                            },
+                            "available_tokens": {
+                                "type": "integer",
+                                "description": "How many tokens are currently available in context window",
+                            },
+                            "max_tokens": {
+                                "type": "integer",
+                                "description": "Maximum context window size (default: 100000)",
+                                "default": 100000,
+                            },
+                            "query_priority": {
+                                "type": "number",
+                                "description": "Query importance (0-1, default: 0.5)",
+                                "default": 0.5,
+                            },
+                        },
+                        "required": ["file_id", "available_tokens"],
+                    },
+                ),
+                Tool(
+                    name="multilevel_encode",
+                    description=(
+                        "📊 MULTI-LEVEL ENCODING (JSCCM-inspired): "
+                        "Generate skeleton with 3 priority levels: "
+                        "• Main branch (top 15%, always included) - critical concepts "
+                        "• Auxiliary branch (next 25%, include if space allows) - important details "
+                        "• Detail branch (remaining, only if plenty of space) - supplementary content. "
+                        "Progressively adds levels based on available context window. "
+                        "Inspired by JSCCM's parallel encoder architecture."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_id": {
+                                "type": "string",
+                                "description": "Document to encode",
+                            },
+                            "available_tokens": {
+                                "type": "integer",
+                                "description": "Available context window tokens",
+                            },
+                        },
+                        "required": ["file_id", "available_tokens"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -283,6 +344,10 @@ class SemanticModulatorServer:
                     result = self._handle_detect_hallucination(arguments)
                 elif name == "get_stats":
                     result = self._handle_get_stats(arguments)
+                elif name == "adapt_to_context_window":
+                    result = self._handle_adapt_to_context_window(arguments)
+                elif name == "multilevel_encode":
+                    result = self._handle_multilevel_encode(arguments)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -453,6 +518,37 @@ Total nodes: {stats['total_nodes']}
 
 Files: {', '.join(stats['files'])}
 """
+
+        return result
+
+    def _handle_adapt_to_context_window(self, args: Dict) -> str:
+        """Handle adapt_to_context_window tool call"""
+        file_id = args["file_id"]
+        available_tokens = args["available_tokens"]
+        max_tokens = args.get("max_tokens", 100000)
+        query_priority = args.get("query_priority", 0.5)
+
+        logger.info(
+            f"Adapting skeleton for {file_id}: {available_tokens}/{max_tokens} tokens available"
+        )
+
+        result = self.context_window_adapter.adapt_to_context_window(
+            file_id=file_id,
+            available_tokens=available_tokens,
+            max_tokens=max_tokens,
+            query_priority=query_priority,
+        )
+
+        return result
+
+    def _handle_multilevel_encode(self, args: Dict) -> str:
+        """Handle multilevel_encode tool call"""
+        file_id = args["file_id"]
+        available_tokens = args["available_tokens"]
+
+        logger.info(f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available")
+
+        result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
 
         return result
 

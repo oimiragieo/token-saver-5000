@@ -536,16 +536,32 @@ black >= 23.0.0                   # Code formatting
 
 When running as MCP server, these tools are available:
 
-**Note**: The following 7 tools are currently implemented in server.py. Additional tools (adapt_to_context_window, multilevel_encode) are planned.
+### All Implemented Tools (9 tools total)
 
+**Core Compression & Retrieval**:
 1. **`ingest_context`** - Ingest document into semantic graph
 2. **`read_skeleton`** - Get compressed skeleton view (80-95% reduction)
 3. **`modulate_region`** - Retrieve sections at chosen fidelity
+
+**Search & Discovery**:
 4. **`search_semantic`** - Semantic search across documents
-5. **`analyze_blind_spots`** - Detect missed context in AI response
-6. **`adapt_to_context_window`** - JSCCM-inspired context adaptation
-7. **`multilevel_encode`** - Multi-branch encoding
-8. **`get_stats`** - Document statistics
+
+**Quality & Validation**:
+5. **`check_blind_spots`** 🔍 - Detect missed context in AI response (blind spot detection)
+6. **`detect_hallucination`** 🛡️ - Validate response is grounded in source material
+
+**Analytics**:
+7. **`get_stats`** - Document statistics
+
+**JSCCM-Inspired Adaptive Features** ✨ NEW!:
+8. **`adapt_to_context_window`** 🔧 - Dynamically adjust compression based on context window availability
+   - Uses learned rate allocator to determine optimal skeleton ratio
+   - Inspired by JSCCM's channel adaptation strategy
+
+9. **`multilevel_encode`** 📊 - Multi-level encoding with priority branches
+   - Main branch (15%, always included) + Auxiliary (25%, if space) + Detail (remaining)
+   - Progressively adds levels based on available tokens
+   - Inspired by JSCCM's parallel encoder architecture
 
 ---
 
