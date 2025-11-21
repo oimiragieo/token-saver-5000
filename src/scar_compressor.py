@@ -21,6 +21,7 @@ from dataclasses import dataclass
 @dataclass
 class CompressionStats:
     """Statistics from SCAR compression"""
+
     original_dim: int
     compressed_dim: int
     compression_ratio: float
@@ -84,9 +85,7 @@ class LearnableSemanticCompressor(nn.Module):
         )
 
     def forward(
-        self,
-        embeddings: torch.Tensor,
-        return_reconstruction: bool = False
+        self, embeddings: torch.Tensor, return_reconstruction: bool = False
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Compress embeddings using parallel branches.
@@ -114,9 +113,7 @@ class LearnableSemanticCompressor(nn.Module):
         return compressed, None
 
     def compute_preservation_loss(
-        self,
-        original: torch.Tensor,
-        reconstructed: torch.Tensor
+        self, original: torch.Tensor, reconstructed: torch.Tensor
     ) -> torch.Tensor:
         """
         Semantic preservation loss from SCAR Equation 4:
@@ -183,7 +180,7 @@ class SemanticAlignmentModule(nn.Module):
         self,
         source_embedding: torch.Tensor,
         target_embedding: torch.Tensor,
-        use_projection: bool = True
+        use_projection: bool = True,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """
         Compute semantic alignment between source and target.
@@ -212,14 +209,12 @@ class SemanticAlignmentModule(nn.Module):
         with torch.no_grad():
             # Cosine similarity (before and after projection)
             cosine_sim_original = F.cosine_similarity(
-                source_embedding.unsqueeze(0),
-                target_embedding.unsqueeze(0)
+                source_embedding.unsqueeze(0), target_embedding.unsqueeze(0)
             ).item()
 
             if use_projection:
                 cosine_sim_projected = F.cosine_similarity(
-                    source_projected.unsqueeze(0),
-                    target_embedding.unsqueeze(0)
+                    source_projected.unsqueeze(0), target_embedding.unsqueeze(0)
                 ).item()
             else:
                 cosine_sim_projected = cosine_sim_original
@@ -228,10 +223,10 @@ class SemanticAlignmentModule(nn.Module):
             l2_distance = torch.norm(source_projected - target_embedding).item()
 
         metrics = {
-            'cosine_similarity_original': cosine_sim_original,
-            'cosine_similarity_projected': cosine_sim_projected,
-            'l2_distance': l2_distance,
-            'alignment_loss': alignment_loss.item(),
+            "cosine_similarity_original": cosine_sim_original,
+            "cosine_similarity_projected": cosine_sim_projected,
+            "l2_distance": l2_distance,
+            "alignment_loss": alignment_loss.item(),
         }
 
         return alignment_loss, metrics
@@ -240,7 +235,7 @@ class SemanticAlignmentModule(nn.Module):
         self,
         source_embeddings: np.ndarray,
         query_embedding: np.ndarray,
-        use_projection: bool = False
+        use_projection: bool = False,
     ) -> np.ndarray:
         """
         Compute alignment scores for multiple source nodes against a query.
@@ -315,12 +310,12 @@ class SCAREnhancedCompressor:
                 input_dim=embedding_dim,
                 compressed_dim=compressed_dim,
             )
-            print(f"📦 SCAR Learnable Compression: {embedding_dim}D → {compressed_dim}D ({compression_ratio}× compression)")
+            print(
+                f"📦 SCAR Learnable Compression: {embedding_dim}D → {compressed_dim}D ({compression_ratio}× compression)"
+            )
 
         if use_alignment_guidance:
-            self.alignment_module = SemanticAlignmentModule(
-                embedding_dim=embedding_dim
-            )
+            self.alignment_module = SemanticAlignmentModule(embedding_dim=embedding_dim)
             print(f"🎯 SCAR Semantic Alignment: Enabled")
 
     def compress_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
@@ -343,7 +338,7 @@ class SCAREnhancedCompressor:
         query: str,
         file_id: Optional[str] = None,
         top_k: int = 5,
-        alignment_weight: float = 0.5
+        alignment_weight: float = 0.5,
     ) -> List[Tuple[str, float]]:
         """
         Enhanced semantic search using SCAR's alignment guidance.
@@ -374,26 +369,23 @@ class SCAREnhancedCompressor:
 
             # Standard cosine similarity
             from sklearn.metrics.pairwise import cosine_similarity
-            cosine_sim = cosine_similarity(
-                [query_embedding],
-                [node.embedding]
-            )[0][0]
+
+            cosine_sim = cosine_similarity([query_embedding], [node.embedding])[0][0]
 
             # SCAR alignment score
             if self.use_alignment_guidance:
                 alignment_score = self.alignment_module.compute_alignment_score(
                     source_embeddings=node.embedding.reshape(1, -1),
                     query_embedding=query_embedding,
-                    use_projection=True
+                    use_projection=True,
                 )[0]
             else:
                 alignment_score = cosine_sim
 
             # Combine scores
             combined_score = (
-                (1 - alignment_weight) * cosine_sim +
-                alignment_weight * alignment_score
-            )
+                1 - alignment_weight
+            ) * cosine_sim + alignment_weight * alignment_score
 
             candidates.append((node_id, float(combined_score)))
 
@@ -403,11 +395,7 @@ class SCAREnhancedCompressor:
         return candidates[:top_k]
 
     def adaptive_modulate(
-        self,
-        query: str,
-        file_id: str,
-        top_k: int = 3,
-        alignment_threshold: float = 0.7
+        self, query: str, file_id: str, top_k: int = 3, alignment_threshold: float = 0.7
     ) -> str:
         """
         Adaptive modulation with SCAR-inspired fidelity selection.
@@ -432,7 +420,7 @@ class SCAREnhancedCompressor:
             query=query,
             file_id=file_id,
             top_k=top_k,
-            alignment_weight=0.5  # Balance between similarity and alignment
+            alignment_weight=0.5,  # Balance between similarity and alignment
         )
 
         # Adaptive fidelity selection
@@ -457,11 +445,12 @@ class SCAREnhancedCompressor:
 
             # Retrieve at determined fidelity
             content = self.base_compressor.modulate_region(
-                node_ids=[node_id],
-                fidelity_level=fidelity
+                node_ids=[node_id], fidelity_level=fidelity
             )
 
-            output_lines.append(f"{marker} Alignment Score: {score:.3f} → Fidelity: {fidelity.name}")
+            output_lines.append(
+                f"{marker} Alignment Score: {score:.3f} → Fidelity: {fidelity.name}"
+            )
             output_lines.append(content)
             output_lines.append("")
 
@@ -470,14 +459,14 @@ class SCAREnhancedCompressor:
     def get_compression_stats(self) -> Dict:
         """Get statistics about SCAR enhancements."""
         stats = {
-            'learnable_compression_enabled': self.use_learnable_compression,
-            'alignment_guidance_enabled': self.use_alignment_guidance,
+            "learnable_compression_enabled": self.use_learnable_compression,
+            "alignment_guidance_enabled": self.use_alignment_guidance,
         }
 
         if self.use_learnable_compression:
-            stats['compression_ratio'] = self.learnable_compressor.compression_ratio
-            stats['input_dim'] = self.learnable_compressor.input_dim
-            stats['compressed_dim'] = self.learnable_compressor.compressed_dim
+            stats["compression_ratio"] = self.learnable_compressor.compression_ratio
+            stats["input_dim"] = self.learnable_compressor.input_dim
+            stats["compressed_dim"] = self.learnable_compressor.compressed_dim
 
         return stats
 
@@ -489,7 +478,8 @@ if __name__ == "__main__":
     """
     import sys
     import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
     from src.semantic_compressor import SemanticCompressor
 
@@ -506,7 +496,7 @@ if __name__ == "__main__":
         base_compressor=base_compressor,
         use_learnable_compression=True,
         use_alignment_guidance=True,
-        compression_ratio=4.0  # 4× compression like SCAR paper
+        compression_ratio=4.0,  # 4× compression like SCAR paper
     )
 
     # Ingest sample document
@@ -537,10 +527,7 @@ if __name__ == "__main__":
 
     query = "What is the error threshold for surface codes?"
     results = scar.search_with_alignment(
-        query=query,
-        file_id="quantum_ec",
-        top_k=3,
-        alignment_weight=0.5
+        query=query, file_id="quantum_ec", top_k=3, alignment_weight=0.5
     )
 
     print(f"\nQuery: {query}")
@@ -555,10 +542,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     result = scar.adaptive_modulate(
-        query=query,
-        file_id="quantum_ec",
-        top_k=3,
-        alignment_threshold=0.7
+        query=query, file_id="quantum_ec", top_k=3, alignment_threshold=0.7
     )
     print(result)
 
@@ -570,7 +554,7 @@ if __name__ == "__main__":
     test_texts = [
         "Surface codes use stabilizer measurements",
         "The error threshold is approximately 1%",
-        "Overhead requires hundreds of qubits"
+        "Overhead requires hundreds of qubits",
     ]
     embeddings = base_compressor.model.encode(test_texts)
 

@@ -20,7 +20,7 @@ from src.semantic_compressor import SemanticCompressor
 # --- Configuration ---
 FILE_ID = "test_paper_quantum_v1"
 MAX_TOKENS = 128000  # GPT-4o Context Window
-DOC_SIZE = 45000     # A dense technical paper
+DOC_SIZE = 45000  # A dense technical paper
 
 
 class SemanticGraph:
@@ -28,6 +28,7 @@ class SemanticGraph:
     Wrapper around networkx.Graph to add utility methods
     for the simulation
     """
+
     def __init__(self):
         self.graph = nx.Graph()
         self._node_count = 0
@@ -35,9 +36,7 @@ class SemanticGraph:
     def add_node(self, node_id: str, importance: float, content_length: int):
         """Add a node with importance and content length"""
         self.graph.add_node(
-            node_id,
-            importance=importance,
-            content_length=content_length
+            node_id, importance=importance, content_length=content_length
         )
         self._node_count += 1
 
@@ -72,9 +71,11 @@ def generate_synthetic_document():
 
             # Occasionally connect to earlier nodes (cross-references)
             if i > 5 and random.random() > 0.7:
-                earlier_node = random.randint(0, i-2)
+                earlier_node = random.randint(0, i - 2)
                 similarity = np.random.uniform(0.6, 0.9)
-                graph.graph.add_edge(f"node_{earlier_node}", f"node_{i}", weight=similarity)
+                graph.graph.add_edge(
+                    f"node_{earlier_node}", f"node_{i}", weight=similarity
+                )
 
     return graph
 
@@ -98,18 +99,24 @@ def calculate_semantic_ssim(graph_nx, selected_nodes, all_nodes):
         return 0.0
 
     # Get node data
-    all_importance = [graph_nx.nodes[n].get('importance', 0.5) for n in all_nodes]
-    selected_importance = [graph_nx.nodes[n].get('importance', 0.5) for n in selected_nodes]
+    all_importance = [graph_nx.nodes[n].get("importance", 0.5) for n in all_nodes]
+    selected_importance = [
+        graph_nx.nodes[n].get("importance", 0.5) for n in selected_nodes
+    ]
 
     # Component 1: Luminance (mean importance)
     mean_all = np.mean(all_importance)
     mean_selected = np.mean(selected_importance)
-    luminance = (2 * mean_all * mean_selected + 0.01) / (mean_all**2 + mean_selected**2 + 0.01)
+    luminance = (2 * mean_all * mean_selected + 0.01) / (
+        mean_all**2 + mean_selected**2 + 0.01
+    )
 
     # Component 2: Contrast (variance in importance)
     std_all = np.std(all_importance)
     std_selected = np.std(selected_importance)
-    contrast = (2 * std_all * std_selected + 0.01) / (std_all**2 + std_selected**2 + 0.01)
+    contrast = (2 * std_all * std_selected + 0.01) / (
+        std_all**2 + std_selected**2 + 0.01
+    )
 
     # Component 3: Structure (graph connectivity preservation)
     # Count how many edges are preserved
@@ -125,7 +132,7 @@ def calculate_semantic_ssim(graph_nx, selected_nodes, all_nodes):
 
     # Combine components (like SSIM formula)
     # Standard weights: luminance=0.33, contrast=0.33, structure=0.34
-    ssim = (luminance ** 0.33) * (contrast ** 0.33) * (structure ** 0.34)
+    ssim = (luminance**0.33) * (contrast**0.33) * (structure**0.34)
 
     return min(ssim, 1.0)
 
@@ -143,8 +150,7 @@ def simulate_compression(graph, ratio, doc_size=DOC_SIZE):
 
     # Sort nodes by importance
     nodes_with_importance = [
-        (n, graph_nx.nodes[n].get('importance', 0.5))
-        for n in all_nodes
+        (n, graph_nx.nodes[n].get("importance", 0.5)) for n in all_nodes
     ]
     nodes_with_importance.sort(key=lambda x: x[1], reverse=True)
 
@@ -178,7 +184,7 @@ def run_channel_stress_test():
     # Calculate PageRank for importance
     pagerank = nx.pagerank(graph_nx)
     for node_id, score in pagerank.items():
-        graph_nx.nodes[node_id]['importance'] = score
+        graph_nx.nodes[node_id]["importance"] = score
 
     # Metric Tracking
     results = []
@@ -200,12 +206,13 @@ def run_channel_stress_test():
 
         # 1. Adaptive Allocator determines strategy
         import torch
+
         with torch.no_grad():
             ratio, diagnostics = allocator.forward(
                 graph=graph_nx,
                 available_context_tokens=available,
                 max_context_tokens=MAX_TOKENS,
-                query_priority=0.5
+                query_priority=0.5,
             )
 
         # 2. Simulate compression
@@ -228,28 +235,32 @@ def run_channel_stress_test():
             print("  ✅ SUCCESS: Fits in Context")
             status = "OK"
 
-        results.append({
-            'pressure': pressure,
-            'available': available,
-            'ratio': ratio,
-            'skeleton_tokens': skeleton_tokens,
-            'compression': compression_factor,
-            'ssim': ssim_score,
-            'complexity': diagnostics['complexity'],
-            'status': status
-        })
+        results.append(
+            {
+                "pressure": pressure,
+                "available": available,
+                "ratio": ratio,
+                "skeleton_tokens": skeleton_tokens,
+                "compression": compression_factor,
+                "ssim": ssim_score,
+                "complexity": diagnostics["complexity"],
+                "status": status,
+            }
+        )
 
     # Summary Analysis
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("📊 VALIDATION SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     print("\nPressure | Available  | Ratio | Tokens  | Compression | SSIM  | Status")
     print("-" * 75)
     for r in results:
-        print(f"{r['pressure']:>6.0%} | {r['available']:>9,} | {r['ratio']:>5.1%} | "
-              f"{r['skeleton_tokens']:>6,} | {r['compression']:>10.1f}x | "
-              f"{r['ssim']:>5.3f} | {r['status']:>6}")
+        print(
+            f"{r['pressure']:>6.0%} | {r['available']:>9,} | {r['ratio']:>5.1%} | "
+            f"{r['skeleton_tokens']:>6,} | {r['compression']:>10.1f}x | "
+            f"{r['ssim']:>5.3f} | {r['status']:>6}"
+        )
 
     # Key findings
     print("\n🔍 KEY FINDINGS:")
@@ -259,13 +270,17 @@ def run_channel_stress_test():
         high_pressure = results[-1]
         low_pressure = results[0]
         print(f"\n1. ADAPTIVE ALLOCATION (JSCCM Validation)")
-        print(f"   Low pressure  ({low_pressure['pressure']:.0%}): ratio={low_pressure['ratio']:.1%}")
-        print(f"   High pressure ({high_pressure['pressure']:.0%}): ratio={high_pressure['ratio']:.1%}")
+        print(
+            f"   Low pressure  ({low_pressure['pressure']:.0%}): ratio={low_pressure['ratio']:.1%}"
+        )
+        print(
+            f"   High pressure ({high_pressure['pressure']:.0%}): ratio={high_pressure['ratio']:.1%}"
+        )
         print(f"   → System adapts to channel conditions ✅")
 
     # Finding 2: SSIM correlation
-    ssim_scores = [r['ssim'] for r in results]
-    compressions = [r['compression'] for r in results]
+    ssim_scores = [r["ssim"] for r in results]
+    compressions = [r["compression"] for r in results]
 
     # Check if SSIM stays high despite compression
     avg_ssim = np.mean(ssim_scores)
@@ -282,7 +297,7 @@ def run_channel_stress_test():
         print(f"   → Warning: Structure degradation detected ⚠️")
 
     # Finding 3: Success rate
-    success_rate = sum(1 for r in results if r['status'] == 'OK') / len(results)
+    success_rate = sum(1 for r in results if r["status"] == "OK") / len(results)
     print(f"\n3. ROBUSTNESS")
     print(f"   Success rate: {success_rate:.1%}")
     print(f"   All scenarios: {len(results)}")
@@ -290,9 +305,9 @@ def run_channel_stress_test():
     if success_rate == 1.0:
         print(f"   → System handles all context pressures ✅")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ VALIDATION COMPLETE")
-    print("="*70)
+    print("=" * 70)
     print("\n💡 INTERPRETATION:")
     print("   - SSIM > 0.6: Good structure preservation")
     print("   - Adaptive ratio changes with pressure: JSCCM working")

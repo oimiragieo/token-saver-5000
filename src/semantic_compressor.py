@@ -26,16 +26,18 @@ class FidelityLevel(Enum):
     Inspired by JSCCM's multi-rate allocation strategy.
     5 levels provide fine-grained control over token budget vs. information fidelity.
     """
-    ABSTRACT = 1    # 1-sentence summary (~10 tokens)
-    OUTLINE = 2     # Summary + section markers (~30 tokens)
-    STRUCTURE = 3   # Headers + key entities (~50 tokens)
-    DETAILED = 4    # Summary + entities + key excerpts (~100 tokens)
-    RAW = 5         # Full original text (variable, typically 200-500 tokens)
+
+    ABSTRACT = 1  # 1-sentence summary (~10 tokens)
+    OUTLINE = 2  # Summary + section markers (~30 tokens)
+    STRUCTURE = 3  # Headers + key entities (~50 tokens)
+    DETAILED = 4  # Summary + entities + key excerpts (~100 tokens)
+    RAW = 5  # Full original text (variable, typically 200-500 tokens)
 
 
 @dataclass
 class SemanticNode:
     """Represents a chunk in the semantic graph"""
+
     node_id: str
     text: str
     embedding: np.ndarray
@@ -50,6 +52,7 @@ class SemanticNode:
 @dataclass
 class SkeletonResponse:
     """The compressed skeleton view of a document"""
+
     file_id: str
     total_nodes: int
     total_tokens: int
@@ -110,7 +113,7 @@ class SemanticCompressor:
         3. Fixed size fallback
         """
         # Split by double newlines first (paragraphs)
-        paragraphs = text.split('\n\n')
+        paragraphs = text.split("\n\n")
         chunks = []
         current_chunk = ""
 
@@ -131,10 +134,13 @@ class SemanticCompressor:
 
                 # If single paragraph is too large, split by sentences
                 if para_tokens > max_chunk_size:
-                    sentences = re.split(r'(?<=[.!?])\s+', para)
+                    sentences = re.split(r"(?<=[.!?])\s+", para)
                     current_chunk = ""
                     for sent in sentences:
-                        if self._count_tokens(current_chunk + " " + sent) <= max_chunk_size:
+                        if (
+                            self._count_tokens(current_chunk + " " + sent)
+                            <= max_chunk_size
+                        ):
                             current_chunk += " " + sent if current_chunk else sent
                         else:
                             if current_chunk:
@@ -159,7 +165,7 @@ class SemanticCompressor:
 
         for i, word in enumerate(words):
             # Look for capitalized words that aren't sentence starts
-            if word[0].isupper() and i > 0 and words[i-1][-1] not in '.!?':
+            if word[0].isupper() and i > 0 and words[i - 1][-1] not in ".!?":
                 entities.append(word)
 
         # Return unique entities
@@ -170,7 +176,7 @@ class SemanticCompressor:
         Generate a simple extractive summary.
         Takes first sentence or first max_length characters.
         """
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         if sentences:
             summary = sentences[0]
             if len(summary) > max_length:
@@ -178,7 +184,9 @@ class SemanticCompressor:
             return summary
         return text[:max_length] + "..."
 
-    def ingest_file(self, text: str, file_id: str, metadata: Optional[Dict] = None) -> SkeletonResponse:
+    def ingest_file(
+        self, text: str, file_id: str, metadata: Optional[Dict] = None
+    ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
 
@@ -227,7 +235,7 @@ class SemanticCompressor:
                     "position": i,
                     "tokens": self._count_tokens(chunk),
                     "entities": self._extract_key_entities(chunk),
-                }
+                },
             )
 
             self.chunks[node_id] = node
@@ -257,7 +265,9 @@ class SemanticCompressor:
         # 5. Generate skeleton
         skeleton_response = self._generate_skeleton(file_id)
 
-        print(f"  ✅ Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
+        print(
+            f"  ✅ Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens"
+        )
         print(f"  📊 Ratio: {skeleton_response.compression_ratio:.1f}x")
 
         return skeleton_response
@@ -277,9 +287,7 @@ class SemanticCompressor:
 
         # Get all nodes for this file
         file_nodes = [
-            (nid, self.chunks[nid])
-            for nid in graph.nodes()
-            if nid.startswith(file_id)
+            (nid, self.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)
         ]
 
         # Sort by importance
@@ -292,8 +300,12 @@ class SemanticCompressor:
         # Build skeleton text
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
-        skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
-        skeleton_lines.append(f"Compression: {self.skeleton_ratio:.0%} of content shown\n")
+        skeleton_lines.append(
+            f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}"
+        )
+        skeleton_lines.append(
+            f"Compression: {self.skeleton_ratio:.0%} of content shown\n"
+        )
 
         node_map = {}
         total_tokens = 0
@@ -348,9 +360,7 @@ class SemanticCompressor:
         return skeleton.skeleton_text
 
     def modulate_region(
-        self,
-        node_ids: List[str],
-        fidelity_level: FidelityLevel = FidelityLevel.RAW
+        self, node_ids: List[str], fidelity_level: FidelityLevel = FidelityLevel.RAW
     ) -> str:
         """
         Step 3: The Modulator (Adaptive Fidelity)
@@ -372,7 +382,9 @@ class SemanticCompressor:
             Formatted content string
         """
         output_lines = []
-        output_lines.append(f"=== MODULATED CONTENT (Fidelity: {fidelity_level.name}) ===\n")
+        output_lines.append(
+            f"=== MODULATED CONTENT (Fidelity: {fidelity_level.name}) ===\n"
+        )
 
         for node_id in node_ids:
             if node_id not in self.chunks:
@@ -389,7 +401,7 @@ class SemanticCompressor:
             elif fidelity_level == FidelityLevel.OUTLINE:
                 # Level 2: Summary + position context (~30 tokens)
                 summary = self._generate_summary(node.text, max_length=120)
-                position = node.metadata.get('position', '?')
+                position = node.metadata.get("position", "?")
                 entities = ", ".join(node.metadata["entities"][:2])  # Top 2 entities
 
                 output_lines.append(f"[{node_id}] Outline:")
@@ -416,8 +428,8 @@ class SemanticCompressor:
                 entities = ", ".join(node.metadata["entities"])
 
                 # Extract first 2-3 sentences as excerpt
-                sentences = re.split(r'(?<=[.!?])\s+', node.text)
-                excerpt = " ".join(sentences[:min(3, len(sentences))])
+                sentences = re.split(r"(?<=[.!?])\s+", node.text)
+                excerpt = " ".join(sentences[: min(3, len(sentences))])
                 if len(excerpt) > 300:
                     excerpt = excerpt[:300] + "..."
 
@@ -425,7 +437,9 @@ class SemanticCompressor:
                 output_lines.append(f"  Summary: {summary}")
                 output_lines.append(f"  Entities: {entities}")
                 output_lines.append(f"  Key excerpt:\n    {excerpt}")
-                output_lines.append(f"  Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n")
+                output_lines.append(
+                    f"  Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n"
+                )
 
             else:  # FidelityLevel.RAW
                 # Level 5: Full content (variable tokens)
@@ -433,11 +447,15 @@ class SemanticCompressor:
                 output_lines.append(f"--- BEGIN ---")
                 output_lines.append(node.text)
                 output_lines.append(f"--- END ---")
-                output_lines.append(f"Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n")
+                output_lines.append(
+                    f"Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n"
+                )
 
         return "\n".join(output_lines)
 
-    def search_semantic(self, query: str, file_id: Optional[str] = None, top_k: int = 5) -> List[str]:
+    def search_semantic(
+        self, query: str, file_id: Optional[str] = None, top_k: int = 5
+    ) -> List[str]:
         """
         Semantic search using vector similarity.
 
@@ -458,10 +476,7 @@ class SemanticCompressor:
             if file_id and not node_id.startswith(file_id):
                 continue
 
-            similarity = cosine_similarity(
-                [query_embedding],
-                [node.embedding]
-            )[0][0]
+            similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
 
             candidates.append((node_id, similarity))
 
@@ -479,10 +494,7 @@ class SemanticCompressor:
             graph = self.graphs[file_id]
             nodes = [nid for nid in graph.nodes() if nid.startswith(file_id)]
 
-            total_tokens = sum(
-                self.chunks[nid].metadata["tokens"]
-                for nid in nodes
-            )
+            total_tokens = sum(self.chunks[nid].metadata["tokens"] for nid in nodes)
 
             skeleton = self._generate_skeleton(file_id)
 

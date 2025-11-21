@@ -12,7 +12,8 @@ Features:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.code_compressor import CodeSemanticCompressor
 
@@ -206,10 +207,10 @@ def main():
         file_id="nn_trainer",
         filepath="nn_trainer.py",
         metadata={
-            'module': 'neural network training',
-            'language': 'python',
-            'lines': len(SAMPLE_MODULE.split('\n'))
-        }
+            "module": "neural network training",
+            "language": "python",
+            "lines": len(SAMPLE_MODULE.split("\n")),
+        },
     )
 
     print("\n📊 Compression Statistics:")
@@ -250,7 +251,7 @@ def main():
             print(f"   Type: {chunk.chunk_type}")
             print(f"   Name: {chunk.name}")
             if chunk.docstring:
-                doc_preview = chunk.docstring.split('\n')[0][:70]
+                doc_preview = chunk.docstring.split("\n")[0][:70]
                 print(f"   Doc: {doc_preview}...")
             print(f"   Lines: {chunk.start_line}-{chunk.end_line}")
 
@@ -277,6 +278,7 @@ def main():
 
     # Count tokens in original code
     import tiktoken
+
     tokenizer = tiktoken.get_encoding("cl100k_base")
     original_tokens = len(tokenizer.encode(SAMPLE_MODULE))
 
@@ -296,9 +298,15 @@ def main():
     print(f"\n📊 Token Usage:")
     print(f"   Original code: {original_tokens:,} tokens")
     print(f"   Skeleton only: {skeleton_tokens:,} tokens")
-    print(f"   Typical workflow (skeleton + 2 functions): {typical_workflow_tokens:,} tokens")
-    print(f"\n   Savings with skeleton: {(1 - skeleton_tokens/original_tokens)*100:.1f}%")
-    print(f"   Savings with workflow: {(1 - typical_workflow_tokens/original_tokens)*100:.1f}%")
+    print(
+        f"   Typical workflow (skeleton + 2 functions): {typical_workflow_tokens:,} tokens"
+    )
+    print(
+        f"\n   Savings with skeleton: {(1 - skeleton_tokens/original_tokens)*100:.1f}%"
+    )
+    print(
+        f"   Savings with workflow: {(1 - typical_workflow_tokens/original_tokens)*100:.1f}%"
+    )
 
     # Use case examples
     print("\n" + "=" * 80)

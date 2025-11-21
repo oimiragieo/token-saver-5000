@@ -21,6 +21,7 @@ from tqdm import tqdm
 @dataclass
 class TrainingConfig:
     """Configuration for SCAR training"""
+
     # Training hyperparameters
     batch_size: int = 32
     learning_rate: float = 1e-4
@@ -52,11 +53,7 @@ class SemanticCompressionDataset(Dataset):
     - Same embeddings as reconstruction target (self-supervised)
     """
 
-    def __init__(
-        self,
-        embeddings: np.ndarray,
-        chunk_texts: Optional[List[str]] = None
-    ):
+    def __init__(self, embeddings: np.ndarray, chunk_texts: Optional[List[str]] = None):
         """
         Initialize dataset.
 
@@ -72,8 +69,8 @@ class SemanticCompressionDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         return {
-            'embedding': self.embeddings[idx],
-            'target': self.embeddings[idx],  # Self-supervised reconstruction
+            "embedding": self.embeddings[idx],
+            "target": self.embeddings[idx],  # Self-supervised reconstruction
         }
 
 
@@ -90,7 +87,7 @@ class AlignmentDataset(Dataset):
         self,
         query_embeddings: np.ndarray,
         positive_embeddings: np.ndarray,
-        negative_embeddings: np.ndarray
+        negative_embeddings: np.ndarray,
     ):
         """
         Initialize alignment dataset.
@@ -109,9 +106,9 @@ class AlignmentDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         return {
-            'query': self.queries[idx],
-            'positive': self.positives[idx],
-            'negative': self.negatives[idx],
+            "query": self.queries[idx],
+            "positive": self.positives[idx],
+            "negative": self.negatives[idx],
         }
 
 
@@ -129,7 +126,7 @@ class SCARTrainer:
         self,
         model: nn.Module,
         config: TrainingConfig,
-        model_type: str = "compressor"  # "compressor" or "alignment"
+        model_type: str = "compressor",  # "compressor" or "alignment"
     ):
         """
         Initialize trainer.
@@ -148,7 +145,7 @@ class SCARTrainer:
         self.optimizer = optim.AdamW(
             model.parameters(),
             lr=config.learning_rate,
-            weight_decay=config.weight_decay
+            weight_decay=config.weight_decay,
         )
 
         # Scheduler
@@ -157,7 +154,7 @@ class SCARTrainer:
         # Training state
         self.global_step = 0
         self.current_epoch = 0
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
 
         # Metrics tracking
         self.train_losses = []
@@ -167,20 +164,17 @@ class SCARTrainer:
         """Setup learning rate scheduler"""
         if self.config.scheduler_type == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer,
-                T_max=num_training_steps
+                self.optimizer, T_max=num_training_steps
             )
         elif self.config.scheduler_type == "step":
             self.scheduler = optim.lr_scheduler.StepLR(
-                self.optimizer,
-                step_size=num_training_steps // 3,
-                gamma=0.1
+                self.optimizer, step_size=num_training_steps // 3, gamma=0.1
             )
 
     def train_compressor(
         self,
         train_dataset: SemanticCompressionDataset,
-        eval_dataset: Optional[SemanticCompressionDataset] = None
+        eval_dataset: Optional[SemanticCompressionDataset] = None,
     ) -> Dict[str, List[float]]:
         """
         Train the learnable semantic compressor.
@@ -202,7 +196,7 @@ class SCARTrainer:
             train_dataset,
             batch_size=self.config.batch_size,
             shuffle=True,
-            num_workers=0
+            num_workers=0,
         )
 
         num_training_steps = len(train_loader) * self.config.num_epochs
@@ -225,10 +219,7 @@ class SCARTrainer:
                     self.best_loss = eval_loss
                     print(f"  ✓ New best model (loss: {eval_loss:.6f})")
 
-        return {
-            'train_losses': self.train_losses,
-            'eval_losses': self.eval_losses
-        }
+        return {"train_losses": self.train_losses, "eval_losses": self.eval_losses}
 
     def _train_compressor_epoch(self, train_loader: DataLoader) -> float:
         """Train compressor for one epoch"""
@@ -238,13 +229,12 @@ class SCARTrainer:
         pbar = tqdm(train_loader, desc=f"Epoch {self.current_epoch+1}")
         for batch_idx, batch in enumerate(pbar):
             # Move to device
-            embeddings = batch['embedding'].to(self.device)
-            targets = batch['target'].to(self.device)
+            embeddings = batch["embedding"].to(self.device)
+            targets = batch["target"].to(self.device)
 
             # Forward pass with reconstruction
             compressed, reconstructed = self.model(
-                embeddings,
-                return_reconstruction=True
+                embeddings, return_reconstruction=True
             )
 
             # SCAR Equation 4: L_pres = ||Fs - Uk(Fc)||^2
@@ -265,7 +255,7 @@ class SCARTrainer:
             self.global_step += 1
 
             if batch_idx % self.config.log_interval == 0:
-                pbar.set_postfix({'loss': f'{loss.item():.6f}'})
+                pbar.set_postfix({"loss": f"{loss.item():.6f}"})
 
         return np.mean(epoch_losses)
 
@@ -273,20 +263,17 @@ class SCARTrainer:
         """Evaluate compressor on validation set"""
         self.model.eval()
         eval_loader = DataLoader(
-            eval_dataset,
-            batch_size=self.config.batch_size,
-            shuffle=False
+            eval_dataset, batch_size=self.config.batch_size, shuffle=False
         )
 
         eval_losses = []
         with torch.no_grad():
             for batch in eval_loader:
-                embeddings = batch['embedding'].to(self.device)
-                targets = batch['target'].to(self.device)
+                embeddings = batch["embedding"].to(self.device)
+                targets = batch["target"].to(self.device)
 
                 compressed, reconstructed = self.model(
-                    embeddings,
-                    return_reconstruction=True
+                    embeddings, return_reconstruction=True
                 )
 
                 loss = self.model.compute_preservation_loss(targets, reconstructed)
@@ -297,7 +284,7 @@ class SCARTrainer:
     def train_alignment(
         self,
         train_dataset: AlignmentDataset,
-        eval_dataset: Optional[AlignmentDataset] = None
+        eval_dataset: Optional[AlignmentDataset] = None,
     ) -> Dict[str, List[float]]:
         """
         Train the semantic alignment module.
@@ -319,7 +306,7 @@ class SCARTrainer:
             train_dataset,
             batch_size=self.config.batch_size,
             shuffle=True,
-            num_workers=0
+            num_workers=0,
         )
 
         num_training_steps = len(train_loader) * self.config.num_epochs
@@ -340,10 +327,7 @@ class SCARTrainer:
                     self.best_loss = eval_loss
                     print(f"  ✓ New best model (loss: {eval_loss:.6f})")
 
-        return {
-            'train_losses': self.train_losses,
-            'eval_losses': self.eval_losses
-        }
+        return {"train_losses": self.train_losses, "eval_losses": self.eval_losses}
 
     def _train_alignment_epoch(self, train_loader: DataLoader) -> float:
         """Train alignment module for one epoch"""
@@ -352,9 +336,9 @@ class SCARTrainer:
 
         pbar = tqdm(train_loader, desc=f"Epoch {self.current_epoch+1}")
         for batch_idx, batch in enumerate(pbar):
-            queries = batch['query'].to(self.device)
-            positives = batch['positive'].to(self.device)
-            negatives = batch['negative'].to(self.device)
+            queries = batch["query"].to(self.device)
+            positives = batch["positive"].to(self.device)
+            negatives = batch["negative"].to(self.device)
 
             # Compute alignment loss for positive pairs (SCAR Eq. 8)
             pos_loss, _ = self.model(queries, positives, use_projection=True)
@@ -382,7 +366,7 @@ class SCARTrainer:
             self.global_step += 1
 
             if batch_idx % self.config.log_interval == 0:
-                pbar.set_postfix({'loss': f'{loss.item():.6f}'})
+                pbar.set_postfix({"loss": f"{loss.item():.6f}"})
 
         return np.mean(epoch_losses)
 
@@ -390,17 +374,15 @@ class SCARTrainer:
         """Evaluate alignment module"""
         self.model.eval()
         eval_loader = DataLoader(
-            eval_dataset,
-            batch_size=self.config.batch_size,
-            shuffle=False
+            eval_dataset, batch_size=self.config.batch_size, shuffle=False
         )
 
         eval_losses = []
         with torch.no_grad():
             for batch in eval_loader:
-                queries = batch['query'].to(self.device)
-                positives = batch['positive'].to(self.device)
-                negatives = batch['negative'].to(self.device)
+                queries = batch["query"].to(self.device)
+                positives = batch["positive"].to(self.device)
+                negatives = batch["negative"].to(self.device)
 
                 pos_loss, _ = self.model(queries, positives, use_projection=True)
                 neg_loss, _ = self.model(queries, negatives, use_projection=True)
@@ -414,13 +396,15 @@ class SCARTrainer:
     def save_checkpoint(self, filepath: str):
         """Save model checkpoint"""
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
-            'global_step': self.global_step,
-            'current_epoch': self.current_epoch,
-            'best_loss': self.best_loss,
-            'config': self.config,
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "scheduler_state_dict": (
+                self.scheduler.state_dict() if self.scheduler else None
+            ),
+            "global_step": self.global_step,
+            "current_epoch": self.current_epoch,
+            "best_loss": self.best_loss,
+            "config": self.config,
         }
         torch.save(checkpoint, filepath)
         print(f"✓ Checkpoint saved to {filepath}")
@@ -428,15 +412,18 @@ class SCARTrainer:
     def load_checkpoint(self, filepath: str):
         """Load model checkpoint"""
         checkpoint = torch.load(filepath, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-        if checkpoint['scheduler_state_dict'] is not None and self.scheduler is not None:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if (
+            checkpoint["scheduler_state_dict"] is not None
+            and self.scheduler is not None
+        ):
+            self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-        self.global_step = checkpoint['global_step']
-        self.current_epoch = checkpoint['current_epoch']
-        self.best_loss = checkpoint['best_loss']
+        self.global_step = checkpoint["global_step"]
+        self.current_epoch = checkpoint["current_epoch"]
+        self.best_loss = checkpoint["best_loss"]
 
         print(f"✓ Checkpoint loaded from {filepath}")
         print(f"  Global step: {self.global_step}")
@@ -444,8 +431,7 @@ class SCARTrainer:
 
 
 def create_synthetic_training_data(
-    num_samples: int = 1000,
-    embedding_dim: int = 384
+    num_samples: int = 1000, embedding_dim: int = 384
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Create synthetic training data for demonstration.
@@ -504,8 +490,7 @@ if __name__ == "__main__":
 
     # Create synthetic data
     train_embeddings, eval_embeddings = create_synthetic_training_data(
-        num_samples=1000,
-        embedding_dim=384
+        num_samples=1000, embedding_dim=384
     )
 
     # Create datasets
@@ -522,11 +507,7 @@ if __name__ == "__main__":
         compressed_dim=96,  # 4× compression like SCAR
     )
 
-    trainer = SCARTrainer(
-        model=compressor,
-        config=config,
-        model_type="compressor"
-    )
+    trainer = SCARTrainer(model=compressor, config=config, model_type="compressor")
 
     history = trainer.train_compressor(train_dataset, eval_dataset)
 

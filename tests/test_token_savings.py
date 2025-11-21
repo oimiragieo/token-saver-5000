@@ -10,7 +10,8 @@ Run with: pytest tests/test_token_savings.py -v
 import pytest
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.scar_compressor import SCAREnhancedCompressor
@@ -178,8 +179,7 @@ class TestTokenSavings:
     def setup_method(self):
         """Initialize compressor for each test"""
         self.compressor = SemanticCompressor(
-            similarity_threshold=0.75,
-            skeleton_ratio=0.2
+            similarity_threshold=0.75, skeleton_ratio=0.2
         )
 
     def test_small_document_savings(self):
@@ -188,7 +188,7 @@ class TestTokenSavings:
 
         # Verify compression
         assert result.compression_ratio > 2.0, "Should achieve at least 2x compression"
-        savings_percent = (1 - 1/result.compression_ratio) * 100
+        savings_percent = (1 - 1 / result.compression_ratio) * 100
 
         print(f"\n📊 Small Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
@@ -204,7 +204,7 @@ class TestTokenSavings:
 
         # Medium docs should achieve 5-10x compression
         assert result.compression_ratio >= 5.0, "Should achieve at least 5x compression"
-        savings_percent = (1 - 1/result.compression_ratio) * 100
+        savings_percent = (1 - 1 / result.compression_ratio) * 100
 
         print(f"\n📊 Medium Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
@@ -219,8 +219,10 @@ class TestTokenSavings:
         result = self.compressor.ingest_file(LARGE_DOCUMENT, "large_doc")
 
         # Large docs should achieve 15-20x compression
-        assert result.compression_ratio >= 10.0, "Should achieve at least 10x compression"
-        savings_percent = (1 - 1/result.compression_ratio) * 100
+        assert (
+            result.compression_ratio >= 10.0
+        ), "Should achieve at least 10x compression"
+        savings_percent = (1 - 1 / result.compression_ratio) * 100
 
         print(f"\n📊 Large Document Results:")
         print(f"   Original tokens: {result.total_tokens}")
@@ -250,10 +252,10 @@ class TestTokenSavings:
             print(f"   {fidelity_name}: {tokens} tokens")
 
         # Verify hierarchy: ABSTRACT < OUTLINE < STRUCTURE < DETAILED < RAW
-        assert fidelity_results['ABSTRACT'] < fidelity_results['OUTLINE']
-        assert fidelity_results['OUTLINE'] < fidelity_results['STRUCTURE']
-        assert fidelity_results['STRUCTURE'] < fidelity_results['DETAILED']
-        assert fidelity_results['DETAILED'] < fidelity_results['RAW']
+        assert fidelity_results["ABSTRACT"] < fidelity_results["OUTLINE"]
+        assert fidelity_results["OUTLINE"] < fidelity_results["STRUCTURE"]
+        assert fidelity_results["STRUCTURE"] < fidelity_results["DETAILED"]
+        assert fidelity_results["DETAILED"] < fidelity_results["RAW"]
 
     def test_progressive_retrieval_savings(self):
         """Test token savings with progressive retrieval strategy"""
@@ -269,8 +271,10 @@ class TestTokenSavings:
         skeleton_tokens = self.compressor._count_tokens(skeleton)
 
         # Retrieve only top 20% at RAW fidelity
-        top_nodes = all_nodes[:max(1, len(all_nodes) // 5)]
-        selective_content = self.compressor.modulate_region(top_nodes, FidelityLevel.RAW)
+        top_nodes = all_nodes[: max(1, len(all_nodes) // 5)]
+        selective_content = self.compressor.modulate_region(
+            top_nodes, FidelityLevel.RAW
+        )
         selective_tokens = self.compressor._count_tokens(selective_content)
 
         progressive_total = skeleton_tokens + selective_tokens
@@ -283,7 +287,9 @@ class TestTokenSavings:
         print(f"   Progressive total: {progressive_total} tokens")
         print(f"   Progressive savings: {progressive_savings:.1f}%")
 
-        assert progressive_savings >= 70, "Progressive retrieval should save at least 70%"
+        assert (
+            progressive_savings >= 70
+        ), "Progressive retrieval should save at least 70%"
 
     def test_semantic_search_efficiency(self):
         """Test that semantic search reduces retrieval token usage"""
@@ -309,7 +315,9 @@ class TestTokenSavings:
         print(f"   Search (top 3): {search_tokens} tokens")
         print(f"   Search savings: {search_savings:.1f}%")
 
-        assert search_savings >= 50, "Semantic search should reduce tokens by at least 50%"
+        assert (
+            search_savings >= 50
+        ), "Semantic search should reduce tokens by at least 50%"
 
 
 class TestSCARTokenSavings:
@@ -322,7 +330,7 @@ class TestSCARTokenSavings:
             base_compressor=base,
             use_learnable_compression=True,
             use_alignment_guidance=True,
-            compression_ratio=4.0
+            compression_ratio=4.0,
         )
         self.base = base
 
@@ -334,7 +342,7 @@ class TestSCARTokenSavings:
             "Syndrome extraction identifies error locations",
             "Lattice surgery enables logical operations",
             "Code concatenation reduces overhead",
-            "Magic state distillation produces non-Clifford gates"
+            "Magic state distillation produces non-Clifford gates",
         ]
 
         original_embeddings = self.base.model.encode(sample_texts)
@@ -369,16 +377,15 @@ class TestSCARTokenSavings:
 
         # SCAR alignment-guided search
         scar_results = self.scar.search_with_alignment(
-            query=query,
-            file_id="alignment_test",
-            top_k=5,
-            alignment_weight=0.5
+            query=query, file_id="alignment_test", top_k=5, alignment_weight=0.5
         )
 
         print(f"\n📊 SCAR Alignment Search Comparison:")
         print(f"   Query: '{query}'")
         print(f"\n   Baseline top result: {baseline_results[0]}")
-        print(f"   SCAR top result: {scar_results[0][0]} (score: {scar_results[0][1]:.3f})")
+        print(
+            f"   SCAR top result: {scar_results[0][0]} (score: {scar_results[0][1]:.3f})"
+        )
 
         # Verify we got results
         assert len(baseline_results) == 5
@@ -397,11 +404,7 @@ class TestEndToEndSavings:
         compressor = SemanticCompressor()
 
         # Ingest multiple documents
-        docs = {
-            "doc1": SMALL_DOCUMENT,
-            "doc2": MEDIUM_DOCUMENT,
-            "doc3": LARGE_DOCUMENT
-        }
+        docs = {"doc1": SMALL_DOCUMENT, "doc2": MEDIUM_DOCUMENT, "doc3": LARGE_DOCUMENT}
 
         total_original_tokens = 0
         total_skeleton_tokens = 0
@@ -412,7 +415,7 @@ class TestEndToEndSavings:
             total_skeleton_tokens += result.skeleton_tokens
 
         overall_compression = total_original_tokens / total_skeleton_tokens
-        overall_savings = (1 - 1/overall_compression) * 100
+        overall_savings = (1 - 1 / overall_compression) * 100
 
         print(f"\n📊 Multi-Document Analysis:")
         print(f"   Total documents: {len(docs)}")
@@ -441,11 +444,15 @@ class TestEndToEndSavings:
         relevant_nodes = compressor.search_semantic(query, "qa_doc", top_k=3)
 
         # Step 3: System retrieves relevant sections at STRUCTURE level first
-        structure_content = compressor.modulate_region(relevant_nodes, FidelityLevel.STRUCTURE)
+        structure_content = compressor.modulate_region(
+            relevant_nodes, FidelityLevel.STRUCTURE
+        )
         total_tokens_used += compressor._count_tokens(structure_content)
 
         # Step 4: User asks for more detail on one section
-        detailed_content = compressor.modulate_region([relevant_nodes[0]], FidelityLevel.RAW)
+        detailed_content = compressor.modulate_region(
+            [relevant_nodes[0]], FidelityLevel.RAW
+        )
         total_tokens_used += compressor._count_tokens(detailed_content)
 
         # Calculate savings vs reading full document
@@ -456,8 +463,12 @@ class TestEndToEndSavings:
         print(f"   Full document: {full_doc_tokens} tokens")
         print(f"   Step 1 (skeleton): {compressor._count_tokens(skeleton)} tokens")
         print(f"   Step 2 (search): 0 tokens (computation only)")
-        print(f"   Step 3 (structure): {compressor._count_tokens(structure_content)} tokens")
-        print(f"   Step 4 (detailed): {compressor._count_tokens(detailed_content)} tokens")
+        print(
+            f"   Step 3 (structure): {compressor._count_tokens(structure_content)} tokens"
+        )
+        print(
+            f"   Step 4 (detailed): {compressor._count_tokens(detailed_content)} tokens"
+        )
         print(f"   Total workflow: {total_tokens_used} tokens")
         print(f"   Workflow savings: {workflow_savings:.1f}%")
 
@@ -466,9 +477,9 @@ class TestEndToEndSavings:
 
 def print_summary_report():
     """Print summary of all token savings achievements"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TOKEN SAVINGS VALIDATION REPORT")
-    print("="*80)
+    print("=" * 80)
     print("\n✅ All tests passed! Token savings verified:\n")
     print("   📈 Small documents (100 tokens):    50-70% savings")
     print("   📈 Medium documents (500 tokens):   80-85% savings")
@@ -478,9 +489,9 @@ def print_summary_report():
     print("   📈 SCAR embedding compression:      75% memory savings")
     print("   📈 Multi-document analysis:         87%+ savings")
     print("   📈 Realistic Q&A workflow:          80%+ savings")
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Semantic Modulator delivers on its promise: 80-95% token reduction! 🎉")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
@@ -491,9 +502,9 @@ if __name__ == "__main__":
     test_basic = TestTokenSavings()
     test_basic.setup_method()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("BASIC TOKEN SAVINGS TESTS")
-    print("="*80)
+    print("=" * 80)
 
     test_basic.test_small_document_savings()
     test_basic.test_medium_document_savings()
@@ -506,9 +517,9 @@ if __name__ == "__main__":
     test_scar = TestSCARTokenSavings()
     test_scar.setup_method()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SCAR ENHANCEMENT TESTS")
-    print("="*80)
+    print("=" * 80)
 
     test_scar.test_embedding_compression_savings()
     test_scar.test_scar_alignment_improves_relevance()
@@ -516,9 +527,9 @@ if __name__ == "__main__":
     # Test end-to-end
     test_e2e = TestEndToEndSavings()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("END-TO-END WORKFLOW TESTS")
-    print("="*80)
+    print("=" * 80)
 
     test_e2e.test_multi_document_analysis_savings()
     test_e2e.test_realistic_qa_workflow_savings()

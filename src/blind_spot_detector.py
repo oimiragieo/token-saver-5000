@@ -23,6 +23,7 @@ from .semantic_compressor import SemanticCompressor, SemanticNode
 @dataclass
 class BlindSpot:
     """Represents a detected blind spot in AI reasoning"""
+
     node_id: str
     similarity_to_response: float
     was_retrieved: bool
@@ -33,6 +34,7 @@ class BlindSpot:
 @dataclass
 class BlindSpotReport:
     """Report of detected blind spots"""
+
     response_analyzed: str
     total_blind_spots: int
     critical_blind_spots: int
@@ -71,7 +73,9 @@ class BlindSpotDetector:
         self.similarity_threshold = similarity_threshold
         self.urgency_threshold = urgency_threshold
 
-    def _calculate_urgency(self, similarity: float, importance: float) -> Tuple[str, float]:
+    def _calculate_urgency(
+        self, similarity: float, importance: float
+    ) -> Tuple[str, float]:
         """
         Calculate urgency score and level.
 
@@ -120,10 +124,7 @@ class BlindSpotDetector:
         if not graph:
             raise ValueError(f"File {file_id} not found")
 
-        file_nodes = [
-            nid for nid in graph.nodes()
-            if nid.startswith(file_id)
-        ]
+        file_nodes = [nid for nid in graph.nodes() if nid.startswith(file_id)]
 
         # 3. Compare response to each node
         blind_spots = []
@@ -133,10 +134,7 @@ class BlindSpotDetector:
             node = self.compressor.chunks[node_id]
 
             # Calculate similarity
-            similarity = cosine_similarity(
-                [response_embedding],
-                [node.embedding]
-            )[0][0]
+            similarity = cosine_similarity([response_embedding], [node.embedding])[0][0]
 
             # Is this node relevant but missed?
             if similarity >= self.similarity_threshold:
@@ -202,10 +200,14 @@ class BlindSpotDetector:
                 )
 
         if not blind_spots:
-            recommendations.append("✅ No significant blind spots detected. Response appears well-grounded.")
+            recommendations.append(
+                "✅ No significant blind spots detected. Response appears well-grounded."
+            )
 
         return BlindSpotReport(
-            response_analyzed=ai_response[:200] + "..." if len(ai_response) > 200 else ai_response,
+            response_analyzed=(
+                ai_response[:200] + "..." if len(ai_response) > 200 else ai_response
+            ),
             total_blind_spots=len(blind_spots),
             critical_blind_spots=len(critical_spots),
             blind_spots=blind_spots,
@@ -226,7 +228,9 @@ class BlindSpotDetector:
         lines.append(f"  • Critical blind spots: {report.critical_blind_spots}")
 
         if report.auto_inject:
-            lines.append(f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n")
+            lines.append(
+                f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n"
+            )
 
         lines.append(f"\n💡 Recommendations:")
         for rec in report.recommendations:
@@ -237,7 +241,9 @@ class BlindSpotDetector:
             lines.append(f"The following nodes should be retrieved immediately:")
             for node_id in report.auto_inject:
                 lines.append(f"  • {node_id}")
-            lines.append(f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')")
+            lines.append(
+                f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')"
+            )
 
         lines.append("\n" + "=" * 60)
 
@@ -311,10 +317,7 @@ class HaloEffectDetector:
         max_similarities = []
         for node_id in file_nodes:
             node = self.compressor.chunks[node_id]
-            similarity = cosine_similarity(
-                [response_embedding],
-                [node.embedding]
-            )[0][0]
+            similarity = cosine_similarity([response_embedding], [node.embedding])[0][0]
             max_similarities.append(similarity)
 
         max_sim = max(max_similarities) if max_similarities else 0
