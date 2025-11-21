@@ -20,10 +20,17 @@ import tiktoken
 
 
 class FidelityLevel(Enum):
-    """Semantic fidelity levels for adaptive transmission"""
-    ABSTRACT = 1  # 1-sentence summary (~10 tokens)
-    STRUCTURE = 2  # Headers + key entities (~50 tokens)
-    RAW = 3  # Full original text (variable)
+    """
+    Semantic fidelity levels for adaptive transmission
+
+    Inspired by JSCCM's multi-rate allocation strategy.
+    5 levels provide fine-grained control over token budget vs. information fidelity.
+    """
+    ABSTRACT = 1    # 1-sentence summary (~10 tokens)
+    OUTLINE = 2     # Summary + section markers (~30 tokens)
+    STRUCTURE = 3   # Headers + key entities (~50 tokens)
+    DETAILED = 4    # Summary + entities + key excerpts (~100 tokens)
+    RAW = 5         # Full original text (variable, typically 200-500 tokens)
 
 
 @dataclass
@@ -350,8 +357,12 @@ class SemanticCompressor:
 
         Returns content at requested fidelity level:
         - ABSTRACT: 1-sentence summary (~10 tokens)
-        - STRUCTURE: Headers + entities (~50 tokens)
-        - RAW: Full original text (variable)
+        - OUTLINE: Summary + section markers (~30 tokens)
+        - STRUCTURE: Headers + key entities (~50 tokens)
+        - DETAILED: Summary + entities + key excerpts (~100 tokens)
+        - RAW: Full original text (variable, typically 200-500 tokens)
+
+        Inspired by JSCCM's adaptive modulation strategy.
 
         Args:
             node_ids: List of node IDs to retrieve
@@ -371,12 +382,25 @@ class SemanticCompressor:
             node = self.chunks[node_id]
 
             if fidelity_level == FidelityLevel.ABSTRACT:
-                # Level 1: Just a summary
+                # Level 1: Just a summary (~10 tokens)
                 summary = self._generate_summary(node.text, max_length=100)
-                output_lines.append(f"[{node_id}] Abstract:\n{summary}\n")
+                output_lines.append(f"[{node_id}] Abstract:\n  {summary}\n")
+
+            elif fidelity_level == FidelityLevel.OUTLINE:
+                # Level 2: Summary + position context (~30 tokens)
+                summary = self._generate_summary(node.text, max_length=120)
+                position = node.metadata.get('position', '?')
+                entities = ", ".join(node.metadata["entities"][:2])  # Top 2 entities
+
+                output_lines.append(f"[{node_id}] Outline:")
+                output_lines.append(f"  Position: Section {position}")
+                output_lines.append(f"  Summary: {summary}")
+                if entities:
+                    output_lines.append(f"  Key terms: {entities}")
+                output_lines.append("")
 
             elif fidelity_level == FidelityLevel.STRUCTURE:
-                # Level 2: Summary + entities + metadata
+                # Level 3: Summary + entities + metadata (~50 tokens)
                 summary = self._generate_summary(node.text, max_length=150)
                 entities = ", ".join(node.metadata["entities"])
 
@@ -386,8 +410,25 @@ class SemanticCompressor:
                 output_lines.append(f"  Tokens: {node.metadata['tokens']}")
                 output_lines.append(f"  Importance: {node.importance:.3f}\n")
 
+            elif fidelity_level == FidelityLevel.DETAILED:
+                # Level 4: Summary + entities + key excerpts (~100 tokens)
+                summary = self._generate_summary(node.text, max_length=200)
+                entities = ", ".join(node.metadata["entities"])
+
+                # Extract first 2-3 sentences as excerpt
+                sentences = re.split(r'(?<=[.!?])\s+', node.text)
+                excerpt = " ".join(sentences[:min(3, len(sentences))])
+                if len(excerpt) > 300:
+                    excerpt = excerpt[:300] + "..."
+
+                output_lines.append(f"[{node_id}] Detailed:")
+                output_lines.append(f"  Summary: {summary}")
+                output_lines.append(f"  Entities: {entities}")
+                output_lines.append(f"  Key excerpt:\n    {excerpt}")
+                output_lines.append(f"  Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n")
+
             else:  # FidelityLevel.RAW
-                # Level 3: Full content
+                # Level 5: Full content (variable tokens)
                 output_lines.append(f"[{node_id}] Full Content:")
                 output_lines.append(f"--- BEGIN ---")
                 output_lines.append(node.text)

@@ -131,11 +131,13 @@ class SemanticModulatorServer:
                     description=(
                         "Retrieve specific sections at a chosen fidelity level. "
                         "Use this to 'zoom in' on relevant parts after reading the skeleton. "
-                        "Fidelity levels: "
-                        "'ABSTRACT' (~10 tokens/node), "
-                        "'STRUCTURE' (~50 tokens/node), "
-                        "'RAW' (full content). "
-                        "This implements adaptive semantic fidelity."
+                        "5 Fidelity levels (JSCCM-inspired adaptive modulation): "
+                        "'ABSTRACT' (~10 tokens/node) - Quick summary only, "
+                        "'OUTLINE' (~30 tokens/node) - Summary + section context, "
+                        "'STRUCTURE' (~50 tokens/node) - Summary + entities + metadata, "
+                        "'DETAILED' (~100 tokens/node) - Summary + entities + key excerpts, "
+                        "'RAW' (variable tokens) - Full original content. "
+                        "This implements adaptive semantic fidelity - choose lower levels when context is tight."
                     ),
                     inputSchema={
                         "type": "object",
@@ -147,8 +149,8 @@ class SemanticModulatorServer:
                             },
                             "fidelity_level": {
                                 "type": "string",
-                                "enum": ["ABSTRACT", "STRUCTURE", "RAW"],
-                                "description": "Detail level to retrieve",
+                                "enum": ["ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW"],
+                                "description": "Detail level to retrieve (default: RAW for maximum fidelity)",
                                 "default": "RAW"
                             },
                         },
@@ -297,19 +299,21 @@ class SemanticModulatorServer:
         result = f"""
 ✅ Document ingested successfully!
 
-File ID: {file_id}
-Total nodes: {skeleton.total_nodes}
+File ID: {file_id} containing {skeleton.total_nodes} semantic nodes
 Original tokens: {skeleton.total_tokens:,}
 Skeleton tokens: {skeleton.skeleton_tokens:,}
 Compression ratio: {skeleton.compression_ratio:.1f}x
 
 📊 Token savings: {skeleton.total_tokens - skeleton.skeleton_tokens:,} tokens ({(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%)
 
+💡 IMPORTANT: Use read_skeleton('{file_id}') to view the semantic map BEFORE requesting specific details.
+   This "map before territory" approach ensures you understand the document structure.
+
 Next steps:
-1. Use read_skeleton('{file_id}') to view the compressed structure
-2. Use modulate_region() to retrieve specific sections
-3. Use search_semantic() to find relevant content
-4. Use check_blind_spots() after generating responses to ensure completeness
+1. read_skeleton('{file_id}') - View the compressed structure (recommended first step)
+2. modulate_region() - Retrieve specific sections at chosen fidelity
+3. search_semantic() - Find relevant content via vector similarity
+4. check_blind_spots() - Verify response completeness after generating answers
 
 {skeleton.skeleton_text[:500]}...
 (Use read_skeleton to see full structure)
