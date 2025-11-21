@@ -26,6 +26,11 @@ from mcp.types import (
 
 from .semantic_compressor import SemanticCompressor, FidelityLevel
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
+from .adaptive_rate_allocator import (
+    AdaptiveRateAllocator,
+    ContextWindowAdapter,
+    MultiLevelSemanticEncoder
+)
 
 
 # Configure logging
@@ -45,6 +50,17 @@ class SemanticModulatorServer:
         )
         self.blind_spot_detector = BlindSpotDetector(self.compressor)
         self.halo_detector = HaloEffectDetector(self.compressor)
+
+        # JSCCM-inspired adaptive components
+        self.context_window_adapter = ContextWindowAdapter(self.compressor)
+        self.multilevel_encoder = MultiLevelSemanticEncoder(self.compressor)
+
+        # Context window monitoring (like SNR in JSCCM)
+        self.context_window_monitor = {
+            'max_tokens': 100000,  # Typical context window size
+            'used_tokens': 0,
+            'history': []
+        }
 
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
