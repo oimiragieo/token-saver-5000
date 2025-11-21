@@ -298,15 +298,9 @@ def main():
     print(f"\n📊 Token Usage:")
     print(f"   Original code: {original_tokens:,} tokens")
     print(f"   Skeleton only: {skeleton_tokens:,} tokens")
-    print(
-        f"   Typical workflow (skeleton + 2 functions): {typical_workflow_tokens:,} tokens"
-    )
-    print(
-        f"\n   Savings with skeleton: {(1 - skeleton_tokens/original_tokens)*100:.1f}%"
-    )
-    print(
-        f"   Savings with workflow: {(1 - typical_workflow_tokens/original_tokens)*100:.1f}%"
-    )
+    print(f"   Typical workflow (skeleton + 2 functions): {typical_workflow_tokens:,} tokens")
+    print(f"\n   Savings with skeleton: {(1 - skeleton_tokens/original_tokens)*100:.1f}%")
+    print(f"   Savings with workflow: {(1 - typical_workflow_tokens/original_tokens)*100:.1f}%")
 
     # Use case examples
     print("\n" + "=" * 80)

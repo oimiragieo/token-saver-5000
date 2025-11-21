@@ -137,10 +137,7 @@ class SemanticCompressor:
                     sentences = re.split(r"(?<=[.!?])\s+", para)
                     current_chunk = ""
                     for sent in sentences:
-                        if (
-                            self._count_tokens(current_chunk + " " + sent)
-                            <= max_chunk_size
-                        ):
+                        if self._count_tokens(current_chunk + " " + sent) <= max_chunk_size:
                             current_chunk += " " + sent if current_chunk else sent
                         else:
                             if current_chunk:
@@ -265,9 +262,7 @@ class SemanticCompressor:
         # 5. Generate skeleton
         skeleton_response = self._generate_skeleton(file_id)
 
-        print(
-            f"  ✅ Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens"
-        )
+        print(f"  ✅ Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
         print(f"  📊 Ratio: {skeleton_response.compression_ratio:.1f}x")
 
         return skeleton_response
@@ -286,9 +281,7 @@ class SemanticCompressor:
             raise ValueError(f"File {file_id} not found")
 
         # Get all nodes for this file
-        file_nodes = [
-            (nid, self.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)
-        ]
+        file_nodes = [(nid, self.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)]
 
         # Sort by importance
         file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
@@ -300,12 +293,8 @@ class SemanticCompressor:
         # Build skeleton text
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
-        skeleton_lines.append(
-            f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}"
-        )
-        skeleton_lines.append(
-            f"Compression: {self.skeleton_ratio:.0%} of content shown\n"
-        )
+        skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
+        skeleton_lines.append(f"Compression: {self.skeleton_ratio:.0%} of content shown\n")
 
         node_map = {}
         total_tokens = 0
@@ -382,9 +371,7 @@ class SemanticCompressor:
             Formatted content string
         """
         output_lines = []
-        output_lines.append(
-            f"=== MODULATED CONTENT (Fidelity: {fidelity_level.name}) ===\n"
-        )
+        output_lines.append(f"=== MODULATED CONTENT (Fidelity: {fidelity_level.name}) ===\n")
 
         for node_id in node_ids:
             if node_id not in self.chunks:

@@ -113,9 +113,7 @@ def main():
     print(f"Original tokens: {skeleton.total_tokens:,}")
     print(f"Skeleton tokens: {skeleton.skeleton_tokens:,}")
     print(f"Compression ratio: {skeleton.compression_ratio:.1f}x")
-    print(
-        f"Token savings: {(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%"
-    )
+    print(f"Token savings: {(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%")
 
     # =================================================================
     # STEP 2: Read the skeleton
@@ -200,9 +198,7 @@ def main():
         print_section("Step 6: Auto-Correction Based on Blind Spots")
 
         print("Retrieving missed critical context...")
-        missed_content = compressor.modulate_region(
-            report.auto_inject, FidelityLevel.RAW
-        )
+        missed_content = compressor.modulate_region(report.auto_inject, FidelityLevel.RAW)
         print(missed_content)
 
         print("\n💡 Corrected understanding:")

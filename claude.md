@@ -466,9 +466,9 @@ cat config/claude.md     # Configuration guide
 ## File Inventory
 
 ### Source Code (src/)
-- `semantic_compressor.py` - Base compression (18.5 KB)
-- `code_compressor.py` - Code-specific (22.7 KB)
-- `multimodal_compressor.py` - Multi-modal (18.3 KB)
+- `semantic_compressor.py` - Base compression (~516 lines)
+- `code_compressor.py` - Code-specific (~700 lines)
+- `multimodal_compressor.py` - Multi-modal (~533 lines)
 - `scar_compressor.py` - SCAR enhancements (20.0 KB)
 - `adaptive_rate_allocator.py` - Adaptive rate (14.8 KB)
 - `blind_spot_detector.py` - Hallucination prevention (11.6 KB)
@@ -503,6 +503,7 @@ cat config/claude.md     # Configuration guide
 - `requirements.txt` - Dependencies
 - `.gitignore` - Git ignore rules
 - `config/claude_desktop_config.example.json` - MCP config template
+- `pyproject.toml` - Python project configuration (Black, Ruff, dependencies)
 
 ---
 
@@ -531,9 +532,11 @@ black >= 23.0.0                   # Code formatting
 
 ---
 
-## MCP Tools Exposed
+## MCP Tools Currently Exposed
 
 When running as MCP server, these tools are available:
+
+**Note**: The following 7 tools are currently implemented in server.py. Additional tools (adapt_to_context_window, multilevel_encode) are planned.
 
 1. **`ingest_context`** - Ingest document into semantic graph
 2. **`read_skeleton`** - Get compressed skeleton view (80-95% reduction)

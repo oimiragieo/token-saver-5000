@@ -233,9 +233,7 @@ class SCARTrainer:
             targets = batch["target"].to(self.device)
 
             # Forward pass with reconstruction
-            compressed, reconstructed = self.model(
-                embeddings, return_reconstruction=True
-            )
+            compressed, reconstructed = self.model(embeddings, return_reconstruction=True)
 
             # SCAR Equation 4: L_pres = ||Fs - Uk(Fc)||^2
             loss = self.model.compute_preservation_loss(targets, reconstructed)
@@ -262,9 +260,7 @@ class SCARTrainer:
     def _evaluate_compressor(self, eval_dataset: SemanticCompressionDataset) -> float:
         """Evaluate compressor on validation set"""
         self.model.eval()
-        eval_loader = DataLoader(
-            eval_dataset, batch_size=self.config.batch_size, shuffle=False
-        )
+        eval_loader = DataLoader(eval_dataset, batch_size=self.config.batch_size, shuffle=False)
 
         eval_losses = []
         with torch.no_grad():
@@ -272,9 +268,7 @@ class SCARTrainer:
                 embeddings = batch["embedding"].to(self.device)
                 targets = batch["target"].to(self.device)
 
-                compressed, reconstructed = self.model(
-                    embeddings, return_reconstruction=True
-                )
+                compressed, reconstructed = self.model(embeddings, return_reconstruction=True)
 
                 loss = self.model.compute_preservation_loss(targets, reconstructed)
                 eval_losses.append(loss.item())
@@ -373,9 +367,7 @@ class SCARTrainer:
     def _evaluate_alignment(self, eval_dataset: AlignmentDataset) -> float:
         """Evaluate alignment module"""
         self.model.eval()
-        eval_loader = DataLoader(
-            eval_dataset, batch_size=self.config.batch_size, shuffle=False
-        )
+        eval_loader = DataLoader(eval_dataset, batch_size=self.config.batch_size, shuffle=False)
 
         eval_losses = []
         with torch.no_grad():
@@ -398,9 +390,7 @@ class SCARTrainer:
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": (
-                self.scheduler.state_dict() if self.scheduler else None
-            ),
+            "scheduler_state_dict": (self.scheduler.state_dict() if self.scheduler else None),
             "global_step": self.global_step,
             "current_epoch": self.current_epoch,
             "best_loss": self.best_loss,
@@ -415,10 +405,7 @@ class SCARTrainer:
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-        if (
-            checkpoint["scheduler_state_dict"] is not None
-            and self.scheduler is not None
-        ):
+        if checkpoint["scheduler_state_dict"] is not None and self.scheduler is not None:
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
         self.global_step = checkpoint["global_step"]
@@ -449,14 +436,10 @@ def create_synthetic_training_data(
 
     # Generate synthetic embeddings (normally distributed, then normalized)
     train_embeddings = np.random.randn(num_samples, embedding_dim)
-    train_embeddings = train_embeddings / np.linalg.norm(
-        train_embeddings, axis=1, keepdims=True
-    )
+    train_embeddings = train_embeddings / np.linalg.norm(train_embeddings, axis=1, keepdims=True)
 
     eval_embeddings = np.random.randn(num_samples // 5, embedding_dim)
-    eval_embeddings = eval_embeddings / np.linalg.norm(
-        eval_embeddings, axis=1, keepdims=True
-    )
+    eval_embeddings = eval_embeddings / np.linalg.norm(eval_embeddings, axis=1, keepdims=True)
 
     return train_embeddings, eval_embeddings
 

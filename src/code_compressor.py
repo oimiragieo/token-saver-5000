@@ -82,9 +82,7 @@ class CodeSemanticCompressor:
         try:
             self.model = SentenceTransformer(model_name)
         except Exception as e:
-            print(
-                f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2"
-            )
+            print(f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2")
             self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.similarity_threshold = similarity_threshold
@@ -133,9 +131,7 @@ class CodeSemanticCompressor:
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
-            print(
-                f"Warning: Syntax error in {file_id}, falling back to line-based chunking"
-            )
+            print(f"Warning: Syntax error in {file_id}, falling back to line-based chunking")
             return self._chunk_by_lines(code, file_id)
 
         # Extract imports
@@ -150,9 +146,7 @@ class CodeSemanticCompressor:
                     imports.append(f"{module}.{alias.name}")
 
         if imports:
-            import_code = "\n".join(
-                [line for line in code.split("\n") if "import" in line]
-            )
+            import_code = "\n".join([line for line in code.split("\n") if "import" in line])
             chunks.append(
                 CodeChunk(
                     chunk_id=f"{file_id}_imports",
@@ -228,16 +222,12 @@ class CodeSemanticCompressor:
         chunks = []
 
         # Extract imports
-        import_pattern = (
-            r'(?:import|require)\s+.*?(?:from\s+[\'"](.+?)[\'"]|[\'"](.+?)[\'"])'
-        )
+        import_pattern = r'(?:import|require)\s+.*?(?:from\s+[\'"](.+?)[\'"]|[\'"](.+?)[\'"])'
         imports = re.findall(import_pattern, code)
 
         if imports:
             import_lines = [
-                line
-                for line in code.split("\n")
-                if "import" in line or "require" in line
+                line for line in code.split("\n") if "import" in line or "require" in line
             ]
             chunks.append(
                 CodeChunk(
@@ -381,13 +371,8 @@ class CodeSemanticCompressor:
             for dep in chunk.dependencies:
                 # Find chunks with matching names
                 for other_chunk in chunks:
-                    if (
-                        other_chunk.name == dep
-                        and other_chunk.chunk_id != chunk.chunk_id
-                    ):
-                        graph.add_edge(
-                            chunk.chunk_id, other_chunk.chunk_id, type="dependency"
-                        )
+                    if other_chunk.name == dep and other_chunk.chunk_id != chunk.chunk_id:
+                        graph.add_edge(chunk.chunk_id, other_chunk.chunk_id, type="dependency")
 
         # Add semantic similarity edges
         from sklearn.metrics.pairwise import cosine_similarity
@@ -467,9 +452,7 @@ class CodeSemanticCompressor:
             raise ValueError(f"File {file_id} not found")
 
         # Get chunks sorted by importance
-        file_chunks = [
-            (cid, self.chunks[cid]) for cid in graph.nodes() if cid.startswith(file_id)
-        ]
+        file_chunks = [(cid, self.chunks[cid]) for cid in graph.nodes() if cid.startswith(file_id)]
         file_chunks.sort(key=lambda x: x[1].importance, reverse=True)
 
         # Determine how many to show
@@ -478,9 +461,7 @@ class CodeSemanticCompressor:
 
         skeleton_lines = []
         skeleton_lines.append(f"=== CODE SKELETON: {file_id} ===")
-        skeleton_lines.append(
-            f"Total chunks: {len(file_chunks)} | Showing: {show_top_n}"
-        )
+        skeleton_lines.append(f"Total chunks: {len(file_chunks)} | Showing: {show_top_n}")
         skeleton_lines.append("")
 
         # Always show imports first
@@ -490,15 +471,11 @@ class CodeSemanticCompressor:
             for chunk in import_chunks:
                 skeleton_lines.append(f"   {', '.join(chunk.dependencies[:5])}")
                 if len(chunk.dependencies) > 5:
-                    skeleton_lines.append(
-                        f"   ... and {len(chunk.dependencies) - 5} more"
-                    )
+                    skeleton_lines.append(f"   ... and {len(chunk.dependencies) - 5} more")
             skeleton_lines.append("")
 
         # Show top N important chunks
-        top_chunks = [
-            c for cid, c in file_chunks[:show_top_n] if c.chunk_type != "import"
-        ]
+        top_chunks = [c for cid, c in file_chunks[:show_top_n] if c.chunk_type != "import"]
 
         for chunk in top_chunks:
             if chunk.chunk_type == "function":
@@ -527,13 +504,9 @@ class CodeSemanticCompressor:
                 if chunk.docstring:
                     first_doc_line = chunk.docstring.strip().split("\n")[0].strip()
                     skeleton_lines.append(f"   Doc: {first_doc_line[:80]}...")
-                skeleton_lines.append(
-                    f"   Methods: {', '.join(chunk.dependencies[:5])}"
-                )
+                skeleton_lines.append(f"   Methods: {', '.join(chunk.dependencies[:5])}")
                 if len(chunk.dependencies) > 5:
-                    skeleton_lines.append(
-                        f"   ... and {len(chunk.dependencies) - 5} more methods"
-                    )
+                    skeleton_lines.append(f"   ... and {len(chunk.dependencies) - 5} more methods")
                 skeleton_lines.append(f"   Lines: {chunk.start_line}-{chunk.end_line}")
                 skeleton_lines.append("")
 
@@ -541,9 +514,7 @@ class CodeSemanticCompressor:
         hidden_count = len(file_chunks) - show_top_n - len(import_chunks)
         if hidden_count > 0:
             skeleton_lines.append(f"📦 {hidden_count} additional chunks hidden")
-            skeleton_lines.append(
-                "   Use search_code() or modulate_code() to retrieve them"
-            )
+            skeleton_lines.append("   Use search_code() or modulate_code() to retrieve them")
 
         return "\n".join(skeleton_lines)
 

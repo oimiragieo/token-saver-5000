@@ -180,9 +180,7 @@ def main():
 
     # Get embeddings from a few nodes
     sample_node_ids = list(base_compressor.chunks.keys())[:5]
-    sample_embeddings = np.array(
-        [base_compressor.chunks[nid].embedding for nid in sample_node_ids]
-    )
+    sample_embeddings = np.array([base_compressor.chunks[nid].embedding for nid in sample_node_ids])
 
     print(f"\n📦 Embedding Compression Demo:")
     print(f"   Input shape: {sample_embeddings.shape}")
@@ -241,9 +239,7 @@ def main():
     print("1. SCAR's learnable compression reduces embedding size by 4× (384D → 96D)")
     print("2. Semantic alignment guidance improves retrieval relevance")
     print("3. Adaptive fidelity automatically adjusts detail level based on alignment")
-    print(
-        "4. All concepts from SCAR paper (arXiv:2511.14063v1) adapted to text compression"
-    )
+    print("4. All concepts from SCAR paper (arXiv:2511.14063v1) adapted to text compression")
 
 
 if __name__ == "__main__":

@@ -140,8 +140,8 @@ See [SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) for detailed implementat
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/semantic-modulator.git
-cd semantic-modulator
+git clone https://github.com/oimiragieo/token-saver-5000.git
+cd token-saver-5000
 
 # Install dependencies
 pip install -r requirements.txt
@@ -171,7 +171,7 @@ Add to your `claude_desktop_config.json`:
     "semantic-modulator": {
       "command": "python",
       "args": ["-m", "src.server"],
-      "cwd": "/path/to/semantic-modulator",
+      "cwd": "/path/to/token-saver-5000",
       "env": {}
     }
   }
@@ -643,8 +643,8 @@ This implementation is inspired by research in:
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/semantic-modulator/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/yourusername/semantic-modulator/discussions)
+- **Issues:** [GitHub Issues](https://github.com/oimiragieo/token-saver-5000/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/oimiragieo/token-saver-5000/discussions)
 - **Email:** support@example.com
 
 ---

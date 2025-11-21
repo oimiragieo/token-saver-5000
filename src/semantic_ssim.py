@@ -131,9 +131,7 @@ class SemanticSSIM:
             edge_preservation = 1.0
         else:
             preserved_edges = sum(
-                1
-                for u, v in graph.edges()
-                if u in compressed_nodes and v in compressed_nodes
+                1 for u, v in graph.edges() if u in compressed_nodes and v in compressed_nodes
             )
             edge_preservation = preserved_edges / total_edges
 
@@ -168,9 +166,7 @@ class SemanticSSIM:
             # Pearson correlation
             if len(original_pr) > 1:
                 correlation = np.corrcoef(original_pr, compressed_pr)[0, 1]
-                centrality_preservation = max(
-                    correlation, 0
-                )  # Clip negative correlations
+                centrality_preservation = max(correlation, 0)  # Clip negative correlations
             else:
                 centrality_preservation = 1.0
         except:
@@ -178,9 +174,7 @@ class SemanticSSIM:
 
         # Combine sub-metrics
         structure = (
-            0.5 * edge_preservation
-            + 0.25 * clustering_similarity
-            + 0.25 * centrality_preservation
+            0.5 * edge_preservation + 0.25 * clustering_similarity + 0.25 * centrality_preservation
         )
 
         return structure

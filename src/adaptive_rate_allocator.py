@@ -172,9 +172,7 @@ class AdaptiveRateAllocator(nn.Module):
         logits = self.rate_predictor(features)
 
         # 5. Select rate using Gumbel-Softmax
-        selection, selected_level = self.gumbel_softmax_rate_selection(
-            logits, hard=True
-        )
+        selection, selected_level = self.gumbel_softmax_rate_selection(logits, hard=True)
 
         # 6. Get skeleton ratio
         skeleton_ratio = self.rate_levels[selected_level].item()
@@ -289,9 +287,7 @@ class MultiLevelSemanticEncoder:
         """
         graph = self.compressor.graphs[file_id]
         file_nodes = [
-            (nid, self.compressor.chunks[nid])
-            for nid in graph.nodes()
-            if nid.startswith(file_id)
+            (nid, self.compressor.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)
         ]
 
         # Sort by importance
@@ -306,9 +302,7 @@ class MultiLevelSemanticEncoder:
         # Rest are details - only if plenty of space
 
         main_nodes = [nid for nid, _ in file_nodes[:main_count]]
-        auxiliary_nodes = [
-            nid for nid, _ in file_nodes[main_count : main_count + auxiliary_count]
-        ]
+        auxiliary_nodes = [nid for nid, _ in file_nodes[main_count : main_count + auxiliary_count]]
         detail_nodes = [nid for nid, _ in file_nodes[main_count + auxiliary_count :]]
 
         return {

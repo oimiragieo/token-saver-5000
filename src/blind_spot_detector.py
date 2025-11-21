@@ -73,9 +73,7 @@ class BlindSpotDetector:
         self.similarity_threshold = similarity_threshold
         self.urgency_threshold = urgency_threshold
 
-    def _calculate_urgency(
-        self, similarity: float, importance: float
-    ) -> Tuple[str, float]:
+    def _calculate_urgency(self, similarity: float, importance: float) -> Tuple[str, float]:
         """
         Calculate urgency score and level.
 
@@ -139,9 +137,7 @@ class BlindSpotDetector:
             # Is this node relevant but missed?
             if similarity >= self.similarity_threshold:
                 was_retrieved = node_id in retrieved_set
-                urgency_level, urgency_score = self._calculate_urgency(
-                    similarity, node.importance
-                )
+                urgency_level, urgency_score = self._calculate_urgency(similarity, node.importance)
 
                 # Determine reason
                 if not was_retrieved and urgency_level in ["critical", "high"]:
@@ -228,9 +224,7 @@ class BlindSpotDetector:
         lines.append(f"  • Critical blind spots: {report.critical_blind_spots}")
 
         if report.auto_inject:
-            lines.append(
-                f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n"
-            )
+            lines.append(f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n")
 
         lines.append(f"\n💡 Recommendations:")
         for rec in report.recommendations:
@@ -241,9 +235,7 @@ class BlindSpotDetector:
             lines.append(f"The following nodes should be retrieved immediately:")
             for node_id in report.auto_inject:
                 lines.append(f"  • {node_id}")
-            lines.append(
-                f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')"
-            )
+            lines.append(f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')")
 
         lines.append("\n" + "=" * 60)
 
