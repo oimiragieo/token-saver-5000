@@ -15,7 +15,8 @@ Run with: pytest tests/test_functional.py -v
 import pytest
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.blind_spot_detector import BlindSpotDetector
@@ -92,7 +93,9 @@ class TestBasicFunctionality:
 
         assert graph is not None
         assert graph.number_of_nodes() > 0
-        assert graph.number_of_edges() >= 0  # May have no edges if chunks too dissimilar
+        assert (
+            graph.number_of_edges() >= 0
+        )  # May have no edges if chunks too dissimilar
 
         print(f"\n✅ Semantic Graph:")
         print(f"   Nodes: {graph.number_of_nodes()}")
@@ -111,9 +114,7 @@ class TestBasicFunctionality:
 
         # Search for relevant content
         results = self.compressor.search_semantic(
-            query="error correction mechanisms",
-            file_id="search_test",
-            top_k=3
+            query="error correction mechanisms", file_id="search_test", top_k=3
         )
 
         assert results is not None
@@ -152,14 +153,12 @@ class TestBasicFunctionality:
         # Ingest multiple documents
         self.compressor.ingest_file(SAMPLE_DOCUMENT, "doc1")
         self.compressor.ingest_file(
-            "Machine learning uses neural networks for pattern recognition.",
-            "doc2"
+            "Machine learning uses neural networks for pattern recognition.", "doc2"
         )
 
         # Search without specifying file_id (searches all)
         results = self.compressor.search_semantic(
-            query="quantum error correction",
-            top_k=5
+            query="quantum error correction", top_k=5
         )
 
         assert len(results) > 0
@@ -216,7 +215,7 @@ class TestBlindSpotDetection:
         blind_spots = self.detector.check_blind_spots(
             ai_response=ai_response,
             file_id="blindspot_test",
-            retrieved_nodes=retrieved_nodes
+            retrieved_nodes=retrieved_nodes,
         )
 
         assert blind_spots is not None
@@ -227,7 +226,7 @@ class TestBlindSpotDetection:
         print(f"   Total blind spots: {blind_spots['total_blind_spots']}")
         print(f"   Critical blind spots: {blind_spots['critical_blind_spots']}")
 
-        if blind_spots['blind_spot_nodes']:
+        if blind_spots["blind_spot_nodes"]:
             print(f"   Detected {len(blind_spots['blind_spot_nodes'])} missed nodes")
 
     def test_no_blind_spots_when_comprehensive(self):
@@ -246,9 +245,7 @@ class TestBlindSpotDetection:
         """
 
         blind_spots = self.detector.check_blind_spots(
-            ai_response=ai_response,
-            file_id="complete_test",
-            retrieved_nodes=all_nodes
+            ai_response=ai_response, file_id="complete_test", retrieved_nodes=all_nodes
         )
 
         print(f"\n✅ Comprehensive Retrieval Check:")
@@ -256,7 +253,7 @@ class TestBlindSpotDetection:
         print(f"   Critical blind spots: {blind_spots['critical_blind_spots']}")
 
         # Should have few or no blind spots when all nodes retrieved
-        assert blind_spots['total_blind_spots'] >= 0
+        assert blind_spots["total_blind_spots"] >= 0
 
     def test_hallucination_detection(self):
         """Test detection of hallucinated content"""
@@ -270,8 +267,7 @@ class TestBlindSpotDetection:
         """
 
         result = self.detector.detect_hallucination(
-            ai_response=hallucinated_response,
-            file_id="hallucination_test"
+            ai_response=hallucinated_response, file_id="hallucination_test"
         )
 
         assert result is not None
@@ -295,7 +291,7 @@ class TestSCARFunctionality:
         self.scar = SCAREnhancedCompressor(
             base_compressor=base,
             use_learnable_compression=True,
-            use_alignment_guidance=True
+            use_alignment_guidance=True,
         )
         self.base = base
 
@@ -307,8 +303,8 @@ class TestSCARFunctionality:
         assert self.scar.alignment_module is not None
 
         stats = self.scar.get_compression_stats()
-        assert stats['learnable_compression_enabled'] == True
-        assert stats['alignment_guidance_enabled'] == True
+        assert stats["learnable_compression_enabled"] == True
+        assert stats["alignment_guidance_enabled"] == True
 
         print(f"\n✅ SCAR Initialization:")
         for key, value in stats.items():
@@ -319,7 +315,7 @@ class TestSCARFunctionality:
         sample_texts = [
             "Quantum error correction is essential",
             "Surface codes have high thresholds",
-            "Syndrome extraction detects errors"
+            "Syndrome extraction detects errors",
         ]
 
         # Get original embeddings
@@ -348,10 +344,7 @@ class TestSCARFunctionality:
         query = "What are the challenges in quantum error correction?"
 
         results = self.scar.search_with_alignment(
-            query=query,
-            file_id="alignment_search_test",
-            top_k=3,
-            alignment_weight=0.5
+            query=query, file_id="alignment_search_test", top_k=3, alignment_weight=0.5
         )
 
         assert results is not None
@@ -376,10 +369,7 @@ class TestSCARFunctionality:
         query = "error thresholds"
 
         result = self.scar.adaptive_modulate(
-            query=query,
-            file_id="adaptive_test",
-            top_k=2,
-            alignment_threshold=0.7
+            query=query, file_id="adaptive_test", top_k=2, alignment_threshold=0.7
         )
 
         assert result is not None
@@ -460,14 +450,14 @@ class TestEdgeCases:
 
 def run_all_tests():
     """Run all functional tests with detailed output"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("FUNCTIONAL TEST SUITE - SEMANTIC MODULATOR")
-    print("="*80)
+    print("=" * 80)
 
     # Basic functionality tests
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("BASIC FUNCTIONALITY TESTS")
-    print("="*80)
+    print("=" * 80)
 
     basic = TestBasicFunctionality()
     basic.setup_method()
@@ -480,9 +470,9 @@ def run_all_tests():
     basic.test_stats_retrieval()
 
     # Blind spot detection tests
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("BLIND SPOT DETECTION TESTS")
-    print("="*80)
+    print("=" * 80)
 
     blindspot = TestBlindSpotDetection()
     blindspot.setup_method()
@@ -491,9 +481,9 @@ def run_all_tests():
     blindspot.test_hallucination_detection()
 
     # SCAR functionality tests
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SCAR ENHANCEMENT TESTS")
-    print("="*80)
+    print("=" * 80)
 
     scar = TestSCARFunctionality()
     scar.setup_method()
@@ -503,9 +493,9 @@ def run_all_tests():
     scar.test_adaptive_modulation()
 
     # Edge case tests
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EDGE CASE TESTS")
-    print("="*80)
+    print("=" * 80)
 
     edge = TestEdgeCases()
     edge.setup_method()
@@ -516,9 +506,9 @@ def run_all_tests():
     edge.test_duplicate_file_id_ingestion()
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("✅ ALL FUNCTIONAL TESTS PASSED!")
-    print("="*80)
+    print("=" * 80)
     print("\nSemantic Modulator is working correctly!")
     print("All core features validated:")
     print("  ✓ Document ingestion and compression")
@@ -530,7 +520,7 @@ def run_all_tests():
     print("  ✓ Hallucination detection")
     print("  ✓ SCAR enhancements")
     print("  ✓ Edge case handling")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":

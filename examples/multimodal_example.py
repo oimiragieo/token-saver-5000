@@ -15,7 +15,8 @@ Optional: pip install clip-ViT-B-32 (for CLIP image embeddings)
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.multimodal_compressor import MultiModalCompressor
 
@@ -27,26 +28,26 @@ def create_sample_image():
         import io
 
         # Create a simple diagram image
-        img = Image.new('RGB', (400, 300), color='white')
+        img = Image.new("RGB", (400, 300), color="white")
         draw = ImageDraw.Draw(img)
 
         # Draw a simple neural network diagram
-        draw.rectangle([50, 50, 150, 100], outline='black', width=2)
-        draw.text((70, 70), "Input Layer", fill='black')
+        draw.rectangle([50, 50, 150, 100], outline="black", width=2)
+        draw.text((70, 70), "Input Layer", fill="black")
 
-        draw.rectangle([200, 50, 300, 100], outline='black', width=2)
-        draw.text((210, 70), "Hidden Layer", fill='black')
+        draw.rectangle([200, 50, 300, 100], outline="black", width=2)
+        draw.text((210, 70), "Hidden Layer", fill="black")
 
-        draw.rectangle([50, 150, 150, 200], outline='black', width=2)
-        draw.text((60, 170), "Output Layer", fill='black')
+        draw.rectangle([50, 150, 150, 200], outline="black", width=2)
+        draw.text((60, 170), "Output Layer", fill="black")
 
         # Draw arrows
-        draw.line([(150, 75), (200, 75)], fill='black', width=2)
-        draw.line([(150, 175), (200, 75)], fill='black', width=2)
+        draw.line([(150, 75), (200, 75)], fill="black", width=2)
+        draw.line([(150, 175), (200, 75)], fill="black", width=2)
 
         # Convert to bytes
         img_bytes = io.BytesIO()
-        img.save(img_bytes, format='PNG')
+        img.save(img_bytes, format="PNG")
         return img_bytes.getvalue()
 
     except ImportError:
@@ -64,7 +65,7 @@ def main():
     print("\n[1] INITIALIZING MULTI-MODAL COMPRESSOR")
     compressor = MultiModalCompressor(
         use_clip_for_images=True,  # Try to use CLIP for images
-        use_codebert_for_code=False  # Use general model for simplicity
+        use_codebert_for_code=False,  # Use general model for simplicity
     )
 
     # Prepare multi-modal content (simulating a project)
@@ -73,8 +74,8 @@ def main():
     content_items = [
         # README text
         {
-            'type': 'text',
-            'content': '''
+            "type": "text",
+            "content": """
 # Neural Network Project
 
 This project implements a neural network for image classification.
@@ -87,14 +88,13 @@ This project implements a neural network for image classification.
 
 ## Performance
 The model achieves 95% accuracy on CIFAR-10 after 50 epochs.
-            ''',
-            'metadata': {'file': 'README.md', 'section': 'overview'}
+            """,
+            "metadata": {"file": "README.md", "section": "overview"},
         },
-
         # Training code
         {
-            'type': 'code',
-            'content': '''
+            "type": "code",
+            "content": '''
 def train_model(model, train_loader, optimizer, epochs=10):
     """
     Train neural network model.
@@ -121,13 +121,12 @@ def train_model(model, train_loader, optimizer, epochs=10):
 
     return model
             ''',
-            'metadata': {'file': 'train.py', 'function': 'train_model'}
+            "metadata": {"file": "train.py", "function": "train_model"},
         },
-
         # Model architecture code
         {
-            'type': 'code',
-            'content': '''
+            "type": "code",
+            "content": '''
 class ConvNet(nn.Module):
     """Convolutional Neural Network for image classification"""
 
@@ -148,13 +147,12 @@ class ConvNet(nn.Module):
         x = self.fc2(x)
         return x
             ''',
-            'metadata': {'file': 'model.py', 'class': 'ConvNet'}
+            "metadata": {"file": "model.py", "class": "ConvNet"},
         },
-
         # Results documentation
         {
-            'type': 'text',
-            'content': '''
+            "type": "text",
+            "content": """
 ## Training Results
 
 Final test accuracy: 95.2%
@@ -163,15 +161,17 @@ Best epoch: 48
 
 The model shows strong generalization with minimal overfitting.
 Confusion matrix shows good performance across all classes.
-            ''',
-            'metadata': {'file': 'RESULTS.md'}
+            """,
+            "metadata": {"file": "RESULTS.md"},
         },
-
         # Architecture diagram (image)
         {
-            'type': 'image',
-            'content': create_sample_image(),
-            'metadata': {'file': 'architecture.png', 'description': 'Network architecture diagram'}
+            "type": "image",
+            "content": create_sample_image(),
+            "metadata": {
+                "file": "architecture.png",
+                "description": "Network architecture diagram",
+            },
         },
     ]
 
@@ -185,17 +185,17 @@ Confusion matrix shows good performance across all classes.
     stats = compressor.ingest_mixed_content(
         content_items=content_items,
         project_id="nn_project",
-        similarity_threshold=0.65  # Lower threshold for cross-modal connections
+        similarity_threshold=0.65,  # Lower threshold for cross-modal connections
     )
 
     print("\n📊 Ingestion Statistics:")
     for key, value in stats.items():
-        if key != 'cross_modal_connections':
+        if key != "cross_modal_connections":
             print(f"   {key}: {value}")
 
-    if stats.get('cross_modal_connections'):
+    if stats.get("cross_modal_connections"):
         print("   cross_modal_connections:")
-        for conn_type, count in stats['cross_modal_connections'].items():
+        for conn_type, count in stats["cross_modal_connections"].items():
             print(f"     {conn_type}: {count}")
 
     # Generate project summary
@@ -216,18 +216,18 @@ Confusion matrix shows good performance across all classes.
     query = "how to train the neural network"
     results = compressor.search_cross_modal(
         query=query,
-        query_type='text',
+        query_type="text",
         project_id="nn_project",
-        filter_modality='code',  # Only return code
-        top_k=2
+        filter_modality="code",  # Only return code
+        top_k=2,
     )
 
     print(f"Query: '{query}'")
     print("Filter: CODE only\n")
     for i, (node_id, score, modality) in enumerate(results, 1):
         node_data = compressor.get_node_content(node_id)
-        preview = node_data['content'][:80].replace('\n', ' ')
-        file = node_data['metadata'].get('file', 'unknown')
+        preview = node_data["content"][:80].replace("\n", " ")
+        file = node_data["metadata"].get("file", "unknown")
         print(f"{i}. {file} (score: {score:.3f})")
         print(f"   {preview}...\n")
 
@@ -237,18 +237,18 @@ Confusion matrix shows good performance across all classes.
     query = "class ConvNet"
     results = compressor.search_cross_modal(
         query=query,
-        query_type='code',
+        query_type="code",
         project_id="nn_project",
-        filter_modality='text',  # Only return text
-        top_k=2
+        filter_modality="text",  # Only return text
+        top_k=2,
     )
 
     print(f"Query: '{query}'")
     print("Filter: TEXT only\n")
     for i, (node_id, score, modality) in enumerate(results, 1):
         node_data = compressor.get_node_content(node_id)
-        preview = node_data['content'][:100].replace('\n', ' ')
-        file = node_data['metadata'].get('file', 'unknown')
+        preview = node_data["content"][:100].replace("\n", " ")
+        file = node_data["metadata"].get("file", "unknown")
         print(f"{i}. {file} (score: {score:.3f})")
         print(f"   {preview}...\n")
 
@@ -258,18 +258,18 @@ Confusion matrix shows good performance across all classes.
     query = "neural network architecture diagram"
     results = compressor.search_cross_modal(
         query=query,
-        query_type='text',
+        query_type="text",
         project_id="nn_project",
-        filter_modality='image',  # Only return images
-        top_k=1
+        filter_modality="image",  # Only return images
+        top_k=1,
     )
 
     print(f"Query: '{query}'")
     print("Filter: IMAGES only\n")
     for i, (node_id, score, modality) in enumerate(results, 1):
         node_data = compressor.get_node_content(node_id)
-        file = node_data['metadata'].get('file', 'unknown')
-        description = node_data['metadata'].get('description', 'No description')
+        file = node_data["metadata"].get("file", "unknown")
+        description = node_data["metadata"].get("description", "No description")
         print(f"{i}. {file} (score: {score:.3f})")
         print(f"   Description: {description}")
         print(f"   Content type: {node_data['content_type']}")
@@ -321,21 +321,22 @@ Confusion matrix shows good performance across all classes.
     print("=" * 80)
 
     import tiktoken
+
     tokenizer = tiktoken.get_encoding("cl100k_base")
 
     # Calculate total text tokens (code + text)
     total_text_tokens = 0
     for item in content_items:
-        if item['type'] in ['text', 'code']:
-            total_text_tokens += len(tokenizer.encode(item['content']))
+        if item["type"] in ["text", "code"]:
+            total_text_tokens += len(tokenizer.encode(item["content"]))
 
     # Images are typically sent as base64, which is 4/3 * bytes
     # In token terms, ~1.5 tokens per byte (rough estimate)
     total_image_tokens = 0
     for item in content_items:
-        if item['type'] == 'image':
+        if item["type"] == "image":
             # Base64 encoding increases size by 33%
-            base64_size = len(item['content']) * 4 / 3
+            base64_size = len(item["content"]) * 4 / 3
             # Rough token estimate (1 token ≈ 4 chars)
             total_image_tokens += base64_size / 4
 
@@ -348,13 +349,19 @@ Confusion matrix shows good performance across all classes.
     print(f"\n📊 Token Usage Comparison:")
     print(f"   Full project (text): {total_text_tokens:,} tokens")
     print(f"   Full project (images): ~{int(total_image_tokens):,} tokens (base64)")
-    print(f"   Total if sent raw: ~{int(total_text_tokens + total_image_tokens):,} tokens")
+    print(
+        f"   Total if sent raw: ~{int(total_text_tokens + total_image_tokens):,} tokens"
+    )
     print(f"\n   With compression:")
     print(f"     Summary only: {summary_tokens:,} tokens")
     print(f"     Typical workflow: ~{int(workflow_tokens):,} tokens")
     print(f"\n   Savings:")
-    print(f"     Summary: {(1 - summary_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%")
-    print(f"     Workflow: {(1 - workflow_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%")
+    print(
+        f"     Summary: {(1 - summary_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%"
+    )
+    print(
+        f"     Workflow: {(1 - workflow_tokens/(total_text_tokens + total_image_tokens))*100:.1f}%"
+    )
 
     print("\n" + "=" * 80)
     print("✅ Multi-modal compression complete!")

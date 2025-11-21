@@ -29,7 +29,7 @@ from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
 from .adaptive_rate_allocator import (
     AdaptiveRateAllocator,
     ContextWindowAdapter,
-    MultiLevelSemanticEncoder
+    MultiLevelSemanticEncoder,
 )
 
 
@@ -57,9 +57,9 @@ class SemanticModulatorServer:
 
         # Context window monitoring (like SNR in JSCCM)
         self.context_window_monitor = {
-            'max_tokens': 100000,  # Typical context window size
-            'used_tokens': 0,
-            'history': []
+            "max_tokens": 100000,  # Typical context window size
+            "used_tokens": 0,
+            "history": [],
         }
 
         # Track what the AI has retrieved (for blind spot detection)
@@ -87,11 +87,11 @@ class SemanticModulatorServer:
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "The raw document text to ingest"
+                                "description": "The raw document text to ingest",
                             },
                             "file_id": {
                                 "type": "string",
-                                "description": "Unique identifier for this document (e.g., 'paper_1', 'manual_v2')"
+                                "description": "Unique identifier for this document (e.g., 'paper_1', 'manual_v2')",
                             },
                             "metadata": {
                                 "type": "object",
@@ -100,7 +100,10 @@ class SemanticModulatorServer:
                                     "author": {"type": "string"},
                                     "date": {"type": "string"},
                                     "source": {"type": "string"},
-                                    "tags": {"type": "array", "items": {"type": "string"}},
+                                    "tags": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
                                 },
                             },
                         },
@@ -120,7 +123,7 @@ class SemanticModulatorServer:
                         "properties": {
                             "file_id": {
                                 "type": "string",
-                                "description": "The document identifier"
+                                "description": "The document identifier",
                             },
                         },
                         "required": ["file_id"],
@@ -145,13 +148,19 @@ class SemanticModulatorServer:
                             "node_ids": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "List of node IDs to retrieve (from skeleton)"
+                                "description": "List of node IDs to retrieve (from skeleton)",
                             },
                             "fidelity_level": {
                                 "type": "string",
-                                "enum": ["ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW"],
+                                "enum": [
+                                    "ABSTRACT",
+                                    "OUTLINE",
+                                    "STRUCTURE",
+                                    "DETAILED",
+                                    "RAW",
+                                ],
                                 "description": "Detail level to retrieve (default: RAW for maximum fidelity)",
-                                "default": "RAW"
+                                "default": "RAW",
                             },
                         },
                         "required": ["node_ids"],
@@ -170,16 +179,16 @@ class SemanticModulatorServer:
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Natural language search query"
+                                "description": "Natural language search query",
                             },
                             "file_id": {
                                 "type": "string",
-                                "description": "Optional: limit search to specific document"
+                                "description": "Optional: limit search to specific document",
                             },
                             "top_k": {
                                 "type": "integer",
                                 "description": "Number of results to return",
-                                "default": 5
+                                "default": 5,
                             },
                         },
                         "required": ["query"],
@@ -199,16 +208,16 @@ class SemanticModulatorServer:
                         "properties": {
                             "ai_response": {
                                 "type": "string",
-                                "description": "The response you generated"
+                                "description": "The response you generated",
                             },
                             "file_id": {
                                 "type": "string",
-                                "description": "Which document was being discussed"
+                                "description": "Which document was being discussed",
                             },
                             "retrieved_nodes": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "Which node IDs you actually retrieved/viewed"
+                                "description": "Which node IDs you actually retrieved/viewed",
                             },
                         },
                         "required": ["ai_response", "file_id", "retrieved_nodes"],
@@ -227,11 +236,11 @@ class SemanticModulatorServer:
                         "properties": {
                             "ai_response": {
                                 "type": "string",
-                                "description": "The response to validate"
+                                "description": "The response to validate",
                             },
                             "file_id": {
                                 "type": "string",
-                                "description": "The source document"
+                                "description": "The source document",
                             },
                         },
                         "required": ["ai_response", "file_id"],
@@ -249,7 +258,7 @@ class SemanticModulatorServer:
                         "properties": {
                             "file_id": {
                                 "type": "string",
-                                "description": "Optional: specific file ID, or omit for global stats"
+                                "description": "Optional: specific file ID, or omit for global stats",
                             },
                         },
                     },
@@ -370,7 +379,9 @@ Next steps:
             result_lines.append(f"   Importance: {node.importance:.3f}")
             result_lines.append(f"   Summary: {summary}\n")
 
-        result_lines.append(f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content")
+        result_lines.append(
+            f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content"
+        )
 
         return "\n".join(result_lines)
 
@@ -412,7 +423,9 @@ Next steps:
             result += "The response may contain fabricated information:\n"
             for warning in warnings:
                 result += f"  • {warning}\n"
-            result += "\nRecommendation: Re-examine source material and regenerate response."
+            result += (
+                "\nRecommendation: Re-examine source material and regenerate response."
+            )
         else:
             result = "✅ Response appears grounded in source material.\n"
             result += "No hallucination detected."
@@ -454,15 +467,15 @@ Files: {', '.join(stats['files'])}
     async def run(self):
         """Run the MCP server"""
         logger.info("🚀 Starting Semantic Modulator MCP Server")
-        logger.info("   Combining Semantic Communication + Fidelity-Preserving Encoding")
+        logger.info(
+            "   Combining Semantic Communication + Fidelity-Preserving Encoding"
+        )
         logger.info("   Model: all-MiniLM-L6-v2 (local)")
         logger.info("   Mode: Adaptive Semantic Fidelity\n")
 
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
-                read_stream,
-                write_stream,
-                self.server.create_initialization_options()
+                read_stream, write_stream, self.server.create_initialization_options()
             )
 
 

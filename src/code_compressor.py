@@ -24,6 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 class CodeLanguage(Enum):
     """Supported programming languages"""
+
     PYTHON = "python"
     JAVASCRIPT = "javascript"
     TYPESCRIPT = "typescript"
@@ -37,6 +38,7 @@ class CodeLanguage(Enum):
 @dataclass
 class CodeChunk:
     """Represents a semantic code unit"""
+
     chunk_id: str
     chunk_type: str  # "function", "class", "import", "comment", "block"
     code: str
@@ -80,7 +82,9 @@ class CodeSemanticCompressor:
         try:
             self.model = SentenceTransformer(model_name)
         except Exception as e:
-            print(f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2")
+            print(
+                f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2"
+            )
             self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.similarity_threshold = similarity_threshold
@@ -93,19 +97,19 @@ class CodeSemanticCompressor:
     def detect_language(self, filepath: str) -> CodeLanguage:
         """Detect programming language from file extension"""
         ext_map = {
-            '.py': CodeLanguage.PYTHON,
-            '.js': CodeLanguage.JAVASCRIPT,
-            '.jsx': CodeLanguage.JAVASCRIPT,
-            '.ts': CodeLanguage.TYPESCRIPT,
-            '.tsx': CodeLanguage.TYPESCRIPT,
-            '.java': CodeLanguage.JAVA,
-            '.cpp': CodeLanguage.CPP,
-            '.cc': CodeLanguage.CPP,
-            '.cxx': CodeLanguage.CPP,
-            '.h': CodeLanguage.CPP,
-            '.hpp': CodeLanguage.CPP,
-            '.go': CodeLanguage.GO,
-            '.rs': CodeLanguage.RUST,
+            ".py": CodeLanguage.PYTHON,
+            ".js": CodeLanguage.JAVASCRIPT,
+            ".jsx": CodeLanguage.JAVASCRIPT,
+            ".ts": CodeLanguage.TYPESCRIPT,
+            ".tsx": CodeLanguage.TYPESCRIPT,
+            ".java": CodeLanguage.JAVA,
+            ".cpp": CodeLanguage.CPP,
+            ".cc": CodeLanguage.CPP,
+            ".cxx": CodeLanguage.CPP,
+            ".h": CodeLanguage.CPP,
+            ".hpp": CodeLanguage.CPP,
+            ".go": CodeLanguage.GO,
+            ".rs": CodeLanguage.RUST,
         }
 
         for ext, lang in ext_map.items():
@@ -129,7 +133,9 @@ class CodeSemanticCompressor:
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
-            print(f"Warning: Syntax error in {file_id}, falling back to line-based chunking")
+            print(
+                f"Warning: Syntax error in {file_id}, falling back to line-based chunking"
+            )
             return self._chunk_by_lines(code, file_id)
 
         # Extract imports
@@ -144,17 +150,21 @@ class CodeSemanticCompressor:
                     imports.append(f"{module}.{alias.name}")
 
         if imports:
-            import_code = "\n".join([line for line in code.split('\n') if 'import' in line])
-            chunks.append(CodeChunk(
-                chunk_id=f"{file_id}_imports",
-                chunk_type="import",
-                code=import_code,
-                name="imports",
-                docstring=None,
-                start_line=1,
-                end_line=len(import_code.split('\n')),
-                dependencies=imports
-            ))
+            import_code = "\n".join(
+                [line for line in code.split("\n") if "import" in line]
+            )
+            chunks.append(
+                CodeChunk(
+                    chunk_id=f"{file_id}_imports",
+                    chunk_type="import",
+                    code=import_code,
+                    name="imports",
+                    docstring=None,
+                    start_line=1,
+                    end_line=len(import_code.split("\n")),
+                    dependencies=imports,
+                )
+            )
 
         # Extract functions and classes
         for node in ast.walk(tree):
@@ -172,16 +182,18 @@ class CodeSemanticCompressor:
                         elif isinstance(child.func, ast.Attribute):
                             deps.append(child.func.attr)
 
-                chunks.append(CodeChunk(
-                    chunk_id=f"{file_id}_func_{node.name}",
-                    chunk_type="function",
-                    code=func_code or "",
-                    name=node.name,
-                    docstring=docstring,
-                    start_line=node.lineno,
-                    end_line=node.end_lineno or node.lineno,
-                    dependencies=deps
-                ))
+                chunks.append(
+                    CodeChunk(
+                        chunk_id=f"{file_id}_func_{node.name}",
+                        chunk_type="function",
+                        code=func_code or "",
+                        name=node.name,
+                        docstring=docstring,
+                        start_line=node.lineno,
+                        end_line=node.end_lineno or node.lineno,
+                        dependencies=deps,
+                    )
+                )
 
             elif isinstance(node, ast.ClassDef):
                 # Extract class
@@ -191,16 +203,18 @@ class CodeSemanticCompressor:
                 # Get method names
                 methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef)]
 
-                chunks.append(CodeChunk(
-                    chunk_id=f"{file_id}_class_{node.name}",
-                    chunk_type="class",
-                    code=class_code or "",
-                    name=node.name,
-                    docstring=docstring,
-                    start_line=node.lineno,
-                    end_line=node.end_lineno or node.lineno,
-                    dependencies=methods
-                ))
+                chunks.append(
+                    CodeChunk(
+                        chunk_id=f"{file_id}_class_{node.name}",
+                        chunk_type="class",
+                        code=class_code or "",
+                        name=node.name,
+                        docstring=docstring,
+                        start_line=node.lineno,
+                        end_line=node.end_lineno or node.lineno,
+                        dependencies=methods,
+                    )
+                )
 
         return chunks
 
@@ -214,68 +228,82 @@ class CodeSemanticCompressor:
         chunks = []
 
         # Extract imports
-        import_pattern = r'(?:import|require)\s+.*?(?:from\s+[\'"](.+?)[\'"]|[\'"](.+?)[\'"])'
+        import_pattern = (
+            r'(?:import|require)\s+.*?(?:from\s+[\'"](.+?)[\'"]|[\'"](.+?)[\'"])'
+        )
         imports = re.findall(import_pattern, code)
 
         if imports:
-            import_lines = [line for line in code.split('\n') if 'import' in line or 'require' in line]
-            chunks.append(CodeChunk(
-                chunk_id=f"{file_id}_imports",
-                chunk_type="import",
-                code="\n".join(import_lines),
-                name="imports",
-                docstring=None,
-                start_line=1,
-                end_line=len(import_lines),
-                dependencies=[imp[0] or imp[1] for imp in imports]
-            ))
+            import_lines = [
+                line
+                for line in code.split("\n")
+                if "import" in line or "require" in line
+            ]
+            chunks.append(
+                CodeChunk(
+                    chunk_id=f"{file_id}_imports",
+                    chunk_type="import",
+                    code="\n".join(import_lines),
+                    name="imports",
+                    docstring=None,
+                    start_line=1,
+                    end_line=len(import_lines),
+                    dependencies=[imp[0] or imp[1] for imp in imports],
+                )
+            )
 
         # Extract functions (simplified)
-        func_pattern = r'(?:function|const|let|var)\s+(\w+)\s*=?\s*(?:\([^)]*\)|async\s*\([^)]*\))\s*(?:=>)?\s*\{([^}]*)\}'
+        func_pattern = r"(?:function|const|let|var)\s+(\w+)\s*=?\s*(?:\([^)]*\)|async\s*\([^)]*\))\s*(?:=>)?\s*\{([^}]*)\}"
 
         for match in re.finditer(func_pattern, code, re.MULTILINE | re.DOTALL):
             func_name = match.group(1)
             func_body = match.group(2)
 
             # Extract docstring (JSDoc)
-            jsdoc_pattern = r'/\*\*([^*]|\*(?!/))*\*/'
-            jsdoc_match = re.search(jsdoc_pattern, code[:match.start()])
+            jsdoc_pattern = r"/\*\*([^*]|\*(?!/))*\*/"
+            jsdoc_match = re.search(jsdoc_pattern, code[: match.start()])
             docstring = jsdoc_match.group(0) if jsdoc_match else None
 
-            chunks.append(CodeChunk(
-                chunk_id=f"{file_id}_func_{func_name}",
-                chunk_type="function",
-                code=match.group(0),
-                name=func_name,
-                docstring=docstring,
-                start_line=code[:match.start()].count('\n') + 1,
-                end_line=code[:match.end()].count('\n') + 1,
-                dependencies=[]
-            ))
+            chunks.append(
+                CodeChunk(
+                    chunk_id=f"{file_id}_func_{func_name}",
+                    chunk_type="function",
+                    code=match.group(0),
+                    name=func_name,
+                    docstring=docstring,
+                    start_line=code[: match.start()].count("\n") + 1,
+                    end_line=code[: match.end()].count("\n") + 1,
+                    dependencies=[],
+                )
+            )
 
         return chunks
 
-    def _chunk_by_lines(self, code: str, file_id: str, lines_per_chunk: int = 50) -> List[CodeChunk]:
+    def _chunk_by_lines(
+        self, code: str, file_id: str, lines_per_chunk: int = 50
+    ) -> List[CodeChunk]:
         """
         Fallback chunking strategy: split by lines when AST parsing fails.
         """
-        lines = code.split('\n')
+        lines = code.split("\n")
         chunks = []
 
         for i in range(0, len(lines), lines_per_chunk):
-            chunk_lines = lines[i:i + lines_per_chunk]
-            chunk_code = '\n'.join(chunk_lines)
+            chunk_lines = lines[i : i + lines_per_chunk]
+            chunk_code = "\n".join(chunk_lines)
 
-            chunks.append(CodeChunk(
-                chunk_id=f"{file_id}_block_{i // lines_per_chunk}",
-                chunk_type="block",
-                code=chunk_code,
-                name=f"block_{i}",
-                docstring=None,
-                start_line=i + 1,
-                end_line=min(i + lines_per_chunk, len(lines)),
-                dependencies=[]
-            ))
+            chunks.append(
+                CodeChunk(
+                    chunk_id=f"{file_id}_block_{i // lines_per_chunk}",
+                    chunk_type="block",
+                    code=chunk_code,
+                    name=f"block_{i}",
+                    docstring=None,
+                    start_line=i + 1,
+                    end_line=min(i + lines_per_chunk, len(lines)),
+                    dependencies=[],
+                )
+            )
 
         return chunks
 
@@ -284,7 +312,7 @@ class CodeSemanticCompressor:
         code: str,
         file_id: str,
         filepath: Optional[str] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> Dict:
         """
         Ingest source code file and create semantic graph.
@@ -340,21 +368,30 @@ class CodeSemanticCompressor:
             self.chunks[chunk.chunk_id] = chunk
 
             # Add node
-            graph.add_node(chunk.chunk_id, **{
-                'type': chunk.chunk_type,
-                'name': chunk.name,
-                'lines': chunk.end_line - chunk.start_line,
-            })
+            graph.add_node(
+                chunk.chunk_id,
+                **{
+                    "type": chunk.chunk_type,
+                    "name": chunk.name,
+                    "lines": chunk.end_line - chunk.start_line,
+                },
+            )
 
             # Add dependency edges
             for dep in chunk.dependencies:
                 # Find chunks with matching names
                 for other_chunk in chunks:
-                    if other_chunk.name == dep and other_chunk.chunk_id != chunk.chunk_id:
-                        graph.add_edge(chunk.chunk_id, other_chunk.chunk_id, type='dependency')
+                    if (
+                        other_chunk.name == dep
+                        and other_chunk.chunk_id != chunk.chunk_id
+                    ):
+                        graph.add_edge(
+                            chunk.chunk_id, other_chunk.chunk_id, type="dependency"
+                        )
 
         # Add semantic similarity edges
         from sklearn.metrics.pairwise import cosine_similarity
+
         similarity_matrix = cosine_similarity(embeddings)
 
         for i in range(len(chunks)):
@@ -362,10 +399,18 @@ class CodeSemanticCompressor:
                 similarity = similarity_matrix[i][j]
                 if similarity > self.similarity_threshold:
                     # Undirected similarity edge
-                    graph.add_edge(chunks[i].chunk_id, chunks[j].chunk_id,
-                                 type='semantic', weight=float(similarity))
-                    graph.add_edge(chunks[j].chunk_id, chunks[i].chunk_id,
-                                 type='semantic', weight=float(similarity))
+                    graph.add_edge(
+                        chunks[i].chunk_id,
+                        chunks[j].chunk_id,
+                        type="semantic",
+                        weight=float(similarity),
+                    )
+                    graph.add_edge(
+                        chunks[j].chunk_id,
+                        chunks[i].chunk_id,
+                        type="semantic",
+                        weight=float(similarity),
+                    )
 
         # Calculate importance using PageRank
         print(f"  Calculating importance scores...")
@@ -386,18 +431,18 @@ class CodeSemanticCompressor:
         total_lines = sum(c.end_line - c.start_line for c in chunks)
 
         stats = {
-            'file_id': file_id,
-            'language': language.value,
-            'total_chunks': len(chunks),
-            'total_lines': total_lines,
-            'chunk_types': {
-                'imports': sum(1 for c in chunks if c.chunk_type == 'import'),
-                'functions': sum(1 for c in chunks if c.chunk_type == 'function'),
-                'classes': sum(1 for c in chunks if c.chunk_type == 'class'),
-                'blocks': sum(1 for c in chunks if c.chunk_type == 'block'),
+            "file_id": file_id,
+            "language": language.value,
+            "total_chunks": len(chunks),
+            "total_lines": total_lines,
+            "chunk_types": {
+                "imports": sum(1 for c in chunks if c.chunk_type == "import"),
+                "functions": sum(1 for c in chunks if c.chunk_type == "function"),
+                "classes": sum(1 for c in chunks if c.chunk_type == "class"),
+                "blocks": sum(1 for c in chunks if c.chunk_type == "block"),
             },
-            'graph_nodes': graph.number_of_nodes(),
-            'graph_edges': graph.number_of_edges(),
+            "graph_nodes": graph.number_of_nodes(),
+            "graph_edges": graph.number_of_edges(),
         }
 
         print(f"  ✅ Parsed {len(chunks)} chunks:")
@@ -423,9 +468,7 @@ class CodeSemanticCompressor:
 
         # Get chunks sorted by importance
         file_chunks = [
-            (cid, self.chunks[cid])
-            for cid in graph.nodes()
-            if cid.startswith(file_id)
+            (cid, self.chunks[cid]) for cid in graph.nodes() if cid.startswith(file_id)
         ]
         file_chunks.sort(key=lambda x: x[1].importance, reverse=True)
 
@@ -435,44 +478,62 @@ class CodeSemanticCompressor:
 
         skeleton_lines = []
         skeleton_lines.append(f"=== CODE SKELETON: {file_id} ===")
-        skeleton_lines.append(f"Total chunks: {len(file_chunks)} | Showing: {show_top_n}")
+        skeleton_lines.append(
+            f"Total chunks: {len(file_chunks)} | Showing: {show_top_n}"
+        )
         skeleton_lines.append("")
 
         # Always show imports first
-        import_chunks = [c for cid, c in file_chunks if c.chunk_type == 'import']
+        import_chunks = [c for cid, c in file_chunks if c.chunk_type == "import"]
         if import_chunks:
             skeleton_lines.append("📦 IMPORTS:")
             for chunk in import_chunks:
                 skeleton_lines.append(f"   {', '.join(chunk.dependencies[:5])}")
                 if len(chunk.dependencies) > 5:
-                    skeleton_lines.append(f"   ... and {len(chunk.dependencies) - 5} more")
+                    skeleton_lines.append(
+                        f"   ... and {len(chunk.dependencies) - 5} more"
+                    )
             skeleton_lines.append("")
 
         # Show top N important chunks
-        top_chunks = [c for cid, c in file_chunks[:show_top_n] if c.chunk_type != 'import']
+        top_chunks = [
+            c for cid, c in file_chunks[:show_top_n] if c.chunk_type != "import"
+        ]
 
         for chunk in top_chunks:
-            if chunk.chunk_type == 'function':
+            if chunk.chunk_type == "function":
                 # Extract function signature
-                signature = chunk.code.split('{')[0].strip() if '{' in chunk.code else chunk.code.split('\n')[0]
+                signature = (
+                    chunk.code.split("{")[0].strip()
+                    if "{" in chunk.code
+                    else chunk.code.split("\n")[0]
+                )
 
-                skeleton_lines.append(f"⭐ FUNCTION: {chunk.name} (importance: {chunk.importance:.3f})")
+                skeleton_lines.append(
+                    f"⭐ FUNCTION: {chunk.name} (importance: {chunk.importance:.3f})"
+                )
                 skeleton_lines.append(f"   Signature: {signature}")
                 if chunk.docstring:
                     # First line of docstring
-                    first_doc_line = chunk.docstring.strip().split('\n')[0].strip()
+                    first_doc_line = chunk.docstring.strip().split("\n")[0].strip()
                     skeleton_lines.append(f"   Doc: {first_doc_line[:80]}...")
                 skeleton_lines.append(f"   Lines: {chunk.start_line}-{chunk.end_line}")
                 skeleton_lines.append("")
 
-            elif chunk.chunk_type == 'class':
-                skeleton_lines.append(f"⭐ CLASS: {chunk.name} (importance: {chunk.importance:.3f})")
+            elif chunk.chunk_type == "class":
+                skeleton_lines.append(
+                    f"⭐ CLASS: {chunk.name} (importance: {chunk.importance:.3f})"
+                )
                 if chunk.docstring:
-                    first_doc_line = chunk.docstring.strip().split('\n')[0].strip()
+                    first_doc_line = chunk.docstring.strip().split("\n")[0].strip()
                     skeleton_lines.append(f"   Doc: {first_doc_line[:80]}...")
-                skeleton_lines.append(f"   Methods: {', '.join(chunk.dependencies[:5])}")
+                skeleton_lines.append(
+                    f"   Methods: {', '.join(chunk.dependencies[:5])}"
+                )
                 if len(chunk.dependencies) > 5:
-                    skeleton_lines.append(f"   ... and {len(chunk.dependencies) - 5} more methods")
+                    skeleton_lines.append(
+                        f"   ... and {len(chunk.dependencies) - 5} more methods"
+                    )
                 skeleton_lines.append(f"   Lines: {chunk.start_line}-{chunk.end_line}")
                 skeleton_lines.append("")
 
@@ -480,11 +541,15 @@ class CodeSemanticCompressor:
         hidden_count = len(file_chunks) - show_top_n - len(import_chunks)
         if hidden_count > 0:
             skeleton_lines.append(f"📦 {hidden_count} additional chunks hidden")
-            skeleton_lines.append("   Use search_code() or modulate_code() to retrieve them")
+            skeleton_lines.append(
+                "   Use search_code() or modulate_code() to retrieve them"
+            )
 
         return "\n".join(skeleton_lines)
 
-    def search_code(self, query: str, file_id: Optional[str] = None, top_k: int = 5) -> List[Tuple[str, float]]:
+    def search_code(
+        self, query: str, file_id: Optional[str] = None, top_k: int = 5
+    ) -> List[Tuple[str, float]]:
         """
         Semantic code search.
 
@@ -504,10 +569,8 @@ class CodeSemanticCompressor:
                 continue
 
             from sklearn.metrics.pairwise import cosine_similarity
-            similarity = cosine_similarity(
-                [query_embedding],
-                [chunk.embedding]
-            )[0][0]
+
+            similarity = cosine_similarity([query_embedding], [chunk.embedding])[0][0]
 
             candidates.append((chunk_id, float(similarity)))
 
@@ -607,9 +670,7 @@ def evaluate_model(model, test_data, test_labels):
 
     # Ingest code
     stats = compressor.ingest_code_file(
-        code=sample_code,
-        file_id="neural_net",
-        filepath="neural_net.py"
+        code=sample_code, file_id="neural_net", filepath="neural_net.py"
     )
 
     print("\n" + "=" * 70)

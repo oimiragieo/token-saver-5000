@@ -25,6 +25,7 @@ import networkx as nx
 
 class ModalityType(Enum):
     """Content modality types"""
+
     TEXT = "text"
     CODE = "code"
     IMAGE = "image"
@@ -33,6 +34,7 @@ class ModalityType(Enum):
 @dataclass
 class MultiModalNode:
     """Node that can contain any modality"""
+
     node_id: str
     modality: ModalityType
     content: Union[str, bytes]  # Text/code string or image bytes
@@ -59,7 +61,7 @@ class MultiModalCompressor:
     def __init__(
         self,
         use_clip_for_images: bool = True,
-        use_codebert_for_code: bool = False  # Fallback to general model if False
+        use_codebert_for_code: bool = False,  # Fallback to general model if False
     ):
         """
         Initialize multi-modal compressor.
@@ -127,6 +129,7 @@ class MultiModalCompressor:
 
         try:
             from PIL import Image
+
             image = Image.open(BytesIO(image_data))
 
             # CLIP expects PIL images
@@ -140,7 +143,7 @@ class MultiModalCompressor:
         self,
         content_items: List[Dict],
         project_id: str,
-        similarity_threshold: float = 0.70
+        similarity_threshold: float = 0.70,
     ) -> Dict:
         """
         Ingest mixed content (text, code, images) into unified graph.
@@ -170,18 +173,18 @@ class MultiModalCompressor:
 
         # Process each content item
         for i, item in enumerate(content_items):
-            content_type = item.get('type', 'text')
-            content = item['content']
-            metadata = item.get('metadata', {})
+            content_type = item.get("type", "text")
+            content = item["content"]
+            metadata = item.get("metadata", {})
 
             # Determine modality
-            if content_type == 'text':
+            if content_type == "text":
                 modality = ModalityType.TEXT
                 embedding = self._encode_text(content)
-            elif content_type == 'code':
+            elif content_type == "code":
                 modality = ModalityType.CODE
                 embedding = self._encode_code(content)
-            elif content_type == 'image':
+            elif content_type == "image":
                 modality = ModalityType.IMAGE
                 embedding = self._encode_image(content)
                 if embedding is None:
@@ -197,7 +200,7 @@ class MultiModalCompressor:
                 modality=modality,
                 content=content,
                 embedding=embedding,
-                metadata=metadata
+                metadata=metadata,
             )
 
             nodes.append(node)
@@ -207,13 +210,16 @@ class MultiModalCompressor:
         print(f"  Created {len(nodes)} nodes:")
         print(f"    Text: {sum(1 for n in nodes if n.modality == ModalityType.TEXT)}")
         print(f"    Code: {sum(1 for n in nodes if n.modality == ModalityType.CODE)}")
-        print(f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}")
+        print(
+            f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}"
+        )
 
         # Build cross-modal semantic graph
         print(f"  Building cross-modal graph...")
         graph = nx.Graph()
 
         from sklearn.metrics.pairwise import cosine_similarity
+
         embeddings_array = np.array(embeddings)
         similarity_matrix = cosine_similarity(embeddings_array)
 
@@ -229,7 +235,7 @@ class MultiModalCompressor:
                         node_i.node_id,
                         node_j.node_id,
                         weight=float(similarity),
-                        connection_type=f"{node_i.modality.value}-{node_j.modality.value}"
+                        connection_type=f"{node_i.modality.value}-{node_j.modality.value}",
                     )
 
         # Calculate importance
@@ -245,19 +251,19 @@ class MultiModalCompressor:
         # Statistics
         edge_types = {}
         for u, v, data in graph.edges(data=True):
-            conn_type = data.get('connection_type', 'unknown')
+            conn_type = data.get("connection_type", "unknown")
             edge_types[conn_type] = edge_types.get(conn_type, 0) + 1
 
         stats = {
-            'project_id': project_id,
-            'total_nodes': len(nodes),
-            'nodes_by_modality': {
-                'text': sum(1 for n in nodes if n.modality == ModalityType.TEXT),
-                'code': sum(1 for n in nodes if n.modality == ModalityType.CODE),
-                'image': sum(1 for n in nodes if n.modality == ModalityType.IMAGE),
+            "project_id": project_id,
+            "total_nodes": len(nodes),
+            "nodes_by_modality": {
+                "text": sum(1 for n in nodes if n.modality == ModalityType.TEXT),
+                "code": sum(1 for n in nodes if n.modality == ModalityType.CODE),
+                "image": sum(1 for n in nodes if n.modality == ModalityType.IMAGE),
             },
-            'graph_edges': graph.number_of_edges(),
-            'cross_modal_connections': edge_types,
+            "graph_edges": graph.number_of_edges(),
+            "cross_modal_connections": edge_types,
         }
 
         print(f"  ✅ Created unified graph:")
@@ -270,10 +276,10 @@ class MultiModalCompressor:
     def search_cross_modal(
         self,
         query: Union[str, bytes],
-        query_type: str = 'text',
+        query_type: str = "text",
         project_id: Optional[str] = None,
         top_k: int = 5,
-        filter_modality: Optional[str] = None
+        filter_modality: Optional[str] = None,
     ) -> List[Tuple[str, float, str]]:
         """
         Cross-modal semantic search.
@@ -299,11 +305,11 @@ class MultiModalCompressor:
             search_cross_modal("def train_model():", query_type='code', filter_modality='text')
         """
         # Encode query
-        if query_type == 'text':
+        if query_type == "text":
             query_embedding = self._encode_text(query)
-        elif query_type == 'code':
+        elif query_type == "code":
             query_embedding = self._encode_code(query)
-        elif query_type == 'image':
+        elif query_type == "image":
             query_embedding = self._encode_image(query)
             if query_embedding is None:
                 return []
@@ -321,10 +327,8 @@ class MultiModalCompressor:
                 continue
 
             from sklearn.metrics.pairwise import cosine_similarity
-            similarity = cosine_similarity(
-                [query_embedding],
-                [node.embedding]
-            )[0][0]
+
+            similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
 
             candidates.append((node_id, float(similarity), node.modality.value))
 
@@ -340,23 +344,23 @@ class MultiModalCompressor:
         """
         node = self.nodes.get(node_id)
         if not node:
-            return {'error': f'Node {node_id} not found'}
+            return {"error": f"Node {node_id} not found"}
 
         result = {
-            'node_id': node_id,
-            'modality': node.modality.value,
-            'importance': node.importance,
-            'metadata': node.metadata,
+            "node_id": node_id,
+            "modality": node.modality.value,
+            "importance": node.importance,
+            "metadata": node.metadata,
         }
 
         if node.modality == ModalityType.IMAGE:
             # For images, provide base64 encoding
-            result['content'] = base64.b64encode(node.content).decode('utf-8')
-            result['content_type'] = 'base64'
+            result["content"] = base64.b64encode(node.content).decode("utf-8")
+            result["content_type"] = "base64"
         else:
             # For text/code, provide as string
-            result['content'] = node.content
-            result['content_type'] = 'text'
+            result["content"] = node.content
+            result["content_type"] = "text"
 
         return result
 
@@ -380,9 +384,15 @@ class MultiModalCompressor:
             if nid.startswith(project_id)
         ]
 
-        text_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.TEXT]
-        code_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.CODE]
-        image_nodes = [(nid, n) for nid, n in project_nodes if n.modality == ModalityType.IMAGE]
+        text_nodes = [
+            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.TEXT
+        ]
+        code_nodes = [
+            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.CODE
+        ]
+        image_nodes = [
+            (nid, n) for nid, n in project_nodes if n.modality == ModalityType.IMAGE
+        ]
 
         lines = []
         lines.append(f"=== MULTI-MODAL PROJECT: {project_id} ===")
@@ -394,8 +404,10 @@ class MultiModalCompressor:
             lines.append(f"📄 TEXT DOCUMENTS ({len(text_nodes)}):")
             text_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in text_nodes[:3]:
-                preview = node.content[:80].replace('\n', ' ')
-                lines.append(f"  {nid}: {preview}... (importance: {node.importance:.3f})")
+                preview = node.content[:80].replace("\n", " ")
+                lines.append(
+                    f"  {nid}: {preview}... (importance: {node.importance:.3f})"
+                )
             if len(text_nodes) > 3:
                 lines.append(f"  ... and {len(text_nodes) - 3} more")
             lines.append("")
@@ -405,9 +417,11 @@ class MultiModalCompressor:
             lines.append(f"💻 CODE FILES ({len(code_nodes)}):")
             code_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in code_nodes[:3]:
-                file_name = node.metadata.get('file', 'unknown')
-                preview = node.content[:60].replace('\n', ' ')
-                lines.append(f"  {nid} ({file_name}): {preview}... (importance: {node.importance:.3f})")
+                file_name = node.metadata.get("file", "unknown")
+                preview = node.content[:60].replace("\n", " ")
+                lines.append(
+                    f"  {nid} ({file_name}): {preview}... (importance: {node.importance:.3f})"
+                )
             if len(code_nodes) > 3:
                 lines.append(f"  ... and {len(code_nodes) - 3} more")
             lines.append("")
@@ -417,9 +431,11 @@ class MultiModalCompressor:
             lines.append(f"🖼️  IMAGES ({len(image_nodes)}):")
             image_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in image_nodes[:3]:
-                file_name = node.metadata.get('file', 'unknown')
+                file_name = node.metadata.get("file", "unknown")
                 size_kb = len(node.content) / 1024
-                lines.append(f"  {nid} ({file_name}): {size_kb:.1f}KB (importance: {node.importance:.3f})")
+                lines.append(
+                    f"  {nid} ({file_name}): {size_kb:.1f}KB (importance: {node.importance:.3f})"
+                )
             if len(image_nodes) > 3:
                 lines.append(f"  ... and {len(image_nodes) - 3} more")
             lines.append("")
@@ -427,9 +443,9 @@ class MultiModalCompressor:
         # Cross-modal connections
         cross_modal = []
         for u, v, data in graph.edges(data=True):
-            conn_type = data.get('connection_type', '')
-            if '-' in conn_type and conn_type.split('-')[0] != conn_type.split('-')[1]:
-                cross_modal.append((u, v, data['weight']))
+            conn_type = data.get("connection_type", "")
+            if "-" in conn_type and conn_type.split("-")[0] != conn_type.split("-")[1]:
+                cross_modal.append((u, v, data["weight"]))
 
         if cross_modal:
             cross_modal.sort(key=lambda x: x[2], reverse=True)
@@ -451,19 +467,19 @@ if __name__ == "__main__":
     # Initialize
     compressor = MultiModalCompressor(
         use_clip_for_images=True,  # Try to use CLIP for images
-        use_codebert_for_code=False  # Use general model for simplicity
+        use_codebert_for_code=False,  # Use general model for simplicity
     )
 
     # Sample multi-modal content
     content = [
         {
-            'type': 'text',
-            'content': 'This project implements a neural network for image classification using PyTorch.',
-            'metadata': {'file': 'README.md'}
+            "type": "text",
+            "content": "This project implements a neural network for image classification using PyTorch.",
+            "metadata": {"file": "README.md"},
         },
         {
-            'type': 'code',
-            'content': '''
+            "type": "code",
+            "content": '''
 def train_model(model, data_loader, epochs=10):
     """Train the neural network model"""
     for epoch in range(epochs):
@@ -472,12 +488,12 @@ def train_model(model, data_loader, epochs=10):
             loss.backward()
     return model
 ''',
-            'metadata': {'file': 'train.py', 'function': 'train_model'}
+            "metadata": {"file": "train.py", "function": "train_model"},
         },
         {
-            'type': 'text',
-            'content': 'The model achieves 95% accuracy on the test set after 10 epochs of training.',
-            'metadata': {'file': 'results.txt'}
+            "type": "text",
+            "content": "The model achieves 95% accuracy on the test set after 10 epochs of training.",
+            "metadata": {"file": "results.txt"},
         },
     ]
 
@@ -499,10 +515,10 @@ def train_model(model, data_loader, epochs=10):
     query = "training neural networks"
     results = compressor.search_cross_modal(
         query=query,
-        query_type='text',
+        query_type="text",
         project_id="ml_project",
-        filter_modality='code',  # Only return code
-        top_k=3
+        filter_modality="code",  # Only return code
+        top_k=3,
     )
 
     print(f"\nQuery: '{query}'")
@@ -510,7 +526,7 @@ def train_model(model, data_loader, epochs=10):
     print("\nResults:")
     for node_id, score, modality in results:
         node = compressor.nodes[node_id]
-        preview = node.content[:60].replace('\n', ' ')
+        preview = node.content[:60].replace("\n", " ")
         print(f"  {node_id} ({modality}, score: {score:.3f}): {preview}...")
 
     print("\n✅ Multi-modal compression demo complete!")

@@ -14,7 +14,7 @@ import sys
 import os
 
 # Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.blind_spot_detector import BlindSpotDetector, HaloEffectDetector
@@ -106,14 +106,16 @@ def main():
             "title": "Introduction to Quantum Error Correction",
             "author": "Example Author",
             "date": "2025-01-15",
-        }
+        },
     )
 
     print(f"Original document length: {len(SAMPLE_DOCUMENT)} characters")
     print(f"Original tokens: {skeleton.total_tokens:,}")
     print(f"Skeleton tokens: {skeleton.skeleton_tokens:,}")
     print(f"Compression ratio: {skeleton.compression_ratio:.1f}x")
-    print(f"Token savings: {(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%")
+    print(
+        f"Token savings: {(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%"
+    )
 
     # =================================================================
     # STEP 2: Read the skeleton
@@ -199,20 +201,21 @@ def main():
 
         print("Retrieving missed critical context...")
         missed_content = compressor.modulate_region(
-            report.auto_inject,
-            FidelityLevel.RAW
+            report.auto_inject, FidelityLevel.RAW
         )
         print(missed_content)
 
         print("\n💡 Corrected understanding:")
-        print("""
+        print(
+            """
         While initial fidelity measurements appear impressive at 99.7%, recent studies
         have revealed important caveats. Cross-talk between qubits and correlated errors
         can make fidelities appear higher than they truly are. More sophisticated methods
         like gate set tomography reveal systematic errors that simpler benchmarking misses.
         This suggests the path to fault-tolerant quantum computation may be longer than
         initially thought.
-        """)
+        """
+        )
 
     # =================================================================
     # STEP 7: Hallucination detection

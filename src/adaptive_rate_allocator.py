@@ -45,8 +45,7 @@ class AdaptiveRateAllocator(nn.Module):
         # Possible skeleton ratios (like JSCCM's rate levels)
         # [0.10, 0.15, 0.20, 0.25, 0.30]
         self.rate_levels = nn.Parameter(
-            torch.linspace(0.10, 0.30, num_rate_levels),
-            requires_grad=False
+            torch.linspace(0.10, 0.30, num_rate_levels), requires_grad=False
         )
 
         # MLP to predict optimal rate level
@@ -56,7 +55,7 @@ class AdaptiveRateAllocator(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, num_rate_levels)  # Logits for each rate level
+            nn.Linear(64, num_rate_levels),  # Logits for each rate level
         )
 
     def calculate_complexity_score(self, graph: nx.Graph) -> float:
@@ -96,9 +95,7 @@ class AdaptiveRateAllocator(nn.Module):
         return complexity
 
     def gumbel_softmax_rate_selection(
-        self,
-        logits: torch.Tensor,
-        hard: bool = False
+        self, logits: torch.Tensor, hard: bool = False
     ) -> Tuple[torch.Tensor, int]:
         """
         Gumbel-Softmax for differentiable rate level selection
@@ -145,7 +142,7 @@ class AdaptiveRateAllocator(nn.Module):
         graph: nx.Graph,
         available_context_tokens: int,
         max_context_tokens: int = 100000,
-        query_priority: float = 0.5
+        query_priority: float = 0.5,
     ) -> Tuple[float, Dict]:
         """
         Determine optimal skeleton ratio
@@ -167,11 +164,9 @@ class AdaptiveRateAllocator(nn.Module):
         context_availability = available_context_tokens / max_context_tokens
 
         # 3. Create feature vector
-        features = torch.tensor([
-            complexity,
-            context_availability,
-            query_priority
-        ], dtype=torch.float32)
+        features = torch.tensor(
+            [complexity, context_availability, query_priority], dtype=torch.float32
+        )
 
         # 4. Predict rate level
         logits = self.rate_predictor(features)
@@ -185,12 +180,12 @@ class AdaptiveRateAllocator(nn.Module):
         skeleton_ratio = self.rate_levels[selected_level].item()
 
         diagnostics = {
-            'complexity': complexity,
-            'context_availability': context_availability,
-            'selected_level': selected_level,
-            'skeleton_ratio': skeleton_ratio,
-            'logits': logits.detach().numpy(),
-            'selection_probs': F.softmax(logits, dim=-1).detach().numpy()
+            "complexity": complexity,
+            "context_availability": context_availability,
+            "selected_level": selected_level,
+            "skeleton_ratio": skeleton_ratio,
+            "logits": logits.detach().numpy(),
+            "selection_probs": F.softmax(logits, dim=-1).detach().numpy(),
         }
 
         return skeleton_ratio, diagnostics
@@ -215,7 +210,7 @@ class ContextWindowAdapter:
         file_id: str,
         available_tokens: int,
         max_tokens: int = 100000,
-        query_priority: float = 0.5
+        query_priority: float = 0.5,
     ) -> str:
         """
         Generate skeleton adapted to context window availability
@@ -241,7 +236,7 @@ class ContextWindowAdapter:
             graph=graph,
             available_context_tokens=available_tokens,
             max_context_tokens=max_tokens,
-            query_priority=query_priority
+            query_priority=query_priority,
         )
 
         # Generate skeleton with adapted ratio
@@ -306,26 +301,24 @@ class MultiLevelSemanticEncoder:
 
         # Like JSCCM: Main branch gets 80%, Auxiliary gets 20%
         # But we split into 3 levels instead of 2
-        main_count = int(total_nodes * 0.15)      # Top 15% - MUST include
-        auxiliary_count = int(total_nodes * 0.25) # Next 25% - include if space
+        main_count = int(total_nodes * 0.15)  # Top 15% - MUST include
+        auxiliary_count = int(total_nodes * 0.25)  # Next 25% - include if space
         # Rest are details - only if plenty of space
 
         main_nodes = [nid for nid, _ in file_nodes[:main_count]]
-        auxiliary_nodes = [nid for nid, _ in file_nodes[main_count:main_count+auxiliary_count]]
-        detail_nodes = [nid for nid, _ in file_nodes[main_count+auxiliary_count:]]
+        auxiliary_nodes = [
+            nid for nid, _ in file_nodes[main_count : main_count + auxiliary_count]
+        ]
+        detail_nodes = [nid for nid, _ in file_nodes[main_count + auxiliary_count :]]
 
         return {
-            'main': main_nodes,
-            'auxiliary': auxiliary_nodes,
-            'detail': detail_nodes,
-            'available_tokens': available_tokens
+            "main": main_nodes,
+            "auxiliary": auxiliary_nodes,
+            "detail": detail_nodes,
+            "available_tokens": available_tokens,
         }
 
-    def generate_adaptive_skeleton(
-        self,
-        file_id: str,
-        available_tokens: int
-    ) -> str:
+    def generate_adaptive_skeleton(self, file_id: str, available_tokens: int) -> str:
         """
         Generate skeleton by progressively adding levels based on available space
 
@@ -334,37 +327,39 @@ class MultiLevelSemanticEncoder:
         levels = self.encode_multilevel(file_id, available_tokens)
 
         # Always include main branch
-        included_nodes = levels['main']
+        included_nodes = levels["main"]
 
         # Include auxiliary if we have space
         # Rough estimate: each node ~50 tokens
-        main_token_estimate = len(levels['main']) * 50
+        main_token_estimate = len(levels["main"]) * 50
 
         if available_tokens - main_token_estimate > 2000:
             # Include auxiliary branch
-            included_nodes.extend(levels['auxiliary'])
+            included_nodes.extend(levels["auxiliary"])
 
-            auxiliary_token_estimate = len(levels['auxiliary']) * 50
+            auxiliary_token_estimate = len(levels["auxiliary"]) * 50
 
             if available_tokens - main_token_estimate - auxiliary_token_estimate > 5000:
                 # Include details too
-                included_nodes.extend(levels['detail'])
+                included_nodes.extend(levels["detail"])
 
         # Generate skeleton with selected nodes
         skeleton_lines = []
         skeleton_lines.append(f"=== MULTI-LEVEL SEMANTIC SKELETON: {file_id} ===")
         skeleton_lines.append(f"Context budget: {available_tokens:,} tokens")
-        skeleton_lines.append(f"Included: {len(included_nodes)} / {len(levels['main']) + len(levels['auxiliary']) + len(levels['detail'])} nodes")
+        skeleton_lines.append(
+            f"Included: {len(included_nodes)} / {len(levels['main']) + len(levels['auxiliary']) + len(levels['detail'])} nodes"
+        )
         skeleton_lines.append("")
 
         for node_id in included_nodes:
             node = self.compressor.chunks[node_id]
 
             # Mark level
-            if node_id in levels['main']:
+            if node_id in levels["main"]:
                 level = "MAIN"
                 marker = "⭐⭐"
-            elif node_id in levels['auxiliary']:
+            elif node_id in levels["auxiliary"]:
                 level = "AUX"
                 marker = "⭐"
             else:
@@ -372,7 +367,9 @@ class MultiLevelSemanticEncoder:
                 marker = "📦"
 
             summary = self.compressor._generate_summary(node.text, max_length=100)
-            skeleton_lines.append(f"[{node_id}] {marker} {level} (importance: {node.importance:.3f})")
+            skeleton_lines.append(
+                f"[{node_id}] {marker} {level} (importance: {node.importance:.3f})"
+            )
             skeleton_lines.append(f"  {summary}\n")
 
         return "\n".join(skeleton_lines)
@@ -385,7 +382,8 @@ if __name__ == "__main__":
     """
     import sys
     import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
     from src.semantic_compressor import SemanticCompressor
 
@@ -417,7 +415,7 @@ if __name__ == "__main__":
     skeleton_high = adapter.adapt_to_context_window(
         file_id="quantum_doc",
         available_tokens=50000,  # Lots of space
-        max_tokens=100000
+        max_tokens=100000,
     )
     print(skeleton_high)
 
@@ -425,9 +423,7 @@ if __name__ == "__main__":
     print("SCENARIO 2: Limited context window (low 'SNR')")
     print("=" * 70)
     skeleton_low = adapter.adapt_to_context_window(
-        file_id="quantum_doc",
-        available_tokens=5000,  # Limited space
-        max_tokens=100000
+        file_id="quantum_doc", available_tokens=5000, max_tokens=100000  # Limited space
     )
     print(skeleton_low)
 
@@ -436,7 +432,6 @@ if __name__ == "__main__":
     print("=" * 70)
     multilevel = MultiLevelSemanticEncoder(compressor)
     skeleton_multilevel = multilevel.generate_adaptive_skeleton(
-        file_id="quantum_doc",
-        available_tokens=10000
+        file_id="quantum_doc", available_tokens=10000
     )
     print(skeleton_multilevel)

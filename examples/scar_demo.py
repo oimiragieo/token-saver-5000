@@ -13,7 +13,8 @@ This example shows:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor
 from src.scar_compressor import SCAREnhancedCompressor
@@ -81,10 +82,7 @@ def main():
 
     # Initialize base compressor
     print("\n[1] Initializing Base Semantic Compressor...")
-    base_compressor = SemanticCompressor(
-        similarity_threshold=0.75,
-        skeleton_ratio=0.2
-    )
+    base_compressor = SemanticCompressor(similarity_threshold=0.75, skeleton_ratio=0.2)
 
     # Initialize SCAR enhancements
     print("[2] Initializing SCAR Enhancements...")
@@ -92,7 +90,7 @@ def main():
         base_compressor=base_compressor,
         use_learnable_compression=True,
         use_alignment_guidance=True,
-        compression_ratio=4.0  # 4× compression like SCAR paper
+        compression_ratio=4.0,  # 4× compression like SCAR paper
     )
 
     # Ingest document
@@ -102,8 +100,8 @@ def main():
         file_id="quantum_ec",
         metadata={
             "title": "Introduction to Quantum Error Correction",
-            "domain": "quantum_computing"
-        }
+            "domain": "quantum_computing",
+        },
     )
 
     print(f"\n📊 Compression Statistics:")
@@ -126,7 +124,7 @@ def main():
     queries = [
         "What is the error threshold for surface codes?",
         "What are the practical challenges?",
-        "How does syndrome extraction work?"
+        "How does syndrome extraction work?",
     ]
 
     for query in queries:
@@ -135,9 +133,7 @@ def main():
 
         # Standard search (baseline)
         standard_results = base_compressor.search_semantic(
-            query=query,
-            file_id="quantum_ec",
-            top_k=3
+            query=query, file_id="quantum_ec", top_k=3
         )
 
         print("\n   Baseline Search (cosine similarity only):")
@@ -151,7 +147,7 @@ def main():
             query=query,
             file_id="quantum_ec",
             top_k=3,
-            alignment_weight=0.5  # 50% alignment, 50% similarity
+            alignment_weight=0.5,  # 50% alignment, 50% similarity
         )
 
         print("\n   SCAR Search (alignment + similarity):")
@@ -173,7 +169,7 @@ def main():
         query=query,
         file_id="quantum_ec",
         top_k=3,
-        alignment_threshold=0.7  # High-fidelity threshold
+        alignment_threshold=0.7,  # High-fidelity threshold
     )
     print(result)
 
@@ -184,10 +180,9 @@ def main():
 
     # Get embeddings from a few nodes
     sample_node_ids = list(base_compressor.chunks.keys())[:5]
-    sample_embeddings = np.array([
-        base_compressor.chunks[nid].embedding
-        for nid in sample_node_ids
-    ])
+    sample_embeddings = np.array(
+        [base_compressor.chunks[nid].embedding for nid in sample_node_ids]
+    )
 
     print(f"\n📦 Embedding Compression Demo:")
     print(f"   Input shape: {sample_embeddings.shape}")
@@ -198,8 +193,12 @@ def main():
 
     print(f"\n   Compressed shape: {compressed_embeddings.shape}")
     print(f"   Compressed dimension: {compressed_embeddings.shape[1]}")
-    print(f"   Compression ratio: {sample_embeddings.shape[1] / compressed_embeddings.shape[1]:.1f}×")
-    print(f"\n   Memory savings: {(1 - compressed_embeddings.nbytes / sample_embeddings.nbytes) * 100:.1f}%")
+    print(
+        f"   Compression ratio: {sample_embeddings.shape[1] / compressed_embeddings.shape[1]:.1f}×"
+    )
+    print(
+        f"\n   Memory savings: {(1 - compressed_embeddings.nbytes / sample_embeddings.nbytes) * 100:.1f}%"
+    )
 
     # SCAR Stats
     print("\n" + "=" * 80)
@@ -221,23 +220,17 @@ def main():
     # Baseline
     print("   [Baseline] Standard Retrieval:")
     baseline_nodes = base_compressor.search_semantic(
-        query=comparison_query,
-        file_id="quantum_ec",
-        top_k=2
+        query=comparison_query, file_id="quantum_ec", top_k=2
     )
     baseline_content = base_compressor.modulate_region(
-        node_ids=baseline_nodes,
-        fidelity_level=base_compressor.FidelityLevel.STRUCTURE
+        node_ids=baseline_nodes, fidelity_level=base_compressor.FidelityLevel.STRUCTURE
     )
     print(baseline_content)
 
     # SCAR
     print("\n   [SCAR] Alignment-Guided Retrieval:")
     scar_content = scar.adaptive_modulate(
-        query=comparison_query,
-        file_id="quantum_ec",
-        top_k=2,
-        alignment_threshold=0.6
+        query=comparison_query, file_id="quantum_ec", top_k=2, alignment_threshold=0.6
     )
     print(scar_content)
 
@@ -248,9 +241,12 @@ def main():
     print("1. SCAR's learnable compression reduces embedding size by 4× (384D → 96D)")
     print("2. Semantic alignment guidance improves retrieval relevance")
     print("3. Adaptive fidelity automatically adjusts detail level based on alignment")
-    print("4. All concepts from SCAR paper (arXiv:2511.14063v1) adapted to text compression")
+    print(
+        "4. All concepts from SCAR paper (arXiv:2511.14063v1) adapted to text compression"
+    )
 
 
 if __name__ == "__main__":
     import numpy as np
+
     main()

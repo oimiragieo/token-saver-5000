@@ -63,9 +63,7 @@ class SemanticSSIM:
         self.c2 = c2
 
     def calculate_luminance(
-        self,
-        original_importance: np.ndarray,
-        compressed_importance: np.ndarray
+        self, original_importance: np.ndarray, compressed_importance: np.ndarray
     ) -> float:
         """
         Luminance: Average importance comparison
@@ -88,9 +86,7 @@ class SemanticSSIM:
         return numerator / denominator
 
     def calculate_contrast(
-        self,
-        original_importance: np.ndarray,
-        compressed_importance: np.ndarray
+        self, original_importance: np.ndarray, compressed_importance: np.ndarray
     ) -> float:
         """
         Contrast: Variance in importance comparison
@@ -113,10 +109,7 @@ class SemanticSSIM:
         return numerator / denominator
 
     def calculate_structure(
-        self,
-        graph: nx.Graph,
-        original_nodes: List[str],
-        compressed_nodes: List[str]
+        self, graph: nx.Graph, original_nodes: List[str], compressed_nodes: List[str]
     ) -> float:
         """
         Structure: Graph connectivity preservation
@@ -138,7 +131,8 @@ class SemanticSSIM:
             edge_preservation = 1.0
         else:
             preserved_edges = sum(
-                1 for u, v in graph.edges()
+                1
+                for u, v in graph.edges()
                 if u in compressed_nodes and v in compressed_nodes
             )
             edge_preservation = preserved_edges / total_edges
@@ -157,8 +151,7 @@ class SemanticSSIM:
                 clustering_similarity = 1.0
             else:
                 clustering_similarity = min(
-                    compressed_clustering / (original_clustering + 1e-10),
-                    1.0
+                    compressed_clustering / (original_clustering + 1e-10), 1.0
                 )
         except:
             clustering_similarity = 0.5  # Fallback
@@ -175,7 +168,9 @@ class SemanticSSIM:
             # Pearson correlation
             if len(original_pr) > 1:
                 correlation = np.corrcoef(original_pr, compressed_pr)[0, 1]
-                centrality_preservation = max(correlation, 0)  # Clip negative correlations
+                centrality_preservation = max(
+                    correlation, 0
+                )  # Clip negative correlations
             else:
                 centrality_preservation = 1.0
         except:
@@ -183,9 +178,9 @@ class SemanticSSIM:
 
         # Combine sub-metrics
         structure = (
-            0.5 * edge_preservation +
-            0.25 * clustering_similarity +
-            0.25 * centrality_preservation
+            0.5 * edge_preservation
+            + 0.25 * clustering_similarity
+            + 0.25 * centrality_preservation
         )
 
         return structure
@@ -195,7 +190,7 @@ class SemanticSSIM:
         graph: nx.Graph,
         original_nodes: List[str],
         compressed_nodes: List[str],
-        importance_key: str = 'importance'
+        importance_key: str = "importance",
     ) -> Tuple[float, Dict[str, float]]:
         """
         Calculate Semantic SSIM
@@ -212,55 +207,39 @@ class SemanticSSIM:
         """
         if len(compressed_nodes) == 0:
             return 0.0, {
-                'luminance': 0.0,
-                'contrast': 0.0,
-                'structure': 0.0,
-                'ssim': 0.0
+                "luminance": 0.0,
+                "contrast": 0.0,
+                "structure": 0.0,
+                "ssim": 0.0,
             }
 
         # Extract importance scores
-        original_importance = np.array([
-            graph.nodes[n].get(importance_key, 0.5)
-            for n in original_nodes
-        ])
+        original_importance = np.array(
+            [graph.nodes[n].get(importance_key, 0.5) for n in original_nodes]
+        )
 
-        compressed_importance = np.array([
-            graph.nodes[n].get(importance_key, 0.5)
-            for n in compressed_nodes
-        ])
+        compressed_importance = np.array(
+            [graph.nodes[n].get(importance_key, 0.5) for n in compressed_nodes]
+        )
 
         # Calculate components
-        luminance = self.calculate_luminance(
-            original_importance,
-            compressed_importance
-        )
+        luminance = self.calculate_luminance(original_importance, compressed_importance)
 
-        contrast = self.calculate_contrast(
-            original_importance,
-            compressed_importance
-        )
+        contrast = self.calculate_contrast(original_importance, compressed_importance)
 
-        structure = self.calculate_structure(
-            graph,
-            original_nodes,
-            compressed_nodes
-        )
+        structure = self.calculate_structure(graph, original_nodes, compressed_nodes)
 
         # Combine using weighted geometric mean (like visual SSIM)
-        ssim = (
-            (luminance ** self.alpha) *
-            (contrast ** self.beta) *
-            (structure ** self.gamma)
-        )
+        ssim = (luminance**self.alpha) * (contrast**self.beta) * (structure**self.gamma)
 
         # Ensure [0, 1] range
         ssim = min(max(ssim, 0.0), 1.0)
 
         components = {
-            'luminance': luminance,
-            'contrast': contrast,
-            'structure': structure,
-            'ssim': ssim
+            "luminance": luminance,
+            "contrast": contrast,
+            "structure": structure,
+            "ssim": ssim,
         }
 
         return ssim, components
@@ -270,7 +249,7 @@ class SemanticSSIM:
         original_embeddings: np.ndarray,
         compressed_embeddings: np.ndarray,
         original_importance: Optional[np.ndarray] = None,
-        compressed_importance: Optional[np.ndarray] = None
+        compressed_importance: Optional[np.ndarray] = None,
     ) -> Tuple[float, Dict[str, float]]:
         """
         Alternative SSIM calculation using embeddings directly
@@ -294,15 +273,9 @@ class SemanticSSIM:
             compressed_importance = np.ones(len(compressed_embeddings))
 
         # Luminance and Contrast
-        luminance = self.calculate_luminance(
-            original_importance,
-            compressed_importance
-        )
+        luminance = self.calculate_luminance(original_importance, compressed_importance)
 
-        contrast = self.calculate_contrast(
-            original_importance,
-            compressed_importance
-        )
+        contrast = self.calculate_contrast(original_importance, compressed_importance)
 
         # Structure: Use embedding similarity instead of graph
         # Calculate pairwise similarity in original space
@@ -317,19 +290,15 @@ class SemanticSSIM:
         structure = min(comp_connectivity / (orig_connectivity + 1e-10), 1.0)
 
         # Combine
-        ssim = (
-            (luminance ** self.alpha) *
-            (contrast ** self.beta) *
-            (structure ** self.gamma)
-        )
+        ssim = (luminance**self.alpha) * (contrast**self.beta) * (structure**self.gamma)
 
         ssim = min(max(ssim, 0.0), 1.0)
 
         components = {
-            'luminance': luminance,
-            'contrast': contrast,
-            'structure': structure,
-            'ssim': ssim
+            "luminance": luminance,
+            "contrast": contrast,
+            "structure": structure,
+            "ssim": ssim,
         }
 
         return ssim, components
@@ -376,12 +345,12 @@ if __name__ == "__main__":
 
     # Add edges (create some structure)
     edges = [
-        ('node_0', 'node_1'),
-        ('node_1', 'node_2'),
-        ('node_2', 'node_3'),
-        ('node_0', 'node_5'),
-        ('node_5', 'node_7'),
-        ('node_7', 'node_9'),
+        ("node_0", "node_1"),
+        ("node_1", "node_2"),
+        ("node_2", "node_3"),
+        ("node_0", "node_5"),
+        ("node_5", "node_7"),
+        ("node_7", "node_9"),
     ]
     for u, v in edges:
         graph.add_edge(u, v)
@@ -406,9 +375,9 @@ if __name__ == "__main__":
         graph, original_nodes, compressed_nodes_30
     )
 
-    print("="*70)
+    print("=" * 70)
     print("Semantic SSIM Demonstration")
-    print("="*70)
+    print("=" * 70)
     print(f"\nOriginal graph: {len(nodes)} nodes, {len(edges)} edges")
 
     print(f"\n--- Scenario 1: 50% Compression ---")
