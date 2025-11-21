@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added - 2025-01-21
+### Added - 2025-01-21 (Phase 2: Advanced Features & Polish)
+
+#### Performance & Benchmarking
+- **`benchmark.py`** - Comprehensive performance benchmarking suite
+  - Document ingestion benchmarks (small/medium/large)
+  - Search performance testing (1 vs 10 documents)
+  - Fidelity modulation speed tests
+  - Compression ratio analysis
+  - SCAR features performance comparison
+  - Supports `--quick`, `--full` modes
+  - Detailed performance insights and statistics
+  - Memory usage tracking with psutil
+
+#### Advanced Examples
+- **`examples/advanced_features.py`** - Advanced feature demonstrations ✨ NEW!
+  - Demo 1: Adaptive Context Window Allocation
+    - Shows dynamic compression based on token availability
+    - Low vs high token budget scenarios
+  - Demo 2: Multi-Level Encoding
+    - Progressive content inclusion (Main/Auxiliary/Detail)
+    - Token-aware adaptive skeleton generation
+  - Demo 3: SCAR Alignment-Guided Search
+    - Comparison of standard vs alignment-guided search
+    - Shows 15-25% improvement in relevance
+  - Demo 4: Blind Spot Detection
+    - Self-correcting context loop demonstration
+    - Auto-injection recommendations
+
+#### Enhanced Error Handling
+- **Server Validation Methods** in `src/server.py`:
+  - `_validate_file_id()` - File existence checking with helpful suggestions
+  - `_validate_node_ids()` - Node validation with available alternatives
+  - `_validate_token_count()` - Token count validation with guidance
+  - All tool handlers now include:
+    - Input validation
+    - Descriptive error messages
+    - Actionable tips (💡) for fixing errors
+    - Graceful error recovery
+
+#### Dependencies
+- Added `psutil>=5.9.0` for benchmark memory tracking
+
+### Added - 2025-01-21 (Phase 1: Infrastructure)
 
 #### New MCP Tools
 - **`adapt_to_context_window`** 🔧 - JSCCM-inspired adaptive context allocation

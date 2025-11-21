@@ -357,15 +357,86 @@ class SemanticModulatorServer:
                 logger.error(f"Error in {name}: {e}", exc_info=True)
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
+    def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
+        """Validate file_id and provide helpful error messages"""
+        if not file_id:
+            raise ValueError("file_id cannot be empty")
+
+        if must_exist:
+            if file_id not in self.compressor.chunks:
+                available = list(set([nid.split("_n")[0] for nid in self.compressor.chunks.keys()]))
+                raise ValueError(
+                    f"Document '{file_id}' not found. "
+                    f"Available documents: {available if available else '(none)'}\n"
+                    f"💡 Tip: Use ingest_context() to add documents first."
+                )
+
+    def _validate_node_ids(self, node_ids: List[str]) -> None:
+        """Validate node_ids and provide helpful suggestions"""
+        if not node_ids:
+            raise ValueError("node_ids list cannot be empty")
+
+        invalid_nodes = [nid for nid in node_ids if nid not in self.compressor.chunks]
+        if invalid_nodes:
+            # Extract file_id from first node to give better error message
+            file_id = node_ids[0].rsplit("_n", 1)[0] if "_n" in node_ids[0] else "unknown"
+            valid_nodes = [nid for nid in self.compressor.chunks.keys() if nid.startswith(file_id)]
+
+            raise ValueError(
+                f"Invalid node IDs: {invalid_nodes[:3]}\n"
+                f"💡 Tip: Use read_skeleton('{file_id}') to see valid node IDs.\n"
+                f"   Valid nodes for '{file_id}': {valid_nodes[:5]}..."
+                if valid_nodes
+                else f"   No nodes found for '{file_id}'. Document may not be ingested."
+            )
+
+    def _validate_token_count(self, available_tokens: int, max_tokens: int = None) -> None:
+        """Validate token counts"""
+        if available_tokens < 0:
+            raise ValueError(f"available_tokens must be non-negative, got {available_tokens}")
+
+        if available_tokens == 0:
+            raise ValueError(
+                "available_tokens is 0 - no space for content!\n"
+                "💡 Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
+            )
+
+        if max_tokens is not None and available_tokens > max_tokens:
+            raise ValueError(
+                f"available_tokens ({available_tokens}) exceeds max_tokens ({max_tokens})\n"
+                "💡 Tip: available_tokens should be ≤ max_tokens"
+            )
+
     def _handle_ingest(self, args: Dict) -> str:
         """Handle ingest_context tool call"""
         text = args["text"]
         file_id = args["file_id"]
         metadata = args.get("metadata")
 
-        logger.info(f"Ingesting document: {file_id}")
+        # Validation
+        if not text or len(text.strip()) == 0:
+            raise ValueError(
+                "text cannot be empty\n"
+                "💡 Tip: Provide document content to ingest (minimum ~20 characters recommended)"
+            )
 
-        skeleton = self.compressor.ingest_file(text, file_id, metadata)
+        if len(text) < 20:
+            raise ValueError(
+                f"text is too short ({len(text)} chars)\n"
+                "💡 Tip: Provide at least 20 characters for meaningful semantic analysis"
+            )
+
+        self._validate_file_id(file_id, must_exist=False)
+
+        logger.info(f"Ingesting document: {file_id} ({len(text)} chars)")
+
+        try:
+            skeleton = self.compressor.ingest_file(text, file_id, metadata)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to ingest document: {str(e)}\n"
+                "💡 Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
+            ) from e
 
         # Initialize retrieval history
         self.retrieval_history[file_id] = []
@@ -397,18 +468,41 @@ Next steps:
     def _handle_read_skeleton(self, args: Dict) -> str:
         """Handle read_skeleton tool call"""
         file_id = args["file_id"]
+        self._validate_file_id(file_id, must_exist=True)
+
         logger.info(f"Reading skeleton: {file_id}")
 
-        skeleton_text = self.compressor.read_skeleton(file_id)
-        return skeleton_text
+        try:
+            skeleton_text = self.compressor.read_skeleton(file_id)
+            return skeleton_text
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to read skeleton for '{file_id}': {str(e)}\n"
+                f"💡 Tip: Verify the document was ingested successfully with get_stats()"
+            ) from e
 
     def _handle_modulate_region(self, args: Dict) -> str:
         """Handle modulate_region tool call"""
         node_ids = args["node_ids"]
         fidelity_str = args.get("fidelity_level", "RAW")
 
-        # Convert string to enum
-        fidelity = FidelityLevel[fidelity_str]
+        # Validation
+        self._validate_node_ids(node_ids)
+
+        # Convert string to enum with validation
+        try:
+            fidelity = FidelityLevel[fidelity_str]
+        except KeyError:
+            valid_levels = [level.name for level in FidelityLevel]
+            raise ValueError(
+                f"Invalid fidelity_level: '{fidelity_str}'\n"
+                f"💡 Valid levels: {valid_levels}\n"
+                f"   ABSTRACT: ~10 tokens (summary only)\n"
+                f"   OUTLINE: ~30 tokens (summary + section markers)\n"
+                f"   STRUCTURE: ~50 tokens (headers + entities)\n"
+                f"   DETAILED: ~100 tokens (summary + excerpts)\n"
+                f"   RAW: Full original text"
+            )
 
         logger.info(f"Modulating {len(node_ids)} nodes at {fidelity_str} fidelity")
 
@@ -421,8 +515,14 @@ Next steps:
             if node_id not in self.retrieval_history[file_id]:
                 self.retrieval_history[file_id].append(node_id)
 
-        result = self.compressor.modulate_region(node_ids, fidelity)
-        return result
+        try:
+            result = self.compressor.modulate_region(node_ids, fidelity)
+            return result
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to modulate region: {str(e)}\n"
+                f"💡 Tip: Verify node IDs are valid with read_skeleton()"
+            ) from e
 
     def _handle_search_semantic(self, args: Dict) -> str:
         """Handle search_semantic tool call"""
@@ -528,29 +628,54 @@ Files: {', '.join(stats['files'])}
         max_tokens = args.get("max_tokens", 100000)
         query_priority = args.get("query_priority", 0.5)
 
+        # Validation
+        self._validate_file_id(file_id, must_exist=True)
+        self._validate_token_count(available_tokens, max_tokens)
+
+        if not 0.0 <= query_priority <= 1.0:
+            raise ValueError(
+                f"query_priority must be between 0.0 and 1.0, got {query_priority}\n"
+                "💡 Tip: 0.0 = low priority, 0.5 = medium, 1.0 = high priority"
+            )
+
         logger.info(
             f"Adapting skeleton for {file_id}: {available_tokens}/{max_tokens} tokens available"
         )
 
-        result = self.context_window_adapter.adapt_to_context_window(
-            file_id=file_id,
-            available_tokens=available_tokens,
-            max_tokens=max_tokens,
-            query_priority=query_priority,
-        )
-
-        return result
+        try:
+            result = self.context_window_adapter.adapt_to_context_window(
+                file_id=file_id,
+                available_tokens=available_tokens,
+                max_tokens=max_tokens,
+                query_priority=query_priority,
+            )
+            return result
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to adapt to context window: {str(e)}\n"
+                "💡 Tip: This is a JSCCM-inspired feature. Check that the document exists and token counts are valid."
+            ) from e
 
     def _handle_multilevel_encode(self, args: Dict) -> str:
         """Handle multilevel_encode tool call"""
         file_id = args["file_id"]
         available_tokens = args["available_tokens"]
 
+        # Validation
+        self._validate_file_id(file_id, must_exist=True)
+        self._validate_token_count(available_tokens)
+
         logger.info(f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available")
 
-        result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
-
-        return result
+        try:
+            result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
+            return result
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to generate multi-level encoding: {str(e)}\n"
+                "💡 Tip: This JSCCM-inspired feature requires Main + Auxiliary + Detail branches.\n"
+                "   Try with at least 1000 tokens available for meaningful output."
+            ) from e
 
     async def run(self):
         """Run the MCP server"""
