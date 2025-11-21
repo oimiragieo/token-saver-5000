@@ -12,7 +12,6 @@ Tests that all core features work correctly:
 Run with: pytest tests/test_functional.py -v
 """
 
-import pytest
 import sys
 import os
 
@@ -21,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.blind_spot_detector import BlindSpotDetector
 from src.scar_compressor import SCAREnhancedCompressor
-import numpy as np
 
 
 SAMPLE_DOCUMENT = """
@@ -65,7 +63,7 @@ class TestBasicFunctionality:
         assert result.skeleton_tokens > 0
         assert result.compression_ratio > 1.0
 
-        print(f"\n✅ Document Ingestion:")
+        print("\n✅ Document Ingestion:")
         print(f"   File ID: {result.file_id}")
         print(f"   Nodes: {result.total_nodes}")
         print(f"   Tokens: {result.total_tokens} → {result.skeleton_tokens}")
@@ -81,7 +79,7 @@ class TestBasicFunctionality:
         assert "SEMANTIC SKELETON" in skeleton
         assert "ANCHOR" in skeleton or "Detail hidden" in skeleton
 
-        print(f"\n✅ Skeleton Generation:")
+        print("\n✅ Skeleton Generation:")
         print(f"   Length: {len(skeleton)} characters")
         print(f"   Preview:\n{skeleton[:300]}...")
 
@@ -95,7 +93,7 @@ class TestBasicFunctionality:
         assert graph.number_of_nodes() > 0
         assert graph.number_of_edges() >= 0  # May have no edges if chunks too dissimilar
 
-        print(f"\n✅ Semantic Graph:")
+        print("\n✅ Semantic Graph:")
         print(f"   Nodes: {graph.number_of_nodes()}")
         print(f"   Edges: {graph.number_of_edges()}")
 
@@ -119,8 +117,8 @@ class TestBasicFunctionality:
         assert len(results) > 0
         assert len(results) <= 3
 
-        print(f"\n✅ Semantic Search:")
-        print(f"   Query: 'error correction mechanisms'")
+        print("\n✅ Semantic Search:")
+        print("   Query: 'error correction mechanisms'")
         print(f"   Results: {len(results)}")
 
         for i, node_id in enumerate(results, 1):
@@ -134,7 +132,7 @@ class TestBasicFunctionality:
 
         nodes = list(self.compressor.chunks.keys())[:2]
 
-        print(f"\n✅ Fidelity Modulation:")
+        print("\n✅ Fidelity Modulation:")
 
         for fidelity in FidelityLevel:
             content = self.compressor.modulate_region(nodes, fidelity)
@@ -159,8 +157,8 @@ class TestBasicFunctionality:
 
         assert len(results) > 0
 
-        print(f"\n✅ Cross-File Search:")
-        print(f"   Query: 'quantum error correction'")
+        print("\n✅ Cross-File Search:")
+        print("   Query: 'quantum error correction'")
         print(f"   Total results: {len(results)}")
 
         # Results should mostly come from doc1 (quantum content)
@@ -181,7 +179,7 @@ class TestBasicFunctionality:
         assert "total_tokens" in stats
         assert "compression_ratio" in stats
 
-        print(f"\n✅ Stats Retrieval:")
+        print("\n✅ Stats Retrieval:")
         for key, value in stats.items():
             if key != "metadata":
                 print(f"   {key}: {value}")
@@ -218,7 +216,7 @@ class TestBlindSpotDetection:
         assert "total_blind_spots" in blind_spots
         assert "critical_blind_spots" in blind_spots
 
-        print(f"\n✅ Blind Spot Detection:")
+        print("\n✅ Blind Spot Detection:")
         print(f"   Total blind spots: {blind_spots['total_blind_spots']}")
         print(f"   Critical blind spots: {blind_spots['critical_blind_spots']}")
 
@@ -244,7 +242,7 @@ class TestBlindSpotDetection:
             ai_response=ai_response, file_id="complete_test", retrieved_nodes=all_nodes
         )
 
-        print(f"\n✅ Comprehensive Retrieval Check:")
+        print("\n✅ Comprehensive Retrieval Check:")
         print(f"   Total blind spots: {blind_spots['total_blind_spots']}")
         print(f"   Critical blind spots: {blind_spots['critical_blind_spots']}")
 
@@ -270,7 +268,7 @@ class TestBlindSpotDetection:
         assert "hallucination_score" in result
         assert "is_grounded" in result
 
-        print(f"\n✅ Hallucination Detection:")
+        print("\n✅ Hallucination Detection:")
         print(f"   Grounded: {result['is_grounded']}")
         print(f"   Hallucination score: {result['hallucination_score']:.3f}")
 
@@ -293,16 +291,16 @@ class TestSCARFunctionality:
 
     def test_scar_initialization(self):
         """Test that SCAR modules initialize correctly"""
-        assert self.scar.use_learnable_compression == True
-        assert self.scar.use_alignment_guidance == True
+        assert self.scar.use_learnable_compression
+        assert self.scar.use_alignment_guidance
         assert self.scar.learnable_compressor is not None
         assert self.scar.alignment_module is not None
 
         stats = self.scar.get_compression_stats()
-        assert stats["learnable_compression_enabled"] == True
-        assert stats["alignment_guidance_enabled"] == True
+        assert stats["learnable_compression_enabled"]
+        assert stats["alignment_guidance_enabled"]
 
-        print(f"\n✅ SCAR Initialization:")
+        print("\n✅ SCAR Initialization:")
         for key, value in stats.items():
             print(f"   {key}: {value}")
 
@@ -326,7 +324,7 @@ class TestSCARFunctionality:
 
         compression_ratio = original.shape[1] / compressed.shape[1]
 
-        print(f"\n✅ Embedding Compression:")
+        print("\n✅ Embedding Compression:")
         print(f"   Original: {original.shape}")
         print(f"   Compressed: {compressed.shape}")
         print(f"   Compression: {compression_ratio:.1f}x")
@@ -347,7 +345,7 @@ class TestSCARFunctionality:
         assert len(results) > 0
         assert len(results) <= 3
 
-        print(f"\n✅ Alignment-Guided Search:")
+        print("\n✅ Alignment-Guided Search:")
         print(f"   Query: '{query}'")
 
         for i, (node_id, score) in enumerate(results, 1):
@@ -373,7 +371,7 @@ class TestSCARFunctionality:
         assert "SCAR ADAPTIVE MODULATION" in result
         assert query in result
 
-        print(f"\n✅ Adaptive Modulation:")
+        print("\n✅ Adaptive Modulation:")
         print(f"   Query: '{query}'")
         print(f"   Result length: {len(result)} characters")
         print(f"   Preview:\n{result[:400]}...")
@@ -393,7 +391,7 @@ class TestEdgeCases:
         # Should handle gracefully (may create minimal skeleton)
         assert result is not None
 
-        print(f"\n✅ Empty Document Handling:")
+        print("\n✅ Empty Document Handling:")
         print(f"   Nodes: {result.total_nodes}")
 
     def test_very_short_document(self):
@@ -403,7 +401,7 @@ class TestEdgeCases:
         assert result is not None
         assert result.total_nodes >= 1
 
-        print(f"\n✅ Short Document Handling:")
+        print("\n✅ Short Document Handling:")
         print(f"   Nodes: {result.total_nodes}")
         print(f"   Tokens: {result.total_tokens}")
 
@@ -413,7 +411,7 @@ class TestEdgeCases:
 
         assert "error" in stats or stats == {}
 
-        print(f"\n✅ Nonexistent File Handling:")
+        print("\n✅ Nonexistent File Handling:")
         print(f"   Result: {stats}")
 
     def test_search_before_ingestion(self):
@@ -424,7 +422,7 @@ class TestEdgeCases:
         assert isinstance(results, list)
         assert len(results) == 0
 
-        print(f"\n✅ Search Before Ingestion:")
+        print("\n✅ Search Before Ingestion:")
         print(f"   Results: {results}")
 
     def test_duplicate_file_id_ingestion(self):
@@ -440,8 +438,8 @@ class TestEdgeCases:
         graph = self.compressor.graphs.get("duplicate_test")
         assert graph is not None
 
-        print(f"\n✅ Duplicate File ID Handling:")
-        print(f"   Graph updated successfully")
+        print("\n✅ Duplicate File ID Handling:")
+        print("   Graph updated successfully")
 
 
 def run_all_tests():

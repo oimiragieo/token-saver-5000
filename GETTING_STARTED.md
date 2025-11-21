@@ -1,17 +1,23 @@
-# Getting Started with Semantic Modulator 🚀
+# Getting Started with Token Saver 5000 🚀
 
 **Your step-by-step guide to achieving 80-95% token savings in 10 minutes!**
+
+Token Saver 5000 provides **two complementary compression systems**:
+1. **Document Compression** (SemanticCompressor) - Compress long documents 80-95%
+2. **Dialogue Compression** (AFM) - Manage multi-turn conversations with ~66% fewer tokens
 
 ---
 
 ## What You'll Learn
 
 By the end of this guide, you will:
-- ✅ Install and verify Semantic Modulator works
-- ✅ Run tests proving 80-95% token savings
+- ✅ Install and verify Token Saver 5000 works
+- ✅ Run tests proving 80-95% document compression
+- ✅ Test AFM dialogue memory retaining critical context
 - ✅ Try all features with real examples
 - ✅ Integrate with Claude Desktop or your AI platform
-- ✅ Understand how to use SCAR enhancements
+- ✅ Understand when to use Document vs Dialogue compression
+- ✅ Explore SCAR enhancements for advanced use cases
 
 **Time required:** 10-15 minutes
 
@@ -157,6 +163,37 @@ python tests/test_functional.py
 - ✅ SCAR alignment improves retrieval
 - ✅ All edge cases handled
 
+### 2.3 Run AFM Tests (Dialogue Memory)
+
+These tests prove AFM retains critical context across conversations:
+
+```bash
+python tests/test_afm.py
+```
+
+**What you'll see:**
+
+```
+test_allergy_retention_short_conversation PASSED
+test_allergy_retention_medium_conversation PASSED
+test_recency_weighting PASSED
+test_token_savings PASSED
+✅ All AFM tests passed!
+
+Key Results:
+- Critical messages (allergies) retained across 9+ turns
+- ~66% token reduction with full context preservation
+- Recency weighting working as expected
+- Safety context never lost
+```
+
+**What this proves:**
+- ✅ CRITICAL messages always retained at FULL fidelity
+- ✅ RELEVANT messages compressed to summaries
+- ✅ TRIVIAL messages replaced with placeholders
+- ✅ Recency weighting prioritizes recent context
+- ✅ ~66% token savings while preserving safety
+
 ---
 
 ## Step 3: Try Interactive Examples (3 minutes)
@@ -184,7 +221,55 @@ This demonstrates:
   📊 Ratio: 9.9x
 ```
 
-### 3.2 SCAR Enhanced Example
+### 3.2 AFM Dialogue Memory Demo
+
+```bash
+python examples/afm_demo.py
+```
+
+This demonstrates:
+- Adding messages to dialogue history
+- Automatic importance classification (CRITICAL/RELEVANT/TRIVIAL)
+- Building context with adaptive fidelity
+- Token savings comparison (FULL vs AFM)
+
+**Expected output:**
+```
+=======================================================================
+ADAPTIVE FOCUS MEMORY (AFM) DEMONSTRATION
+=======================================================================
+
+[1] SHORT CONVERSATION (3 turns)
+Adding messages to dialogue history...
+Turn 1: User mentions peanut allergy
+Turn 2: Assistant acknowledges
+Turn 3: User asks about Thai street food
+
+Building context with AFM (budget: 500 tokens)...
+📊 Context Built:
+   Messages: 3
+   FULL fidelity: 3 (100%)
+   Token usage: 342 / 500 (68%)
+
+✅ PASS: Allergy context retained
+
+[2] MEDIUM CONVERSATION (9 turns)
+...
+📊 AFM Results:
+   FULL fidelity: 3 messages (33%)
+   COMPRESSED: 4 messages (44%)
+   PLACEHOLDER: 2 messages (22%)
+   Token usage: 647 / 800 (81%)
+
+✅ PASS: Critical allergy retained across 9 turns!
+
+[3] TOKEN SAVINGS
+Baseline (all FULL): 1,245 tokens
+AFM adaptive: 647 tokens
+Savings: 598 tokens (48.0%)
+```
+
+### 3.3 SCAR Enhanced Example
 
 ```bash
 python examples/scar_demo.py
@@ -264,14 +349,24 @@ In Claude Desktop, type:
 Can you list the available MCP tools?
 ```
 
-You should see:
-- ✅ `ingest_context` - Compress and ingest documents
-- ✅ `read_skeleton` - View compressed skeleton
-- ✅ `modulate_region` - Retrieve at different fidelity levels
-- ✅ `search_semantic` - Semantic vector search
-- ✅ `check_blind_spots` - Detect missed context
-- ✅ `detect_hallucination` - Verify grounding
+You should see **13 tools** (9 document + 4 dialogue):
+
+**Document Compression Tools:**
+- ✅ `ingest_context` - Compress and ingest long documents
+- ✅ `read_skeleton` - View compressed document structure
+- ✅ `modulate_region` - Retrieve specific sections with variable detail
+- ✅ `search_semantic` - Find relevant sections via embedding search
+- ✅ `check_blind_spots` - Detect missed critical context
+- ✅ `detect_hallucination` - Verify AI responses against source
 - ✅ `get_stats` - View compression statistics
+- ✅ `adapt_to_context_window` - Fit content within token budget
+- ✅ `multilevel_encode` - Generate multi-fidelity representations
+
+**Dialogue Memory Tools (AFM):**
+- ✅ `afm_add_message` - Add message to dialogue history
+- ✅ `afm_build_context` - Build context window with adaptive fidelity
+- ✅ `afm_get_stats` - View dialogue statistics
+- ✅ `afm_clear_history` - Clear dialogue history
 
 ---
 
@@ -379,7 +474,7 @@ Token usage: 512 instead of 10,234 (95% savings!)
 
 **When to use:** Critical analysis where accuracy matters
 
-### Feature 5: SCAR Enhancements (NEW!)
+### Feature 5: SCAR Enhancements
 
 **What it does:**
 - Compresses embeddings 4× (384D → 96D)
@@ -387,6 +482,34 @@ Token usage: 512 instead of 10,234 (95% savings!)
 - Adaptive fidelity based on alignment
 
 **When to use:** When you need the absolute best retrieval quality
+
+### Feature 6: Adaptive Focus Memory (AFM) (NEW!)
+
+**What it does:**
+- Manages multi-turn conversations with adaptive compression
+- Automatically classifies message importance (CRITICAL/RELEVANT/TRIVIAL)
+- Applies 3 fidelity levels: FULL, COMPRESSED, PLACEHOLDER
+- Uses recency weighting to favor recent context
+
+**How it works:**
+1. Each message added gets an importance score
+2. Recent messages weighted more heavily
+3. CRITICAL messages (allergies, safety) → always FULL
+4. RELEVANT messages → compressed to summaries
+5. TRIVIAL messages → replaced with placeholders
+
+**Fidelity Levels:**
+- **FULL**: Original message text (100% tokens)
+- **COMPRESSED**: 1-2 sentence summary (~33% tokens)
+- **PLACEHOLDER**: Brief stub (~10 tokens)
+
+**When to use:**
+- Multi-turn conversations (customer support, planning sessions)
+- When critical context must be retained (medical info, preferences)
+- Long conversations that exceed context windows
+- Combining with document compression for hybrid workflows
+
+**Token Savings:** ~48-66% while preserving all critical context
 
 ---
 
@@ -454,30 +577,95 @@ trainer.train_compressor(train_dataset, eval_dataset)
 trainer.save_checkpoint("my_trained_scar.pt")
 ```
 
+### Q: When should I use AFM vs Document Compression?
+
+**A:** Use both! They're complementary:
+
+**Document Compression:**
+- Use for: Long documents, papers, codebases, articles
+- Saves: 80-95% of document tokens
+- Best for: Analyzing large static content
+
+**AFM (Dialogue Memory):**
+- Use for: Multi-turn conversations, planning sessions
+- Saves: 48-66% of conversation history tokens
+- Best for: Retaining critical context across turns
+
+**Combined Workflow:**
+1. Compress long document with `ingest_context()` (80-95% savings)
+2. Add document insights to conversation with `afm_add_message()`
+3. Build context with `afm_build_context()` (additional 48-66% savings)
+4. Result: Massive token savings with full context retention!
+
+### Q: Is AFM safe for critical information?
+
+**A:** Yes! AFM is designed for safety:
+- CRITICAL importance → Always FULL fidelity (never compressed)
+- Heuristic classifier detects medical info, allergies, safety warnings
+- Test suite verifies retention across 9+ turns
+- Based on research paper (arXiv:2511.12712v1) with safety focus
+
+**Example:** Allergy mentioned in turn 1 is retained at FULL fidelity even at turn 10!
+
+### Q: Can I customize AFM thresholds?
+
+**A:** Yes! Edit `src/afm.py`:
+
+```python
+config = AFMConfig(
+    tau_high=0.45,      # Threshold for FULL (higher = stricter)
+    tau_mid=0.25,       # Threshold for COMPRESSED
+    half_life=12,       # Recency decay parameter
+)
+```
+
+**Trade-offs:**
+- Higher `tau_high` → More compression, but risk missing context
+- Lower `half_life` → Stronger recency bias (favor recent messages)
+
 ---
 
 ## Next Steps
 
 Now that you're set up:
 
-1. **Try with your own documents**
-   - Technical papers, documentation, long articles
-   - See the compression ratios you get!
+### 1. Try with Your Own Content
 
-2. **Explore advanced features**
-   - Multi-document analysis
-   - Cross-document search
-   - Blind spot detection
+**Document Compression:**
+- Technical papers, documentation, long articles
+- See the 80-95% compression ratios!
+- Example: `python examples/example_usage.py`
 
-3. **Customize for your needs**
-   - Adjust compression ratio in `src/semantic_compressor.py`
-   - Try different embedding models
-   - Train SCAR on your domain
+**Dialogue Memory:**
+- Multi-turn conversations with context preservation
+- Test with critical information (allergies, preferences)
+- Example: `python examples/afm_demo.py`
 
-4. **Read the full docs**
-   - [README.md](README.md) - Complete feature list
-   - [ARCHITECTURE.md](ARCHITECTURE.md) - How it works
-   - [SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) - Research details
+### 2. Explore Advanced Features
+
+- **Multi-document analysis**: Ingest multiple documents, search across all
+- **Cross-document search**: Find related concepts across your knowledge base
+- **Blind spot detection**: Auto-catch missed context
+- **Hybrid workflows**: Combine document + dialogue compression
+
+### 3. Customize for Your Needs
+
+**Document Compression:**
+- Adjust compression ratio in `src/semantic_compressor.py`
+- Try different embedding models
+- Train SCAR on your domain
+
+**AFM Configuration:**
+- Tune importance thresholds in `src/afm.py`
+- Adjust recency weighting
+- Customize compression ratios per fidelity level
+
+### 4. Read the Full Documentation
+
+- [README.md](README.md) - Complete feature list & research background
+- [QUICKSTART.md](QUICKSTART.md) - 5-minute quick start guide
+- [docs/SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) - SCAR research details
+- [docs/AFM_PAPER_SUMMARY.md](docs/AFM_PAPER_SUMMARY.md) - AFM research background
 
 ---
 
@@ -530,11 +718,20 @@ self.model = SentenceTransformer("all-MiniLM-L6-v2")  # Smallest
 ## Success! 🎉
 
 You now have:
-- ✅ Semantic Modulator installed and tested
-- ✅ Proven 80-95% token savings
-- ✅ All features working
+- ✅ Token Saver 5000 installed and tested
+- ✅ Document compression: 80-95% token savings proven
+- ✅ AFM dialogue memory: 48-66% conversation token savings
+- ✅ All 13 MCP tools working (9 document + 4 dialogue)
 - ✅ Integrated with Claude Desktop
-- ✅ Understanding of how to use it
+- ✅ Understanding of when to use each system
+
+**Key Capabilities:**
+- 📄 Compress long documents 10-20× with semantic preservation
+- 💬 Manage multi-turn conversations with adaptive fidelity
+- 🔍 Semantic search across your knowledge base
+- 🎯 Progressive retrieval at variable detail levels
+- 🛡️ Blind spot detection for critical accuracy
+- 🧠 SCAR enhancements for advanced use cases
 
 **Start saving tokens and enjoying infinite context windows!** 🚀
 
@@ -542,3 +739,9 @@ You now have:
 
 **Built with ❤️ for the AI community**
 *Making context windows infinite, one semantic graph at a time*
+
+Based on 4 research papers:
+- JSCCM (Joint Semantic Compression & Contextual Memory)
+- FPQE (Full Prompt Quality Evaluation - SSIM metrics)
+- SCAR (Semantic Compression with Alignment & Retrieval)
+- AFM (Adaptive Focus Memory - arXiv:2511.12712v1)

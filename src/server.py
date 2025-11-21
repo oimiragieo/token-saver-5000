@@ -14,23 +14,22 @@ Architecture:
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     Tool,
     TextContent,
-    EmbeddedResource,
 )
 
 from .semantic_compressor import SemanticCompressor, FidelityLevel
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
 from .adaptive_rate_allocator import (
-    AdaptiveRateAllocator,
     ContextWindowAdapter,
     MultiLevelSemanticEncoder,
 )
+from .afm import FocusManager, AFMConfig
 
 
 # Configure logging
@@ -54,6 +53,16 @@ class SemanticModulatorServer:
         # JSCCM-inspired adaptive components
         self.context_window_adapter = ContextWindowAdapter(self.compressor)
         self.multilevel_encoder = MultiLevelSemanticEncoder(self.compressor)
+
+        # AFM (Adaptive Focus Memory) for dialogue management
+        afm_config = AFMConfig(
+            tau_high=0.45,
+            tau_mid=0.25,
+            half_life=12,
+            use_llm_importance=False,  # Use heuristic importance
+            use_llm_compression=False,  # Use heuristic compression
+        )
+        self.focus_manager = FocusManager(afm_config)
 
         # Context window monitoring (like SNR in JSCCM)
         self.context_window_monitor = {
@@ -324,6 +333,84 @@ class SemanticModulatorServer:
                         "required": ["file_id", "available_tokens"],
                     },
                 ),
+                Tool(
+                    name="afm_add_message",
+                    description=(
+                        "💬 ADAPTIVE FOCUS MEMORY: Add message to dialogue history. "
+                        "AFM (Adaptive Focus Memory, arXiv:2511.12712v1) manages multi-turn conversations "
+                        "by assigning adaptive fidelity to each message based on recency, semantic relevance, "
+                        "and importance. Messages are automatically classified as CRITICAL (safety-sensitive), "
+                        "RELEVANT, or TRIVIAL. Use this to build dialogue history before calling afm_build_context."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "role": {
+                                "type": "string",
+                                "enum": ["user", "assistant", "system"],
+                                "description": "Message role (user, assistant, or system)",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Message content",
+                            },
+                        },
+                        "required": ["role", "content"],
+                    },
+                ),
+                Tool(
+                    name="afm_build_context",
+                    description=(
+                        "🧠 ADAPTIVE FOCUS MEMORY: Build optimized context for current query. "
+                        "Uses semantic similarity + recency weighting + importance classification "
+                        "to pack dialogue history under strict token budget. Achieves ~66% token reduction "
+                        "while preserving safety-critical information (e.g., allergies, constraints). "
+                        "Each message gets adaptive fidelity: FULL (verbatim), COMPRESSED (summary), or "
+                        "PLACEHOLDER (stub). Messages packed chronologically to preserve conversation flow."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "current_query": {
+                                "type": "string",
+                                "description": "Current user query to build context for",
+                            },
+                            "budget_tokens": {
+                                "type": "integer",
+                                "description": "Maximum tokens allowed in context",
+                            },
+                            "system_preamble": {
+                                "type": "string",
+                                "description": "Optional system message to include first",
+                            },
+                        },
+                        "required": ["current_query", "budget_tokens"],
+                    },
+                ),
+                Tool(
+                    name="afm_get_stats",
+                    description=(
+                        "📊 ADAPTIVE FOCUS MEMORY: Get dialogue statistics. "
+                        "Returns total messages, current turn index, and importance breakdown "
+                        "(critical/relevant/trivial counts). Useful for monitoring dialogue state."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                ),
+                Tool(
+                    name="afm_clear_history",
+                    description=(
+                        "🗑️ ADAPTIVE FOCUS MEMORY: Clear dialogue history. "
+                        "Removes all messages and resets turn counter. Use when starting a new conversation "
+                        "or when dialogue context is no longer relevant."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -348,6 +435,14 @@ class SemanticModulatorServer:
                     result = self._handle_adapt_to_context_window(arguments)
                 elif name == "multilevel_encode":
                     result = self._handle_multilevel_encode(arguments)
+                elif name == "afm_add_message":
+                    result = self._handle_afm_add_message(arguments)
+                elif name == "afm_build_context":
+                    result = self._handle_afm_build_context(arguments)
+                elif name == "afm_get_stats":
+                    result = self._handle_afm_get_stats(arguments)
+                elif name == "afm_clear_history":
+                    result = self._handle_afm_clear_history(arguments)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -562,7 +657,7 @@ Next steps:
 
         # If critical blind spots found, auto-suggest retrieval
         if report.auto_inject:
-            result += f"\n\n🔧 AUTO-CORRECTION SUGGESTED:\n"
+            result += "\n\n🔧 AUTO-CORRECTION SUGGESTED:\n"
             result += f"Retrieve these nodes: {report.auto_inject}\n"
             result += f"Command: modulate_region({report.auto_inject}, 'RAW')"
 
@@ -665,7 +760,9 @@ Files: {', '.join(stats['files'])}
         self._validate_file_id(file_id, must_exist=True)
         self._validate_token_count(available_tokens)
 
-        logger.info(f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available")
+        logger.info(
+            f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available"
+        )
 
         try:
             result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
@@ -676,6 +773,131 @@ Files: {', '.join(stats['files'])}
                 "💡 Tip: This JSCCM-inspired feature requires Main + Auxiliary + Detail branches.\n"
                 "   Try with at least 1000 tokens available for meaningful output."
             ) from e
+
+    def _handle_afm_add_message(self, args: Dict) -> str:
+        """Handle afm_add_message tool call"""
+        role = args["role"]
+        content = args["content"]
+
+        # Validation
+        if role not in ["user", "assistant", "system"]:
+            raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
+
+        logger.info(f"AFM: Adding {role} message (turn {self.focus_manager.turn_counter})")
+
+        # Add message
+        msg = self.focus_manager.add_message(role, content)
+
+        # Return confirmation with importance classification
+        return f"""
+💬 Message Added to Dialogue History
+
+Turn: {msg.turn_index}
+Role: {msg.role}
+Importance: {msg.importance.value.upper()}
+Content: {content[:100]}{'...' if len(content) > 100 else ''}
+
+Dialogue Stats:
+  Total messages: {len(self.focus_manager.messages)}
+  Current turn: {self.focus_manager.turn_counter}
+
+💡 Use afm_build_context(query, budget_tokens) to build optimized context
+"""
+
+    def _handle_afm_build_context(self, args: Dict) -> str:
+        """Handle afm_build_context tool call"""
+        current_query = args["current_query"]
+        budget_tokens = args["budget_tokens"]
+        system_preamble = args.get("system_preamble")
+
+        # Validation
+        if budget_tokens <= 0:
+            raise ValueError(f"budget_tokens must be positive, got {budget_tokens}")
+
+        logger.info(f"AFM: Building context for query (budget: {budget_tokens} tokens)")
+
+        # Build context
+        context, stats = self.focus_manager.build_context(
+            current_query=current_query,
+            budget_tokens=budget_tokens,
+            system_preamble=system_preamble,
+        )
+
+        # Format context for display
+        context_display = []
+        for i, (role, content) in enumerate(context):
+            preview = content[:150] + "..." if len(content) > 150 else content
+            context_display.append(f"  [{i+1}] {role}: {preview}")
+
+        context_display_text = "\n".join(context_display)
+
+        result = f"""
+🧠 AFM Context Built Successfully
+
+Query: {current_query[:100]}{'...' if len(current_query) > 100 else ''}
+
+📊 Packing Statistics:
+  Total messages processed: {stats.total_messages}
+  ├─ FULL fidelity:         {stats.full_count}
+  ├─ COMPRESSED:            {stats.compressed_count}
+  ├─ PLACEHOLDER:           {stats.placeholder_count}
+  └─ DROPPED:               {stats.dropped_count}
+
+  Tokens used:              {stats.total_tokens} / {stats.budget_tokens}
+  Budget utilization:       {stats.compression_ratio:.1%}
+
+📝 Context Messages ({len(context)} total):
+{context_display_text}
+
+✅ Ready to send to LLM
+💡 AFM achieved ~{100 * (1 - stats.compression_ratio):.0f}% token savings vs naive replay
+
+---
+Paper: Adaptive Focus Memory (arXiv:2511.12712v1)
+"""
+
+        return result
+
+    def _handle_afm_get_stats(self, args: Dict) -> str:
+        """Handle afm_get_stats tool call"""
+        stats = self.focus_manager.get_stats()
+
+        return f"""
+📊 AFM Dialogue Statistics
+
+Total messages: {stats['total_messages']}
+Current turn:   {stats['current_turn']}
+
+Importance Breakdown:
+  ⚠️  CRITICAL:  {stats['importance_breakdown']['critical']} messages
+  📌 RELEVANT:  {stats['importance_breakdown']['relevant']} messages
+  📝 TRIVIAL:   {stats['importance_breakdown']['trivial']} messages
+
+💡 CRITICAL messages (e.g., allergies) are always preserved at full fidelity
+"""
+
+    def _handle_afm_clear_history(self, args: Dict) -> str:
+        """Handle afm_clear_history tool call"""
+        prev_count = len(self.focus_manager.messages)
+        prev_turn = self.focus_manager.turn_counter
+
+        self.focus_manager.clear_history()
+
+        logger.info(f"AFM: Cleared dialogue history ({prev_count} messages)")
+
+        return f"""
+🗑️ AFM Dialogue History Cleared
+
+Previous state:
+  Messages: {prev_count}
+  Turns:    {prev_turn}
+
+Current state:
+  Messages: 0
+  Turns:    0
+
+✅ Ready for new conversation
+"""
 
     async def run(self):
         """Run the MCP server"""

@@ -12,7 +12,7 @@ Demonstrates advanced features including:
 This example shows how to use the latest JSCCM-inspired adaptive features.
 """
 
-from src.semantic_compressor import SemanticCompressor, FidelityLevel
+from src.semantic_compressor import SemanticCompressor
 from src.scar_compressor import SCAREnhancedCompressor
 from src.adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
 from src.blind_spot_detector import BlindSpotDetector

@@ -1,6 +1,12 @@
 # 🚀 Quick Start Guide
 
-Get up and running with Semantic Modulator in 5 minutes!
+Get up and running with Token Saver 5000 in 5 minutes!
+
+Token Saver 5000 provides **two complementary compression systems**:
+1. **Document Compression** (SemanticCompressor) - Compress long documents 80-95%
+2. **Dialogue Compression** (AFM) - Manage multi-turn conversations, retain ~66% fewer tokens
+
+Both systems work together through a unified MCP server with 13 tools.
 
 ---
 
@@ -92,14 +98,41 @@ python tests/test_functional.py
 ✅ ALL FUNCTIONAL TESTS PASSED!
 ```
 
+### Run AFM tests (Dialogue Memory)
+
+These tests verify AFM retains critical context across conversations:
+
+```bash
+python tests/test_afm.py
+```
+
+**Expected output:**
+```
+test_allergy_retention_short_conversation PASSED
+test_allergy_retention_medium_conversation PASSED
+test_token_savings PASSED
+✅ All AFM tests passed!
+
+Key Results:
+- Critical messages (allergies) retained across 9+ turns
+- ~66% token reduction with full context preservation
+- Recency weighting working as expected
+```
+
 ### Run example scripts
 
 ```bash
-# Basic example
+# Document compression example
 python examples/example_usage.py
+
+# Dialogue memory (AFM) demo
+python examples/afm_demo.py
 
 # SCAR-enhanced retrieval
 python examples/scar_demo.py
+
+# Multi-modal compression (text + code + images)
+python examples/multimodal_example.py
 ```
 
 ---
@@ -136,14 +169,24 @@ python examples/scar_demo.py
    Can you list the MCP tools available?
    ```
 
-You should see:
-- `ingest_context`
-- `read_skeleton`
-- `modulate_region`
-- `search_semantic`
-- `check_blind_spots`
-- `detect_hallucination`
-- `get_stats`
+You should see **13 tools** (9 document + 4 dialogue):
+
+**Document Compression Tools:**
+- `ingest_context` - Compress and ingest long documents
+- `read_skeleton` - View compressed document structure
+- `modulate_region` - Retrieve specific sections with variable detail
+- `search_semantic` - Find relevant sections via embedding search
+- `check_blind_spots` - Detect missed critical context
+- `detect_hallucination` - Verify AI responses against source
+- `get_stats` - View compression statistics
+- `adapt_to_context_window` - Fit content within token budget
+- `multilevel_encode` - Generate multi-fidelity representations
+
+**Dialogue Memory Tools (AFM):**
+- `afm_add_message` - Add message to dialogue history
+- `afm_build_context` - Build context window with adaptive fidelity
+- `afm_get_stats` - View dialogue statistics
+- `afm_clear_history` - Clear dialogue history
 
 ---
 
@@ -225,6 +268,47 @@ Retrieving missed context...
 
 ---
 
+### Example 4: Dialogue Memory with AFM
+
+AFM manages multi-turn conversations by compressing older messages adaptively.
+
+```
+You: I have a severe peanut allergy that is life-threatening.
+
+[Uses: afm_add_message(role="user", content="I have a severe peanut allergy...")]
+
+💬 Message Added to Dialogue History
+Turn: 1
+Role: user
+Importance: CRITICAL
+
+[Several turns later discussing travel, hotels, sightseeing...]
+
+You: What Thai street food should I try?
+
+[Uses: afm_build_context(
+  current_query="What Thai street food should I try?",
+  budget_tokens=2000
+)]
+
+📊 Context Built: 8 messages
+   FULL fidelity: 3 messages (including allergy!)
+   COMPRESSED: 3 messages
+   PLACEHOLDER: 2 messages
+   Token usage: 1,247 / 2,000 (62%)
+
+Claude: Based on your peanut allergy mentioned earlier, I recommend avoiding...
+```
+
+**How AFM Works:**
+- **CRITICAL** messages (allergies, safety info) → Always FULL fidelity
+- **RELEVANT** messages → Compressed to summaries
+- **TRIVIAL** messages → Replaced with placeholders
+- Recency weighting: Recent messages get higher fidelity
+- ~66% token reduction while preserving safety context
+
+---
+
 ## Configuration Options
 
 ### Adjusting Compression Ratio
@@ -258,6 +342,28 @@ self.compressor = SemanticCompressor(
 ```
 
 Trade-off: Larger models = better semantic understanding but slower processing
+
+---
+
+### Configuring AFM (Dialogue Memory)
+
+Edit `src/afm.py` to adjust AFM behavior:
+
+```python
+config = AFMConfig(
+    tau_high=0.45,      # Threshold for FULL fidelity (higher = stricter)
+    tau_mid=0.25,       # Threshold for COMPRESSED (lower = more compression)
+    half_life=12,       # Recency decay (lower = favor recent messages more)
+    max_stub_tokens=12, # Placeholder stub size
+    target_compression_ratio=0.33,  # Target for COMPRESSED summaries
+)
+```
+
+**Trade-offs:**
+- Higher `tau_high` → Fewer FULL messages, more compression, risk missing context
+- Lower `tau_mid` → More COMPRESSED messages, fewer PLACEHOLDERS
+- Lower `half_life` → Stronger recency bias (favor recent turns)
+- Higher `half_life` → More even treatment across conversation
 
 ---
 
@@ -371,13 +477,30 @@ See [SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) for implementation detai
 
 ## Next Steps
 
-1. ✅ **Run tests** to verify installation: `python tests/test_token_savings.py`
-2. ✅ **Try examples** to see it in action: `python examples/scar_demo.py`
-3. ✅ **Configure Claude Desktop** with the MCP server (see above)
-4. ✅ **Read** [GETTING_STARTED.md](GETTING_STARTED.md) for complete walkthrough
-5. 📖 **Explore** [README.md](README.md) for advanced features
-6. 🧪 **Experiment** with blind spot detection and SCAR
-7. 🚀 **Try** multi-document analysis
+### Verify Installation
+
+1. ✅ **Run token savings tests**: `python tests/test_token_savings.py`
+2. ✅ **Run functional tests**: `python tests/test_functional.py`
+3. ✅ **Run AFM tests**: `python tests/test_afm.py`
+
+### Try Examples
+
+4. 📝 **Document compression**: `python examples/example_usage.py`
+5. 🧠 **Dialogue memory (AFM)**: `python examples/afm_demo.py`
+6. 🎯 **SCAR-enhanced retrieval**: `python examples/scar_demo.py`
+7. 🖼️ **Multi-modal compression**: `python examples/multimodal_example.py`
+
+### Configure & Explore
+
+8. ✅ **Configure Claude Desktop** with the MCP server (see above)
+9. 📖 **Read** [GETTING_STARTED.md](GETTING_STARTED.md) for complete walkthrough
+10. 📚 **Explore** [README.md](README.md) for advanced features and research background
+
+### Understand the Two Systems
+
+- **When to use Document Compression**: Long documents, research papers, codebases
+- **When to use AFM**: Multi-turn conversations, preserving context across turns
+- **Using both together**: Compress documents into context, then manage dialogue with AFM
 
 ---
 

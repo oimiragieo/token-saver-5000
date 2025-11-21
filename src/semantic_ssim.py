@@ -374,7 +374,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print(f"\nOriginal graph: {len(nodes)} nodes, {len(edges)} edges")
 
-    print(f"\n--- Scenario 1: 50% Compression ---")
+    print("\n--- Scenario 1: 50% Compression ---")
     print(f"Retained nodes: {len(compressed_nodes_50)}")
     print(f"Luminance: {components_50['luminance']:.3f}")
     print(f"Contrast:  {components_50['contrast']:.3f}")
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     print(f"SSIM:      {ssim_50:.3f}")
     print(f"Quality:   {interpret_ssim_score(ssim_50)}")
 
-    print(f"\n--- Scenario 2: 70% Compression ---")
+    print("\n--- Scenario 2: 70% Compression ---")
     print(f"Retained nodes: {len(compressed_nodes_30)}")
     print(f"Luminance: {components_30['luminance']:.3f}")
     print(f"Contrast:  {components_30['contrast']:.3f}")
@@ -390,5 +390,5 @@ if __name__ == "__main__":
     print(f"SSIM:      {ssim_30:.3f}")
     print(f"Quality:   {interpret_ssim_score(ssim_30)}")
 
-    print(f"\n💡 Insight: Higher compression → Lower SSIM (as expected)")
-    print(f"   FPQE paper shows SSIM predicts downstream task performance!")
+    print("\n💡 Insight: Higher compression → Lower SSIM (as expected)")
+    print("   FPQE paper shows SSIM predicts downstream task performance!")

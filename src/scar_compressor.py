@@ -316,7 +316,7 @@ class SCAREnhancedCompressor:
 
         if use_alignment_guidance:
             self.alignment_module = SemanticAlignmentModule(embedding_dim=embedding_dim)
-            print(f"🎯 SCAR Semantic Alignment: Enabled")
+            print("🎯 SCAR Semantic Alignment: Enabled")
 
     def compress_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
         """
@@ -427,7 +427,7 @@ class SCAREnhancedCompressor:
         from .semantic_compressor import FidelityLevel
 
         output_lines = []
-        output_lines.append(f"=== SCAR ADAPTIVE MODULATION ===")
+        output_lines.append("=== SCAR ADAPTIVE MODULATION ===")
         output_lines.append(f"Query: {query}")
         output_lines.append(f"Retrieved {len(results)} nodes with adaptive fidelity\n")
 
@@ -531,7 +531,7 @@ if __name__ == "__main__":
     )
 
     print(f"\nQuery: {query}")
-    print(f"\nTop results with alignment scores:")
+    print("\nTop results with alignment scores:")
     for node_id, score in results:
         node = base_compressor.chunks[node_id]
         summary = base_compressor._generate_summary(node.text, 60)

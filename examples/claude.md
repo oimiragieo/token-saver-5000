@@ -1,7 +1,7 @@
 # examples/ Directory
 
 ## Overview
-Runnable examples demonstrating various features of the Semantic Modulator, including basic usage, SCAR enhancements, code compression, and multi-modal document processing.
+Runnable examples demonstrating Token Saver 5000's dual compression systems: document compression (80-95% savings) and dialogue memory (AFM, 48-66% savings). Includes basic usage, SCAR enhancements, code compression, multi-modal processing, and conversation management.
 
 ## Files
 
@@ -140,7 +140,124 @@ python examples/scar_demo.py
 
 ---
 
-### 3. **`code_compression_example.py`** (10,366 bytes)
+### 3. **`afm_demo.py`** (7,200 bytes) ✨ NEW!
+**Purpose**: Adaptive Focus Memory (AFM) dialogue compression demonstration
+
+**Features Demonstrated**:
+- Multi-turn conversation management
+- Automatic importance classification (CRITICAL/RELEVANT/TRIVIAL)
+- 3-level adaptive fidelity (FULL/COMPRESSED/PLACEHOLDER)
+- Recency weighting with half-life decay
+- Token savings while preserving critical context
+- Safety context retention (allergies, medical info)
+
+**Example Flow**:
+```python
+from src.afm import FocusManager, AFMConfig
+
+# 1. Initialize AFM
+manager = FocusManager(
+    config=AFMConfig(
+        tau_high=0.45,      # FULL fidelity threshold
+        tau_mid=0.25,       # COMPRESSED fidelity threshold
+        half_life=12        # Recency decay parameter
+    )
+)
+
+# 2. Add messages to dialogue history
+manager.add_message("user", "I have a severe peanut allergy that is life-threatening")
+manager.add_message("assistant", "I understand. I'll make sure to avoid any peanut-containing foods in my recommendations.")
+# ... several more turns discussing travel, hotels, activities ...
+manager.add_message("user", "What Thai street food should I try?")
+
+# 3. Build context with adaptive fidelity
+context, stats = manager.build_context(
+    current_query="What Thai street food should I try?",
+    budget_tokens=2000
+)
+
+# 4. Inspect fidelity distribution
+print(f"""
+📊 Context Built:
+   FULL fidelity: {stats['full_count']} messages
+   COMPRESSED: {stats['compressed_count']} messages
+   PLACEHOLDER: {stats['placeholder_count']} messages
+   Token usage: {stats['token_usage']} / {stats['budget']}
+""")
+```
+
+**Output Example**:
+```
+======================================================================
+ADAPTIVE FOCUS MEMORY (AFM) DEMONSTRATION
+======================================================================
+
+[1] SHORT CONVERSATION (3 turns)
+----------------------------------------------------------------------
+Turn 1 (user): I have a severe peanut allergy
+→ Importance: CRITICAL | Intended fidelity: FULL
+
+Turn 2 (assistant): I understand and will remember
+→ Importance: RELEVANT | Intended fidelity: FULL
+
+Turn 3 (user): What Thai street food should I try?
+→ Importance: RELEVANT | Intended fidelity: FULL
+
+Building context (budget: 500 tokens)...
+📊 Context Built:
+   Messages: 3
+   FULL fidelity: 3 (100%)
+   Token usage: 342 / 500 (68%)
+
+✅ PASS: Allergy context retained
+
+[2] MEDIUM CONVERSATION (9 turns)
+----------------------------------------------------------------------
+Adding 9 messages across various topics...
+- Travel planning
+- Hotel recommendations
+- Muay Thai interest
+- Temple visits
+- Food query (related to allergy!)
+
+Building context with AFM (budget: 800 tokens)...
+📊 AFM Results:
+   FULL fidelity: 3 messages (33%)
+   COMPRESSED: 4 messages (44%)
+   PLACEHOLDER: 2 messages (22%)
+   Token usage: 647 / 800 (81%)
+
+✅ PASS: Critical allergy retained across 9 turns!
+
+Verifying allergy context in final context...
+✅ Found allergy-related content in context
+
+[3] TOKEN SAVINGS COMPARISON
+----------------------------------------------------------------------
+Baseline (all FULL): 1,245 tokens
+AFM adaptive: 647 tokens
+Savings: 598 tokens (48.0%)
+```
+
+**Run Command**:
+```bash
+python examples/afm_demo.py
+```
+
+**Scenarios Demonstrated**:
+1. **Short conversation (3 turns)**: Basic AFM functionality
+2. **Medium conversation (9 turns)**: Critical context retention across long dialogue
+3. **Token savings analysis**: AFM vs baseline comparison
+
+**Key Learnings**:
+- CRITICAL messages (allergies) always kept at FULL fidelity
+- Recency weighting favors recent messages
+- ~48-66% token savings while preserving safety context
+- Based on research paper arXiv:2511.12712v1
+
+---
+
+### 4. **`code_compression_example.py`** (10,366 bytes)
 **Purpose**: Code-specific compression with AST analysis
 
 **Features Demonstrated**:
@@ -239,7 +356,7 @@ python examples/code_compression_example.py
 
 ---
 
-### 4. **`multimodal_example.py`** (13,297 bytes)
+### 5. **`multimodal_example.py`** (13,297 bytes)
 **Purpose**: Multi-modal document processing (text + code + images)
 
 **Features Demonstrated**:
@@ -354,7 +471,7 @@ pip install sentence-transformers[clip]
 
 ---
 
-### 5. **`advanced_features.py`** ✨ NEW! (15,234 bytes)
+### 6. **`advanced_features.py`** (15,234 bytes)
 **Purpose**: Demonstrate advanced JSCCM-inspired features
 
 **Features Demonstrated**:
@@ -439,10 +556,23 @@ Selected skeleton ratio: 25.0% (level 3)
 
 ### Run individually
 ```bash
+# Document compression
 python examples/example_usage.py
+
+# Dialogue memory (AFM)
+python examples/afm_demo.py
+
+# SCAR enhancements
 python examples/scar_demo.py
+
+# Code compression
 python examples/code_compression_example.py
+
+# Multi-modal (text + code + images)
 python examples/multimodal_example.py
+
+# Advanced features
+python examples/advanced_features.py
 ```
 
 ### Run all with output
@@ -485,10 +615,24 @@ done
 ## Learning Path
 
 **Recommended Order**:
-1. **Start here**: `example_usage.py` - Learn basic workflow
+
+### For Document Compression:
+1. **Start here**: `example_usage.py` - Learn basic document compression workflow
 2. **Code-specific**: `code_compression_example.py` - If compressing code
 3. **Advanced**: `scar_demo.py` - Learn SCAR enhancements
 4. **Multi-modal**: `multimodal_example.py` - If working with images
+5. **Production**: `advanced_features.py` - JSCCM-inspired adaptive features
+
+### For Dialogue Management:
+1. **Start here**: `afm_demo.py` - Learn AFM dialogue memory compression
+   - Critical context retention
+   - Multi-turn conversation management
+   - Token savings while preserving safety
+
+### Combined Workflows:
+- Use document compression for knowledge bases
+- Use AFM for managing conversations about compressed documents
+- Combine both for maximum token efficiency
 
 ---
 

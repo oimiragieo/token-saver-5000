@@ -295,7 +295,7 @@ def main():
             chunk = compressor.chunks[results[0][0]]
             typical_workflow_tokens += len(tokenizer.encode(chunk.code))
 
-    print(f"\n📊 Token Usage:")
+    print("\n📊 Token Usage:")
     print(f"   Original code: {original_tokens:,} tokens")
     print(f"   Skeleton only: {skeleton_tokens:,} tokens")
     print(f"   Typical workflow (skeleton + 2 functions): {typical_workflow_tokens:,} tokens")

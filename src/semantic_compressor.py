@@ -6,10 +6,9 @@ Implements the core encoding/decoding logic inspired by:
 - Paper 2: FPQE (Fidelity-Preserving Quantization) - Structure preservation
 """
 
-import hashlib
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from enum import Enum
 
 import numpy as np
@@ -211,11 +210,11 @@ class SemanticCompressor:
         print(f"  Created {len(raw_chunks)} semantic chunks")
 
         # 2. Generate embeddings
-        print(f"  Generating embeddings...")
+        print("  Generating embeddings...")
         embeddings = self.model.encode(raw_chunks, show_progress_bar=False)
 
         # 3. Build similarity graph (preserves global structure)
-        print(f"  Building semantic graph...")
+        print("  Building semantic graph...")
         graph = nx.Graph()
         similarity_matrix = cosine_similarity(embeddings)
 
@@ -246,7 +245,7 @@ class SemanticCompressor:
                     graph.add_edge(node_id, edge_id, weight=float(similarity))
 
         # 4. Calculate importance via PageRank (rate allocation)
-        print(f"  Calculating importance scores (PageRank)...")
+        print("  Calculating importance scores (PageRank)...")
         if len(graph.nodes) > 0:
             pagerank = nx.pagerank(graph)
 
@@ -431,9 +430,9 @@ class SemanticCompressor:
             else:  # FidelityLevel.RAW
                 # Level 5: Full content (variable tokens)
                 output_lines.append(f"[{node_id}] Full Content:")
-                output_lines.append(f"--- BEGIN ---")
+                output_lines.append("--- BEGIN ---")
                 output_lines.append(node.text)
-                output_lines.append(f"--- END ---")
+                output_lines.append("--- END ---")
                 output_lines.append(
                     f"Metadata: {node.metadata['tokens']} tokens, importance {node.importance:.3f}\n"
                 )

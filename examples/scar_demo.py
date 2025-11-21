@@ -104,7 +104,7 @@ def main():
         },
     )
 
-    print(f"\n📊 Compression Statistics:")
+    print("\n📊 Compression Statistics:")
     print(f"   Original tokens: {skeleton.total_tokens:,}")
     print(f"   Skeleton tokens: {skeleton.skeleton_tokens:,}")
     print(f"   Compression ratio: {skeleton.compression_ratio:.1f}×")
@@ -182,7 +182,7 @@ def main():
     sample_node_ids = list(base_compressor.chunks.keys())[:5]
     sample_embeddings = np.array([base_compressor.chunks[nid].embedding for nid in sample_node_ids])
 
-    print(f"\n📦 Embedding Compression Demo:")
+    print("\n📦 Embedding Compression Demo:")
     print(f"   Input shape: {sample_embeddings.shape}")
     print(f"   Input dimension: {sample_embeddings.shape[1]}")
 

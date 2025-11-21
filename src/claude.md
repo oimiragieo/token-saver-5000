@@ -385,3 +385,65 @@ Reconstruction: Linear(96→256) → LayerNorm → GELU → Linear(256→384)
 - SSIM score: > 0.7 (good preservation)
 - Retrieval speed: < 100ms for typical queries
 - Memory: < 500MB for embedding model
+
+---
+
+#### 10. **`afm.py`** (30,500 bytes) **NEW!**
+**Purpose**: Adaptive Focus Memory for dialogue management (arXiv:2511.12712v1)
+
+**Key Classes**:
+- `FocusManager`: Main dialogue memory manager (~66% token reduction)
+- `Message`: Dialogue turn with metadata
+- `AFMConfig`: Configuration (thresholds, half-life, compression settings)
+- `FidelityLevel(Enum)`: FULL, COMPRESSED, PLACEHOLDER
+- `ImportanceLevel(Enum)`: CRITICAL, RELEVANT, TRIVIAL
+- `TokenCounter`: tiktoken or word-count fallback
+- `HeuristicCompressor`: Local extractive compression
+- `LLMCompressor`: Optional OpenAI abstractive compression
+- `SentenceTransformerEmbedder` / `HashingEmbedder`: Embeddings
+- `ImportanceClassifier`: Heuristic or LLM-based
+
+**Key Methods**:
+- `add_message(role, content)`: Add turn with auto-importance classification
+- `build_context(query, budget_tokens, system_preamble)`: Build optimized context
+  - Semantic similarity scoring
+  - Recency weighting (half-life decay: w = 0.5^(k/h))
+  - Adaptive fidelity assignment
+  - Chronological packing under budget
+- `clear_history()`, `get_stats()`: Management methods
+
+**Scoring Function** (Section 3.2 of AFM paper):
+```python
+if importance == CRITICAL:
+    score = 1.0  # Force-elevated
+elif importance == RELEVANT:
+    score = max(0, similarity) * (0.5 + 0.5 * recency_weight)
+else:  # TRIVIAL
+    score = max(0, similarity) * (0.25 * recency_weight)
+```
+
+**Use Case**: Multi-turn dialogue memory (not long documents)
+
+**Research Paper**: "Adaptive Focus Memory for Language Models" (arXiv:2511.12712v1)
+- Author: Christopher Cruz, Purdue University
+- Result: ~66% token reduction while preserving safety (allergy retention)
+- License: CC BY 4.0
+
+**MCP Integration**: 4 new tools
+- `afm_add_message`: Add dialogue turn
+- `afm_build_context`: Build optimized context
+- `afm_get_stats`: Get dialogue statistics
+- `afm_clear_history`: Reset dialogue
+
+**Key Difference from SemanticCompressor**:
+| Feature | AFM (Dialogue) | SemanticCompressor (Docs) |
+|---------|----------------|---------------------------|
+| Use case | Multi-turn conversations | Long documents |
+| Fidelity levels | 3 (FULL/COMPRESSED/PLACEHOLDER) | 5 (ABSTRACT → RAW) |
+| Importance | Critical/Relevant/Trivial | PageRank |
+| Temporal | Recency decay (half-life) | No temporal aspect |
+| Granularity | Message-level | Paragraph-level |
+| Ordering | Chronological (preserves flow) | Importance-ranked |
+
+**Examples**: `examples/afm_demo.py`
+**Tests**: `tests/test_afm.py` (allergy retention benchmark)
