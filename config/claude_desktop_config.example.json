@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "semantic-modulator": {
+      "command": "python",
+      "args": ["-m", "src.server"],
+      "cwd": "/REPLACE/WITH/YOUR/PATH/token-saver-5000",
+      "env": {
+        "PYTHONPATH": "/REPLACE/WITH/YOUR/PATH/token-saver-5000"
+      }
+    }
+  }
+}
