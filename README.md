@@ -24,7 +24,11 @@ python tests/test_functional.py
 **See it in action:**
 ```bash
 python examples/scar_demo.py  # SCAR-enhanced retrieval
+python examples/code_compression_example.py  # Code compression
+python examples/multimodal_example.py  # Text + Code + Images
 ```
+
+**📖 New to code/image compression?** [CODE_AND_IMAGES.md](docs/CODE_AND_IMAGES.md)
 
 ---
 
@@ -39,6 +43,7 @@ This approach:
 - ✅ **Works with ALL AI models** (OpenAI, Claude, DeepSeek, etc.)
 - ✅ **Detects blind spots** to prevent hallucination
 - ✅ **Runs entirely locally** (no external API calls for compression)
+- ✅ **Supports text, code, AND images** in unified graph (NEW!)
 
 ---
 
