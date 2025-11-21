@@ -38,19 +38,54 @@ pip install -r requirements.txt
 uv pip install -r requirements.txt
 ```
 
-### 1.3 Verify Installation
+### 1.3 Verify Installation ✨ NEW!
 
-The first time you run, the system will download the embedding model (~80MB). This is a one-time download.
+Run the comprehensive setup verification script:
 
 ```bash
-python -c "from sentence_transformers import SentenceTransformer; m = SentenceTransformer('all-MiniLM-L6-v2'); print('✅ Installation successful!')"
+python check_setup.py
 ```
+
+This script checks:
+- ✅ Python version (>= 3.10)
+- ✅ All dependencies installed
+- ✅ Modules can be imported
+- ✅ Embedding model loads (downloads ~80MB on first run)
+- ✅ Basic functionality works
 
 **Expected output:**
 ```
-Downloading model...
-✅ Installation successful!
+======================================================================
+  TOKEN SAVER 5000 - SETUP VERIFICATION
+======================================================================
+1. Checking Python Version...
+✅ Python 3.10 is supported (requirement: >= 3.10)
+
+2. Checking Dependencies...
+✅ mcp                      - Model Context Protocol
+✅ sentence_transformers    - Sentence Transformers for embeddings
+... (10/10 dependencies)
+
+3. Checking Module Imports...
+✅ src.semantic_compressor
+✅ src.server
+... (9/9 modules)
+
+4. Checking Embedding Model...
+Loading all-MiniLM-L6-v2 model...
+✅ Model loaded successfully
+
+5. Running Smoke Test...
+✅ Document ingested: 3 nodes
+✅ Compression: 47 → 23 tokens (2.0x)
+
+======================================================================
+Result: 5/5 checks passed
+======================================================================
+🎉 All checks passed! Token Saver 5000 is ready to use.
 ```
+
+**If you see errors**, the script will tell you exactly what's wrong and how to fix it.
 
 ---
 
