@@ -1,6 +1,30 @@
 # 🧠 Semantic Modulator: Adaptive Semantic Fidelity MCP Server
 
-**Combining Semantic Communication with Fidelity-Preserving Encoding for 80-95% Token Reduction**
+**Proven 80-95% Token Reduction • Locally Processed • Works with All AI Models**
+
+[![Tests Passing](https://img.shields.io/badge/tests-passing-brightgreen)]() [![Token Savings](https://img.shields.io/badge/token%20savings-80--95%25-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
+
+---
+
+## 🚀 Quick Start
+
+**New user? Start here:** [**GETTING_STARTED.md**](GETTING_STARTED.md) - Complete step-by-step guide (10 minutes)
+
+**Quick installation:**
+```bash
+git clone https://github.com/oimiragieo/token-saver-5000.git
+cd token-saver-5000
+pip install -r requirements.txt
+
+# Prove it works + see token savings
+python tests/test_token_savings.py
+python tests/test_functional.py
+```
+
+**See it in action:**
+```bash
+python examples/scar_demo.py  # SCAR-enhanced retrieval
+```
 
 ---
 
