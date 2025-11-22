@@ -49,7 +49,7 @@ uv pip install -r requirements.txt
 Run the comprehensive setup verification script:
 
 ```bash
-python check_setup.py
+python scripts/check_setup.py
 ```
 
 This script checks:
@@ -91,7 +91,7 @@ Result: 5/5 checks passed
 🎉 All checks passed! Token Saver 5000 is ready to use.
 ```
 
-**If you see errors**, the script will tell you exactly what's wrong and how to fix it.
+**If you see errors**, the script will tell you exactly what's wrong and how to fix it. For detailed troubleshooting, see [**TROUBLESHOOTING.md**](TROUBLESHOOTING.md).
 
 ---
 
@@ -667,48 +667,49 @@ Now that you're set up:
 
 ### 4. Read the Full Documentation
 
-- [README.md](README.md) - Complete feature list & research background
-- [QUICKSTART.md](QUICKSTART.md) - 5-minute quick start guide
+**Core Documentation:**
+- [**README.md**](README.md) - Complete feature list & research background
+- [**HOW_IT_WORKS.md**](HOW_IT_WORKS.md) - Technical deep dive on all technology
+- [**MCP_TOOLS_GUIDE.md**](MCP_TOOLS_GUIDE.md) - Complete reference for all 17 MCP tools
+- [**TROUBLESHOOTING.md**](TROUBLESHOOTING.md) - Common issues and solutions
+
+**Advanced Topics:**
+- [**ARCHITECTURE.md**](ARCHITECTURE.md) - System architecture and design
+- [**API_REFERENCE.md**](API_REFERENCE.md) - Module and API documentation
 - [docs/SCAR_PAPER_SUMMARY.md](docs/SCAR_PAPER_SUMMARY.md) - SCAR research details
-- [docs/AFM_PAPER_SUMMARY.md](docs/AFM_PAPER_SUMMARY.md) - AFM research background
+- [docs/RESEARCH_SYNTHESIS.md](docs/RESEARCH_SYNTHESIS.md) - Research paper validation
 
 ---
 
 ## Troubleshooting
 
+Having issues? See the comprehensive [**TROUBLESHOOTING.md**](TROUBLESHOOTING.md) guide which covers:
+
+- Installation issues (dependencies, Python version, etc.)
+- Model download issues
+- MCP server configuration
+- Performance problems
+- Storage and resource limits
+- AFM dialogue memory issues
+- Platform-specific fixes (macOS, Windows, Linux)
+
+**Quick fixes for common issues:**
+
 ### "Module not found" error
-
-**Solution:**
 ```bash
-# Make sure you're in the right directory
 cd token-saver-5000
-
-# Install dependencies again
 pip install -r requirements.txt
 ```
 
 ### "Model download failed"
-
-**Solution:**
 ```bash
-# Manually download model
 python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 ```
 
-### "Out of memory" error
-
-**Solution:** Use a smaller model in `src/semantic_compressor.py`:
-```python
-self.model = SentenceTransformer("all-MiniLM-L6-v2")  # Smallest
-```
-
 ### "Claude doesn't see MCP tools"
-
-**Solution:**
-1. Check config file path is correct
-2. Use absolute path (not relative)
-3. Completely restart Claude Desktop
-4. Check logs for errors
+1. Check config uses absolute path (not relative)
+2. Completely restart Claude Desktop
+3. See [TROUBLESHOOTING.md#mcp-server-issues](TROUBLESHOOTING.md#mcp-server-issues)
 
 ---
 
