@@ -385,12 +385,12 @@ This project implements **4 peer-reviewed research papers**:
 ### **Features**
 - [**CODE_AND_IMAGES.md**](docs/CODE_AND_IMAGES.md) - Code & image compression guide
 - [**SCAR_PAPER_SUMMARY.md**](docs/SCAR_PAPER_SUMMARY.md) - SCAR implementation notes
-- [**AFM: Dialogue Memory**](IMPLEMENTATION_SUMMARY.md#adaptive-focus-memory-afm-implementation-) - AFM implementation guide
+- [**AFM: Dialogue Memory**](docs/archive/IMPLEMENTATION_SUMMARY.md#adaptive-focus-memory-afm-implementation-) - AFM implementation guide
 
 ### **Development**
 - [**CONTRIBUTING.md**](CONTRIBUTING.md) - Contribution guidelines
 - [**CHANGELOG.md**](CHANGELOG.md) - Version history
-- [**DEEP_DIVE_AUDIT.md**](DEEP_DIVE_AUDIT.md) - Comprehensive codebase audit
+- [**DEEP_DIVE_AUDIT.md**](docs/archive/DEEP_DIVE_AUDIT.md) - Comprehensive codebase audit
 
 ### **Code Documentation**
 - `src/claude.md` - Source code documentation
@@ -497,13 +497,15 @@ manual_section = compressor.modulate_region(relevant_nodes, "STRUCTURE")
 - [x] SCAR learnable compression
 - [x] Code & multimodal support
 - [x] AFM dialogue memory (NEW!)
-- [x] MCP server with 13 tools
+- [x] MCP server with 16 tools
 - [x] Comprehensive test suite
 - [x] CI/CD pipeline
 - [x] Production documentation
+- [x] Persistent storage (ChromaDB/JSON fallback) (NEW in v0.2.0!)
+- [x] Resource management & limits (NEW in v0.2.0!)
+- [x] AFM export/import (NEW in v0.2.0!)
 
 ### 🚧 In Progress
-- [ ] Persistent storage (ChromaDB/FAISS)
 - [ ] Web UI for visualization
 - [ ] Fine-tuned SCAR models
 
