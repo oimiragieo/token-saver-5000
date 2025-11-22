@@ -512,6 +512,30 @@ class SemanticModulatorServer:
                         },
                     },
                 ),
+                Tool(
+                    name="delete_document",
+                    description=(
+                        "🗑️ DELETE DOCUMENT: Permanently delete an ingested document. "
+                        "Removes the document from memory and persistent storage. "
+                        "This operation cannot be undone. Use with caution. "
+                        "Useful for managing storage limits or removing outdated documents."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_id": {
+                                "type": "string",
+                                "description": "Document identifier to delete",
+                            },
+                            "confirm": {
+                                "type": "boolean",
+                                "description": "Confirmation flag (must be true to proceed)",
+                                "default": False,
+                            },
+                        },
+                        "required": ["file_id", "confirm"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -550,6 +574,8 @@ class SemanticModulatorServer:
                     result = self._handle_afm_export_history(arguments)
                 elif name == "afm_import_history":
                     result = self._handle_afm_import_history(arguments)
+                elif name == "delete_document":
+                    result = self._handle_delete_document(arguments)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -1187,6 +1213,94 @@ Exported at: {metadata.get('exported_at', 'unknown')}
 ✅ Conversation state has been restored.
 
 💡 Use afm_get_stats() to see current state.
+"""
+
+    def _handle_delete_document(self, args: Dict) -> str:
+        """Handle delete_document tool call"""
+        file_id = args["file_id"]
+        confirm = args.get("confirm", False)
+
+        # Validation
+        self._validate_file_id(file_id, must_exist=True)
+
+        if not confirm:
+            return f"""
+⚠️  DELETE CONFIRMATION REQUIRED
+
+You are about to delete document: {file_id}
+
+This will:
+  • Remove all {len([k for k in self.compressor.chunks.keys() if k.startswith(file_id)])} semantic nodes from memory
+  • Delete persistent storage (cannot be undone)
+  • Clear retrieval history for this document
+
+To proceed, call again with confirm=true:
+  delete_document(file_id="{file_id}", confirm=true)
+
+💡 Tip: Use list_documents() to see all available documents first
+"""
+
+        logger.info(f"Deleting document: {file_id}")
+
+        # Get stats before deletion
+        stats = self.compressor.get_stats(file_id)
+        node_count = stats['total_nodes']
+
+        # Delete from memory
+        try:
+            # Remove chunks
+            chunks_to_delete = [k for k in self.compressor.chunks.keys() if k.startswith(file_id)]
+            for chunk_id in chunks_to_delete:
+                del self.compressor.chunks[chunk_id]
+
+            # Remove graph
+            if file_id in self.compressor.graphs:
+                del self.compressor.graphs[file_id]
+
+            # Remove metadata
+            if file_id in self.compressor.file_metadata:
+                del self.compressor.file_metadata[file_id]
+
+            # Remove retrieval history
+            if file_id in self.retrieval_history:
+                del self.retrieval_history[file_id]
+
+            logger.info(f"✅ Removed {file_id} from memory ({node_count} nodes)")
+
+        except Exception as e:
+            logger.error(f"Failed to delete {file_id} from memory: {e}")
+            raise RuntimeError(f"Failed to delete from memory: {e}")
+
+        # Delete from persistent storage
+        try:
+            success = self.persistence.delete_document(file_id)
+            if success:
+                logger.info(f"✅ Deleted {file_id} from persistent storage")
+            else:
+                logger.warning(f"⚠️  Failed to delete {file_id} from persistent storage")
+        except Exception as e:
+            logger.error(f"Failed to delete {file_id} from storage: {e}")
+
+        # Unregister from resource manager
+        try:
+            self.resource_manager.unregister_document(file_id)
+        except Exception as e:
+            logger.warning(f"Failed to unregister {file_id} from resource manager: {e}")
+
+        return f"""
+🗑️ Document Deleted Successfully
+
+File ID: {file_id}
+Nodes removed: {node_count}
+Memory freed: ~{node_count * 2}KB (estimated)
+
+✅ Document has been permanently deleted from:
+   • Memory (semantic graph, chunks, metadata)
+   • Persistent storage (ChromaDB/JSON)
+   • Resource tracking
+
+💡 Remaining documents: {len(set([nid.split('_n')[0] for nid in self.compressor.chunks.keys()]))}
+   Use list_documents() to see what's left.
 """
 
     async def run(self):

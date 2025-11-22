@@ -288,7 +288,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 **Linux:** `~/.config/claude/claude_desktop_config.json`
 
-### Available MCP Tools (16 total - NEW!)
+### Available MCP Tools (17 total)
 
 **Document Compression (9 tools):**
 1. `ingest_context` - Ingest document into semantic graph
@@ -307,10 +307,11 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 12. `afm_get_stats` - Get dialogue statistics
 13. `afm_clear_history` - Reset dialogue
 
-**Discovery & Persistence (3 tools - NEW!):**
+**Discovery & Persistence (4 tools):**
 14. `list_documents` - Get inventory of all ingested documents
 15. `afm_export_history` - Save conversation state to file
 16. `afm_import_history` - Restore conversation state from file
+17. `delete_document` - Permanently delete ingested documents (NEW in v0.3.0!)
 
 **See:** [MCP Tool Documentation](docs/MCP_TOOLS_GUIDE.md) for detailed usage
 
@@ -336,7 +337,7 @@ This project implements **4 peer-reviewed research papers**:
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    MCP Server (stdio)                        │
-│                      13 Tools Exposed                        │
+│                      17 Tools Exposed                        │
 └──────────────────────────────────────────────────────────────┘
                             │
         ┌───────────────────┴───────────────────┐
@@ -430,6 +431,66 @@ python examples/multimodal_example.py    # Multi-modal
 
 ---
 
+## 🎯 TOON Integration (NEW in v0.3.0!)
+
+Token Saver 5000 now supports **TOON (Token-Oriented Object Notation)** for an additional ~40% token savings on structured outputs!
+
+### What is TOON?
+
+TOON is a token-optimized alternative to JSON that:
+- Uses ~40% fewer tokens than JSON
+- Improves LLM parsing accuracy (69.7% → 73.9%)
+- Perfect for tabular/uniform data (search results, inventories, stats)
+- Lossless round-trip conversion
+
+### Combined Token Savings
+
+**Original Document:** 45,000 tokens
+
+**Step 1 - Semantic Compression:**
+- Result: 2,300 tokens (94.9% savings)
+
+**Step 2 - TOON on Outputs:**
+- Result: ~1,400 tokens (40% additional savings)
+
+**Total: 96.9% token reduction!** (45,000 → 1,400 tokens)
+
+### Usage Example
+
+```python
+from src.toon_serializer import TOONSerializer, format_response, OutputFormat
+
+# Serialize search results to TOON
+serializer = TOONSerializer()
+toon_output = serializer.serialize_search_results(search_results)
+
+# Or use the format_response helper
+output = format_response(
+    data=search_results,
+    format_type=OutputFormat.TOON  # or JSON, or TEXT
+)
+```
+
+### When to Use TOON
+
+✅ **Ideal for:**
+- Search results (uniform node lists)
+- Document inventories
+- Statistics and metrics
+- AFM context building
+- Any tabular/structured data
+
+❌ **Not ideal for:**
+- Deeply nested hierarchies
+- Unstructured narrative text
+- Pure flat tables (use CSV)
+
+**Try it:** `python examples/toon_demo.py`
+
+**Learn more:** [TOON GitHub](https://github.com/toon-format/toon)
+
+---
+
 ## 🔬 Performance Benchmarks
 
 ### Document Compression
@@ -496,14 +557,16 @@ manual_section = compressor.modulate_region(relevant_nodes, "STRUCTURE")
 - [x] Core semantic compression (JSCCM, FPQE)
 - [x] SCAR learnable compression
 - [x] Code & multimodal support
-- [x] AFM dialogue memory (NEW!)
-- [x] MCP server with 16 tools
+- [x] AFM dialogue memory
+- [x] MCP server with 17 tools
 - [x] Comprehensive test suite
 - [x] CI/CD pipeline
 - [x] Production documentation
-- [x] Persistent storage (ChromaDB/JSON fallback) (NEW in v0.2.0!)
-- [x] Resource management & limits (NEW in v0.2.0!)
-- [x] AFM export/import (NEW in v0.2.0!)
+- [x] Persistent storage (ChromaDB/JSON fallback) (v0.2.0)
+- [x] Resource management & limits (v0.2.0)
+- [x] AFM export/import (v0.2.0)
+- [x] TOON integration for ~40% additional savings (v0.3.0!)
+- [x] Delete document tool for resource management (v0.3.0!)
 
 ### 🚧 In Progress
 - [ ] Web UI for visualization
