@@ -15,7 +15,7 @@ cd token-saver-5000
 pip install -r requirements.txt
 
 # 2. Verify setup (should see "All checks passed!")
-python check_setup.py
+python scripts/check_setup.py
 
 # 3. Try it out!
 python examples/example_usage.py    # Document compression demo
@@ -123,7 +123,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 4. Verify installation
-python check_setup.py
+python scripts/check_setup.py
 ```
 
 **Expected output:** `🎉 All checks passed! Token Saver 5000 is ready to use.`
@@ -263,8 +263,8 @@ chmod +x src/server.py
 
 **Option A: Automated Install (Recommended)**
 ```bash
-chmod +x install_mcp.sh
-./install_mcp.sh
+chmod +x scripts/install_mcp.sh
+./scripts/install_mcp.sh
 ```
 This script auto-detects your OS, locates Claude Desktop config, and safely merges the MCP configuration.
 
@@ -378,25 +378,31 @@ This project implements **4 peer-reviewed research papers**:
 
 ## 📖 Documentation
 
-### **Getting Started**
-- [**GETTING_STARTED.md**](GETTING_STARTED.md) - Complete step-by-step guide (10 minutes)
-- [**QUICKSTART.md**](QUICKSTART.md) - Fast-track installation (2 minutes)
-- [**ARCHITECTURE.md**](ARCHITECTURE.md) - System architecture deep dive
+### **Getting Started (Start Here!)**
+- [**GETTING_STARTED.md**](GETTING_STARTED.md) - Complete step-by-step installation guide (10 minutes)
+- [**QUICKSTART.md**](QUICKSTART.md) - Fast-track quick reference (2 minutes)
+- [**TROUBLESHOOTING.md**](TROUBLESHOOTING.md) - Common issues and solutions (NEW!)
 
-### **Features**
+### **Core Concepts & Usage**
+- [**HOW_IT_WORKS.md**](HOW_IT_WORKS.md) - Technical deep dive: how everything works (NEW!)
+- [**MCP_TOOLS_GUIDE.md**](MCP_TOOLS_GUIDE.md) - Complete reference for all 17 MCP tools (NEW!)
+- [**ARCHITECTURE.md**](ARCHITECTURE.md) - System architecture and design
+- [**API_REFERENCE.md**](API_REFERENCE.md) - Module and API documentation
+
+### **Advanced Features**
 - [**CODE_AND_IMAGES.md**](docs/CODE_AND_IMAGES.md) - Code & image compression guide
 - [**SCAR_PAPER_SUMMARY.md**](docs/SCAR_PAPER_SUMMARY.md) - SCAR implementation notes
-- [**AFM: Dialogue Memory**](docs/archive/IMPLEMENTATION_SUMMARY.md#adaptive-focus-memory-afm-implementation-) - AFM implementation guide
+- [**RESEARCH_SYNTHESIS.md**](docs/RESEARCH_SYNTHESIS.md) - How research papers validate design
 
-### **Development**
+### **Development & Contributing**
 - [**CONTRIBUTING.md**](CONTRIBUTING.md) - Contribution guidelines
-- [**CHANGELOG.md**](CHANGELOG.md) - Version history
-- [**DEEP_DIVE_AUDIT.md**](docs/archive/DEEP_DIVE_AUDIT.md) - Comprehensive codebase audit
+- [**CHANGELOG.md**](CHANGELOG.md) - Version history and release notes
+- [**scripts/README.md**](scripts/README.md) - Utility scripts documentation
 
-### **Code Documentation**
-- `src/claude.md` - Source code documentation
-- `tests/claude.md` - Test suite documentation
-- `examples/claude.md` - Example scripts documentation
+### **Research Papers**
+- [**JSCCM_PAPER_ANALYSIS.md**](docs/JSCCM_PAPER_ANALYSIS.md) - Joint Semantic-Channel Coding
+- [**FPQE_PAPER_ANALYSIS.md**](docs/FPQE_PAPER_ANALYSIS.md) - Fidelity-Preserving Encoding
+- AFM Paper: arXiv:2511.12712v1 (Adaptive Focus Memory)
 
 ---
 
@@ -639,7 +645,7 @@ Special thanks to **Christopher Cruz** (Purdue University) for the AFM paper.
 ```bash
 # Setup
 pip install -r requirements.txt
-python check_setup.py
+python scripts/check_setup.py
 
 # Examples
 python examples/example_usage.py      # Document compression demo

@@ -60,7 +60,7 @@ pip install pytest pytest-cov pytest-asyncio black ruff pre-commit
 ### 3. Verify Setup
 
 ```bash
-python check_setup.py
+python scripts/check_setup.py
 ```
 
 This script checks:
@@ -272,7 +272,7 @@ Updated documentation accordingly.
    ruff check src/ tests/ examples/
 
    # Verify setup
-   python check_setup.py
+   python scripts/check_setup.py
    ```
 
 4. **Commit Your Changes**
