@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-11-22
+
+**Codename**: "Persistence & Polish"
+**Status**: Production-Ready
+
+This release transforms Token Saver 5000 into a production-ready, persistent system with robust resource management.
+
+### Added
+
+#### Persistent Storage Layer
+- ChromaDB integration for vector storage
+- JSON/Pickle fallback when ChromaDB unavailable
+- Auto-save documents on ingest
+- Auto-load documents on server start
+- Storage location: `.semantic_modulator_data/`
+- New file: `src/persistence.py` (531 lines)
+
+#### Resource Management System
+- Max document size: 100MB (configurable)
+- Max total storage: 1GB (configurable)
+- Max document count: 1000 (configurable)
+- Max memory usage: 2GB (configurable)
+- Pre-ingestion validation
+- Warning thresholds (80% of limits)
+- Resource statistics and health checks
+- New file: `src/resource_manager.py` (257 lines)
+
+#### New MCP Tools (+3)
+- `afm_export_history` - Save conversation state for multi-session dialogues
+- `afm_import_history` - Restore conversation state
+- `list_documents` - Get inventory of all ingested documents with metadata
+
+#### Automated Installation
+- `install_mcp.sh` - Automated MCP configuration script
+- Auto-detects OS (macOS/Linux/Windows)
+- Locates Claude Desktop config automatically
+- Generates MCP config with correct paths
+- Safely merges with existing config
+- Creates backup before modification
+
+#### Robust Token Counting
+- Primary: tiktoken (cl100k_base)
+- Fallback: word count × 1.3 approximation
+- Graceful degradation when tiktoken unavailable
+- Better offline support
+
+### Changed
+
+#### MCP Server
+- Total MCP tools: 13 → 16
+- Integrated persistence manager
+- Integrated resource manager
+- Added export/import handlers for AFM
+
+#### Documentation
+- Updated ARCHITECTURE.md with v0.2.0 features
+- Updated README.md with new tool count and features
+- Created comprehensive audit reports
+
+### Technical Details
+
+#### Files Created
+- `src/persistence.py` - Persistence layer (531 lines)
+- `src/resource_manager.py` - Resource management (257 lines)
+- `install_mcp.sh` - Installation script (143 lines)
+
+#### Files Modified
+- `src/server.py` - Added persistence, resource mgmt, new tools (+74 lines)
+- `src/semantic_compressor.py` - Robust token counting (+10 lines)
+- `ARCHITECTURE.md` - Updated with v0.2.0 features
+- `README.md` - Updated tool count and features
+
 ### Added - 2025-01-21 (Phase 2: Advanced Features & Polish)
 
 #### Performance & Benchmarking

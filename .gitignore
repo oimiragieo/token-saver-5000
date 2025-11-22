@@ -65,3 +65,6 @@ faiss_index/
 
 # MCP specific
 .mcp/
+
+# Persistence layer (v0.2.0+)
+.semantic_modulator_data/
