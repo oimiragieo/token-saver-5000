@@ -95,12 +95,26 @@ class SemanticCompressor:
         self.chunks: Dict[str, SemanticNode] = {}
         self.file_metadata: Dict[str, Dict] = {}
 
-        # Token counter
-        self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        # Token counter with graceful fallback
+        try:
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+            self.use_tiktoken = True
+        except Exception:
+            print("⚠️  Warning: tiktoken not available, using word count fallback")
+            self.tokenizer = None
+            self.use_tiktoken = False
 
     def _count_tokens(self, text: str) -> int:
-        """Count tokens in text using tiktoken"""
-        return len(self.tokenizer.encode(text))
+        """Count tokens in text using tiktoken, with fallback to word count"""
+        if self.use_tiktoken and self.tokenizer:
+            try:
+                return len(self.tokenizer.encode(text))
+            except Exception:
+                # Fallback if encoding fails
+                pass
+
+        # Fallback: approximate as 1.3 tokens per word
+        return int(len(text.split()) * 1.3)
 
     def _chunk_text(self, text: str, max_chunk_size: int = 512) -> List[str]:
         """

@@ -411,6 +411,19 @@ class SemanticModulatorServer:
                         "properties": {},
                     },
                 ),
+                Tool(
+                    name="list_documents",
+                    description=(
+                        "📚 LIST DOCUMENTS: Get inventory of all ingested documents. "
+                        "Returns structured information about each document including file_id, "
+                        "metadata, node count, token counts, and ingestion time. "
+                        "Use this to discover what documents are available for querying."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -443,6 +456,8 @@ class SemanticModulatorServer:
                     result = self._handle_afm_get_stats(arguments)
                 elif name == "afm_clear_history":
                     result = self._handle_afm_clear_history(arguments)
+                elif name == "list_documents":
+                    result = self._handle_list_documents(arguments)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -898,6 +913,68 @@ Current state:
 
 ✅ Ready for new conversation
 """
+
+    def _handle_list_documents(self, args: Dict) -> str:
+        """Handle list_documents tool call"""
+        logger.info("Listing all ingested documents")
+
+        # Get all unique file_ids from chunks
+        file_ids = list(set([nid.split("_n")[0] for nid in self.compressor.chunks.keys()]))
+
+        if not file_ids:
+            return """
+📚 Document Inventory
+
+No documents ingested yet.
+
+💡 Use ingest_context(text, file_id) to add documents.
+"""
+
+        # Build structured inventory
+        documents = []
+        for file_id in sorted(file_ids):
+            stats = self.compressor.get_stats(file_id)
+            metadata = stats.get("metadata", {})
+
+            doc_info = {
+                "file_id": file_id,
+                "title": metadata.get("title", file_id),
+                "total_nodes": stats["total_nodes"],
+                "total_tokens": stats["total_tokens"],
+                "skeleton_tokens": stats["skeleton_tokens"],
+                "compression_ratio": stats["compression_ratio"],
+                "metadata": metadata,
+            }
+            documents.append(doc_info)
+
+        # Format output
+        result_lines = ["📚 Document Inventory\n"]
+        result_lines.append(f"Total documents: {len(documents)}\n")
+
+        for i, doc in enumerate(documents, 1):
+            result_lines.append(f"{i}. [{doc['file_id']}]")
+            if doc['title'] != doc['file_id']:
+                result_lines.append(f"   Title: {doc['title']}")
+            result_lines.append(f"   Nodes: {doc['total_nodes']}")
+            result_lines.append(f"   Tokens: {doc['total_tokens']:,} → {doc['skeleton_tokens']:,} ({doc['compression_ratio']:.1f}x compression)")
+
+            # Include relevant metadata
+            if 'author' in doc['metadata']:
+                result_lines.append(f"   Author: {doc['metadata']['author']}")
+            if 'date' in doc['metadata']:
+                result_lines.append(f"   Date: {doc['metadata']['date']}")
+            if 'tags' in doc['metadata']:
+                tags = ', '.join(doc['metadata']['tags'][:3])
+                result_lines.append(f"   Tags: {tags}")
+
+            result_lines.append("")  # Blank line between documents
+
+        result_lines.append("💡 Next steps:")
+        result_lines.append("  - read_skeleton(file_id) - View compressed structure")
+        result_lines.append("  - search_semantic(query) - Find relevant content")
+        result_lines.append("  - get_stats(file_id) - Detailed statistics")
+
+        return "\n".join(result_lines)
 
     async def run(self):
         """Run the MCP server"""
