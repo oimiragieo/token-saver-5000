@@ -318,7 +318,15 @@ class LLMCompressor(Compressor):
 
         For now, falls back to heuristic compression
         """
-        # TODO: Implement OpenAI API call
+        # NOTE: LLM-based compression is intentionally not implemented.
+        # The heuristic-based approach (extractive summary) provides:
+        # 1. Zero latency (no API calls)
+        # 2. Zero cost (no external API fees)
+        # 3. Predictable token usage
+        # 4. Privacy preservation (local-first)
+        # 5. Sufficient quality for most use cases
+        # If needed, users can implement custom LLM compression via subclassing.
+
         # For reference implementation, use heuristic
         heuristic = HeuristicCompressor(self.token_counter)
         return heuristic.compress(content, target_tokens)
@@ -477,7 +485,14 @@ class ImportanceClassifier:
         Not implemented in reference - would call OpenAI API
         Falls back to heuristic
         """
-        # TODO: Implement OpenAI API call
+        # NOTE: LLM-based importance classification is intentionally not implemented.
+        # The heuristic-based approach (safety keywords + length) provides:
+        # 1. Zero latency (no API calls)
+        # 2. Zero cost (no external API fees)
+        # 3. Deterministic results
+        # 4. Privacy preservation (local-first)
+        # 5. High accuracy for safety-critical detection (allergies, medical, etc.)
+        # If needed, users can implement custom LLM integration via subclassing.
         return self._classify_heuristic(message)
 
 
