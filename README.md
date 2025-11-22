@@ -88,8 +88,12 @@ context, stats = manager.build_context(
 - ✅ **Chronological packing** (preserves conversation flow)
 - ✅ **Local-first operation** (no API calls required)
 
-### **Infrastructure**
-- ✅ **MCP server** with 13 tools via stdio transport
+### **Infrastructure (v0.2.0 - NEW!)**
+- ✅ **MCP server** with 16 tools via stdio transport
+- ✅ **Persistent storage** via ChromaDB/JSON fallback
+- ✅ **Auto-save/load** documents across server restarts
+- ✅ **Resource limits** (100MB per doc, 1GB total, 1000 docs max)
+- ✅ **AFM export/import** for conversation state
 - ✅ **Local processing** (sentence-transformers, no external APIs)
 - ✅ **Research-backed** (4 papers: JSCCM, FPQE, SCAR, AFM)
 - ✅ **Production-ready** (CI/CD, tests, 70% coverage target)
@@ -255,7 +259,16 @@ chmod +x src/server.py
 ./src/server.py
 ```
 
-### Configure Claude Desktop
+### Configure Claude Desktop (Automated!)
+
+**Option A: Automated Install (Recommended)**
+```bash
+chmod +x install_mcp.sh
+./install_mcp.sh
+```
+This script auto-detects your OS, locates Claude Desktop config, and safely merges the MCP configuration.
+
+**Option B: Manual Configuration**
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
@@ -273,8 +286,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ```
 
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux:** `~/.config/claude/claude_desktop_config.json`
 
-### Available MCP Tools (13 total)
+### Available MCP Tools (16 total - NEW!)
 
 **Document Compression (9 tools):**
 1. `ingest_context` - Ingest document into semantic graph
@@ -287,11 +301,16 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 8. `adapt_to_context_window` - JSCCM-inspired adaptive compression
 9. `multilevel_encode` - Multi-level encoding (main + auxiliary + detail)
 
-**Dialogue Memory (4 tools - NEW!):**
+**Dialogue Memory (4 tools):**
 10. `afm_add_message` - Add dialogue turn with auto-importance classification
 11. `afm_build_context` - Build optimized context under token budget
 12. `afm_get_stats` - Get dialogue statistics
 13. `afm_clear_history` - Reset dialogue
+
+**Discovery & Persistence (3 tools - NEW!):**
+14. `list_documents` - Get inventory of all ingested documents
+15. `afm_export_history` - Save conversation state to file
+16. `afm_import_history` - Restore conversation state from file
 
 **See:** [MCP Tool Documentation](docs/MCP_TOOLS_GUIDE.md) for detailed usage
 

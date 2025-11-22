@@ -30,6 +30,8 @@ from .adaptive_rate_allocator import (
     MultiLevelSemanticEncoder,
 )
 from .afm import FocusManager, AFMConfig
+from .persistence import PersistenceManager
+from .resource_manager import ResourceManager, ResourceLimits
 
 
 # Configure logging
@@ -64,6 +66,17 @@ class SemanticModulatorServer:
         )
         self.focus_manager = FocusManager(afm_config)
 
+        # Persistence layer (NEW!)
+        self.persistence = PersistenceManager()
+
+        # Resource management (NEW!)
+        self.resource_manager = ResourceManager(ResourceLimits(
+            max_document_size_mb=100.0,
+            max_total_storage_mb=1024.0,
+            max_documents=1000,
+            max_memory_mb=2048.0,
+        ))
+
         # Context window monitoring (like SNR in JSCCM)
         self.context_window_monitor = {
             "max_tokens": 100000,  # Typical context window size
@@ -74,7 +87,45 @@ class SemanticModulatorServer:
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
 
+        # Auto-load persisted documents
+        self._load_persisted_documents()
+
         self._setup_handlers()
+
+    def _load_persisted_documents(self):
+        """Load previously persisted documents on server start"""
+        try:
+            file_ids = self.persistence.list_documents()
+            if not file_ids:
+                logger.info("No persisted documents found")
+                return
+
+            logger.info(f"Loading {len(file_ids)} persisted documents...")
+            loaded_count = 0
+
+            for file_id in file_ids:
+                try:
+                    data = self.persistence.load_document(file_id)
+                    if data:
+                        # Restore to compressor
+                        self.compressor.chunks.update(data["chunks"])
+                        self.compressor.graphs[file_id] = data["graph_data"]
+                        self.compressor.file_metadata[file_id] = data["metadata"]
+
+                        # Register with resource manager
+                        # Estimate size from chunks
+                        total_size = sum(len(chunk.text) for chunk in data["chunks"].values())
+                        self.resource_manager.register_document(file_id, total_size)
+
+                        loaded_count += 1
+                        logger.info(f"  ✅ Loaded: {file_id} ({len(data['chunks'])} nodes)")
+                except Exception as e:
+                    logger.error(f"  ❌ Failed to load {file_id}: {e}")
+
+            logger.info(f"✅ Successfully loaded {loaded_count}/{len(file_ids)} documents")
+
+        except Exception as e:
+            logger.error(f"Failed to load persisted documents: {e}", exc_info=True)
 
     def _setup_handlers(self):
         """Register MCP tool handlers"""
@@ -424,6 +475,43 @@ class SemanticModulatorServer:
                         "properties": {},
                     },
                 ),
+                Tool(
+                    name="afm_export_history",
+                    description=(
+                        "💾 ADAPTIVE FOCUS MEMORY: Export dialogue history to JSON. "
+                        "Saves current conversation state including all messages, turn counter, "
+                        "and metadata. Use this to preserve conversations for later resume. "
+                        "Returns JSON string that can be saved and imported later."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "Optional session ID for this export (default: 'default')",
+                                "default": "default",
+                            },
+                        },
+                    },
+                ),
+                Tool(
+                    name="afm_import_history",
+                    description=(
+                        "📥 ADAPTIVE FOCUS MEMORY: Import dialogue history from JSON. "
+                        "Restores a previously exported conversation state. This replaces "
+                        "the current dialogue history. Use this to resume saved conversations."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "Session ID to load (default: 'default')",
+                                "default": "default",
+                            },
+                        },
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -458,6 +546,10 @@ class SemanticModulatorServer:
                     result = self._handle_afm_clear_history(arguments)
                 elif name == "list_documents":
                     result = self._handle_list_documents(arguments)
+                elif name == "afm_export_history":
+                    result = self._handle_afm_export_history(arguments)
+                elif name == "afm_import_history":
+                    result = self._handle_afm_import_history(arguments)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -538,7 +630,13 @@ class SemanticModulatorServer:
 
         self._validate_file_id(file_id, must_exist=False)
 
-        logger.info(f"Ingesting document: {file_id} ({len(text)} chars)")
+        # Check resource limits BEFORE ingestion
+        text_size = len(text.encode('utf-8'))
+        allowed, error_msg = self.resource_manager.check_document_size(file_id, text_size)
+        if not allowed:
+            raise ValueError(error_msg)
+
+        logger.info(f"Ingesting document: {file_id} ({len(text)} chars, {text_size/1024:.1f}KB)")
 
         try:
             skeleton = self.compressor.ingest_file(text, file_id, metadata)
@@ -547,6 +645,26 @@ class SemanticModulatorServer:
                 f"Failed to ingest document: {str(e)}\n"
                 "💡 Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
             ) from e
+
+        # Register with resource manager
+        self.resource_manager.register_document(file_id, text_size)
+
+        # Persist to storage
+        try:
+            import networkx as nx
+            graph_data = nx.node_link_data(self.compressor.graphs[file_id])
+            success = self.persistence.save_document(
+                file_id=file_id,
+                chunks={k: v for k, v in self.compressor.chunks.items() if k.startswith(file_id)},
+                graph_data=graph_data,
+                metadata=self.compressor.file_metadata.get(file_id, {})
+            )
+            if success:
+                logger.info(f"✅ Persisted document {file_id}")
+            else:
+                logger.warning(f"⚠️  Failed to persist {file_id}, will be lost on restart")
+        except Exception as e:
+            logger.error(f"Failed to persist {file_id}: {e}")
 
         # Initialize retrieval history
         self.retrieval_history[file_id] = []
@@ -975,6 +1093,101 @@ No documents ingested yet.
         result_lines.append("  - get_stats(file_id) - Detailed statistics")
 
         return "\n".join(result_lines)
+
+    def _handle_afm_export_history(self, args: Dict) -> str:
+        """Handle afm_export_history tool call"""
+        session_id = args.get("session_id", "default")
+        logger.info(f"Exporting AFM history to session: {session_id}")
+
+        # Get current state
+        messages = self.focus_manager.messages
+        turn_counter = self.focus_manager.turn_counter
+
+        if not messages:
+            return """
+💾 AFM Export
+
+No dialogue history to export.
+
+💡 Tip: Add messages with afm_add_message() first.
+"""
+
+        # Save to persistence
+        metadata = {
+            "exported_at": __import__("datetime").datetime.now().isoformat(),
+            "message_count": len(messages),
+            "turn_counter": turn_counter,
+        }
+
+        success = self.persistence.save_afm_history(
+            session_id=session_id,
+            messages=messages,
+            turn_counter=turn_counter,
+            metadata=metadata
+        )
+
+        if success:
+            return f"""
+💾 AFM Export Complete
+
+Session ID: {session_id}
+Messages exported: {len(messages)}
+Current turn: {turn_counter}
+
+💡 This conversation can be restored later with:
+   afm_import_history(session_id="{session_id}")
+
+Available sessions: {', '.join(self.persistence.list_afm_sessions())}
+"""
+        else:
+            return """
+❌ AFM Export Failed
+
+Could not save dialogue history to persistent storage.
+
+💡 Check logs for details.
+"""
+
+    def _handle_afm_import_history(self, args: Dict) -> str:
+        """Handle afm_import_history tool call"""
+        session_id = args.get("session_id", "default")
+        logger.info(f"Importing AFM history from session: {session_id}")
+
+        # Load from persistence
+        data = self.persistence.load_afm_history(session_id)
+
+        if not data:
+            available_sessions = self.persistence.list_afm_sessions()
+            return f"""
+❌ AFM Import Failed
+
+Session '{session_id}' not found.
+
+Available sessions: {', '.join(available_sessions) if available_sessions else '(none)'}
+
+💡 Tip: Use afm_export_history() to save conversations first.
+"""
+
+        # Restore to focus manager
+        self.focus_manager.messages = data["messages"]
+        self.focus_manager.turn_counter = data["turn_counter"]
+
+        metadata = data.get("metadata", {})
+
+        logger.info(f"✅ Imported {len(data['messages'])} messages from {session_id}")
+
+        return f"""
+📥 AFM Import Complete
+
+Session ID: {session_id}
+Messages restored: {len(data['messages'])}
+Turn counter restored: {data['turn_counter']}
+Exported at: {metadata.get('exported_at', 'unknown')}
+
+✅ Conversation state has been restored.
+
+💡 Use afm_get_stats() to see current state.
+"""
 
     async def run(self):
         """Run the MCP server"""

@@ -199,22 +199,55 @@ Alert: 🚨 Response not grounded in source material!
 ### MCP Server Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│          MCP Server (stdio transport)            │
-│                                                   │
-│  Handlers:                                        │
-│  ┌───────────────────────────────────────┐      │
-│  │ @list_tools() → Return tool schemas   │      │
-│  │ @call_tool() → Execute tool logic     │      │
-│  └───────────────────────────────────────┘      │
-│                                                   │
-│  State Management:                                │
-│  • compressor: SemanticCompressor instance       │
-│  • blind_spot_detector: BlindSpotDetector        │
-│  • retrieval_history: Dict[file_id, node_ids]   │
-│                                                   │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│          MCP Server (stdio transport)                        │
+│                                                               │
+│  Handlers:                                                    │
+│  ┌───────────────────────────────────────────┐              │
+│  │ @list_tools() → Return 16 tool schemas    │              │
+│  │ @call_tool() → Execute tool logic         │              │
+│  └───────────────────────────────────────────┘              │
+│                                                               │
+│  State Management:                                            │
+│  • compressor: SemanticCompressor instance                   │
+│  • blind_spot_detector: BlindSpotDetector                    │
+│  • focus_manager: FocusManager (AFM)                         │
+│  • persistence: PersistenceManager (NEW!)                    │
+│  • resource_manager: ResourceManager (NEW!)                  │
+│  • retrieval_history: Dict[file_id, node_ids]               │
+│                                                               │
+│  Features:                                                    │
+│  • Auto-load documents on server start                       │
+│  • Auto-save documents on ingest                             │
+│  • Resource limit enforcement                                │
+│  • AFM conversation export/import                            │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Complete MCP Tool List (16 tools)
+
+#### Document Compression Tools (9)
+1. `ingest_context` - Ingest and compress documents
+2. `read_skeleton` - View compressed skeleton
+3. `modulate_region` - Retrieve at chosen fidelity
+4. `search_semantic` - Vector similarity search
+5. `check_blind_spots` - Detect missed context
+6. `detect_hallucination` - Validate response grounding
+7. `get_stats` - Document statistics
+8. `adapt_to_context_window` - JSCCM adaptation
+9. `multilevel_encode` - Multi-level encoding
+
+#### Dialogue Memory Tools (4)
+10. `afm_add_message` - Add dialogue turn
+11. `afm_build_context` - Build optimized context
+12. `afm_get_stats` - Dialogue statistics
+13. `afm_clear_history` - Reset dialogue
+
+#### Discovery & Persistence Tools (3)
+14. `list_documents` - Document inventory
+15. `afm_export_history` - Save conversation state
+16. `afm_import_history` - Restore conversation state
 
 ### Tool Implementations
 
@@ -374,10 +407,11 @@ Measured on M1 MacBook Pro:
 
 ## Scalability Considerations
 
-### Current Limits
-- **In-memory:** All graphs stored in RAM
+### Current Limits (as of v0.2.0)
+- **Persistent storage:** ChromaDB/JSON fallback for documents and AFM history
+- **Resource limits:** 100MB per document, 1GB total, 1000 documents max
 - **Single process:** No parallelization
-- **Max document size:** ~500K tokens (RAM-limited)
+- **Max document size:** 100MB (configurable)
 
 ### Optimization Strategies
 
@@ -418,10 +452,12 @@ compressor = SemanticCompressor(
 - ✅ No data leaves the system
 - ✅ Model runs on CPU (no cloud GPU needed)
 
-### Data Handling
-- Documents stored in memory during session
-- No persistent storage (by default)
-- Can add ChromaDB/FAISS for persistence
+### Data Handling (v0.2.0)
+- Documents: Persistent storage via ChromaDB or JSON fallback
+- Auto-save: Documents automatically persisted on ingest
+- Auto-load: Persisted documents restored on server start
+- AFM History: Exportable/importable conversation state
+- Location: `.semantic_modulator_data/` directory
 
 ---
 
@@ -476,16 +512,18 @@ collection.add(
 
 ## Future Architecture (Roadmap)
 
-### Version 0.2.0
+### ✅ Version 0.2.0 (COMPLETED)
 ```
 ┌─────────────────────────────────────┐
 │       Persistent Storage Layer       │
-│  (ChromaDB for vectors, SQLite for   │
-│   metadata, graphs)                  │
+│  • ChromaDB/JSON for document storage │
+│  • Resource management & limits       │
+│  • AFM export/import                 │
+│  • Auto-load/save on server cycle    │
 └─────────────────────────────────────┘
 ```
 
-### Version 0.3.0
+### Version 0.3.0 (In Progress)
 ```
 ┌─────────────────────────────────────┐
 │    Cross-Document Intelligence       │
@@ -559,4 +597,6 @@ For architecture questions or contributions:
 
 ---
 
-**Last Updated:** 2025-01-15
+**Last Updated:** 2025-11-22
+**Version:** 0.2.0
+**Status:** Production-Ready with Persistent Storage
