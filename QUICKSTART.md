@@ -6,7 +6,7 @@ Token Saver 5000 provides **two complementary compression systems**:
 1. **Document Compression** (SemanticCompressor) - Compress long documents 80-95%
 2. **Dialogue Compression** (AFM) - Manage multi-turn conversations, retain ~66% fewer tokens
 
-Both systems work together through a unified MCP server with 13 tools.
+Both systems work together through a unified MCP server with 16 tools.
 
 ---
 
@@ -169,9 +169,9 @@ python examples/multimodal_example.py
    Can you list the MCP tools available?
    ```
 
-You should see **13 tools** (9 document + 4 dialogue):
+You should see **16 tools** (9 document + 4 dialogue + 3 discovery/persistence):
 
-**Document Compression Tools:**
+**Document Compression Tools (9):**
 - `ingest_context` - Compress and ingest long documents
 - `read_skeleton` - View compressed document structure
 - `modulate_region` - Retrieve specific sections with variable detail
@@ -182,11 +182,16 @@ You should see **13 tools** (9 document + 4 dialogue):
 - `adapt_to_context_window` - Fit content within token budget
 - `multilevel_encode` - Generate multi-fidelity representations
 
-**Dialogue Memory Tools (AFM):**
+**Dialogue Memory Tools (AFM) - 4:**
 - `afm_add_message` - Add message to dialogue history
 - `afm_build_context` - Build context window with adaptive fidelity
 - `afm_get_stats` - View dialogue statistics
 - `afm_clear_history` - Clear dialogue history
+
+**Discovery & Persistence Tools (3) - NEW in v0.2.0:**
+- `list_documents` - Get inventory of all ingested documents
+- `afm_export_history` - Save conversation state to file
+- `afm_import_history` - Restore conversation state from file
 
 ---
 
