@@ -18,13 +18,13 @@ import logging
 import pickle
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from dataclasses import asdict
 
 import numpy as np
 
 try:
     import chromadb
     from chromadb.config import Settings
+
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
@@ -61,10 +61,7 @@ class PersistenceManager:
             try:
                 self.chroma_client = chromadb.PersistentClient(
                     path=str(self.storage_dir / "chromadb"),
-                    settings=Settings(
-                        anonymized_telemetry=False,
-                        allow_reset=True
-                    )
+                    settings=Settings(anonymized_telemetry=False, allow_reset=True),
                 )
                 logger.info(f"✅ ChromaDB initialized at {self.storage_dir}/chromadb")
             except Exception as e:
@@ -90,7 +87,7 @@ class PersistenceManager:
         file_id: str,
         chunks: Dict[str, Any],
         graph_data: Dict[str, Any],
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
     ) -> bool:
         """
         Save document to persistent storage.
@@ -118,7 +115,7 @@ class PersistenceManager:
         file_id: str,
         chunks: Dict[str, Any],
         graph_data: Dict[str, Any],
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
     ) -> bool:
         """Save document using ChromaDB."""
         # Create or get collection for this document
@@ -128,12 +125,11 @@ class PersistenceManager:
             # Delete existing collection if present
             try:
                 self.chroma_client.delete_collection(name=collection_name)
-            except:
+            except Exception:
                 pass
 
             collection = self.chroma_client.create_collection(
-                name=collection_name,
-                metadata={"file_id": file_id, **metadata}
+                name=collection_name, metadata={"file_id": file_id, **metadata}
             )
 
             # Prepare data for ChromaDB
@@ -146,24 +142,23 @@ class PersistenceManager:
                 node_ids.append(node_id)
                 embeddings.append(node.embedding.tolist())
                 documents.append(node.text)
-                metadatas.append({
-                    "importance": float(node.importance),
-                    "position": node.metadata.get("position", 0),
-                    "tokens": node.metadata.get("tokens", 0),
-                    "entities": json.dumps(node.metadata.get("entities", [])),
-                })
+                metadatas.append(
+                    {
+                        "importance": float(node.importance),
+                        "position": node.metadata.get("position", 0),
+                        "tokens": node.metadata.get("tokens", 0),
+                        "entities": json.dumps(node.metadata.get("entities", [])),
+                    }
+                )
 
             # Add to collection
             collection.add(
-                ids=node_ids,
-                embeddings=embeddings,
-                documents=documents,
-                metadatas=metadatas
+                ids=node_ids, embeddings=embeddings, documents=documents, metadatas=metadatas
             )
 
             # Save graph structure separately (ChromaDB doesn't store graphs)
             graph_file = self.documents_dir / f"{file_id}_graph.pkl"
-            with open(graph_file, 'wb') as f:
+            with open(graph_file, "wb") as f:
                 pickle.dump(graph_data, f)
 
             logger.info(f"✅ Saved document {file_id} to ChromaDB ({len(chunks)} nodes)")
@@ -178,7 +173,7 @@ class PersistenceManager:
         file_id: str,
         chunks: Dict[str, Any],
         graph_data: Dict[str, Any],
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
     ) -> bool:
         """Save document using JSON/pickle fallback."""
         doc_file = self.documents_dir / f"{file_id}.pkl"
@@ -191,7 +186,7 @@ class PersistenceManager:
                 "metadata": metadata,
             }
 
-            with open(doc_file, 'wb') as f:
+            with open(doc_file, "wb") as f:
                 pickle.dump(data, f)
 
             logger.info(f"✅ Saved document {file_id} to JSON ({len(chunks)} nodes)")
@@ -232,6 +227,7 @@ class PersistenceManager:
 
             # Reconstruct chunks
             from .semantic_compressor import SemanticNode
+
             chunks = {}
 
             for i, node_id in enumerate(results["ids"]):
@@ -244,12 +240,12 @@ class PersistenceManager:
                         "position": results["metadatas"][i]["position"],
                         "tokens": results["metadatas"][i]["tokens"],
                         "entities": json.loads(results["metadatas"][i]["entities"]),
-                    }
+                    },
                 )
 
             # Load graph structure
             graph_file = self.documents_dir / f"{file_id}_graph.pkl"
-            with open(graph_file, 'rb') as f:
+            with open(graph_file, "rb") as f:
                 graph_data = pickle.load(f)
 
             logger.info(f"✅ Loaded document {file_id} from ChromaDB ({len(chunks)} nodes)")
@@ -272,7 +268,7 @@ class PersistenceManager:
             return None
 
         try:
-            with open(doc_file, 'rb') as f:
+            with open(doc_file, "rb") as f:
                 data = pickle.load(f)
 
             logger.info(f"✅ Loaded document {file_id} from JSON ({len(data['chunks'])} nodes)")
@@ -383,7 +379,7 @@ class PersistenceManager:
         session_id: str,
         messages: List[Any],
         turn_counter: int,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> bool:
         """
         Save AFM dialogue history.
@@ -407,7 +403,7 @@ class PersistenceManager:
                 "metadata": metadata or {},
             }
 
-            with open(history_file, 'wb') as f:
+            with open(history_file, "wb") as f:
                 pickle.dump(data, f)
 
             logger.info(f"✅ Saved AFM history {session_id} ({len(messages)} messages)")
@@ -433,7 +429,7 @@ class PersistenceManager:
             return None
 
         try:
-            with open(history_file, 'rb') as f:
+            with open(history_file, "rb") as f:
                 data = pickle.load(f)
 
             logger.info(f"✅ Loaded AFM history {session_id} ({len(data['messages'])} messages)")
@@ -481,6 +477,56 @@ class PersistenceManager:
             return False
 
     # =========================================================================
+    # File Sync Metadata Persistence (NEW in v0.4.0)
+    # =========================================================================
+
+    def save_file_sync_metadata(self, metadata_dict: Dict[str, Dict]) -> bool:
+        """
+        Save file sync metadata.
+
+        Args:
+            metadata_dict: Dictionary of file_id -> metadata
+
+        Returns:
+            True if saved successfully
+        """
+        sync_file = self.storage_dir / "file_sync_metadata.json"
+
+        try:
+            with open(sync_file, "w", encoding="utf-8") as f:
+                json.dump(metadata_dict, f, indent=2)
+
+            logger.info(f"✅ Saved file sync metadata ({len(metadata_dict)} files)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save file sync metadata: {e}")
+            return False
+
+    def load_file_sync_metadata(self) -> Optional[Dict[str, Dict]]:
+        """
+        Load file sync metadata.
+
+        Returns:
+            Dictionary of file_id -> metadata, or None if not found
+        """
+        sync_file = self.storage_dir / "file_sync_metadata.json"
+
+        if not sync_file.exists():
+            return None
+
+        try:
+            with open(sync_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            logger.info(f"✅ Loaded file sync metadata ({len(data)} files)")
+            return data
+
+        except Exception as e:
+            logger.error(f"Failed to load file sync metadata: {e}")
+            return None
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
 
@@ -501,11 +547,7 @@ class PersistenceManager:
 
         # Calculate disk usage
         try:
-            total_size = sum(
-                f.stat().st_size
-                for f in self.storage_dir.rglob('*')
-                if f.is_file()
-            )
+            total_size = sum(f.stat().st_size for f in self.storage_dir.rglob("*") if f.is_file())
             stats["disk_usage_mb"] = total_size / (1024 * 1024)
         except Exception as e:
             logger.error(f"Failed to calculate disk usage: {e}")

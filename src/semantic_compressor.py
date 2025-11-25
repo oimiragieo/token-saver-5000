@@ -6,6 +6,7 @@ Implements the core encoding/decoding logic inspired by:
 - Paper 2: FPQE (Fidelity-Preserving Quantization) - Structure preservation
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -13,9 +14,12 @@ from enum import Enum
 
 import numpy as np
 import networkx as nx
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
+
+from .embeddings import EmbeddingManager
+
+logger = logging.getLogger(__name__)
 
 
 class FidelityLevel(Enum):
@@ -85,8 +89,9 @@ class SemanticCompressor:
             similarity_threshold: Minimum similarity to create graph edges
             skeleton_ratio: Fraction of nodes to include in skeleton (top N%)
         """
-        print(f"Loading embedding model: {model_name}")
-        self.model = SentenceTransformer(model_name)
+        # Use EmbeddingManager for shared model caching
+        embedding_manager = EmbeddingManager()
+        self.model = embedding_manager.get_text_embedder(model_name)
         self.similarity_threshold = similarity_threshold
         self.skeleton_ratio = skeleton_ratio
 
@@ -100,7 +105,7 @@ class SemanticCompressor:
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
             self.use_tiktoken = True
         except Exception:
-            print("⚠️  Warning: tiktoken not available, using word count fallback")
+            logger.warning("tiktoken not available, using word count fallback")
             self.tokenizer = None
             self.use_tiktoken = False
 
@@ -213,22 +218,28 @@ class SemanticCompressor:
         Returns:
             SkeletonResponse with compressed view
         """
-        print(f"\n🔬 Ingesting file: {file_id}")
+        # Validate inputs
+        if not text or not text.strip():
+            raise ValueError("Cannot ingest empty or whitespace-only text")
+        if not file_id or not file_id.strip():
+            raise ValueError("file_id cannot be empty or whitespace-only")
+
+        logger.info(f"Ingesting file: {file_id}")
 
         # Count original tokens
         total_tokens = self._count_tokens(text)
-        print(f"  Original tokens: {total_tokens}")
+        logger.info(f"  Original tokens: {total_tokens}")
 
         # 1. Chunk the text semantically
         raw_chunks = self._chunk_text(text)
-        print(f"  Created {len(raw_chunks)} semantic chunks")
+        logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 
         # 2. Generate embeddings
-        print("  Generating embeddings...")
-        embeddings = self.model.encode(raw_chunks, show_progress_bar=False)
+        logger.info("  Generating embeddings...")
+        embeddings = self.model.encode(raw_chunks, show_progress_bar=True)
 
         # 3. Build similarity graph (preserves global structure)
-        print("  Building semantic graph...")
+        logger.info("  Building semantic graph...")
         graph = nx.Graph()
         similarity_matrix = cosine_similarity(embeddings)
 
@@ -259,7 +270,7 @@ class SemanticCompressor:
                     graph.add_edge(node_id, edge_id, weight=float(similarity))
 
         # 4. Calculate importance via PageRank (rate allocation)
-        print("  Calculating importance scores (PageRank)...")
+        logger.info("  Calculating importance scores (PageRank)...")
         if len(graph.nodes) > 0:
             pagerank = nx.pagerank(graph)
 
@@ -275,8 +286,8 @@ class SemanticCompressor:
         # 5. Generate skeleton
         skeleton_response = self._generate_skeleton(file_id)
 
-        print(f"  ✅ Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
-        print(f"  📊 Ratio: {skeleton_response.compression_ratio:.1f}x")
+        logger.info(f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
+        logger.info(f"  Ratio: {skeleton_response.compression_ratio:.1f}x")
 
         return skeleton_response
 
@@ -489,7 +500,7 @@ class SemanticCompressor:
         """Get statistics about stored documents"""
         if file_id:
             if file_id not in self.graphs:
-                return {"error": f"File {file_id} not found"}
+                raise ValueError(f"File {file_id} not found")
 
             graph = self.graphs[file_id]
             nodes = [nid for nid in graph.nodes() if nid.startswith(file_id)]

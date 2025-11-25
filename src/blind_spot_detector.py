@@ -210,6 +210,59 @@ class BlindSpotDetector:
             auto_inject=auto_inject,
         )
 
+    def check_blind_spots(self, ai_response: str, file_id: str, retrieved_nodes: List[str]) -> dict:
+        """
+        Wrapper method for analyze_response that returns a dict instead of BlindSpotReport.
+        Provided for backwards compatibility with tests.
+
+        Args:
+            ai_response: The AI's generated response
+            file_id: Which document was being discussed
+            retrieved_nodes: Which nodes the AI actually saw
+
+        Returns:
+            Dictionary with blind spot analysis results
+        """
+        report = self.analyze_response(ai_response, file_id, retrieved_nodes)
+
+        return {
+            "total_blind_spots": report.total_blind_spots,
+            "critical_blind_spots": report.critical_blind_spots,
+            "blind_spot_nodes": [bs.node_id for bs in report.blind_spots if not bs.was_retrieved],
+            "recommendations": report.recommendations,
+            "auto_inject": report.auto_inject,
+        }
+
+    def detect_hallucination(
+        self, ai_response: str, file_id: str, confidence_threshold: float = 0.3
+    ) -> dict:
+        """
+        Detect potential hallucination in AI response.
+        Wrapper for HaloEffectDetector that returns a dict.
+
+        Args:
+            ai_response: The AI's generated response
+            file_id: Which document was being discussed
+            confidence_threshold: Minimum similarity threshold
+
+        Returns:
+            Dictionary with hallucination analysis results
+        """
+        # Import here to avoid circular dependency
+        from .blind_spot_detector import HaloEffectDetector
+
+        detector = HaloEffectDetector(self.compressor)
+        is_hallucinating, suspicious_claims = detector.detect_hallucination(
+            ai_response, file_id, confidence_threshold
+        )
+
+        # Convert tuple result to dict format expected by tests
+        return {
+            "is_grounded": not is_hallucinating,
+            "hallucination_score": 1.0 if is_hallucinating else 0.0,
+            "suspicious_claims": suspicious_claims,
+        }
+
     def format_report(self, report: BlindSpotReport) -> str:
         """Format a blind spot report for display"""
         lines = []

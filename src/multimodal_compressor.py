@@ -13,6 +13,7 @@ cross-modal search and retrieval.
 """
 
 import base64
+import logging
 from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union
 from dataclasses import dataclass
@@ -20,6 +21,10 @@ from enum import Enum
 
 import numpy as np
 import networkx as nx
+
+from .embeddings import EmbeddingManager
+
+logger = logging.getLogger(__name__)
 
 
 class ModalityType(Enum):
@@ -69,20 +74,15 @@ class MultiModalCompressor:
             use_clip_for_images: Use CLIP for image embeddings
             use_codebert_for_code: Use CodeBERT for code (otherwise use general model)
         """
-        from sentence_transformers import SentenceTransformer
+        # Use EmbeddingManager for shared model caching across all modalities
+        embedding_manager = EmbeddingManager()
 
         # Text encoder
-        print("Loading text encoder (all-MiniLM-L6-v2)...")
-        self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.text_encoder = embedding_manager.get_text_embedder()
 
         # Code encoder (optional CodeBERT)
         if use_codebert_for_code:
-            try:
-                print("Loading code encoder (CodeBERT)...")
-                self.code_encoder = SentenceTransformer("microsoft/codebert-base")
-            except Exception:
-                print("CodeBERT not available, using text encoder for code")
-                self.code_encoder = self.text_encoder
+            self.code_encoder = embedding_manager.get_code_embedder()
         else:
             self.code_encoder = self.text_encoder
 
@@ -90,8 +90,7 @@ class MultiModalCompressor:
         self.image_encoder = None
         if use_clip_for_images:
             try:
-                print("Loading image encoder (CLIP)...")
-                self.image_encoder = SentenceTransformer("clip-ViT-B-32")
+                self.image_encoder = embedding_manager.get_image_embedder()
                 print("✓ CLIP loaded for image processing")
             except Exception as e:
                 print(f"Warning: CLIP not available ({e})")
@@ -106,11 +105,11 @@ class MultiModalCompressor:
 
     def _encode_text(self, text: str) -> np.ndarray:
         """Encode text to embedding"""
-        return self.text_encoder.encode([text], show_progress_bar=False)[0]
+        return self.text_encoder.encode([text], show_progress_bar=True)[0]
 
     def _encode_code(self, code: str) -> np.ndarray:
         """Encode code to embedding"""
-        return self.code_encoder.encode([code], show_progress_bar=False)[0]
+        return self.code_encoder.encode([code], show_progress_bar=True)[0]
 
     def _encode_image(self, image_data: bytes) -> Optional[np.ndarray]:
         """
@@ -132,7 +131,7 @@ class MultiModalCompressor:
             image = Image.open(BytesIO(image_data))
 
             # CLIP expects PIL images
-            embedding = self.image_encoder.encode([image], show_progress_bar=False)[0]
+            embedding = self.image_encoder.encode([image], show_progress_bar=True)[0]
             return embedding
         except Exception as e:
             print(f"Error encoding image: {e}")
@@ -165,7 +164,7 @@ class MultiModalCompressor:
                 {'type': 'image', 'content': b'...png bytes...', 'metadata': {'file': 'diagram.png'}},
             ]
         """
-        print(f"\n🔬 Ingesting mixed content for project: {project_id}")
+        logger.info(f"Ingesting mixed content for project: {project_id}")
 
         nodes = []
         embeddings = []

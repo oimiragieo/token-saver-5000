@@ -24,7 +24,7 @@ from src.multimodal_compressor import MultiModalCompressor
 def create_sample_image():
     """Create a sample image for demonstration"""
     try:
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
         import io
 
         # Create a simple diagram image

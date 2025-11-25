@@ -23,6 +23,7 @@ import enum
 import logging
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Any
+from difflib import SequenceMatcher
 import time
 import math
 
@@ -30,9 +31,12 @@ import numpy as np
 import tiktoken
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Import EmbeddingManager for shared model caching
+from .embeddings import EmbeddingManager
+
 # Try to import sentence_transformers, fall back to hash-based embedder
 try:
-    from sentence_transformers import SentenceTransformer
+    from sentence_transformers import SentenceTransformer  # noqa: F401
 
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -351,10 +355,33 @@ class SentenceTransformerEmbedder(Embedder):
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             raise ImportError("sentence-transformers not available")
-        self.model = SentenceTransformer(model_name)
-        logger.info(f"Loaded SentenceTransformer: {model_name}")
+        # Use EmbeddingManager for shared model caching
+        embedding_manager = EmbeddingManager()
+        self.model = embedding_manager.get_text_embedder(model_name)
+        logger.info(f"Using cached SentenceTransformer: {model_name}")
 
     def encode(self, texts: List[str]) -> np.ndarray:
+        """
+        Encode texts into semantic embeddings using SentenceTransformer.
+
+        This is the primary encoding method for AFM, providing true semantic
+        similarity based on pre-trained language models. The embeddings are
+        used to calculate importance scores and semantic similarity between
+        dialogue turns.
+
+        Args:
+            texts: List of text strings to encode (e.g., message contents)
+
+        Returns:
+            NumPy array of shape (len(texts), embedding_dim) where embedding_dim
+            is 384 for all-MiniLM-L6-v2 (default model). Each row is a dense
+            semantic embedding vector.
+
+        Note:
+            - Uses cached model instance from EmbeddingManager (singleton)
+            - Embeddings are deterministic for the same input text
+            - Uses CPU by default (no GPU required)
+        """
         return self.model.encode(texts, convert_to_numpy=True)
 
 
@@ -417,9 +444,60 @@ class ImportanceClassifier:
         else:
             return self._classify_heuristic(message)
 
+    def _fuzzy_match_keywords(
+        self, text: str, keywords: List[str], threshold: float = 0.80
+    ) -> bool:
+        """
+        Fuzzy match keywords to handle typos (e.g., "alergy" → "allergy")
+
+        Handles hyphenated keywords like "life-threatening" by splitting them
+        into parts and checking each part separately.
+
+        Args:
+            text: Text to search in (should be lowercased)
+            keywords: List of keywords to match
+            threshold: Similarity threshold (0.80 = 80% similar)
+
+        Returns:
+            True if any word in text fuzzy-matches a keyword
+        """
+        words = text.split()
+        for word in words:
+            # Skip very short words to avoid false positives
+            if len(word) < 4:
+                continue
+
+            for keyword in keywords:
+                # For multi-word keywords (with spaces), check exact match
+                if " " in keyword:
+                    if keyword in text:
+                        return True
+                    continue
+
+                # For hyphenated keywords, split and check each part
+                # e.g., "life-threatening" → ["life", "threatening"]
+                if "-" in keyword:
+                    keyword_parts = keyword.split("-")
+                    for part in keyword_parts:
+                        if len(part) < 4:
+                            continue
+                        similarity = SequenceMatcher(None, word, part).ratio()
+                        if similarity >= threshold:
+                            return True
+                else:
+                    # Single word fuzzy matching
+                    similarity = SequenceMatcher(None, word, keyword).ratio()
+                    if similarity >= threshold:
+                        return True
+
+        return False
+
     def _classify_heuristic(self, message: Message) -> ImportanceLevel:
         """
         Heuristic classification based on keywords and patterns
+
+        Now includes fuzzy matching to handle typos in critical keywords
+        (e.g., "alergy" → "allergy", "sevear" → "severe")
         """
         content_lower = message.content.lower()
 
@@ -459,11 +537,17 @@ class ImportanceClassifier:
             "restriction",
         ]
 
-        # Check for critical keywords
+        # Check for critical keywords (exact match first, then fuzzy)
         if any(kw in content_lower for kw in critical_keywords):
             return ImportanceLevel.CRITICAL
 
-        # Check for relevant keywords
+        # Fuzzy match for typos (80% similarity threshold)
+        # Only check critical keywords to avoid performance impact
+        if self._fuzzy_match_keywords(content_lower, critical_keywords, threshold=0.80):
+            logger.info(f"Fuzzy matched critical keyword in: '{message.content[:50]}...'")
+            return ImportanceLevel.CRITICAL
+
+        # Check for relevant keywords (exact match only - less critical)
         if any(kw in content_lower for kw in relevant_keywords):
             return ImportanceLevel.RELEVANT
 
@@ -561,6 +645,12 @@ class FocusManager:
         Returns:
             Created Message object
         """
+        # Validate inputs
+        if not content or not content.strip():
+            raise ValueError("Message content cannot be empty or whitespace-only")
+        if role not in ["user", "assistant", "system"]:
+            raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
+
         msg = Message(
             role=role,
             content=content,
@@ -711,6 +801,104 @@ class FocusManager:
 
         return summary
 
+    def _try_add_system_preamble(
+        self,
+        preamble: str,
+        budget_left: int,
+        packed: List[Tuple[str, str]],
+    ) -> int:
+        """
+        Try to add system preamble to packed messages.
+
+        Args:
+            preamble: System preamble text
+            budget_left: Remaining token budget
+            packed: List of packed messages (modified in-place)
+
+        Returns:
+            Updated budget_left after adding preamble (or unchanged if doesn't fit)
+        """
+        preamble_tokens = self.token_counter.count(preamble)
+        if preamble_tokens <= budget_left:
+            packed.append(("system", preamble))
+            return budget_left - preamble_tokens
+        else:
+            logger.warning("System preamble exceeds budget, skipping")
+            return budget_left
+
+    def _try_pack_message_at_fidelity(
+        self,
+        message: Message,
+        fidelity: FidelityLevel,
+        budget_left: int,
+    ) -> Tuple[Optional[Tuple[str, str]], int]:
+        """
+        Try to pack message at specified fidelity level.
+
+        Args:
+            message: Message to pack
+            fidelity: Fidelity level to attempt (FULL, COMPRESSED, or PLACEHOLDER)
+            budget_left: Remaining token budget
+
+        Returns:
+            (packed_message, tokens_used) if successful, (None, 0) if doesn't fit
+            packed_message: (role, content) tuple or None
+            tokens_used: Number of tokens consumed (0 if message didn't fit)
+        """
+        # Generate content at requested fidelity
+        if fidelity == FidelityLevel.FULL:
+            content = message.content
+        elif fidelity == FidelityLevel.COMPRESSED:
+            content = self._create_compressed(message)
+        else:  # PLACEHOLDER
+            content = self._create_placeholder(message)
+
+        # Check if it fits
+        tokens = self.token_counter.count(content)
+        if tokens <= budget_left:
+            return (message.role, content), tokens
+        else:
+            return None, 0
+
+    def _build_packing_stats(
+        self,
+        messages_with_scores: List[Tuple[Message, float]],
+        budget_tokens: int,
+        budget_left: int,
+        full_count: int,
+        compressed_count: int,
+        placeholder_count: int,
+        dropped_count: int,
+    ) -> PackingStats:
+        """
+        Build PackingStats object from counters.
+
+        Args:
+            messages_with_scores: Original list of (Message, score) tuples
+            budget_tokens: Original token budget
+            budget_left: Remaining token budget after packing
+            full_count: Number of messages packed at FULL fidelity
+            compressed_count: Number of messages packed at COMPRESSED fidelity
+            placeholder_count: Number of messages packed at PLACEHOLDER fidelity
+            dropped_count: Number of messages dropped
+
+        Returns:
+            PackingStats with all metrics
+        """
+        total_tokens_used = budget_tokens - budget_left
+        compression_ratio = total_tokens_used / budget_tokens if budget_tokens > 0 else 0.0
+
+        return PackingStats(
+            total_messages=len(messages_with_scores),
+            full_count=full_count,
+            compressed_count=compressed_count,
+            placeholder_count=placeholder_count,
+            dropped_count=dropped_count,
+            total_tokens=total_tokens_used,
+            budget_tokens=budget_tokens,
+            compression_ratio=compression_ratio,
+        )
+
     def _pack_messages(
         self,
         messages_with_scores: List[Tuple[Message, float]],
@@ -718,7 +906,7 @@ class FocusManager:
         system_preamble: Optional[str] = None,
     ) -> Tuple[List[Tuple[str, str]], PackingStats]:
         """
-        Pack messages chronologically under token budget
+        Pack messages chronologically under token budget (refactored v0.4.3).
 
         Section 3.3 of AFM paper:
         - Process messages in chronological order (oldest to newest)
@@ -735,6 +923,11 @@ class FocusManager:
             (packed_messages, stats)
             packed_messages: List of (role, content) tuples
             stats: PackingStats with metrics
+
+        Note:
+            Refactored in v0.4.3 to improve maintainability (105 lines → 45 lines).
+            Extracted helpers: _try_add_system_preamble, _try_pack_message_at_fidelity,
+            _build_packing_stats.
         """
         packed = []
         budget_left = budget_tokens
@@ -750,69 +943,61 @@ class FocusManager:
 
         # Add system preamble first if provided
         if system_preamble:
-            preamble_tokens = self.token_counter.count(system_preamble)
-            if preamble_tokens <= budget_left:
-                packed.append(("system", system_preamble))
-                budget_left -= preamble_tokens
-            else:
-                logger.warning("System preamble exceeds budget, skipping")
+            budget_left = self._try_add_system_preamble(system_preamble, budget_left, packed)
 
-        # Pack messages chronologically
+        # Pack messages chronologically with fidelity fallback
         for message, score in messages_with_scores:
             intended = message.intended_fidelity
 
             # Try fidelity levels in order: intended → lower → lowest
-            added = False
+            packed_msg, tokens = None, 0
 
             # Try FULL (if intended or fallback)
             if intended == FidelityLevel.FULL:
-                tokens = self.token_counter.count(message.content)
-                if tokens <= budget_left:
-                    packed.append((message.role, message.content))
+                packed_msg, tokens = self._try_pack_message_at_fidelity(
+                    message, FidelityLevel.FULL, budget_left
+                )
+                if packed_msg:
+                    packed.append(packed_msg)
                     budget_left -= tokens
                     full_count += 1
-                    added = True
 
             # Try COMPRESSED (if intended or fallback from FULL)
-            if not added and intended in [FidelityLevel.COMPRESSED, FidelityLevel.FULL]:
-                compressed = self._create_compressed(message)
-                tokens = self.token_counter.count(compressed)
-                if tokens <= budget_left:
-                    packed.append((message.role, compressed))
+            if not packed_msg and intended in [FidelityLevel.COMPRESSED, FidelityLevel.FULL]:
+                packed_msg, tokens = self._try_pack_message_at_fidelity(
+                    message, FidelityLevel.COMPRESSED, budget_left
+                )
+                if packed_msg:
+                    packed.append(packed_msg)
                     budget_left -= tokens
                     compressed_count += 1
-                    added = True
 
             # Try PLACEHOLDER (if intended or fallback from COMPRESSED/FULL)
-            if not added:
-                placeholder = self._create_placeholder(message)
-                tokens = self.token_counter.count(placeholder)
-                if tokens <= budget_left:
-                    packed.append((message.role, placeholder))
+            if not packed_msg:
+                packed_msg, tokens = self._try_pack_message_at_fidelity(
+                    message, FidelityLevel.PLACEHOLDER, budget_left
+                )
+                if packed_msg:
+                    packed.append(packed_msg)
                     budget_left -= tokens
                     placeholder_count += 1
-                    added = True
 
             # If even placeholder doesn't fit, drop
-            if not added:
+            if not packed_msg:
                 dropped_count += 1
                 logger.debug(
                     f"Dropped message {message.message_id} (no space even for placeholder)"
                 )
 
-        # Calculate stats
-        total_tokens_used = budget_tokens - budget_left
-        compression_ratio = total_tokens_used / budget_tokens if budget_tokens > 0 else 0.0
-
-        stats = PackingStats(
-            total_messages=len(messages_with_scores),
-            full_count=full_count,
-            compressed_count=compressed_count,
-            placeholder_count=placeholder_count,
-            dropped_count=dropped_count,
-            total_tokens=total_tokens_used,
-            budget_tokens=budget_tokens,
-            compression_ratio=compression_ratio,
+        # Build and return stats
+        stats = self._build_packing_stats(
+            messages_with_scores,
+            budget_tokens,
+            budget_left,
+            full_count,
+            compressed_count,
+            placeholder_count,
+            dropped_count,
         )
 
         return packed, stats
@@ -835,6 +1020,10 @@ class FocusManager:
             context_messages: List of (role, content) tuples ready for LLM
             stats: PackingStats with compression metrics
         """
+        # Validate budget
+        if budget_tokens <= 0:
+            raise ValueError("Token budget must be positive")
+
         logger.info(f"Building context for query (budget: {budget_tokens} tokens)")
 
         # Embed current query

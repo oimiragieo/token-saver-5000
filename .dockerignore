@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Claude Code
+.claude/
+
+# Documentation (not needed in runtime)
+docs/
+*.md
+!README.md
+
+# Examples (not needed in runtime)
+examples/
+
+# Data directories (will be volumes)
+data/
+chromadb_data/
+json_backup/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

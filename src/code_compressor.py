@@ -12,6 +12,7 @@ Supports: Python, JavaScript, TypeScript, Java, C++, Go, Rust
 """
 
 import ast
+import logging
 import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
@@ -19,7 +20,10 @@ from enum import Enum
 
 import numpy as np
 import networkx as nx
-from sentence_transformers import SentenceTransformer
+
+from .embeddings import EmbeddingManager
+
+logger = logging.getLogger(__name__)
 
 
 class CodeLanguage(Enum):
@@ -76,15 +80,9 @@ class CodeSemanticCompressor:
                        - "all-MiniLM-L6-v2" (general, faster)
             similarity_threshold: Minimum similarity for edges
         """
-        print(f"Loading code embedding model: {model_name}")
-
-        # Try code-specific model, fallback to general model
-        try:
-            self.model = SentenceTransformer(model_name)
-        except Exception:
-            print(f"Warning: Could not load {model_name}, falling back to all-MiniLM-L6-v2")
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
-
+        # Use EmbeddingManager for shared model caching (handles fallback internally)
+        embedding_manager = EmbeddingManager()
+        self.model = embedding_manager.get_code_embedder(model_name)
         self.similarity_threshold = similarity_threshold
 
         # Storage
@@ -316,7 +314,7 @@ class CodeSemanticCompressor:
         Returns:
             Compression statistics
         """
-        print(f"\n🔬 Ingesting code file: {file_id}")
+        logger.info(f"Ingesting code file: {file_id}")
 
         # Detect language
         if filepath:
@@ -347,7 +345,7 @@ class CodeSemanticCompressor:
                 text = f"{chunk.docstring}\n\n{text}"
             chunk_texts.append(text)
 
-        embeddings = self.model.encode(chunk_texts, show_progress_bar=False)
+        embeddings = self.model.encode(chunk_texts, show_progress_bar=True)
 
         # Build dependency graph
         print("  Building dependency graph...")
@@ -377,25 +375,27 @@ class CodeSemanticCompressor:
         # Add semantic similarity edges
         from sklearn.metrics.pairwise import cosine_similarity
 
-        similarity_matrix = cosine_similarity(embeddings)
+        # Only compute similarity if we have chunks
+        if len(chunks) > 1:
+            similarity_matrix = cosine_similarity(embeddings)
 
-        for i in range(len(chunks)):
-            for j in range(i + 1, len(chunks)):
-                similarity = similarity_matrix[i][j]
-                if similarity > self.similarity_threshold:
-                    # Undirected similarity edge
-                    graph.add_edge(
-                        chunks[i].chunk_id,
-                        chunks[j].chunk_id,
-                        type="semantic",
-                        weight=float(similarity),
-                    )
-                    graph.add_edge(
-                        chunks[j].chunk_id,
-                        chunks[i].chunk_id,
-                        type="semantic",
-                        weight=float(similarity),
-                    )
+            for i in range(len(chunks)):
+                for j in range(i + 1, len(chunks)):
+                    similarity = similarity_matrix[i][j]
+                    if similarity > self.similarity_threshold:
+                        # Undirected similarity edge
+                        graph.add_edge(
+                            chunks[i].chunk_id,
+                            chunks[j].chunk_id,
+                            type="semantic",
+                            weight=float(similarity),
+                        )
+                        graph.add_edge(
+                            chunks[j].chunk_id,
+                            chunks[i].chunk_id,
+                            type="semantic",
+                            weight=float(similarity),
+                        )
 
         # Calculate importance using PageRank
         print("  Calculating importance scores...")

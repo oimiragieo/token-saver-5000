@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 AFM (Adaptive Focus Memory) Demo
 
@@ -16,6 +17,11 @@ Expected result: ~66% token reduction while preserving safety-critical informati
 
 import sys
 import os
+import io
+
+# Configure stdout for UTF-8 on Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

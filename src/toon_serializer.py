@@ -18,14 +18,14 @@ References:
 - Paper: Token-Oriented Object Notation (arXiv)
 """
 
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Optional
 import json
 from enum import Enum
 
 
 class OutputFormat(Enum):
     """Supported output formats for MCP tool responses"""
+
     JSON = "json"  # Standard JSON (default)
     TOON = "toon"  # Token-optimized TOON format
     TEXT = "text"  # Human-readable text (current default)
@@ -62,9 +62,7 @@ class TOONSerializer:
         return " " * (level * self.indent_size)
 
     def serialize_search_results(
-        self,
-        results: List[Dict[str, Any]],
-        fields: Optional[List[str]] = None
+        self, results: List[Dict[str, Any]], fields: Optional[List[str]] = None
     ) -> str:
         """
         Serialize search results to TOON tabular format.
@@ -95,9 +93,7 @@ class TOONSerializer:
             fields = list(results[0].keys())
 
         # Build TOON header
-        toon_lines = [
-            f"results[{len(results)}]{{{','.join(fields)}}}:"
-        ]
+        toon_lines = [f"results[{len(results)}]{{{','.join(fields)}}}:"]
 
         # Build rows
         for result in results:
@@ -118,10 +114,7 @@ class TOONSerializer:
 
         return "\n".join(toon_lines)
 
-    def serialize_document_inventory(
-        self,
-        documents: List[Dict[str, Any]]
-    ) -> str:
+    def serialize_document_inventory(self, documents: List[Dict[str, Any]]) -> str:
         """
         Serialize document inventory to TOON format.
 
@@ -137,21 +130,11 @@ class TOONSerializer:
             return "documents[0]{}"
 
         # Standard fields for documents
-        fields = [
-            "file_id",
-            "total_nodes",
-            "total_tokens",
-            "skeleton_tokens",
-            "compression_ratio"
-        ]
+        fields = ["file_id", "total_nodes", "total_tokens", "skeleton_tokens", "compression_ratio"]
 
         return self.serialize_search_results(documents, fields)
 
-    def serialize_afm_context(
-        self,
-        messages: List[tuple],
-        stats: Dict[str, Any]
-    ) -> str:
+    def serialize_afm_context(self, messages: List[tuple], stats: Dict[str, Any]) -> str:
         """
         Serialize AFM context to TOON format.
 
@@ -179,18 +162,16 @@ class TOONSerializer:
         ]
 
         toon_lines.append("")
-        toon_lines.append(" " + self.serialize_search_results(
-            message_dicts,
-            fields=["role", "content"]
-        ).replace("\n", "\n "))  # Indent for nesting
+        toon_lines.append(
+            " "
+            + self.serialize_search_results(message_dicts, fields=["role", "content"]).replace(
+                "\n", "\n "
+            )
+        )  # Indent for nesting
 
         return "\n".join(toon_lines)
 
-    def serialize_skeleton(
-        self,
-        nodes: List[Dict[str, Any]],
-        metadata: Dict[str, Any]
-    ) -> str:
+    def serialize_skeleton(self, nodes: List[Dict[str, Any]], metadata: Dict[str, Any]) -> str:
         """
         Serialize skeleton view to TOON format.
 
@@ -212,10 +193,9 @@ class TOONSerializer:
 
         # Nodes as tabular data
         node_fields = ["node_id", "importance", "type", "summary"]
-        toon_lines.append(" " + self.serialize_search_results(
-            nodes,
-            fields=node_fields
-        ).replace("\n", "\n "))
+        toon_lines.append(
+            " " + self.serialize_search_results(nodes, fields=node_fields).replace("\n", "\n ")
+        )
 
         return "\n".join(toon_lines)
 
@@ -242,7 +222,9 @@ class TOONSerializer:
                 if value and isinstance(value[0], dict):
                     # Array of objects - use tabular format
                     toon_lines.append(f" {key}:")
-                    toon_lines.append("  " + self.serialize_search_results(value).replace("\n", "\n  "))
+                    toon_lines.append(
+                        "  " + self.serialize_search_results(value).replace("\n", "\n  ")
+                    )
                 else:
                     # Simple array
                     toon_lines.append(f" {key}: [{','.join(map(str, value))}]")
@@ -273,7 +255,7 @@ class TOONSerializer:
 def format_response(
     data: Any,
     format_type: OutputFormat = OutputFormat.TEXT,
-    serializer: Optional[TOONSerializer] = None
+    serializer: Optional[TOONSerializer] = None,
 ) -> str:
     """
     Format response data according to requested format.
@@ -330,6 +312,7 @@ def format_response(
 # Token Savings Calculator
 # ============================================================================
 
+
 def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
     """
     Estimate token savings from JSON → TOON conversion.
@@ -356,7 +339,7 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
         "toon_tokens": toon_tokens,
         "tokens_saved": savings,
         "savings_percentage": round(savings_pct, 1),
-        "toon_advantage": f"{savings_pct:.1f}% fewer tokens"
+        "toon_advantage": f"{savings_pct:.1f}% fewer tokens",
     }
 
 
@@ -365,6 +348,13 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
 # ============================================================================
 
 if __name__ == "__main__":
+    import sys
+    import io
+
+    # Ensure UTF-8 encoding for emoji support
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
     print("🎯 TOON Serialization Demo for Token Saver 5000\n")
     print("=" * 70)
 
@@ -375,18 +365,18 @@ if __name__ == "__main__":
         {
             "node_id": "quantum_paper_n5",
             "importance": 0.872,
-            "summary": "Gate fidelity measurements using randomized benchmarking"
+            "summary": "Gate fidelity measurements using randomized benchmarking",
         },
         {
             "node_id": "quantum_paper_n12",
             "importance": 0.756,
-            "summary": "Contradictory findings on gate fidelity from cross-talk"
+            "summary": "Contradictory findings on gate fidelity from cross-talk",
         },
         {
             "node_id": "quantum_paper_n18",
             "importance": 0.691,
-            "summary": "Surface codes with 1% error threshold requirements"
-        }
+            "summary": "Surface codes with 1% error threshold requirements",
+        },
     ]
 
     serializer = TOONSerializer()
@@ -420,15 +410,15 @@ if __name__ == "__main__":
             "total_nodes": 150,
             "total_tokens": 45000,
             "skeleton_tokens": 2300,
-            "compression_ratio": 19.6
+            "compression_ratio": 19.6,
         },
         {
             "file_id": "ml_paper",
             "total_nodes": 98,
             "total_tokens": 32000,
             "skeleton_tokens": 1700,
-            "compression_ratio": 18.8
-        }
+            "compression_ratio": 18.8,
+        },
     ]
 
     json_output = json.dumps(documents, indent=2)

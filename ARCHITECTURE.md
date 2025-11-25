@@ -192,6 +192,361 @@ Alert: 🚨 Response not grounded in source material!
 
 ---
 
+## Layer 2.5: File Sync & Version Management (v0.4.0)
+
+**Files:**
+- `src/file_sync_manager.py`
+- `src/version_manager.py`
+
+### Components
+
+#### 2.5.1 File Sync Manager
+
+**Problem:** Cached document representations may become stale when source files are modified
+
+**Solution:** Track file metadata and checksums to detect when re-ingestion is needed
+
+```
+Algorithm:
+1. Register file path + mtime + MD5 checksum on ingest
+2. On sync check:
+   a. Quick check: Compare mtime
+   b. If mtime differs: Verify with MD5 checksum
+3. Return sync status + reason + recommendations
+
+Example:
+document.txt modified externally
+→ check_file_sync("doc1")
+→ {
+    "in_sync": false,
+    "reason": "File content changed",
+    "current_checksum": "a3b2c1...",
+    "cached_checksum": "d4e5f6...",
+    "recommendation": "Re-ingest with ingest_context()"
+  }
+```
+
+**Metadata Tracked:**
+- `file_path`: Absolute path to source file
+- `last_modified`: File mtime at ingestion
+- `checksum`: MD5 hash of content
+- `last_sync_check`: Timestamp of last check
+
+**API Methods:**
+```python
+sync_manager.register_file(doc_id, path, content)
+sync_manager.check_file_sync(doc_id)  # Returns sync status
+sync_manager.get_stale_documents()    # Returns list of out-of-sync docs
+sync_manager.get_sync_summary()       # Returns overview of all docs
+```
+
+#### 2.5.2 Version Manager
+
+**Problem:** Need to track document evolution and see what changed between versions
+
+**Solution:** Store full version history with diffs and metadata
+
+```
+Algorithm:
+1. On each ingest: Store DocumentVersion
+   - version_number (auto-incremented)
+   - content (full text)
+   - checksum (MD5)
+   - timestamp
+   - metadata (tags, notes, etc.)
+
+2. On diff request:
+   a. Load two versions
+   b. Generate unified diff (difflib)
+   c. Return formatted comparison
+
+Example:
+# Version 1 ingested
+→ add_version("doc1", content_v1, checksum_v1)
+→ DocumentVersion(doc_id="doc1", version=1, ...)
+
+# Version 2 ingested (file changed)
+→ add_version("doc1", content_v2, checksum_v2)
+→ DocumentVersion(doc_id="doc1", version=2, ...)
+
+# Compare versions
+→ diff_versions("doc1", from_version=1, to_version=2)
+→ "--- Version 1\n+++ Version 2\n@@ -10,5 +10,5 @@\n..."
+```
+
+**Storage:**
+- Location: `.semantic_modulator_data/versions/{doc_id}.json`
+- Format: JSON array of DocumentVersion objects
+- Persistence: Automatic on each ingest
+
+**API Methods:**
+```python
+version_manager.add_version(doc_id, content, checksum, metadata)
+version_manager.get_version_history(doc_id)  # Returns list of versions
+version_manager.diff_versions(doc_id, from_version, to_version)
+version_manager.diff_with_current_file(doc_id)  # Compare cached vs. disk
+```
+
+---
+
+## Layer 2.6: ACE Framework - Agentic Context Engineering (v0.4.0)
+
+**Files:**
+- `src/ace_framework.py`
+- `src/handlers/ace_handlers.py`
+
+### Components
+
+#### 2.6.1 ACE Framework Overview
+
+**Problem:** Static contexts don't improve through experience - need evolving playbooks that get better over time
+
+**Solution:** Generate-Reflect-Curate cycle for self-improving domain-specific contexts
+
+```
+┌──────────────────────────────────────────────────────────┐
+│             ACE Framework Architecture                    │
+└──────────────────────────────────────────────────────────┘
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+  ┌──────────┐      ┌──────────┐     ┌──────────┐
+  │Generator │      │Reflector │     │ Curator  │
+  └──────────┘      └──────────┘     └──────────┘
+        │                 │                 │
+        │                 │                 │
+        ▼                 ▼                 ▼
+  Generate            Reflect           Curate
+  Reasoning           Extract           Integrate
+  Trajectory          Insights          via Delta
+                                        Updates
+        │                 │                 │
+        └─────────────────┴─────────────────┘
+                          │
+                          ▼
+                   ACE Context
+                   (Playbook with
+                    Bullet Points)
+```
+
+**Research Foundation:** arXiv:2510.04618v1 - 32% quality boost with 4× shorter contexts
+
+#### 2.6.2 Generator Component
+
+**Purpose:** Produce reasoning trajectories for tasks using current playbook
+
+**Algorithm:**
+```
+Input: Task description + ACE Context (playbook)
+Output: Multi-step reasoning trajectory
+
+Process:
+1. Embed task query
+2. For each step (up to max_steps):
+   a. Find top_k most relevant bullets (cosine similarity)
+   b. Generate reasoning using relevant bullets
+   c. Calculate step confidence
+   d. Add to trajectory
+3. Return complete trajectory with metadata
+
+Example:
+Task: "Review authentication code for security issues"
+Playbook bullets: ["Check input validation", "Verify rate limiting", ...]
+→ Step 1: Apply "Check input validation" → reasoning + confidence
+→ Step 2: Apply "Verify rate limiting" → reasoning + confidence
+→ Step N: ...
+→ Trajectory: [{step_number, relevant_bullets, reasoning, confidence}, ...]
+```
+
+**Key Features:**
+- Semantic bullet retrieval via embeddings
+- Multi-step reasoning with playbook guidance
+- Confidence scoring per step
+
+#### 2.6.3 Reflector Component
+
+**Purpose:** Extract insights from task outcomes (successes and failures)
+
+**Algorithm:**
+```
+Input: Task + Outcome + Trajectory
+Output: List of ACE Insights
+
+Process:
+1. Classify outcome (success/failure)
+2. Analyze which bullets were used
+3. Iterative refinement (multiple passes):
+   a. Pass 1: Extract obvious patterns
+   b. Pass 2: Refine and clarify
+   c. Pass 3: Final validation
+4. Generate new bullets with:
+   - Text content
+   - Type (PRINCIPLE, STRATEGY, TACTIC, etc.)
+   - Confidence score
+   - Source metadata
+
+Example:
+Task: "Review payment processing"
+Outcome: {success: true, findings: ["Missing SQL injection protection"]}
+Trajectory: [used bullets about input validation]
+→ Insight: "Always check for SQL injection in database queries"
+→ BulletType: TACTIC
+→ Confidence: 0.75
+```
+
+**Key Features:**
+- Multi-pass refinement for quality
+- Automatic bullet type classification
+- Tracks what worked and what didn't
+
+#### 2.6.4 Curator Component
+
+**Purpose:** Integrate insights into playbook via delta updates with semantic deduplication
+
+**Algorithm:**
+```
+Input: ACE Context + New Insights
+Output: Updated ACE Context
+
+Process:
+1. For each new insight:
+   a. Embed the insight text
+   b. Compare to existing bullets (cosine similarity)
+   c. If similarity > 0.85: SKIP (duplicate)
+   d. If similarity 0.7-0.85: UPDATE existing (delta)
+   e. If similarity < 0.7: ADD new bullet
+2. Update context metadata
+3. Return updated context
+
+Example:
+New insight: "Always validate user input before database queries"
+Existing bullet: "Check input validation in API endpoints"
+Similarity: 0.82 (high overlap)
+→ ACTION: Merge via delta update instead of adding duplicate
+→ Updated bullet: "Validate all user input before database queries and API calls"
+```
+
+**Key Features:**
+- **Semantic deduplication (0.85 threshold)** - Prevents context collapse
+- **Delta updates** - Incremental changes, not monolithic rewrites
+- **Confidence-weighted merging** - Higher confidence bullets preserved
+
+#### 2.6.5 ACE Context (Playbook)
+
+**Data Structure:**
+```python
+@dataclass
+class ACEContext:
+    context_id: str                    # Unique identifier
+    bullets: List[ACEBullet]           # List of playbook entries
+    domain: str = "general"            # Domain (e.g., "code_review")
+    created_at: float                  # Timestamp
+    updated_at: float                  # Last modification
+    metadata: Dict[str, Any]           # Custom metadata
+
+@dataclass
+class ACEBullet:
+    text: str                          # Bullet content
+    bullet_type: BulletType            # PRINCIPLE, STRATEGY, TACTIC, etc.
+    embedding: np.ndarray              # 384-dim vector
+    confidence: float = 0.5            # Belief in utility (0.0-1.0)
+    success_count: int = 0             # Successful applications
+    failure_count: int = 0             # Failed applications
+    created_at: float                  # Creation timestamp
+    updated_at: float                  # Last update
+    source: str = "manual"             # Origin (manual, reflection, etc.)
+    metadata: Dict[str, Any]           # Additional context
+    bullet_id: str                     # Unique ID
+```
+
+#### 2.6.6 Grow-and-Refine Strategy
+
+**Purpose:** Balance context expansion and consolidation to prevent collapse
+
+**Algorithm:**
+```
+Phase 1: GROW (Expand context with new insights)
+- Add bullets from reflections
+- No hard limits on bullet count
+- Encourage exploration
+
+Phase 2: REFINE (Consolidate via deduplication)
+- Identify similar bullets (semantic similarity > 0.85)
+- Merge duplicates via delta updates
+- Remove low-confidence bullets (confidence < 0.3)
+- Preserve diversity
+
+Balance:
+IF bullets.count > threshold AND avg_similarity > 0.8:
+    → Trigger REFINE phase
+ELSE IF recent_insights.count > 0:
+    → Stay in GROW phase
+
+Result: 32% quality improvement with 4× shorter contexts (research-proven)
+```
+
+**Key Metrics:**
+- Total bullet count
+- Average confidence score
+- Semantic diversity (average pairwise distance)
+- Success rate (success_count / total_applications)
+
+#### 2.6.7 Integration with Token Saver 5000
+
+**How ACE Complements Semantic Compression:**
+
+1. **Meta-level Guidance:**
+   - ACE bullets guide semantic node selection
+   - Playbook principles inform fidelity decisions
+   - Domain-specific strategies improve relevance
+
+2. **Delta Updates Synergy:**
+   - Both ACE and fidelity modulation avoid monolithic rewrites
+   - Incremental, localized changes for efficiency
+   - Complementary approaches to token optimization
+
+3. **Self-Correction:**
+   - ACE Reflector + Blind Spot Detector = comprehensive validation
+   - ACE improves over time through experience
+   - Blind spot detection provides per-query validation
+
+4. **Grow-and-Refine:**
+   - Prevents information loss during compression
+   - Balances expansion (new insights) and consolidation (deduplication)
+   - Maintains comprehensive coverage without bloat
+
+**API Methods:**
+```python
+# Core ACE operations
+ace.generate(task, context_id, max_steps, top_k_bullets)
+ace.reflect(task, outcome, trajectory, refinement_passes)
+ace.curate(context_id, insights, dedup_threshold)
+
+# Context management
+ace.grow_context(context_id, bullets)           # Add bullets manually
+ace.refine_context(context_id, bullet_id, success)  # Update performance
+ace.get_playbook(context_id)                    # Retrieve current state
+
+# Full cycle
+ace.execute_cycle(context_id, task, outcome)   # Generate → Reflect → Curate
+```
+
+**MCP Tools (7 total):**
+1. `ace_generate` - Generate reasoning trajectory
+2. `ace_reflect` - Extract insights from outcome
+3. `ace_curate` - Integrate insights into playbook
+4. `ace_grow_context` - Manually add bullets
+5. `ace_refine_context` - Update bullet performance
+6. `ace_get_playbook` - Retrieve playbook state
+7. `ace_execute_cycle` - Execute full cycle
+
+**Storage:**
+- In-memory ACE contexts (per-session)
+- Future: Persistent playbook storage planned
+- Export/import functionality for sharing playbooks
+
+---
+
 ## Layer 3: MCP Interface
 
 **File:** `src/server.py`
@@ -204,7 +559,7 @@ Alert: 🚨 Response not grounded in source material!
 │                                                               │
 │  Handlers:                                                    │
 │  ┌───────────────────────────────────────────┐              │
-│  │ @list_tools() → Return 16 tool schemas    │              │
+│  │ @list_tools() → Return 17 tool schemas    │              │
 │  │ @call_tool() → Execute tool logic         │              │
 │  └───────────────────────────────────────────┘              │
 │                                                               │
@@ -212,8 +567,12 @@ Alert: 🚨 Response not grounded in source material!
 │  • compressor: SemanticCompressor instance                   │
 │  • blind_spot_detector: BlindSpotDetector                    │
 │  • focus_manager: FocusManager (AFM)                         │
-│  • persistence: PersistenceManager (NEW!)                    │
-│  • resource_manager: ResourceManager (NEW!)                  │
+│  • persistence: PersistenceManager                           │
+│  • resource_manager: ResourceManager                         │
+│  • sync_manager: FileSyncManager (v0.4.0)                    │
+│  • version_manager: VersionManager (v0.4.0)                  │
+│  • ace_framework: ACEFramework (v0.4.0)                      │
+│  • ace_contexts: Dict[context_id, ACEContext] (v0.4.0)       │
 │  • retrieval_history: Dict[file_id, node_ids]               │
 │                                                               │
 │  Features:                                                    │
@@ -225,7 +584,7 @@ Alert: 🚨 Response not grounded in source material!
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Complete MCP Tool List (16 tools)
+### Complete MCP Tool List (29 tools - v0.4.0)
 
 #### Document Compression Tools (9)
 1. `ingest_context` - Ingest and compress documents
@@ -244,10 +603,29 @@ Alert: 🚨 Response not grounded in source material!
 12. `afm_get_stats` - Dialogue statistics
 13. `afm_clear_history` - Reset dialogue
 
-#### Discovery & Persistence Tools (3)
+#### Discovery & Persistence Tools (4)
 14. `list_documents` - Document inventory
 15. `afm_export_history` - Save conversation state
 16. `afm_import_history` - Restore conversation state
+17. `delete_document` - Delete document and free resources
+
+#### File Sync & Version Management Tools (4) - NEW in v0.4.0
+18. `check_file_sync` - Check if cached document is in sync with source file
+19. `diff_cached_file` - Generate diff between cached and current file
+20. `get_sync_summary` - Get overview of all document sync statuses
+21. `refresh_document` - Re-ingest stale documents automatically
+
+#### ACE Framework Tools (7) - NEW in v0.4.0
+22. `ace_generate` - Generate reasoning trajectory for a task using ACE playbook
+23. `ace_reflect` - Extract insights from task outcome (success/failure analysis)
+24. `ace_curate` - Integrate insights into playbook via delta updates
+25. `ace_grow_context` - Manually add bullets to playbook
+26. `ace_refine_context` - Update bullet performance based on feedback
+27. `ace_get_playbook` - Retrieve current playbook state with statistics
+28. `ace_execute_cycle` - Execute full Generate→Reflect→Curate cycle
+
+#### Health Monitoring Tools (1)
+29. `check_resource_health` - Monitor storage and memory usage
 
 ### Tool Implementations
 
@@ -523,13 +901,24 @@ collection.add(
 └─────────────────────────────────────┘
 ```
 
-### Version 0.3.0 (In Progress)
+### ✅ Version 0.3.0 (COMPLETED)
 ```
 ┌─────────────────────────────────────┐
 │    Cross-Document Intelligence       │
 │  • Multi-doc graphs                  │
 │  • Contradiction detection           │
 │  • Citation tracking                 │
+└─────────────────────────────────────┘
+```
+
+### ✅ Version 0.4.0 (COMPLETED)
+```
+┌─────────────────────────────────────┐
+│   File Sync & Version Management     │
+│  • Real-time staleness detection     │
+│  • Full version history with diffs   │
+│  • Automatic sync checking           │
+│  • 115 comprehensive tests           │
 └─────────────────────────────────────┘
 ```
 
@@ -577,8 +966,11 @@ print(f"Metadata: {node.metadata}")
 ## References
 
 ### Research Papers
-1. **Semantic Communication:** "Joint Semantic-Channel Coding and Modulation"
-2. **Fidelity-Preserving Encoding:** "Structure-Preserving Quantization"
+1. **JSCCM** (arXiv:2511.15699v1) - Joint Semantic-Channel Coding and Modulation
+2. **FPQE** (arXiv:2511.15695v1) - Fidelity-Preserving Quantum Encoding
+3. **SCAR** (arXiv:2511.14063v1) - Semantic Context Matters for Autoregressive Models
+4. **AFM** (arXiv:2511.12712v1) - Adaptive Focus Memory
+5. **ACE** (arXiv:2510.04618v1) - Agentic Context Engineering (NEW in v0.4.0)
 
 ### Technologies
 - **MCP:** Model Context Protocol (Anthropic)
@@ -597,6 +989,6 @@ For architecture questions or contributions:
 
 ---
 
-**Last Updated:** 2025-11-22
-**Version:** 0.2.0
-**Status:** Production-Ready with Persistent Storage
+**Last Updated:** 2025-11-25
+**Version:** 0.4.3
+**Status:** Production-Ready - 427 comprehensive tests, 59% coverage (99% core modules)

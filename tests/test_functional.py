@@ -14,6 +14,7 @@ Run with: pytest tests/test_functional.py -v
 
 import sys
 import os
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -386,13 +387,11 @@ class TestEdgeCases:
 
     def test_empty_document(self):
         """Test handling of empty document"""
-        result = self.compressor.ingest_file("", "empty_doc")
+        # Empty documents should raise ValueError (strict validation)
+        with pytest.raises(ValueError, match="empty|text"):
+            self.compressor.ingest_file("", "empty_doc")
 
-        # Should handle gracefully (may create minimal skeleton)
-        assert result is not None
-
-        print("\n✅ Empty Document Handling:")
-        print(f"   Nodes: {result.total_nodes}")
+        print("\n✅ Empty Document Handling: Correctly rejects empty input")
 
     def test_very_short_document(self):
         """Test handling of very short document"""
@@ -407,12 +406,11 @@ class TestEdgeCases:
 
     def test_nonexistent_file_stats(self):
         """Test stats request for nonexistent file"""
-        stats = self.compressor.get_stats("nonexistent_file")
+        # Nonexistent files should raise ValueError (strict validation)
+        with pytest.raises(ValueError, match="not found"):
+            self.compressor.get_stats("nonexistent_file")
 
-        assert "error" in stats or stats == {}
-
-        print("\n✅ Nonexistent File Handling:")
-        print(f"   Result: {stats}")
+        print("\n✅ Nonexistent File Handling: Correctly rejects missing file")
 
     def test_search_before_ingestion(self):
         """Test search when no documents ingested"""

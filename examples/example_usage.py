@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Example Usage of Semantic Modulator
 
@@ -12,6 +13,11 @@ This script demonstrates the core capabilities:
 
 import sys
 import os
+import io
+
+# Configure stdout for UTF-8 on Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -84,30 +90,50 @@ def main():
 
     # Initialize the compressor
     print("Initializing Semantic Compressor...")
-    compressor = SemanticCompressor(
-        model_name="all-MiniLM-L6-v2",
-        similarity_threshold=0.75,
-        skeleton_ratio=0.2,
-    )
+    try:
+        compressor = SemanticCompressor(
+            model_name="all-MiniLM-L6-v2",
+            similarity_threshold=0.75,
+            skeleton_ratio=0.2,
+        )
+    except Exception as e:
+        print(f"❌ Failed to initialize compressor: {e}")
+        print("\n💡 Troubleshooting:")
+        print("  1. Run: python scripts/check_setup.py")
+        print("  2. Ensure all dependencies installed: pip install -r requirements.txt")
+        print("  3. Check model downloads: ~80MB required on first run")
+        return 1
 
     # Initialize blind spot detector
-    blind_spot_detector = BlindSpotDetector(compressor)
-    halo_detector = HaloEffectDetector(compressor)
+    try:
+        blind_spot_detector = BlindSpotDetector(compressor)
+        halo_detector = HaloEffectDetector(compressor)
+    except Exception as e:
+        print(f"❌ Failed to initialize detectors: {e}")
+        return 1
 
     # =================================================================
     # STEP 1: Ingest a document
     # =================================================================
     print_section("Step 1: Ingesting Document with Semantic Compression")
 
-    skeleton = compressor.ingest_file(
-        text=SAMPLE_DOCUMENT,
-        file_id="quantum_paper",
-        metadata={
-            "title": "Introduction to Quantum Error Correction",
-            "author": "Example Author",
-            "date": "2025-01-15",
-        },
-    )
+    try:
+        skeleton = compressor.ingest_file(
+            text=SAMPLE_DOCUMENT,
+            file_id="quantum_paper",
+            metadata={
+                "title": "Introduction to Quantum Error Correction",
+                "author": "Example Author",
+                "date": "2025-01-15",
+            },
+        )
+    except ValueError as e:
+        print(f"❌ Validation error during ingestion: {e}")
+        return 1
+    except Exception as e:
+        print(f"❌ Error during document ingestion: {e}")
+        print("   Check if document is too large or contains invalid characters")
+        return 1
 
     print(f"Original document length: {len(SAMPLE_DOCUMENT)} characters")
     print(f"Original tokens: {skeleton.total_tokens:,}")
@@ -280,4 +306,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        exit_code = main()
+        sys.exit(exit_code if exit_code is not None else 0)
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Demo interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Unexpected error: {e}")
+        import traceback
+
+        traceback.print_exc()
+        print(
+            "\n💡 Please report this issue: https://github.com/oimiragieo/token-saver-5000/issues"
+        )
+        sys.exit(1)

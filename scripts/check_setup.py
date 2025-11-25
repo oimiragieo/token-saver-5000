@@ -12,7 +12,6 @@ Usage:
 """
 
 import sys
-import os
 
 
 def check_python_version():
@@ -32,7 +31,7 @@ def check_python_version():
         return True
     else:
         print(f"❌ Python {version} is NOT supported (requirement: >= 3.10)")
-        print(f"   Please upgrade to Python 3.10 or higher")
+        print("   Please upgrade to Python 3.10 or higher")
         return False
 
 
@@ -124,11 +123,37 @@ def check_embedding_model():
 
     try:
         from sentence_transformers import SentenceTransformer
+        import time
 
         print("Loading all-MiniLM-L6-v2 model...")
-        print("(This may take a minute on first run - model is ~80MB)")
+        print("(First run: downloading ~80MB model from HuggingFace)")
+        print("💡 Tip: Progress bar will show download status automatically")
+        print("")
 
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        # Retry logic for model download with exponential backoff
+        max_retries = 3
+        model = None
+
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    print(f"  Retry attempt {attempt + 1}/{max_retries}...")
+                model = SentenceTransformer("all-MiniLM-L6-v2")
+                print("✅ Model loaded successfully")
+                break
+            except Exception as e:
+                print(f"❌ Download failed: {str(e)[:80]}")
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # Exponential backoff: 2s, 4s, 6s
+                    print(f"  ⏳ Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    print("  ⚠️  All retry attempts exhausted")
+                    raise
+
+        if model is None:
+            raise RuntimeError("Failed to load model after all retries")
+
         print("✅ Model loaded successfully")
 
         # Test encoding
@@ -139,6 +164,12 @@ def check_embedding_model():
         return True
     except Exception as e:
         print(f"❌ Failed to load embedding model: {str(e)}")
+        print("\n💡 Troubleshooting:")
+        print("  1. Check internet connection")
+        print(
+            "  2. Try manual download: python -c 'from sentence_transformers import SentenceTransformer; SentenceTransformer(\"all-MiniLM-L6-v2\")'"
+        )
+        print("  3. See TROUBLESHOOTING.md for more help")
         return False
 
 

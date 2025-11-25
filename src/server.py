@@ -12,8 +12,8 @@ Architecture:
 """
 
 import asyncio
-import json
 import logging
+from collections import OrderedDict
 from typing import Any, Dict, List
 
 from mcp.server import Server
@@ -23,7 +23,8 @@ from mcp.types import (
     TextContent,
 )
 
-from .semantic_compressor import SemanticCompressor, FidelityLevel
+from .types import HandlerContext  # TypedDict for handler context
+from .semantic_compressor import SemanticCompressor
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
 from .adaptive_rate_allocator import (
     ContextWindowAdapter,
@@ -32,11 +33,90 @@ from .adaptive_rate_allocator import (
 from .afm import FocusManager, AFMConfig
 from .persistence import PersistenceManager
 from .resource_manager import ResourceManager, ResourceLimits
+from .file_sync_manager import FileSyncManager
+from .version_manager import VersionManager
+from .ace_framework import ACEFramework
+from .handlers import mcp_core
+from .constants import MAX_ACE_CONTEXTS
 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("semantic-modulator")
+
+
+class ACEContextManager(OrderedDict):
+    """
+    LRU-enabled ACE context storage with automatic eviction (v0.4.2).
+
+    Wraps OrderedDict to provide transparent LRU eviction when max_contexts
+    limit is exceeded. Oldest contexts (by creation/access time) are evicted first.
+
+    Args:
+        max_contexts: Maximum contexts to retain (0 = unlimited, not recommended)
+                      Default: MAX_ACE_CONTEXTS (100 contexts)
+    """
+
+    def __init__(self, max_contexts: int = MAX_ACE_CONTEXTS):
+        super().__init__()
+        self.max_contexts = max_contexts
+        logger.info(
+            f"ACEContextManager initialized "
+            f"(max_contexts={max_contexts if max_contexts > 0 else 'unlimited'})"
+        )
+
+    def __setitem__(self, key, value):
+        """
+        Add or update context with automatic LRU eviction.
+
+        When adding a new context:
+        1. If key exists, move it to end (most recently used)
+        2. Add the new context
+        3. If limit exceeded, evict oldest context (first item)
+        """
+        # If key exists, move to end (mark as recently used)
+        if key in self:
+            super().move_to_end(key)
+
+        # Add/update the context
+        super().__setitem__(key, value)
+
+        # Automatic LRU eviction
+        if self.max_contexts > 0 and len(self) > self.max_contexts:
+            # Remove oldest (first) item
+            oldest_key = next(iter(self))
+            del self[oldest_key]
+            logger.info(
+                f"Auto-evicted oldest ACE context: {oldest_key} "
+                f"(keeping last {self.max_contexts} contexts)"
+            )
+
+    def __getitem__(self, key):
+        """
+        Get context and mark as recently used.
+
+        Moves accessed context to end of OrderedDict (LRU policy).
+        """
+        value = super().__getitem__(key)
+        # Move to end (mark as recently accessed)
+        super().move_to_end(key)
+        return value
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about ACE context storage (v0.4.2).
+
+        Returns:
+            Dictionary with stats including max_contexts configuration
+        """
+        return {
+            "total_contexts": len(self),
+            "max_contexts_limit": self.max_contexts if self.max_contexts > 0 else "unlimited",
+            "context_ids": list(self.keys()),
+            "approaching_limit": (
+                len(self) / self.max_contexts > 0.9 if self.max_contexts > 0 else False
+            ),
+        }
 
 
 class SemanticModulatorServer:
@@ -70,12 +150,28 @@ class SemanticModulatorServer:
         self.persistence = PersistenceManager()
 
         # Resource management (NEW!)
-        self.resource_manager = ResourceManager(ResourceLimits(
-            max_document_size_mb=100.0,
-            max_total_storage_mb=1024.0,
-            max_documents=1000,
-            max_memory_mb=2048.0,
-        ))
+        self.resource_manager = ResourceManager(
+            ResourceLimits(
+                max_document_size_mb=100.0,
+                max_total_storage_mb=1024.0,
+                max_documents=1000,
+                max_memory_mb=2048.0,
+            )
+        )
+
+        # File sync and version management (NEW in v0.4.0!)
+        self.sync_manager = FileSyncManager()
+        self.version_manager = VersionManager()
+        logger.info("File sync and version management enabled")
+
+        # ACE Framework for evolving contexts (NEW in v0.4.1!)
+        self.ace_framework = ACEFramework(
+            deduplication_threshold=0.85,
+            max_bullets=100,
+        )
+        # ACE contexts with LRU eviction (v0.4.2)
+        self.ace_contexts = ACEContextManager(max_contexts=MAX_ACE_CONTEXTS)
+        logger.info("ACE (Agentic Context Engineering) framework initialized")
 
         # Context window monitoring (like SNR in JSCCM)
         self.context_window_monitor = {
@@ -89,6 +185,9 @@ class SemanticModulatorServer:
 
         # Auto-load persisted documents
         self._load_persisted_documents()
+
+        # Auto-load file sync metadata
+        self._load_file_sync_metadata()
 
         self._setup_handlers()
 
@@ -127,460 +226,73 @@ class SemanticModulatorServer:
         except Exception as e:
             logger.error(f"Failed to load persisted documents: {e}", exc_info=True)
 
+    def _load_file_sync_metadata(self):
+        """Load file sync metadata on server start"""
+        try:
+            metadata = self.persistence.load_file_sync_metadata()
+            if not metadata:
+                logger.info("No file sync metadata found (first run or no tracked files)")
+                return
+
+            self.sync_manager.import_metadata(metadata)
+            logger.info(f"✅ Loaded file sync metadata for {len(metadata)} documents")
+
+        except Exception as e:
+            logger.error(f"Failed to load file sync metadata: {e}", exc_info=True)
+
+    def _save_file_sync_metadata(self):
+        """Save file sync metadata to persistent storage"""
+        try:
+            metadata = self.sync_manager.export_metadata()
+            success = self.persistence.save_file_sync_metadata(metadata)
+            if success:
+                logger.info(f"✅ Saved file sync metadata for {len(metadata)} documents")
+            else:
+                logger.warning("⚠️  Failed to save file sync metadata")
+        except Exception as e:
+            logger.error(f"Failed to save file sync metadata: {e}")
+
+    def _build_context(self) -> HandlerContext:
+        """
+        Build context dictionary for handlers.
+
+        Returns:
+            HandlerContext TypedDict containing all components needed by handlers
+        """
+        return {
+            "compressor": self.compressor,
+            "blind_spot_detector": self.blind_spot_detector,
+            "halo_detector": self.halo_detector,
+            "context_window_adapter": self.context_window_adapter,
+            "multilevel_encoder": self.multilevel_encoder,
+            "focus_manager": self.focus_manager,
+            "persistence": self.persistence,
+            "resource_manager": self.resource_manager,
+            "sync_manager": self.sync_manager,
+            "version_manager": self.version_manager,
+            "ace_framework": self.ace_framework,
+            "ace_contexts": self.ace_contexts,
+            "validate_file_id": self._validate_file_id,
+            "validate_node_ids": self._validate_node_ids,
+            "validate_token_count": self._validate_token_count,
+            "save_file_sync_metadata": self._save_file_sync_metadata,
+        }
+
     def _setup_handlers(self):
-        """Register MCP tool handlers"""
+        """Register MCP tool handlers using centralized routing"""
 
         @self.server.list_tools()
         async def list_tools() -> List[Tool]:
             """List available semantic modulation tools"""
-            return [
-                Tool(
-                    name="ingest_context",
-                    description=(
-                        "Ingest and compress a document into a semantic graph. "
-                        "This creates a fidelity-preserving encoding that reduces token usage by 80-95%. "
-                        "The document is analyzed for structure, relationships, and importance. "
-                        "Returns a compressed skeleton view."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "text": {
-                                "type": "string",
-                                "description": "The raw document text to ingest",
-                            },
-                            "file_id": {
-                                "type": "string",
-                                "description": "Unique identifier for this document (e.g., 'paper_1', 'manual_v2')",
-                            },
-                            "metadata": {
-                                "type": "object",
-                                "description": "Optional metadata (author, date, source, etc.)",
-                                "properties": {
-                                    "author": {"type": "string"},
-                                    "date": {"type": "string"},
-                                    "source": {"type": "string"},
-                                    "tags": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                    },
-                                },
-                            },
-                        },
-                        "required": ["text", "file_id"],
-                    },
-                ),
-                Tool(
-                    name="read_skeleton",
-                    description=(
-                        "Read the compressed skeleton view of a previously ingested document. "
-                        "Shows high-importance 'anchor' concepts with summaries, and lists "
-                        "other sections as expandable nodes. Achieves 80-95% token reduction. "
-                        "Use this FIRST before requesting specific details."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_id": {
-                                "type": "string",
-                                "description": "The document identifier",
-                            },
-                        },
-                        "required": ["file_id"],
-                    },
-                ),
-                Tool(
-                    name="modulate_region",
-                    description=(
-                        "Retrieve specific sections at a chosen fidelity level. "
-                        "Use this to 'zoom in' on relevant parts after reading the skeleton. "
-                        "5 Fidelity levels (JSCCM-inspired adaptive modulation): "
-                        "'ABSTRACT' (~10 tokens/node) - Quick summary only, "
-                        "'OUTLINE' (~30 tokens/node) - Summary + section context, "
-                        "'STRUCTURE' (~50 tokens/node) - Summary + entities + metadata, "
-                        "'DETAILED' (~100 tokens/node) - Summary + entities + key excerpts, "
-                        "'RAW' (variable tokens) - Full original content. "
-                        "This implements adaptive semantic fidelity - choose lower levels when context is tight."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "node_ids": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of node IDs to retrieve (from skeleton)",
-                            },
-                            "fidelity_level": {
-                                "type": "string",
-                                "enum": [
-                                    "ABSTRACT",
-                                    "OUTLINE",
-                                    "STRUCTURE",
-                                    "DETAILED",
-                                    "RAW",
-                                ],
-                                "description": "Detail level to retrieve (default: RAW for maximum fidelity)",
-                                "default": "RAW",
-                            },
-                        },
-                        "required": ["node_ids"],
-                    },
-                ),
-                Tool(
-                    name="search_semantic",
-                    description=(
-                        "Semantic search across ingested documents. "
-                        "Uses vector similarity to find relevant sections, "
-                        "even if exact keywords don't match. "
-                        "Returns ranked node IDs."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Natural language search query",
-                            },
-                            "file_id": {
-                                "type": "string",
-                                "description": "Optional: limit search to specific document",
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "Number of results to return",
-                                "default": 5,
-                            },
-                        },
-                        "required": ["query"],
-                    },
-                ),
-                Tool(
-                    name="check_blind_spots",
-                    description=(
-                        "🔍 BLIND SPOT DETECTOR: Analyze if your response missed critical context. "
-                        "This tool embeds your response and compares it to ALL nodes in the document. "
-                        "If relevant content was not retrieved, it alerts you and suggests auto-injection. "
-                        "Use AFTER generating a response to ensure fidelity. "
-                        "This implements the 'Self-Correcting Context Loop'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "ai_response": {
-                                "type": "string",
-                                "description": "The response you generated",
-                            },
-                            "file_id": {
-                                "type": "string",
-                                "description": "Which document was being discussed",
-                            },
-                            "retrieved_nodes": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Which node IDs you actually retrieved/viewed",
-                            },
-                        },
-                        "required": ["ai_response", "file_id", "retrieved_nodes"],
-                    },
-                ),
-                Tool(
-                    name="detect_hallucination",
-                    description=(
-                        "🛡️ HALLUCINATION DETECTOR: Check if a response is grounded in source material. "
-                        "Compares response embedding to document graph. "
-                        "Flags responses with low similarity to all nodes (possible fabrication). "
-                        "Use when uncertain about answer accuracy."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "ai_response": {
-                                "type": "string",
-                                "description": "The response to validate",
-                            },
-                            "file_id": {
-                                "type": "string",
-                                "description": "The source document",
-                            },
-                        },
-                        "required": ["ai_response", "file_id"],
-                    },
-                ),
-                Tool(
-                    name="get_stats",
-                    description=(
-                        "Get statistics about ingested documents. "
-                        "Shows token counts, compression ratios, and graph structure. "
-                        "Useful for understanding the semantic compression efficiency."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_id": {
-                                "type": "string",
-                                "description": "Optional: specific file ID, or omit for global stats",
-                            },
-                        },
-                    },
-                ),
-                Tool(
-                    name="adapt_to_context_window",
-                    description=(
-                        "🔧 ADAPTIVE CONTEXT ALLOCATION (JSCCM-inspired): "
-                        "Dynamically adjust compression based on available context window. "
-                        "Low availability (like low SNR in wireless) → More compression. "
-                        "High availability → Less compression, more detail. "
-                        "Uses learned rate allocator to determine optimal skeleton ratio. "
-                        "Inspired by JSCCM paper's channel adaptation strategy."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_id": {
-                                "type": "string",
-                                "description": "Document to generate adaptive skeleton for",
-                            },
-                            "available_tokens": {
-                                "type": "integer",
-                                "description": "How many tokens are currently available in context window",
-                            },
-                            "max_tokens": {
-                                "type": "integer",
-                                "description": "Maximum context window size (default: 100000)",
-                                "default": 100000,
-                            },
-                            "query_priority": {
-                                "type": "number",
-                                "description": "Query importance (0-1, default: 0.5)",
-                                "default": 0.5,
-                            },
-                        },
-                        "required": ["file_id", "available_tokens"],
-                    },
-                ),
-                Tool(
-                    name="multilevel_encode",
-                    description=(
-                        "📊 MULTI-LEVEL ENCODING (JSCCM-inspired): "
-                        "Generate skeleton with 3 priority levels: "
-                        "• Main branch (top 15%, always included) - critical concepts "
-                        "• Auxiliary branch (next 25%, include if space allows) - important details "
-                        "• Detail branch (remaining, only if plenty of space) - supplementary content. "
-                        "Progressively adds levels based on available context window. "
-                        "Inspired by JSCCM's parallel encoder architecture."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_id": {
-                                "type": "string",
-                                "description": "Document to encode",
-                            },
-                            "available_tokens": {
-                                "type": "integer",
-                                "description": "Available context window tokens",
-                            },
-                        },
-                        "required": ["file_id", "available_tokens"],
-                    },
-                ),
-                Tool(
-                    name="afm_add_message",
-                    description=(
-                        "💬 ADAPTIVE FOCUS MEMORY: Add message to dialogue history. "
-                        "AFM (Adaptive Focus Memory, arXiv:2511.12712v1) manages multi-turn conversations "
-                        "by assigning adaptive fidelity to each message based on recency, semantic relevance, "
-                        "and importance. Messages are automatically classified as CRITICAL (safety-sensitive), "
-                        "RELEVANT, or TRIVIAL. Use this to build dialogue history before calling afm_build_context."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "role": {
-                                "type": "string",
-                                "enum": ["user", "assistant", "system"],
-                                "description": "Message role (user, assistant, or system)",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "Message content",
-                            },
-                        },
-                        "required": ["role", "content"],
-                    },
-                ),
-                Tool(
-                    name="afm_build_context",
-                    description=(
-                        "🧠 ADAPTIVE FOCUS MEMORY: Build optimized context for current query. "
-                        "Uses semantic similarity + recency weighting + importance classification "
-                        "to pack dialogue history under strict token budget. Achieves ~66% token reduction "
-                        "while preserving safety-critical information (e.g., allergies, constraints). "
-                        "Each message gets adaptive fidelity: FULL (verbatim), COMPRESSED (summary), or "
-                        "PLACEHOLDER (stub). Messages packed chronologically to preserve conversation flow."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "current_query": {
-                                "type": "string",
-                                "description": "Current user query to build context for",
-                            },
-                            "budget_tokens": {
-                                "type": "integer",
-                                "description": "Maximum tokens allowed in context",
-                            },
-                            "system_preamble": {
-                                "type": "string",
-                                "description": "Optional system message to include first",
-                            },
-                        },
-                        "required": ["current_query", "budget_tokens"],
-                    },
-                ),
-                Tool(
-                    name="afm_get_stats",
-                    description=(
-                        "📊 ADAPTIVE FOCUS MEMORY: Get dialogue statistics. "
-                        "Returns total messages, current turn index, and importance breakdown "
-                        "(critical/relevant/trivial counts). Useful for monitoring dialogue state."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                    },
-                ),
-                Tool(
-                    name="afm_clear_history",
-                    description=(
-                        "🗑️ ADAPTIVE FOCUS MEMORY: Clear dialogue history. "
-                        "Removes all messages and resets turn counter. Use when starting a new conversation "
-                        "or when dialogue context is no longer relevant."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                    },
-                ),
-                Tool(
-                    name="list_documents",
-                    description=(
-                        "📚 LIST DOCUMENTS: Get inventory of all ingested documents. "
-                        "Returns structured information about each document including file_id, "
-                        "metadata, node count, token counts, and ingestion time. "
-                        "Use this to discover what documents are available for querying."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                    },
-                ),
-                Tool(
-                    name="afm_export_history",
-                    description=(
-                        "💾 ADAPTIVE FOCUS MEMORY: Export dialogue history to JSON. "
-                        "Saves current conversation state including all messages, turn counter, "
-                        "and metadata. Use this to preserve conversations for later resume. "
-                        "Returns JSON string that can be saved and imported later."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "session_id": {
-                                "type": "string",
-                                "description": "Optional session ID for this export (default: 'default')",
-                                "default": "default",
-                            },
-                        },
-                    },
-                ),
-                Tool(
-                    name="afm_import_history",
-                    description=(
-                        "📥 ADAPTIVE FOCUS MEMORY: Import dialogue history from JSON. "
-                        "Restores a previously exported conversation state. This replaces "
-                        "the current dialogue history. Use this to resume saved conversations."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "session_id": {
-                                "type": "string",
-                                "description": "Session ID to load (default: 'default')",
-                                "default": "default",
-                            },
-                        },
-                    },
-                ),
-                Tool(
-                    name="delete_document",
-                    description=(
-                        "🗑️ DELETE DOCUMENT: Permanently delete an ingested document. "
-                        "Removes the document from memory and persistent storage. "
-                        "This operation cannot be undone. Use with caution. "
-                        "Useful for managing storage limits or removing outdated documents."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_id": {
-                                "type": "string",
-                                "description": "Document identifier to delete",
-                            },
-                            "confirm": {
-                                "type": "boolean",
-                                "description": "Confirmation flag (must be true to proceed)",
-                                "default": False,
-                            },
-                        },
-                        "required": ["file_id", "confirm"],
-                    },
-                ),
-            ]
+            return mcp_core.setup_mcp_tools()
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Any) -> List[TextContent]:
-            """Handle tool calls"""
+            """Handle tool calls via centralized router"""
             try:
-                if name == "ingest_context":
-                    result = self._handle_ingest(arguments)
-                elif name == "read_skeleton":
-                    result = self._handle_read_skeleton(arguments)
-                elif name == "modulate_region":
-                    result = self._handle_modulate_region(arguments)
-                elif name == "search_semantic":
-                    result = self._handle_search_semantic(arguments)
-                elif name == "check_blind_spots":
-                    result = self._handle_check_blind_spots(arguments)
-                elif name == "detect_hallucination":
-                    result = self._handle_detect_hallucination(arguments)
-                elif name == "get_stats":
-                    result = self._handle_get_stats(arguments)
-                elif name == "adapt_to_context_window":
-                    result = self._handle_adapt_to_context_window(arguments)
-                elif name == "multilevel_encode":
-                    result = self._handle_multilevel_encode(arguments)
-                elif name == "afm_add_message":
-                    result = self._handle_afm_add_message(arguments)
-                elif name == "afm_build_context":
-                    result = self._handle_afm_build_context(arguments)
-                elif name == "afm_get_stats":
-                    result = self._handle_afm_get_stats(arguments)
-                elif name == "afm_clear_history":
-                    result = self._handle_afm_clear_history(arguments)
-                elif name == "list_documents":
-                    result = self._handle_list_documents(arguments)
-                elif name == "afm_export_history":
-                    result = self._handle_afm_export_history(arguments)
-                elif name == "afm_import_history":
-                    result = self._handle_afm_import_history(arguments)
-                elif name == "delete_document":
-                    result = self._handle_delete_document(arguments)
-                else:
-                    result = f"Unknown tool: {name}"
-
+                context = self._build_context()
+                result = mcp_core.route_tool_call(name, arguments, context)
                 return [TextContent(type="text", text=str(result))]
-
             except Exception as e:
                 logger.error(f"Error in {name}: {e}", exc_info=True)
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
@@ -635,673 +347,20 @@ class SemanticModulatorServer:
                 "💡 Tip: available_tokens should be ≤ max_tokens"
             )
 
-    def _handle_ingest(self, args: Dict) -> str:
-        """Handle ingest_context tool call"""
-        text = args["text"]
-        file_id = args["file_id"]
-        metadata = args.get("metadata")
+    def _create_progress_bar(self, percentage: float, width: int = 40) -> str:
+        """Create a text progress bar"""
+        filled = int((percentage / 100) * width)
+        empty = width - filled
 
-        # Validation
-        if not text or len(text.strip()) == 0:
-            raise ValueError(
-                "text cannot be empty\n"
-                "💡 Tip: Provide document content to ingest (minimum ~20 characters recommended)"
-            )
-
-        if len(text) < 20:
-            raise ValueError(
-                f"text is too short ({len(text)} chars)\n"
-                "💡 Tip: Provide at least 20 characters for meaningful semantic analysis"
-            )
-
-        self._validate_file_id(file_id, must_exist=False)
-
-        # Check resource limits BEFORE ingestion
-        text_size = len(text.encode('utf-8'))
-        allowed, error_msg = self.resource_manager.check_document_size(file_id, text_size)
-        if not allowed:
-            raise ValueError(error_msg)
-
-        logger.info(f"Ingesting document: {file_id} ({len(text)} chars, {text_size/1024:.1f}KB)")
-
-        try:
-            skeleton = self.compressor.ingest_file(text, file_id, metadata)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to ingest document: {str(e)}\n"
-                "💡 Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
-            ) from e
-
-        # Register with resource manager
-        self.resource_manager.register_document(file_id, text_size)
-
-        # Persist to storage
-        try:
-            import networkx as nx
-            graph_data = nx.node_link_data(self.compressor.graphs[file_id])
-            success = self.persistence.save_document(
-                file_id=file_id,
-                chunks={k: v for k, v in self.compressor.chunks.items() if k.startswith(file_id)},
-                graph_data=graph_data,
-                metadata=self.compressor.file_metadata.get(file_id, {})
-            )
-            if success:
-                logger.info(f"✅ Persisted document {file_id}")
-            else:
-                logger.warning(f"⚠️  Failed to persist {file_id}, will be lost on restart")
-        except Exception as e:
-            logger.error(f"Failed to persist {file_id}: {e}")
-
-        # Initialize retrieval history
-        self.retrieval_history[file_id] = []
-
-        result = f"""
-✅ Document ingested successfully!
-
-File ID: {file_id} containing {skeleton.total_nodes} semantic nodes
-Original tokens: {skeleton.total_tokens:,}
-Skeleton tokens: {skeleton.skeleton_tokens:,}
-Compression ratio: {skeleton.compression_ratio:.1f}x
-
-📊 Token savings: {skeleton.total_tokens - skeleton.skeleton_tokens:,} tokens ({(1 - skeleton.skeleton_tokens/skeleton.total_tokens)*100:.1f}%)
-
-💡 IMPORTANT: Use read_skeleton('{file_id}') to view the semantic map BEFORE requesting specific details.
-   This "map before territory" approach ensures you understand the document structure.
-
-Next steps:
-1. read_skeleton('{file_id}') - View the compressed structure (recommended first step)
-2. modulate_region() - Retrieve specific sections at chosen fidelity
-3. search_semantic() - Find relevant content via vector similarity
-4. check_blind_spots() - Verify response completeness after generating answers
-
-{skeleton.skeleton_text[:500]}...
-(Use read_skeleton to see full structure)
-"""
-        return result
-
-    def _handle_read_skeleton(self, args: Dict) -> str:
-        """Handle read_skeleton tool call"""
-        file_id = args["file_id"]
-        self._validate_file_id(file_id, must_exist=True)
-
-        logger.info(f"Reading skeleton: {file_id}")
-
-        try:
-            skeleton_text = self.compressor.read_skeleton(file_id)
-            return skeleton_text
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to read skeleton for '{file_id}': {str(e)}\n"
-                f"💡 Tip: Verify the document was ingested successfully with get_stats()"
-            ) from e
-
-    def _handle_modulate_region(self, args: Dict) -> str:
-        """Handle modulate_region tool call"""
-        node_ids = args["node_ids"]
-        fidelity_str = args.get("fidelity_level", "RAW")
-
-        # Validation
-        self._validate_node_ids(node_ids)
-
-        # Convert string to enum with validation
-        try:
-            fidelity = FidelityLevel[fidelity_str]
-        except KeyError:
-            valid_levels = [level.name for level in FidelityLevel]
-            raise ValueError(
-                f"Invalid fidelity_level: '{fidelity_str}'\n"
-                f"💡 Valid levels: {valid_levels}\n"
-                f"   ABSTRACT: ~10 tokens (summary only)\n"
-                f"   OUTLINE: ~30 tokens (summary + section markers)\n"
-                f"   STRUCTURE: ~50 tokens (headers + entities)\n"
-                f"   DETAILED: ~100 tokens (summary + excerpts)\n"
-                f"   RAW: Full original text"
-            )
-
-        logger.info(f"Modulating {len(node_ids)} nodes at {fidelity_str} fidelity")
-
-        # Track retrieval for blind spot detection
-        for node_id in node_ids:
-            # Extract file_id from node_id (format: file_id_n123)
-            file_id = "_".join(node_id.split("_")[:-1])
-            if file_id not in self.retrieval_history:
-                self.retrieval_history[file_id] = []
-            if node_id not in self.retrieval_history[file_id]:
-                self.retrieval_history[file_id].append(node_id)
-
-        try:
-            result = self.compressor.modulate_region(node_ids, fidelity)
-            return result
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to modulate region: {str(e)}\n"
-                f"💡 Tip: Verify node IDs are valid with read_skeleton()"
-            ) from e
-
-    def _handle_search_semantic(self, args: Dict) -> str:
-        """Handle search_semantic tool call"""
-        query = args["query"]
-        file_id = args.get("file_id")
-        top_k = args.get("top_k", 5)
-
-        logger.info(f"Semantic search: '{query}' in {file_id or 'all files'}")
-
-        node_ids = self.compressor.search_semantic(query, file_id, top_k)
-
-        result_lines = [f"🔍 Semantic Search Results for: '{query}'"]
-        result_lines.append(f"Found {len(node_ids)} relevant nodes:\n")
-
-        for i, node_id in enumerate(node_ids, 1):
-            node = self.compressor.chunks[node_id]
-            summary = self.compressor._generate_summary(node.text, max_length=100)
-            result_lines.append(f"{i}. [{node_id}]")
-            result_lines.append(f"   Importance: {node.importance:.3f}")
-            result_lines.append(f"   Summary: {summary}\n")
-
-        result_lines.append(f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content")
-
-        return "\n".join(result_lines)
-
-    def _handle_check_blind_spots(self, args: Dict) -> str:
-        """Handle check_blind_spots tool call"""
-        ai_response = args["ai_response"]
-        file_id = args["file_id"]
-        retrieved_nodes = args["retrieved_nodes"]
-
-        logger.info(f"Checking blind spots for response about {file_id}")
-
-        report = self.blind_spot_detector.analyze_response(ai_response, file_id, retrieved_nodes)
-
-        result = self.blind_spot_detector.format_report(report)
-
-        # If critical blind spots found, auto-suggest retrieval
-        if report.auto_inject:
-            result += "\n\n🔧 AUTO-CORRECTION SUGGESTED:\n"
-            result += f"Retrieve these nodes: {report.auto_inject}\n"
-            result += f"Command: modulate_region({report.auto_inject}, 'RAW')"
-
-        return result
-
-    def _handle_detect_hallucination(self, args: Dict) -> str:
-        """Handle detect_hallucination tool call"""
-        ai_response = args["ai_response"]
-        file_id = args["file_id"]
-
-        logger.info(f"Checking for hallucination in response about {file_id}")
-
-        is_hallucinating, warnings = self.halo_detector.detect_hallucination(ai_response, file_id)
-
-        if is_hallucinating:
-            result = "🚨 HALLUCINATION ALERT 🚨\n\n"
-            result += "The response may contain fabricated information:\n"
-            for warning in warnings:
-                result += f"  • {warning}\n"
-            result += "\nRecommendation: Re-examine source material and regenerate response."
+        if percentage >= 100:
+            bar = "█" * width
+            return f"[{bar}] 🔴 FULL"
+        elif percentage >= 80:
+            bar = "█" * filled + "░" * empty
+            return f"[{bar}] ⚠️  {percentage:.0f}%"
         else:
-            result = "✅ Response appears grounded in source material.\n"
-            result += "No hallucination detected."
-
-        return result
-
-    def _handle_get_stats(self, args: Dict) -> str:
-        """Handle get_stats tool call"""
-        file_id = args.get("file_id")
-
-        stats = self.compressor.get_stats(file_id)
-
-        if file_id:
-            result = f"""
-📊 Document Statistics: {file_id}
-
-Total nodes: {stats['total_nodes']}
-Total edges: {stats['total_edges']}
-Original tokens: {stats['total_tokens']:,}
-Skeleton tokens: {stats['skeleton_tokens']:,}
-Compression ratio: {stats['compression_ratio']:.1f}x
-
-Token savings: {stats['total_tokens'] - stats['skeleton_tokens']:,} ({(1 - stats['skeleton_tokens']/stats['total_tokens'])*100:.1f}%)
-
-Metadata: {json.dumps(stats['metadata'], indent=2)}
-"""
-        else:
-            result = f"""
-📊 Global Statistics
-
-Total files ingested: {stats['total_files']}
-Total nodes: {stats['total_nodes']}
-
-Files: {', '.join(stats['files'])}
-"""
-
-        return result
-
-    def _handle_adapt_to_context_window(self, args: Dict) -> str:
-        """Handle adapt_to_context_window tool call"""
-        file_id = args["file_id"]
-        available_tokens = args["available_tokens"]
-        max_tokens = args.get("max_tokens", 100000)
-        query_priority = args.get("query_priority", 0.5)
-
-        # Validation
-        self._validate_file_id(file_id, must_exist=True)
-        self._validate_token_count(available_tokens, max_tokens)
-
-        if not 0.0 <= query_priority <= 1.0:
-            raise ValueError(
-                f"query_priority must be between 0.0 and 1.0, got {query_priority}\n"
-                "💡 Tip: 0.0 = low priority, 0.5 = medium, 1.0 = high priority"
-            )
-
-        logger.info(
-            f"Adapting skeleton for {file_id}: {available_tokens}/{max_tokens} tokens available"
-        )
-
-        try:
-            result = self.context_window_adapter.adapt_to_context_window(
-                file_id=file_id,
-                available_tokens=available_tokens,
-                max_tokens=max_tokens,
-                query_priority=query_priority,
-            )
-            return result
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to adapt to context window: {str(e)}\n"
-                "💡 Tip: This is a JSCCM-inspired feature. Check that the document exists and token counts are valid."
-            ) from e
-
-    def _handle_multilevel_encode(self, args: Dict) -> str:
-        """Handle multilevel_encode tool call"""
-        file_id = args["file_id"]
-        available_tokens = args["available_tokens"]
-
-        # Validation
-        self._validate_file_id(file_id, must_exist=True)
-        self._validate_token_count(available_tokens)
-
-        logger.info(
-            f"Generating multi-level encoding for {file_id}: {available_tokens} tokens available"
-        )
-
-        try:
-            result = self.multilevel_encoder.generate_adaptive_skeleton(file_id, available_tokens)
-            return result
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to generate multi-level encoding: {str(e)}\n"
-                "💡 Tip: This JSCCM-inspired feature requires Main + Auxiliary + Detail branches.\n"
-                "   Try with at least 1000 tokens available for meaningful output."
-            ) from e
-
-    def _handle_afm_add_message(self, args: Dict) -> str:
-        """Handle afm_add_message tool call"""
-        role = args["role"]
-        content = args["content"]
-
-        # Validation
-        if role not in ["user", "assistant", "system"]:
-            raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
-
-        logger.info(f"AFM: Adding {role} message (turn {self.focus_manager.turn_counter})")
-
-        # Add message
-        msg = self.focus_manager.add_message(role, content)
-
-        # Return confirmation with importance classification
-        return f"""
-💬 Message Added to Dialogue History
-
-Turn: {msg.turn_index}
-Role: {msg.role}
-Importance: {msg.importance.value.upper()}
-Content: {content[:100]}{'...' if len(content) > 100 else ''}
-
-Dialogue Stats:
-  Total messages: {len(self.focus_manager.messages)}
-  Current turn: {self.focus_manager.turn_counter}
-
-💡 Use afm_build_context(query, budget_tokens) to build optimized context
-"""
-
-    def _handle_afm_build_context(self, args: Dict) -> str:
-        """Handle afm_build_context tool call"""
-        current_query = args["current_query"]
-        budget_tokens = args["budget_tokens"]
-        system_preamble = args.get("system_preamble")
-
-        # Validation
-        if budget_tokens <= 0:
-            raise ValueError(f"budget_tokens must be positive, got {budget_tokens}")
-
-        logger.info(f"AFM: Building context for query (budget: {budget_tokens} tokens)")
-
-        # Build context
-        context, stats = self.focus_manager.build_context(
-            current_query=current_query,
-            budget_tokens=budget_tokens,
-            system_preamble=system_preamble,
-        )
-
-        # Format context for display
-        context_display = []
-        for i, (role, content) in enumerate(context):
-            preview = content[:150] + "..." if len(content) > 150 else content
-            context_display.append(f"  [{i+1}] {role}: {preview}")
-
-        context_display_text = "\n".join(context_display)
-
-        result = f"""
-🧠 AFM Context Built Successfully
-
-Query: {current_query[:100]}{'...' if len(current_query) > 100 else ''}
-
-📊 Packing Statistics:
-  Total messages processed: {stats.total_messages}
-  ├─ FULL fidelity:         {stats.full_count}
-  ├─ COMPRESSED:            {stats.compressed_count}
-  ├─ PLACEHOLDER:           {stats.placeholder_count}
-  └─ DROPPED:               {stats.dropped_count}
-
-  Tokens used:              {stats.total_tokens} / {stats.budget_tokens}
-  Budget utilization:       {stats.compression_ratio:.1%}
-
-📝 Context Messages ({len(context)} total):
-{context_display_text}
-
-✅ Ready to send to LLM
-💡 AFM achieved ~{100 * (1 - stats.compression_ratio):.0f}% token savings vs naive replay
-
----
-Paper: Adaptive Focus Memory (arXiv:2511.12712v1)
-"""
-
-        return result
-
-    def _handle_afm_get_stats(self, args: Dict) -> str:
-        """Handle afm_get_stats tool call"""
-        stats = self.focus_manager.get_stats()
-
-        return f"""
-📊 AFM Dialogue Statistics
-
-Total messages: {stats['total_messages']}
-Current turn:   {stats['current_turn']}
-
-Importance Breakdown:
-  ⚠️  CRITICAL:  {stats['importance_breakdown']['critical']} messages
-  📌 RELEVANT:  {stats['importance_breakdown']['relevant']} messages
-  📝 TRIVIAL:   {stats['importance_breakdown']['trivial']} messages
-
-💡 CRITICAL messages (e.g., allergies) are always preserved at full fidelity
-"""
-
-    def _handle_afm_clear_history(self, args: Dict) -> str:
-        """Handle afm_clear_history tool call"""
-        prev_count = len(self.focus_manager.messages)
-        prev_turn = self.focus_manager.turn_counter
-
-        self.focus_manager.clear_history()
-
-        logger.info(f"AFM: Cleared dialogue history ({prev_count} messages)")
-
-        return f"""
-🗑️ AFM Dialogue History Cleared
-
-Previous state:
-  Messages: {prev_count}
-  Turns:    {prev_turn}
-
-Current state:
-  Messages: 0
-  Turns:    0
-
-✅ Ready for new conversation
-"""
-
-    def _handle_list_documents(self, args: Dict) -> str:
-        """Handle list_documents tool call"""
-        logger.info("Listing all ingested documents")
-
-        # Get all unique file_ids from chunks
-        file_ids = list(set([nid.split("_n")[0] for nid in self.compressor.chunks.keys()]))
-
-        if not file_ids:
-            return """
-📚 Document Inventory
-
-No documents ingested yet.
-
-💡 Use ingest_context(text, file_id) to add documents.
-"""
-
-        # Build structured inventory
-        documents = []
-        for file_id in sorted(file_ids):
-            stats = self.compressor.get_stats(file_id)
-            metadata = stats.get("metadata", {})
-
-            doc_info = {
-                "file_id": file_id,
-                "title": metadata.get("title", file_id),
-                "total_nodes": stats["total_nodes"],
-                "total_tokens": stats["total_tokens"],
-                "skeleton_tokens": stats["skeleton_tokens"],
-                "compression_ratio": stats["compression_ratio"],
-                "metadata": metadata,
-            }
-            documents.append(doc_info)
-
-        # Format output
-        result_lines = ["📚 Document Inventory\n"]
-        result_lines.append(f"Total documents: {len(documents)}\n")
-
-        for i, doc in enumerate(documents, 1):
-            result_lines.append(f"{i}. [{doc['file_id']}]")
-            if doc['title'] != doc['file_id']:
-                result_lines.append(f"   Title: {doc['title']}")
-            result_lines.append(f"   Nodes: {doc['total_nodes']}")
-            result_lines.append(f"   Tokens: {doc['total_tokens']:,} → {doc['skeleton_tokens']:,} ({doc['compression_ratio']:.1f}x compression)")
-
-            # Include relevant metadata
-            if 'author' in doc['metadata']:
-                result_lines.append(f"   Author: {doc['metadata']['author']}")
-            if 'date' in doc['metadata']:
-                result_lines.append(f"   Date: {doc['metadata']['date']}")
-            if 'tags' in doc['metadata']:
-                tags = ', '.join(doc['metadata']['tags'][:3])
-                result_lines.append(f"   Tags: {tags}")
-
-            result_lines.append("")  # Blank line between documents
-
-        result_lines.append("💡 Next steps:")
-        result_lines.append("  - read_skeleton(file_id) - View compressed structure")
-        result_lines.append("  - search_semantic(query) - Find relevant content")
-        result_lines.append("  - get_stats(file_id) - Detailed statistics")
-
-        return "\n".join(result_lines)
-
-    def _handle_afm_export_history(self, args: Dict) -> str:
-        """Handle afm_export_history tool call"""
-        session_id = args.get("session_id", "default")
-        logger.info(f"Exporting AFM history to session: {session_id}")
-
-        # Get current state
-        messages = self.focus_manager.messages
-        turn_counter = self.focus_manager.turn_counter
-
-        if not messages:
-            return """
-💾 AFM Export
-
-No dialogue history to export.
-
-💡 Tip: Add messages with afm_add_message() first.
-"""
-
-        # Save to persistence
-        metadata = {
-            "exported_at": __import__("datetime").datetime.now().isoformat(),
-            "message_count": len(messages),
-            "turn_counter": turn_counter,
-        }
-
-        success = self.persistence.save_afm_history(
-            session_id=session_id,
-            messages=messages,
-            turn_counter=turn_counter,
-            metadata=metadata
-        )
-
-        if success:
-            return f"""
-💾 AFM Export Complete
-
-Session ID: {session_id}
-Messages exported: {len(messages)}
-Current turn: {turn_counter}
-
-💡 This conversation can be restored later with:
-   afm_import_history(session_id="{session_id}")
-
-Available sessions: {', '.join(self.persistence.list_afm_sessions())}
-"""
-        else:
-            return """
-❌ AFM Export Failed
-
-Could not save dialogue history to persistent storage.
-
-💡 Check logs for details.
-"""
-
-    def _handle_afm_import_history(self, args: Dict) -> str:
-        """Handle afm_import_history tool call"""
-        session_id = args.get("session_id", "default")
-        logger.info(f"Importing AFM history from session: {session_id}")
-
-        # Load from persistence
-        data = self.persistence.load_afm_history(session_id)
-
-        if not data:
-            available_sessions = self.persistence.list_afm_sessions()
-            return f"""
-❌ AFM Import Failed
-
-Session '{session_id}' not found.
-
-Available sessions: {', '.join(available_sessions) if available_sessions else '(none)'}
-
-💡 Tip: Use afm_export_history() to save conversations first.
-"""
-
-        # Restore to focus manager
-        self.focus_manager.messages = data["messages"]
-        self.focus_manager.turn_counter = data["turn_counter"]
-
-        metadata = data.get("metadata", {})
-
-        logger.info(f"✅ Imported {len(data['messages'])} messages from {session_id}")
-
-        return f"""
-📥 AFM Import Complete
-
-Session ID: {session_id}
-Messages restored: {len(data['messages'])}
-Turn counter restored: {data['turn_counter']}
-Exported at: {metadata.get('exported_at', 'unknown')}
-
-✅ Conversation state has been restored.
-
-💡 Use afm_get_stats() to see current state.
-"""
-
-    def _handle_delete_document(self, args: Dict) -> str:
-        """Handle delete_document tool call"""
-        file_id = args["file_id"]
-        confirm = args.get("confirm", False)
-
-        # Validation
-        self._validate_file_id(file_id, must_exist=True)
-
-        if not confirm:
-            return f"""
-⚠️  DELETE CONFIRMATION REQUIRED
-
-You are about to delete document: {file_id}
-
-This will:
-  • Remove all {len([k for k in self.compressor.chunks.keys() if k.startswith(file_id)])} semantic nodes from memory
-  • Delete persistent storage (cannot be undone)
-  • Clear retrieval history for this document
-
-To proceed, call again with confirm=true:
-  delete_document(file_id="{file_id}", confirm=true)
-
-💡 Tip: Use list_documents() to see all available documents first
-"""
-
-        logger.info(f"Deleting document: {file_id}")
-
-        # Get stats before deletion
-        stats = self.compressor.get_stats(file_id)
-        node_count = stats['total_nodes']
-
-        # Delete from memory
-        try:
-            # Remove chunks
-            chunks_to_delete = [k for k in self.compressor.chunks.keys() if k.startswith(file_id)]
-            for chunk_id in chunks_to_delete:
-                del self.compressor.chunks[chunk_id]
-
-            # Remove graph
-            if file_id in self.compressor.graphs:
-                del self.compressor.graphs[file_id]
-
-            # Remove metadata
-            if file_id in self.compressor.file_metadata:
-                del self.compressor.file_metadata[file_id]
-
-            # Remove retrieval history
-            if file_id in self.retrieval_history:
-                del self.retrieval_history[file_id]
-
-            logger.info(f"✅ Removed {file_id} from memory ({node_count} nodes)")
-
-        except Exception as e:
-            logger.error(f"Failed to delete {file_id} from memory: {e}")
-            raise RuntimeError(f"Failed to delete from memory: {e}")
-
-        # Delete from persistent storage
-        try:
-            success = self.persistence.delete_document(file_id)
-            if success:
-                logger.info(f"✅ Deleted {file_id} from persistent storage")
-            else:
-                logger.warning(f"⚠️  Failed to delete {file_id} from persistent storage")
-        except Exception as e:
-            logger.error(f"Failed to delete {file_id} from storage: {e}")
-
-        # Unregister from resource manager
-        try:
-            self.resource_manager.unregister_document(file_id)
-        except Exception as e:
-            logger.warning(f"Failed to unregister {file_id} from resource manager: {e}")
-
-        return f"""
-🗑️ Document Deleted Successfully
-
-File ID: {file_id}
-Nodes removed: {node_count}
-Memory freed: ~{node_count * 2}KB (estimated)
-
-✅ Document has been permanently deleted from:
-   • Memory (semantic graph, chunks, metadata)
-   • Persistent storage (ChromaDB/JSON)
-   • Resource tracking
-
-💡 Remaining documents: {len(set([nid.split('_n')[0] for nid in self.compressor.chunks.keys()]))}
-   Use list_documents() to see what's left.
-"""
+            bar = "█" * filled + "░" * empty
+            return f"[{bar}] ✅ {percentage:.0f}%"
 
     async def run(self):
         """Run the MCP server"""

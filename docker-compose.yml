@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  token-saver-mcp:
+    build: .
+    image: token-saver-5000:latest
+    container_name: token-saver-mcp
+
+    # Persist data across restarts
+    volumes:
+      - token-saver-data:/data
+
+    # Optional: Mount your project files for analysis
+    # Uncomment to give MCP access to local projects:
+    # - /path/to/your/projects:/projects:ro
+
+    # For development: hot-reload code changes
+    # volumes:
+    #   - ./src:/app/src
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+    # Environment variables
+    environment:
+      - STORAGE_BACKEND=chromadb  # or 'json' for simpler setup
+      - DATA_DIR=/data
+      - LOG_LEVEL=INFO
+
+    # Restart policy
+    restart: unless-stopped
+
+    # stdin/stdout must stay open for MCP protocol
+    stdin_open: true
+    tty: false
+
+volumes:
+  token-saver-data:
+    driver: local

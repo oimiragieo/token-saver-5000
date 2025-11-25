@@ -24,8 +24,13 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.semantic_compressor import SemanticCompressor, FidelityLevel
-from src.toon_serializer import TOONSerializer, format_response, OutputFormat, estimate_token_savings
+from src.semantic_compressor import SemanticCompressor
+from src.toon_serializer import (
+    TOONSerializer,
+    format_response,
+    OutputFormat,
+    estimate_token_savings,
+)
 import json
 
 
@@ -95,12 +100,13 @@ def main():
     # =========================================================================
     print_section("Step 1: Standard Semantic Compression")
 
-    result = compressor.ingest_file(SAMPLE_DOCUMENT, "quantum_paper", metadata={
-        "title": "Intro to Quantum Error Correction",
-        "author": "Example"
-    })
+    result = compressor.ingest_file(
+        SAMPLE_DOCUMENT,
+        "quantum_paper",
+        metadata={"title": "Intro to Quantum Error Correction", "author": "Example"},
+    )
 
-    print(f"📊 Compression Results:")
+    print("📊 Compression Results:")
     print(f"   Original tokens:  {result.total_tokens:,}")
     print(f"   Skeleton tokens:  {result.skeleton_tokens:,}")
     print(f"   Compression:      {result.compression_ratio:.1f}x")
@@ -121,11 +127,13 @@ def main():
     search_results = []
     for node_id in node_ids:
         node = compressor.chunks[node_id]
-        search_results.append({
-            "node_id": node_id,
-            "importance": round(node.importance, 3),
-            "summary": compressor._generate_summary(node.text, max_length=60)
-        })
+        search_results.append(
+            {
+                "node_id": node_id,
+                "importance": round(node.importance, 3),
+                "summary": compressor._generate_summary(node.text, max_length=60),
+            }
+        )
 
     # Compare JSON vs TOON
     json_output = json.dumps(search_results, indent=2)
@@ -140,7 +148,7 @@ def main():
     print(f"\nSize: {len(toon_output)} characters")
 
     savings = estimate_token_savings(json_output, toon_output)
-    print(f"\n💰 TOON vs JSON:")
+    print("\n💰 TOON vs JSON:")
     print(f"   JSON: ~{savings['json_tokens']} tokens")
     print(f"   TOON: ~{savings['toon_tokens']} tokens")
     print(f"   Saved: {savings['tokens_saved']} tokens ({savings['savings_percentage']}%)")
@@ -155,13 +163,15 @@ def main():
     documents = []
     for file_id in file_ids:
         stats = compressor.get_stats(file_id)
-        documents.append({
-            "file_id": file_id,
-            "total_nodes": stats['total_nodes'],
-            "total_tokens": stats['total_tokens'],
-            "skeleton_tokens": stats['skeleton_tokens'],
-            "compression_ratio": round(stats['compression_ratio'], 1)
-        })
+        documents.append(
+            {
+                "file_id": file_id,
+                "total_nodes": stats["total_nodes"],
+                "total_tokens": stats["total_tokens"],
+                "skeleton_tokens": stats["skeleton_tokens"],
+                "compression_ratio": round(stats["compression_ratio"], 1),
+            }
+        )
 
     json_inventory = json.dumps(documents, indent=2)
     toon_inventory = toon.serialize_document_inventory(documents)
@@ -170,7 +180,7 @@ def main():
     print(toon_inventory)
 
     savings = estimate_token_savings(json_inventory, toon_inventory)
-    print(f"\n💰 TOON vs JSON:")
+    print("\n💰 TOON vs JSON:")
     print(f"   Saved: {savings['tokens_saved']} tokens ({savings['savings_percentage']}%)")
 
     # =========================================================================
@@ -187,7 +197,7 @@ def main():
     print(toon_stats)
 
     savings = estimate_token_savings(json_stats, toon_stats)
-    print(f"\n💰 TOON vs JSON:")
+    print("\n💰 TOON vs JSON:")
     print(f"   Saved: {savings['tokens_saved']} tokens ({savings['savings_percentage']}%)")
 
     # =========================================================================
@@ -213,11 +223,11 @@ def main():
 
     print("After TOON Serialization (Step 2-4):")
     print(f"  Estimated tokens: ~{estimated_toon_tokens:,}")
-    print(f"  Additional savings: ~40%")
+    print("  Additional savings: ~40%")
     print()
 
     total_compression = result.total_tokens / estimated_toon_tokens
-    total_savings_pct = (1 - estimated_toon_tokens/result.total_tokens) * 100
+    total_savings_pct = (1 - estimated_toon_tokens / result.total_tokens) * 100
 
     print("✨ COMBINED RESULT:")
     print(f"  {result.total_tokens:,} → ~{estimated_toon_tokens:,} tokens")
@@ -227,7 +237,7 @@ def main():
 
     print("📈 Breakdown:")
     print(f"  • Semantic:  {(1 - result.skeleton_tokens/result.total_tokens)*100:.1f}% savings")
-    print(f"  • TOON:      ~40% additional on outputs")
+    print("  • TOON:      ~40% additional on outputs")
     print(f"  • Combined:  {total_savings_pct:.1f}% total reduction")
 
     # =========================================================================
@@ -237,10 +247,7 @@ def main():
 
     print("The format_response() helper makes it easy to output in any format:\n")
 
-    data = {
-        "query": query,
-        "results": search_results[:3]  # Top 3 results
-    }
+    data = {"query": query, "results": search_results[:3]}  # Top 3 results
 
     # TEXT format (default)
     print("1. TEXT Format (default):")

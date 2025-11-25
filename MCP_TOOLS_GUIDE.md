@@ -1,6 +1,6 @@
 # MCP Tools Guide: Complete Reference
 
-**Comprehensive documentation for all 17 Token Saver 5000 MCP tools**
+**Comprehensive documentation for all 29 Token Saver 5000 MCP tools**
 
 ---
 
@@ -11,6 +11,9 @@
 - [Document Compression Tools (9)](#document-compression-tools)
 - [Dialogue Memory Tools (4)](#dialogue-memory-tools)
 - [Discovery & Management Tools (4)](#discovery--management-tools)
+- [File Sync & Version Management Tools (4)](#file-sync--version-management-tools) - NEW in v0.4.0
+- [ACE Framework Tools (7)](#ace-framework-tools) - NEW in v0.4.0
+- [Health Monitoring Tools (1)](#health-monitoring-tools)
 - [Common Usage Patterns](#common-usage-patterns)
 - [Error Handling](#error-handling)
 - [Performance Tips](#performance-tips)
@@ -19,13 +22,15 @@
 
 ## Overview
 
-Token Saver 5000 exposes **17 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
+Token Saver 5000 exposes **30 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
 
 1. **Compress documents** with 80-95% token reduction
 2. **Manage dialogue memory** with ~66% token savings and safety preservation
 3. **Search semantically** across ingested content
 4. **Detect blind spots** and hallucinations (self-correcting)
 5. **Adapt compression dynamically** based on available context
+6. **Sync file changes** with real-time staleness detection (v0.4.0)
+7. **Evolve contexts** through ACE Framework self-improving playbooks (v0.4.0)
 
 All tools operate **locally** (no external API calls required) and use **persistent storage** (documents survive server restarts).
 
@@ -40,6 +45,9 @@ All tools operate **locally** (no external API calls required) and use **persist
 | **Document Compression** | 9 tools | Process long documents (papers, manuals, code) |
 | **Dialogue Memory (AFM)** | 4 tools | Manage multi-turn conversations efficiently |
 | **Discovery & Management** | 4 tools | List, export, import, and delete documents |
+| **File Sync & Versions** | 4 tools | Track file changes and version history (v0.4.0) |
+| **ACE Framework** | 7 tools | Self-evolving playbooks for domain optimization (v0.4.0) |
+| **Health Monitoring** | 1 tool | Monitor resource usage and system health |
 
 ### Typical Workflow
 
@@ -1156,6 +1164,447 @@ result = await mcp_tools.delete_document(
 - Use `list_documents` first to verify which documents exist
 - Check `storage_used_mb` to see if deletion is needed
 - Consider exporting important documents before deletion
+
+---
+
+## ACE Framework Tools
+
+**NEW in v0.4.0** - Agentic Context Engineering for self-evolving playbooks
+
+ACE Framework enables contexts to improve through experience via Generate→Reflect→Curate cycles, achieving 32% quality improvement with 4× shorter contexts.
+
+---
+
+### 22. `ace_generate`
+
+**Purpose:** Generate multi-step reasoning trajectory for a task using current ACE playbook.
+
+**Input Parameters:**
+
+```json
+{
+  "task": "string (required)",           // Task or query to reason about
+  "context_id": "string (optional)",     // Playbook ID (default: "default")
+  "max_steps": "number (optional)",      // Maximum trajectory steps (default: 5)
+  "top_k_bullets": "number (optional)"   // Bullets to consider per step (default: 5)
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "trajectory": [
+    {
+      "step_number": 1,
+      "relevant_bullets": ["Check input validation", "Verify error handling"],
+      "reasoning": "First, analyze input validation points...",
+      "confidence": 0.85
+    },
+    {
+      "step_number": 2,
+      "relevant_bullets": ["Test edge cases", "Review security"],
+      "reasoning": "Next, examine edge case handling...",
+      "confidence": 0.78
+    }
+  ],
+  "context_id": "default",
+  "total_steps": 2
+}
+```
+
+**Example:**
+
+```python
+result = await mcp_tools.ace_generate(
+    task="Review this authentication function for security issues",
+    context_id="security_review",
+    max_steps=5,
+    top_k_bullets=3
+)
+
+# Use trajectory to guide analysis
+for step in result["trajectory"]:
+    print(f"Step {step['step_number']}: {step['reasoning']}")
+```
+
+**Tips:**
+
+- Higher `max_steps` provides more thorough reasoning
+- `top_k_bullets` controls how many playbook items influence each step
+- Trajectory includes confidence scores per step
+- Context must exist or will be created with default playbook
+
+---
+
+### 23. `ace_reflect`
+
+**Purpose:** Extract insights from task outcomes (success or failure) for playbook improvement.
+
+**Input Parameters:**
+
+```json
+{
+  "task": "string (required)",             // Original task description
+  "outcome": "object (required)",          // Task result with success/failure
+  "trajectory": "array (required)",        // Steps from ace_generate
+  "context_id": "string (optional)",       // Playbook ID (default: "default")
+  "refinement_passes": "number (optional)" // Insight refinement iterations (default: 3)
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "insights": [
+    {
+      "text": "Always check for SQL injection in database queries",
+      "bullet_type": "TACTIC",
+      "confidence": 0.75,
+      "source": "reflection",
+      "metadata": {
+        "from_task": "Review payment processing",
+        "outcome_type": "success"
+      }
+    }
+  ],
+  "context_id": "security_review",
+  "insights_count": 1
+}
+```
+
+**Example:**
+
+```python
+# After executing a task
+outcome = {
+    "success": True,
+    "findings": ["Missing SQL injection protection", "Weak password validation"]
+}
+
+insights = await mcp_tools.ace_reflect(
+    task="Review payment processing code",
+    outcome=outcome,
+    trajectory=trajectory,  # From ace_generate
+    context_id="security_review",
+    refinement_passes=3  # More passes = higher quality insights
+)
+
+# Insights ready for curation
+print(f"Extracted {insights['insights_count']} insights")
+```
+
+**Tips:**
+
+- More `refinement_passes` improves insight quality but takes longer
+- Include detailed `outcome` with what worked/failed
+- Insights include automatic bullet type classification
+- Can reflect on both successes and failures
+
+---
+
+### 24. `ace_curate`
+
+**Purpose:** Integrate insights into playbook via delta updates with semantic deduplication.
+
+**Input Parameters:**
+
+```json
+{
+  "context_id": "string (required)",       // Playbook to update
+  "insights": "array (required)",          // Insights from ace_reflect
+  "dedup_threshold": "number (optional)"   // Similarity threshold (default: 0.85)
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "context_id": "security_review",
+  "bullets_added": 1,
+  "bullets_updated": 2,
+  "bullets_skipped": 1,  // Duplicates
+  "total_bullets": 15,
+  "changes": [
+    {
+      "action": "ADDED",
+      "bullet_text": "Always check for SQL injection in database queries",
+      "reason": "New unique insight (similarity < 0.85)"
+    },
+    {
+      "action": "UPDATED",
+      "bullet_text": "Validate all user input before database queries and API calls",
+      "reason": "Merged with existing bullet (similarity 0.82)"
+    },
+    {
+      "action": "SKIPPED",
+      "bullet_text": "Check input validation",
+      "reason": "Duplicate (similarity 0.91)"
+    }
+  ]
+}
+```
+
+**Example:**
+
+```python
+# Curate insights into playbook
+result = await mcp_tools.ace_curate(
+    context_id="security_review",
+    insights=insights["insights"],  # From ace_reflect
+    dedup_threshold=0.85  # Prevent context collapse
+)
+
+print(f"Added: {result['bullets_added']}, Updated: {result['bullets_updated']}")
+print(f"Total playbook bullets: {result['total_bullets']}")
+```
+
+**Tips:**
+
+- **Deduplication threshold 0.85** prevents context collapse
+- Delta updates merge similar bullets instead of creating duplicates
+- Higher confidence insights take precedence in merges
+- Skipped bullets indicate healthy deduplication
+
+---
+
+### 25. `ace_grow_context`
+
+**Purpose:** Manually add bullets to playbook (useful for initialization or expert knowledge).
+
+**Input Parameters:**
+
+```json
+{
+  "context_id": "string (required)",     // Playbook to grow
+  "bullets": "array (required)"          // List of [text, bullet_type] pairs
+}
+```
+
+Each bullet is a tuple: `["text content", "BULLET_TYPE"]`
+
+**Bullet Types:**
+- `PRINCIPLE` - High-level guidance (e.g., "Be concise")
+- `STRATEGY` - Tactical approaches (e.g., "Use examples")
+- `TACTIC` - Specific techniques (e.g., "List pros/cons")
+- `CONSTRAINT` - Hard requirements (e.g., "No hallucinations")
+- `PREFERENCE` - Soft preferences (e.g., "Prefer bullet points")
+- `LEARNED` - Insights from reflection
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "context_id": "code_review",
+  "bullets_added": 4,
+  "total_bullets": 4
+}
+```
+
+**Example:**
+
+```python
+# Initialize playbook with domain expertise
+await mcp_tools.ace_grow_context(
+    context_id="code_review",
+    bullets=[
+        ["Focus on security vulnerabilities first", "PRINCIPLE"],
+        ["Check for proper error handling", "STRATEGY"],
+        ["Verify input validation at boundaries", "TACTIC"],
+        ["No hardcoded credentials allowed", "CONSTRAINT"]
+    ]
+)
+```
+
+**Tips:**
+
+- Use for playbook initialization with known best practices
+- Mix different bullet types for comprehensive guidance
+- Can grow context at any time (not just initialization)
+- Combine with `ace_curate` for full playbook evolution
+
+---
+
+### 26. `ace_refine_context`
+
+**Purpose:** Update bullet performance scores based on real-world feedback.
+
+**Input Parameters:**
+
+```json
+{
+  "context_id": "string (required)",    // Playbook to refine
+  "bullet_id": "string (required)",     // Bullet to update
+  "success": "boolean (required)",      // Did it help (true) or fail (false)?
+  "confidence_boost": "number (optional)" // Confidence adjustment (default: 0.05)
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "context_id": "code_review",
+  "bullet_id": "abc-123-def-456",
+  "updated_confidence": 0.65,  // Was 0.60, +0.05 for success
+  "success_count": 3,
+  "failure_count": 1,
+  "success_rate": 0.75
+}
+```
+
+**Example:**
+
+```python
+# After applying a bullet's guidance
+bullet_helped = True  # It led to finding a bug
+
+await mcp_tools.ace_refine_context(
+    context_id="code_review",
+    bullet_id="abc-123-def-456",
+    success=bullet_helped,
+    confidence_boost=0.05  # Moderate adjustment
+)
+```
+
+**Tips:**
+
+- Call after each bullet application to track performance
+- Confidence scores influence future bullet selection
+- Low confidence bullets (< 0.3) may be removed during refinement
+- Higher `confidence_boost` for critical domains (e.g., security)
+
+---
+
+### 27. `ace_get_playbook`
+
+**Purpose:** Retrieve current playbook state with statistics and all bullets.
+
+**Input Parameters:**
+
+```json
+{
+  "context_id": "string (required)"  // Playbook to retrieve
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "context_id": "code_review",
+  "domain": "software_engineering",
+  "total_bullets": 15,
+  "avg_confidence": 0.67,
+  "bullets": [
+    {
+      "bullet_id": "abc-123",
+      "text": "Focus on security vulnerabilities first",
+      "bullet_type": "PRINCIPLE",
+      "confidence": 0.85,
+      "success_count": 12,
+      "failure_count": 2,
+      "created_at": "2025-11-24T10:00:00",
+      "source": "manual"
+    }
+  ],
+  "created_at": "2025-11-20T09:00:00",
+  "updated_at": "2025-11-24T14:30:00"
+}
+```
+
+**Example:**
+
+```python
+playbook = await mcp_tools.ace_get_playbook(context_id="code_review")
+
+print(f"Playbook '{playbook['domain']}' has {playbook['total_bullets']} bullets")
+print(f"Average confidence: {playbook['avg_confidence']:.2f}")
+
+# Review high-performing bullets
+for bullet in playbook["bullets"]:
+    if bullet["confidence"] > 0.8:
+        print(f"✅ {bullet['text']}")
+```
+
+**Tips:**
+
+- Use to inspect playbook state and performance
+- High confidence bullets (> 0.8) are well-validated
+- Check `updated_at` to see when playbook last evolved
+- Useful for debugging and playbook migration
+
+---
+
+### 28. `ace_execute_cycle`
+
+**Purpose:** Execute full Generate→Reflect→Curate cycle in one call (convenience wrapper).
+
+**Input Parameters:**
+
+```json
+{
+  "context_id": "string (required)",    // Playbook to use/update
+  "task": "string (required)",          // Task to execute
+  "outcome": "object (required)",       // Task result
+  "max_steps": "number (optional)",     // Trajectory steps (default: 5)
+  "refinement_passes": "number (optional)", // Insight quality (default: 3)
+  "dedup_threshold": "number (optional)" // Dedup threshold (default: 0.85)
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "context_id": "code_review",
+  "trajectory": [...],        // From Generate phase
+  "insights": [...],          // From Reflect phase
+  "curation_result": {...},   // From Curate phase
+  "cycle_summary": {
+    "steps_executed": 3,
+    "insights_extracted": 2,
+    "bullets_added": 1,
+    "bullets_updated": 1,
+    "total_bullets": 16
+  }
+}
+```
+
+**Example:**
+
+```python
+# One-shot: Generate → Reflect → Curate
+result = await mcp_tools.ace_execute_cycle(
+    context_id="code_review",
+    task="Review authentication module for security issues",
+    outcome={
+        "success": True,
+        "findings": ["Missing rate limiting", "Weak password validation"]
+    },
+    max_steps=5,
+    refinement_passes=3
+)
+
+# Playbook automatically updated with insights
+print(f"Cycle complete! Playbook now has {result['cycle_summary']['total_bullets']} bullets")
+```
+
+**Tips:**
+
+- Convenient for automated playbook evolution
+- Combines all three ACE operations
+- Playbook improves with each task execution
+- Use for continuous learning workflows
 
 ---
 

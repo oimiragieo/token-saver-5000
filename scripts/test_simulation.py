@@ -10,12 +10,10 @@ Validates both FPQE and JSCCM principles:
 - JSCCM: Adaptive rate allocation beats fixed allocation
 """
 
-import time
 import random
 import numpy as np
 import networkx as nx
-from src.adaptive_rate_allocator import AdaptiveRateAllocator, ContextWindowAdapter
-from src.semantic_compressor import SemanticCompressor
+from src.adaptive_rate_allocator import AdaptiveRateAllocator
 
 # --- Configuration ---
 FILE_ID = "test_paper_quantum_v1"
@@ -35,9 +33,7 @@ class SemanticGraph:
 
     def add_node(self, node_id: str, importance: float, content_length: int):
         """Add a node with importance and content length"""
-        self.graph.add_node(
-            node_id, importance=importance, content_length=content_length
-        )
+        self.graph.add_node(node_id, importance=importance, content_length=content_length)
         self._node_count += 1
 
     def number_of_nodes(self):
@@ -73,9 +69,7 @@ def generate_synthetic_document():
             if i > 5 and random.random() > 0.7:
                 earlier_node = random.randint(0, i - 2)
                 similarity = np.random.uniform(0.6, 0.9)
-                graph.graph.add_edge(
-                    f"node_{earlier_node}", f"node_{i}", weight=similarity
-                )
+                graph.graph.add_edge(f"node_{earlier_node}", f"node_{i}", weight=similarity)
 
     return graph
 
@@ -100,23 +94,17 @@ def calculate_semantic_ssim(graph_nx, selected_nodes, all_nodes):
 
     # Get node data
     all_importance = [graph_nx.nodes[n].get("importance", 0.5) for n in all_nodes]
-    selected_importance = [
-        graph_nx.nodes[n].get("importance", 0.5) for n in selected_nodes
-    ]
+    selected_importance = [graph_nx.nodes[n].get("importance", 0.5) for n in selected_nodes]
 
     # Component 1: Luminance (mean importance)
     mean_all = np.mean(all_importance)
     mean_selected = np.mean(selected_importance)
-    luminance = (2 * mean_all * mean_selected + 0.01) / (
-        mean_all**2 + mean_selected**2 + 0.01
-    )
+    luminance = (2 * mean_all * mean_selected + 0.01) / (mean_all**2 + mean_selected**2 + 0.01)
 
     # Component 2: Contrast (variance in importance)
     std_all = np.std(all_importance)
     std_selected = np.std(selected_importance)
-    contrast = (2 * std_all * std_selected + 0.01) / (
-        std_all**2 + std_selected**2 + 0.01
-    )
+    contrast = (2 * std_all * std_selected + 0.01) / (std_all**2 + std_selected**2 + 0.01)
 
     # Component 3: Structure (graph connectivity preservation)
     # Count how many edges are preserved
@@ -149,9 +137,7 @@ def simulate_compression(graph, ratio, doc_size=DOC_SIZE):
     all_nodes = list(graph_nx.nodes())
 
     # Sort nodes by importance
-    nodes_with_importance = [
-        (n, graph_nx.nodes[n].get("importance", 0.5)) for n in all_nodes
-    ]
+    nodes_with_importance = [(n, graph_nx.nodes[n].get("importance", 0.5)) for n in all_nodes]
     nodes_with_importance.sort(key=lambda x: x[1], reverse=True)
 
     # Select top ratio
@@ -269,14 +255,14 @@ def run_channel_stress_test():
     if len(results) >= 2:
         high_pressure = results[-1]
         low_pressure = results[0]
-        print(f"\n1. ADAPTIVE ALLOCATION (JSCCM Validation)")
+        print("\n1. ADAPTIVE ALLOCATION (JSCCM Validation)")
         print(
             f"   Low pressure  ({low_pressure['pressure']:.0%}): ratio={low_pressure['ratio']:.1%}"
         )
         print(
             f"   High pressure ({high_pressure['pressure']:.0%}): ratio={high_pressure['ratio']:.1%}"
         )
-        print(f"   → System adapts to channel conditions ✅")
+        print("   → System adapts to channel conditions ✅")
 
     # Finding 2: SSIM correlation
     ssim_scores = [r["ssim"] for r in results]
@@ -286,24 +272,24 @@ def run_channel_stress_test():
     avg_ssim = np.mean(ssim_scores)
     min_ssim = np.min(ssim_scores)
 
-    print(f"\n2. SEMANTIC SSIM (FPQE Validation)")
+    print("\n2. SEMANTIC SSIM (FPQE Validation)")
     print(f"   Average SSIM: {avg_ssim:.3f}")
     print(f"   Minimum SSIM: {min_ssim:.3f}")
     print(f"   Max compression: {max(compressions):.1f}x")
 
     if min_ssim > 0.6:
-        print(f"   → Structure preserved even at high compression ✅")
+        print("   → Structure preserved even at high compression ✅")
     else:
-        print(f"   → Warning: Structure degradation detected ⚠️")
+        print("   → Warning: Structure degradation detected ⚠️")
 
     # Finding 3: Success rate
     success_rate = sum(1 for r in results if r["status"] == "OK") / len(results)
-    print(f"\n3. ROBUSTNESS")
+    print("\n3. ROBUSTNESS")
     print(f"   Success rate: {success_rate:.1%}")
     print(f"   All scenarios: {len(results)}")
 
     if success_rate == 1.0:
-        print(f"   → System handles all context pressures ✅")
+        print("   → System handles all context pressures ✅")
 
     print("\n" + "=" * 70)
     print("✅ VALIDATION COMPLETE")

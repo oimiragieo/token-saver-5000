@@ -10,12 +10,12 @@ Limits:
 """
 
 import logging
-import sys
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from dataclasses import dataclass
 
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -28,6 +28,7 @@ logger = logging.getLogger("resource_manager")
 @dataclass
 class ResourceLimits:
     """Resource limit configuration"""
+
     max_document_size_mb: float = 100.0  # Max size per document
     max_total_storage_mb: float = 1024.0  # Max total storage (1GB)
     max_documents: int = 1000  # Max number of documents
@@ -69,14 +70,7 @@ class ResourceManager:
         """
         size_mb = size_bytes / (1024 * 1024)
 
-        # Check individual document size
-        if size_mb > self.limits.max_document_size_mb:
-            return False, (
-                f"Document too large: {size_mb:.1f}MB exceeds limit of {self.limits.max_document_size_mb:.1f}MB\n"
-                f"💡 Tip: Split document into smaller sections or increase max_document_size_mb"
-            )
-
-        # Check total storage
+        # Check total storage first (system-wide limit)
         total_size_mb = sum(self.document_sizes.values()) + size_mb
         if total_size_mb > self.limits.max_total_storage_mb:
             return False, (
@@ -88,8 +82,15 @@ class ResourceManager:
         # Check document count
         if len(self.document_sizes) >= self.limits.max_documents:
             return False, (
-                f"Document count limit exceeded: {len(self.document_sizes)} >= {self.limits.max_documents}\n"
+                f"Too many documents: {len(self.document_sizes)} >= {self.limits.max_documents}\n"
                 f"💡 Tip: Delete old documents or increase max_documents"
+            )
+
+        # Check individual document size
+        if size_mb > self.limits.max_document_size_mb:
+            return False, (
+                f"Document too large: {size_mb:.1f}MB exceeds limit of {self.limits.max_document_size_mb:.1f}MB\n"
+                f"💡 Tip: Split document into smaller sections or increase max_document_size_mb"
             )
 
         # Warn if approaching limits
@@ -130,6 +131,137 @@ class ResourceManager:
             size_mb = self.document_sizes.pop(file_id)
             logger.info(f"Unregistered document {file_id}: {size_mb:.2f}MB")
 
+    def check_health(self) -> Dict[str, Any]:
+        """
+        Proactive health check for resource usage.
+
+        Returns comprehensive health status including warnings
+        when approaching limits.
+
+        Returns:
+            Dictionary with health status:
+            - healthy: bool - Overall health status
+            - warnings: List[str] - List of warning messages
+            - metrics: Dict - Current resource metrics
+            - recommendations: List[str] - Suggested actions
+        """
+        warnings = []
+        recommendations = []
+
+        # Calculate current usage
+        total_size_mb = sum(self.document_sizes.values())
+        total_docs = len(self.document_sizes)
+
+        # Storage usage
+        storage_pct = total_size_mb / self.limits.max_total_storage_mb
+        if storage_pct >= 1.0:
+            warnings.append(
+                f"Storage at capacity: {total_size_mb:.1f}MB / {self.limits.max_total_storage_mb:.1f}MB"
+            )
+            recommendations.append("Delete unused documents with delete_document()")
+        elif storage_pct >= self.limits.warn_threshold:
+            warnings.append(f"Storage at {storage_pct:.1%} capacity")
+            recommendations.append("Consider cleaning up old documents")
+
+        # Document count
+        doc_pct = total_docs / self.limits.max_documents
+        if doc_pct >= 1.0:
+            warnings.append(f"Document count at limit: {total_docs} / {self.limits.max_documents}")
+            recommendations.append("Delete unused documents to free up slots")
+        elif doc_pct >= self.limits.warn_threshold:
+            warnings.append(f"Document count at {doc_pct:.1%} of limit")
+
+        # Memory usage (if psutil available)
+        memory_warning = None
+        memory_mb = 0.0
+        if PSUTIL_AVAILABLE:
+            try:
+                process = psutil.Process()
+                memory_mb = process.memory_info().rss / (1024 * 1024)
+                memory_pct = memory_mb / self.limits.max_memory_mb
+
+                if memory_pct >= 1.0:
+                    memory_warning = (
+                        f"Memory usage high: {memory_mb:.1f}MB / {self.limits.max_memory_mb:.1f}MB"
+                    )
+                    warnings.append(memory_warning)
+                    recommendations.append("Restart server to reclaim memory")
+                elif memory_pct >= self.limits.warn_threshold:
+                    warnings.append(f"Memory at {memory_pct:.1%} of limit")
+            except Exception as e:
+                logger.debug(f"Failed to get memory usage: {e}")
+
+        # Determine overall health
+        healthy = len(warnings) == 0
+
+        return {
+            "healthy": healthy,
+            "warnings": warnings,
+            "recommendations": recommendations,
+            "metrics": {
+                "storage_mb": total_size_mb,
+                "storage_limit_mb": self.limits.max_total_storage_mb,
+                "storage_usage_pct": storage_pct * 100,
+                "document_count": total_docs,
+                "document_limit": self.limits.max_documents,
+                "document_usage_pct": doc_pct * 100,
+                "memory_mb": memory_mb if PSUTIL_AVAILABLE else None,
+                "memory_limit_mb": self.limits.max_memory_mb,
+            },
+        }
+
+    def get_usage_summary(self) -> str:
+        """
+        Get human-readable usage summary.
+
+        Returns:
+            Formatted string with current resource usage
+        """
+        health = self.check_health()
+        metrics = health["metrics"]
+
+        lines = []
+        lines.append("📊 Resource Usage Summary")
+        lines.append("─" * 50)
+
+        # Storage
+        lines.append(
+            f"Storage: {metrics['storage_mb']:.1f}MB / {metrics['storage_limit_mb']:.1f}MB ({metrics['storage_usage_pct']:.1f}%)"
+        )
+
+        # Documents
+        lines.append(
+            f"Documents: {metrics['document_count']} / {metrics['document_limit']} ({metrics['document_usage_pct']:.1f}%)"
+        )
+
+        # Memory (if available)
+        if metrics["memory_mb"] is not None:
+            memory_pct = (metrics["memory_mb"] / metrics["memory_limit_mb"]) * 100
+            lines.append(
+                f"Memory: {metrics['memory_mb']:.1f}MB / {metrics['memory_limit_mb']:.1f}MB ({memory_pct:.1f}%)"
+            )
+
+        # Status
+        lines.append("─" * 50)
+        if health["healthy"]:
+            lines.append("Status: ✅ Healthy")
+        else:
+            lines.append("Status: ⚠️  Warnings detected")
+
+        # Warnings
+        if health["warnings"]:
+            lines.append("\n⚠️  Warnings:")
+            for warning in health["warnings"]:
+                lines.append(f"  • {warning}")
+
+        # Recommendations
+        if health["recommendations"]:
+            lines.append("\n💡 Recommendations:")
+            for rec in health["recommendations"]:
+                lines.append(f"  • {rec}")
+
+        return "\n".join(lines)
+
     def get_memory_usage(self) -> Dict[str, float]:
         """
         Get current memory usage.
@@ -141,8 +273,11 @@ class ResourceManager:
             "documents_count": len(self.document_sizes),
             "total_documents_mb": sum(self.document_sizes.values()),
             "limit_documents_mb": self.limits.max_total_storage_mb,
-            "utilization_pct": (sum(self.document_sizes.values()) / self.limits.max_total_storage_mb * 100)
-                if self.limits.max_total_storage_mb > 0 else 0,
+            "utilization_pct": (
+                (sum(self.document_sizes.values()) / self.limits.max_total_storage_mb * 100)
+                if self.limits.max_total_storage_mb > 0
+                else 0
+            ),
         }
 
         # Add system memory if psutil available
@@ -209,20 +344,24 @@ class ResourceManager:
         """
         stats = self.get_memory_usage()
 
-        stats.update({
-            "limits": {
-                "max_document_size_mb": self.limits.max_document_size_mb,
-                "max_total_storage_mb": self.limits.max_total_storage_mb,
-                "max_documents": self.limits.max_documents,
-                "max_memory_mb": self.limits.max_memory_mb,
-            },
-            "documents": list(self.document_sizes.keys()),
-            "largest_documents": sorted(
-                [(k, v) for k, v in self.document_sizes.items()],
-                key=lambda x: x[1],
-                reverse=True
-            )[:5],  # Top 5 largest
-        })
+        stats.update(
+            {
+                "limits": {
+                    "max_document_size_mb": self.limits.max_document_size_mb,
+                    "max_total_storage_mb": self.limits.max_total_storage_mb,
+                    "max_documents": self.limits.max_documents,
+                    "max_memory_mb": self.limits.max_memory_mb,
+                },
+                "documents": list(self.document_sizes.keys()),
+                "largest_documents": sorted(
+                    [(k, v) for k, v in self.document_sizes.items()],
+                    key=lambda x: x[1],
+                    reverse=True,
+                )[
+                    :5
+                ],  # Top 5 largest
+            }
+        )
 
         # Health check
         healthy, warning = self.check_memory_health()
@@ -250,10 +389,10 @@ class ResourceManager:
         largest = stats["largest_documents"]
 
         suggestion = [
-            f"💡 Cleanup Suggestions:",
+            "💡 Cleanup Suggestions:",
             f"   Current storage: {stats['total_documents_mb']:.1f}MB / {stats['limit_documents_mb']:.1f}MB ({stats['utilization_pct']:.0f}%)",
-            f"",
-            f"   Consider deleting large documents:",
+            "",
+            "   Consider deleting large documents:",
         ]
 
         for file_id, size_mb in largest[:3]:

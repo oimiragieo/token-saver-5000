@@ -15,7 +15,7 @@ import time
 import sys
 import argparse
 import statistics
-from typing import Dict, List, Tuple, Any
+from typing import List, Tuple
 from dataclasses import dataclass
 import psutil
 import os
@@ -51,7 +51,7 @@ class PerformanceBenchmark:
 
         # Time the function
         start_time = time.perf_counter()
-        result = func(*args, **kwargs)
+        func(*args, **kwargs)
         end_time = time.perf_counter()
 
         # Get final memory
@@ -62,9 +62,7 @@ class PerformanceBenchmark:
 
         return elapsed, memory_used
 
-    def run_benchmark(
-        self, name: str, func, *args, **kwargs
-    ) -> BenchmarkResult:
+    def run_benchmark(self, name: str, func, *args, **kwargs) -> BenchmarkResult:
         """Run a benchmark multiple times and collect statistics"""
         times = []
         memories = []
@@ -110,7 +108,7 @@ class PerformanceBenchmark:
 
     def _print_result(self, result: BenchmarkResult):
         """Print benchmark result"""
-        print(f"\n📊 Results:")
+        print("\n📊 Results:")
         print(f"   Avg Time:     {result.avg_time*1000:8.2f} ms")
         print(f"   Min Time:     {result.min_time*1000:8.2f} ms")
         print(f"   Max Time:     {result.max_time*1000:8.2f} ms")
@@ -123,9 +121,7 @@ class PerformanceBenchmark:
         print("\n" + "=" * 70)
         print("BENCHMARK SUMMARY")
         print("=" * 70)
-        print(
-            f"{'Benchmark':<40} {'Avg Time':>12} {'Throughput':>12} {'Memory':>10}"
-        )
+        print(f"{'Benchmark':<40} {'Avg Time':>12} {'Throughput':>12} {'Memory':>10}")
         print("-" * 70)
 
         for result in self.results:
@@ -147,17 +143,21 @@ def benchmark_document_ingestion(iterations: int = 10):
     small_doc = "Quantum computing uses qubits. " * 10
 
     # Medium document (~500 tokens)
-    medium_doc = """
+    medium_doc = (
+        """
     Quantum computing is a revolutionary technology that uses quantum mechanics.
     Unlike classical computers that use bits (0 or 1), quantum computers use qubits.
     Qubits can exist in superposition, meaning they can be both 0 and 1 simultaneously.
 
     This property enables quantum computers to solve certain problems exponentially faster.
     Applications include cryptography, drug discovery, and optimization problems.
-    """ * 20
+    """
+        * 20
+    )
 
     # Large document (~2000 tokens)
-    large_doc = """
+    large_doc = (
+        """
     Quantum Error Correction is essential for practical quantum computing.
     Physical qubits are prone to errors from decoherence and noise.
     Error correction codes like surface codes can protect quantum information.
@@ -174,7 +174,9 @@ def benchmark_document_ingestion(iterations: int = 10):
 
     Recent progress has been encouraging, with several groups demonstrating
     improved error rates and longer coherence times.
-    """ * 30
+    """
+        * 30
+    )
 
     compressor = SemanticCompressor()
 
@@ -241,18 +243,17 @@ def benchmark_fidelity_modulation(iterations: int = 10):
     compressor = SemanticCompressor()
 
     # Prepare document
-    doc = """
+    doc = (
+        """
     Quantum computing represents a paradigm shift in computation.
     By harnessing quantum mechanics, these systems can solve problems
     that are intractable for classical computers.
-    """ * 20
+    """
+        * 20
+    )
 
-    result = compressor.ingest_file(doc, "fidelity_test")
-    node_ids = [
-        nid
-        for nid in compressor.chunks.keys()
-        if nid.startswith("fidelity_test")
-    ][:5]
+    compressor.ingest_file(doc, "fidelity_test")
+    node_ids = [nid for nid in compressor.chunks.keys() if nid.startswith("fidelity_test")][:5]
 
     # Benchmark different fidelity levels
     for fidelity in [
@@ -402,9 +403,7 @@ def main():
             + scar_bench.results
         )
 
-        print(
-            f"{'Benchmark':<45} {'Avg Time':>12} {'Throughput':>12}"
-        )
+        print(f"{'Benchmark':<45} {'Avg Time':>12} {'Throughput':>12}")
         print("-" * 70)
 
         for result in all_results:
@@ -423,15 +422,11 @@ def main():
         print(
             f"   • Document ingestion: {ingestion_bench.results[0].avg_time*1000:.1f} ms (small doc)"
         )
-        print(
-            f"   • Semantic search: {search_bench.results[0].avg_time*1000:.1f} ms (single doc)"
-        )
+        print(f"   • Semantic search: {search_bench.results[0].avg_time*1000:.1f} ms (single doc)")
         print(
             f"   • Fidelity modulation: {fidelity_bench.results[0].avg_time*1000:.1f} ms (abstract)"
         )
-        print(
-            f"   • Avg compression ratio: {compression_results[1][1]:.1f}x (medium docs)"
-        )
+        print(f"   • Avg compression ratio: {compression_results[1][1]:.1f}x (medium docs)")
 
         return 0
 

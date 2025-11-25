@@ -151,7 +151,7 @@ class SemanticSSIM:
                 clustering_similarity = min(
                     compressed_clustering / (original_clustering + 1e-10), 1.0
                 )
-        except:
+        except Exception:
             clustering_similarity = 0.5  # Fallback
 
         # Sub-metric 3: Centrality preservation (PageRank correlation)
@@ -169,7 +169,7 @@ class SemanticSSIM:
                 centrality_preservation = max(correlation, 0)  # Clip negative correlations
             else:
                 centrality_preservation = 1.0
-        except:
+        except Exception:
             centrality_preservation = 0.5  # Fallback
 
         # Combine sub-metrics

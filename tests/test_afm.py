@@ -102,6 +102,32 @@ class TestImportanceClassifier:
             importance = classifier.classify(msg)
             assert importance == ImportanceLevel.CRITICAL, f"Failed for: {phrase}"
 
+    def test_critical_typo_resilience(self):
+        """Test that typos in critical keywords are still detected via fuzzy matching
+
+        Safety-critical: Typos like "alergy" should still be detected as CRITICAL
+        to prevent medical information from being compressed/lost.
+        """
+        classifier = ImportanceClassifier(use_llm=False)
+
+        # Typos that should still be detected (80%+ similar to real keywords)
+        typo_phrases = [
+            "I have a severe peanut alergy",  # "alergy" → "allergy" (92.3% similar)
+            "I am alergic to shellfish",  # "alergic" → "allergic" (93.3% similar)
+            "This is a sevear reaction",  # "sevear" → "severe" (83.3% similar)
+            "Life threatning condition",  # "threatning" → "threatening" (95.2% similar)
+            "Deadley poison",  # "deadley" → "deadly" (92.3% similar)
+        ]
+
+        for phrase in typo_phrases:
+            msg = Message(role="user", content=phrase, turn_index=0)
+            importance = classifier.classify(msg)
+            assert importance == ImportanceLevel.CRITICAL, (
+                f"SAFETY FAILURE: Typo not detected as CRITICAL: '{phrase}'\n"
+                f"Got: {importance.value}, Expected: CRITICAL\n"
+                f"This could lead to medical information being lost!"
+            )
+
 
 class TestHeuristicCompressor:
     """Test heuristic compression"""
@@ -435,10 +461,10 @@ class TestRecencyWeighting:
 
         recent_msg = manager.add_message("user", "Recent message")
 
-        # Calculate recency immediately
-        recency = manager._calculate_recency_weight(recent_msg, manager.turn_counter)
+        # Calculate recency at the message's own turn (k=0, no decay)
+        recency = manager._calculate_recency_weight(recent_msg, recent_msg.turn_index)
 
-        # Should be 1.0 (no decay)
+        # Should be 1.0 (no decay when k=0)
         assert recency == 1.0
 
 
