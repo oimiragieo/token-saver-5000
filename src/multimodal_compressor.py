@@ -1,6 +1,19 @@
 """
 Multi-Modal Semantic Compressor
 
+⚠️  EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
+
+Status: Documented feature with working examples (examples/multimodal_example.py)
+Coverage: 0% (no tests yet)
+Production Ready: NO - requires tests and integration
+Dependencies: Pillow, optional CLIP for image embeddings
+
+TODO for production:
+- [ ] Add comprehensive tests (target: 80%+ coverage)
+- [ ] Integrate with MCP server tools
+- [ ] Benchmark image compression quality
+- [ ] Document multimodal API in server.py
+
 Handles text, code, AND images in a unified semantic graph.
 
 Uses:

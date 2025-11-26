@@ -1,6 +1,19 @@
 """
 TOON Serializer for Token Saver 5000
 
+⚠️  EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
+
+Status: Documented feature with working examples (examples/toon_demo.py)
+Coverage: 0% (no tests yet)
+Production Ready: NO - requires tests and benchmarking
+Dependencies: None (pure Python)
+
+TODO for production:
+- [ ] Add comprehensive tests (target: 80%+ coverage)
+- [ ] Benchmark actual token savings vs JSON
+- [ ] Add TOON output option to MCP tools
+- [ ] Validate LLM parsing accuracy improvements
+
 Integrates TOON (Token-Oriented Object Notation) format to achieve
 additional ~40% token savings on top of semantic compression.
 

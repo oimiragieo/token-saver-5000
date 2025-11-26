@@ -1,6 +1,19 @@
 """
 Training Utilities for SCAR Modules
 
+⚠️  EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
+
+Status: Documented feature referenced in GETTING_STARTED.md
+Coverage: 0% (no tests yet)
+Production Ready: NO - requires tests and integration
+Dependencies: PyTorch, tqdm
+
+TODO for production:
+- [ ] Add comprehensive tests (target: 80%+ coverage)
+- [ ] Integrate with MCP server tools
+- [ ] Benchmark training effectiveness
+- [ ] Document training API in server.py
+
 Provides training infrastructure for:
 1. Learnable Semantic Compressor (SCAR Section 3.2)
 2. Semantic Alignment Module (SCAR Section 3.3)
