@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict
 
 from ..graph_visualizer import GraphVisualizer, VisualizationConfig
-from ..smart_error import SmartError
+from ..error_helpers import SmartError
 
 logger = logging.getLogger(__name__)
 
