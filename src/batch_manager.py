@@ -174,8 +174,8 @@ class BatchCompressionManager:
             try:
                 # Perform async ingestion
                 result = await self.compressor.ingest_file_async(
-                    content=document.text,
-                    doc_id=document.file_id,
+                    text=document.text,
+                    file_id=document.file_id,
                     metadata=document.metadata,
                 )
 
