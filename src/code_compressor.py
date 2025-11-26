@@ -430,7 +430,7 @@ class CodeSemanticCompressor:
             "graph_edges": graph.number_of_edges(),
         }
 
-        print(f"  ✅ Parsed {len(chunks)} chunks:")
+        print(f"  [OK] Parsed {len(chunks)} chunks:")
         print(f"     Functions: {stats['chunk_types']['functions']}")
         print(f"     Classes: {stats['chunk_types']['classes']}")
         print(f"     Dependencies: {graph.number_of_edges()}")
@@ -467,7 +467,7 @@ class CodeSemanticCompressor:
         # Always show imports first
         import_chunks = [c for cid, c in file_chunks if c.chunk_type == "import"]
         if import_chunks:
-            skeleton_lines.append("📦 IMPORTS:")
+            skeleton_lines.append("[IMPORTS]")
             for chunk in import_chunks:
                 skeleton_lines.append(f"   {', '.join(chunk.dependencies[:5])}")
                 if len(chunk.dependencies) > 5:
@@ -487,7 +487,7 @@ class CodeSemanticCompressor:
                 )
 
                 skeleton_lines.append(
-                    f"⭐ FUNCTION: {chunk.name} (importance: {chunk.importance:.3f})"
+                    f"[FUNCTION] {chunk.name} (importance: {chunk.importance:.3f})"
                 )
                 skeleton_lines.append(f"   Signature: {signature}")
                 if chunk.docstring:
@@ -498,9 +498,7 @@ class CodeSemanticCompressor:
                 skeleton_lines.append("")
 
             elif chunk.chunk_type == "class":
-                skeleton_lines.append(
-                    f"⭐ CLASS: {chunk.name} (importance: {chunk.importance:.3f})"
-                )
+                skeleton_lines.append(f"[CLASS] {chunk.name} (importance: {chunk.importance:.3f})")
                 if chunk.docstring:
                     first_doc_line = chunk.docstring.strip().split("\n")[0].strip()
                     skeleton_lines.append(f"   Doc: {first_doc_line[:80]}...")
@@ -513,7 +511,7 @@ class CodeSemanticCompressor:
         # Show hidden chunks
         hidden_count = len(file_chunks) - show_top_n - len(import_chunks)
         if hidden_count > 0:
-            skeleton_lines.append(f"📦 {hidden_count} additional chunks hidden")
+            skeleton_lines.append(f"[HIDDEN] {hidden_count} additional chunks hidden")
             skeleton_lines.append("   Use search_code() or modulate_code() to retrieve them")
 
         return "\n".join(skeleton_lines)

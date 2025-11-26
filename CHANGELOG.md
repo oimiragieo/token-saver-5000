@@ -2,6 +2,23 @@
 
 All notable changes to Token Saver 5000.
 
+## [0.4.4] - 2025-11-25
+
+### Added
+- MCP lifespan management with async context manager protocol (__aenter__/__aexit__)
+- PageRank caching for performance optimization (O(1) lookup after first computation)
+- Server lifecycle tests (6 tests in test_server_lifecycle.py)
+- PageRank caching unit tests (3 tests in test_semantic_compressor_unit.py)
+
+### Changed
+- Moved state loading from __init__ to __aenter__ for proper resource initialization
+- Moved state persistence from __del__ to __aexit__ for graceful shutdown
+- Updated test count: 427 → 436 tests (all passing)
+
+### Fixed
+- 5 failing tests related to async context manager protocol
+- Test expectations aligned with MCP best practices
+
 ## [0.4.3] - 2025-11-25
 
 ### Added

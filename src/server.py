@@ -183,11 +183,8 @@ class SemanticModulatorServer:
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
 
-        # Auto-load persisted documents
-        self._load_persisted_documents()
-
-        # Auto-load file sync metadata
-        self._load_file_sync_metadata()
+        # NOTE: Auto-load moved to __aenter__ for proper lifespan management
+        # This ensures clean startup/shutdown sequencing
 
         self._setup_handlers()
 
@@ -362,6 +359,44 @@ class SemanticModulatorServer:
             bar = "█" * filled + "░" * empty
             return f"[{bar}] ✅ {percentage:.0f}%"
 
+    async def __aenter__(self):
+        """
+        Async context manager entry - initialize resources.
+
+        This implements MCP best practice for lifespan management, ensuring
+        proper resource initialization before the server starts handling requests.
+        """
+        logger.info("Server starting - initializing resources")
+
+        # Auto-load persisted state
+        self._load_persisted_documents()
+        self._load_file_sync_metadata()
+
+        logger.info("Resources initialized successfully")
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Async context manager exit - cleanup resources.
+
+        This implements MCP best practice for graceful shutdown, ensuring
+        all state is persisted before the server terminates.
+
+        Returns:
+            False to not suppress exceptions
+        """
+        logger.info("Server shutting down gracefully")
+
+        try:
+            # Persist file sync metadata
+            self._save_file_sync_metadata()
+            logger.info("State persisted successfully")
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}", exc_info=True)
+
+        logger.info("Server shutdown complete")
+        return False  # Don't suppress exceptions
+
     async def run(self):
         """Run the MCP server"""
         logger.info("🚀 Starting Semantic Modulator MCP Server")
@@ -375,10 +410,16 @@ class SemanticModulatorServer:
             )
 
 
+async def async_main():
+    """Async entry point with lifespan management"""
+    server = SemanticModulatorServer()
+    async with server:
+        await server.run()
+
+
 def main():
     """Entry point"""
-    server = SemanticModulatorServer()
-    asyncio.run(server.run())
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

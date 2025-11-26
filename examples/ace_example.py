@@ -20,8 +20,8 @@ import os
 import io
 
 # Configure stdout for UTF-8 on Windows
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -45,8 +45,8 @@ def print_playbook_stats(context: ACEContext, title: str = "Playbook Statistics"
     print(f"  Average confidence: {stats['avg_confidence']:.2f}")
     print(f"  Average success rate: {stats['avg_success_rate']:.2f}")
     print(f"  Total usage: {stats['total_usage']}")
-    print(f"  Bullets by type:")
-    for bullet_type, count in stats['by_type'].items():
+    print("  Bullets by type:")
+    for bullet_type, count in stats["by_type"].items():
         if count > 0:
             print(f"    - {bullet_type}: {count}")
 
@@ -63,7 +63,7 @@ def demo_1_initialize_playbook():
     print("Creating ACE Framework...")
     ace = ACEFramework(
         deduplication_threshold=0.85,  # Semantic similarity threshold
-        max_bullets=100  # Maximum bullets before pruning
+        max_bullets=100,  # Maximum bullets before pruning
     )
 
     print("\nCreating 'code_review' playbook with seed bullets...")
@@ -73,17 +73,14 @@ def demo_1_initialize_playbook():
         # Principles (high-level guidance)
         ("Focus on security vulnerabilities first", BulletType.PRINCIPLE),
         ("Prioritize readability over cleverness", BulletType.PRINCIPLE),
-
         # Strategies (tactical approaches)
         ("Check for proper error handling", BulletType.STRATEGY),
         ("Verify input validation at all boundaries", BulletType.STRATEGY),
         ("Look for potential race conditions", BulletType.STRATEGY),
-
         # Tactics (specific techniques)
         ("Review authentication logic for bypass opportunities", BulletType.TACTIC),
         ("Check SQL queries for injection vulnerabilities", BulletType.TACTIC),
         ("Verify proper cleanup in finally blocks", BulletType.TACTIC),
-
         # Constraints (hard requirements)
         ("No hardcoded credentials allowed", BulletType.CONSTRAINT),
         ("All database queries must use parameterized statements", BulletType.CONSTRAINT),
@@ -141,14 +138,14 @@ def demo_2_generate_reflect_curate(ace: ACEFramework, context: ACEContext):
         task=task,
         context=context,
         max_steps=3,  # 3-step reasoning process
-        top_k_bullets=5  # Consider top 5 relevant bullets per step
+        top_k_bullets=5,  # Consider top 5 relevant bullets per step
     )
 
     print(f"\n✅ Generated trajectory with {len(trajectory)} steps:")
     for step in trajectory:
         print(f"\n   Step {step['step_number']} (confidence: {step['confidence']:.2f}):")
         print(f"   Applied {len(step['relevant_bullets'])} bullets:")
-        for bullet in step['relevant_bullets'][:2]:  # Show first 2 bullets
+        for bullet in step["relevant_bullets"][:2]:  # Show first 2 bullets
             print(f"     • [{bullet['bullet_type']}] {bullet['text'][:60]}...")
 
     # Simulate task outcome
@@ -168,9 +165,7 @@ def demo_2_generate_reflect_curate(ace: ACEFramework, context: ACEContext):
 
     # Reflect on the trajectory
     insights = ace.reflector.reflect_on_trajectory(
-        trajectory=trajectory,
-        outcome=outcome,
-        success=success
+        trajectory=trajectory, outcome=outcome, success=success
     )
 
     print(f"\n✅ Extracted {len(insights)} insights from reflection:")
@@ -183,9 +178,7 @@ def demo_2_generate_reflect_curate(ace: ACEFramework, context: ACEContext):
 
     # Curate insights (with semantic deduplication)
     updated_context = ace.curator.curate_insights(
-        context=context,
-        insights=insights,
-        max_bullets=ace.max_bullets
+        context=context, insights=insights, max_bullets=ace.max_bullets
     )
 
     print(f"   After: {len(updated_context.bullets)} bullets, version v{updated_context.version}")
@@ -194,7 +187,9 @@ def demo_2_generate_reflect_curate(ace: ACEFramework, context: ACEContext):
     if updated_context.delta_history:
         print("\n   Recent changes:")
         for delta in updated_context.delta_history[-3:]:  # Last 3 changes
-            print(f"     v{delta['version']}: {delta['operation']} - {delta['description'][:60]}...")
+            print(
+                f"     v{delta['version']}: {delta['operation']} - {delta['description'][:60]}..."
+            )
 
     print_playbook_stats(updated_context, "Updated Playbook Statistics")
 
@@ -222,45 +217,45 @@ def demo_3_continuous_learning(ace: ACEFramework, context: ACEContext):
         {
             "task": "Review API endpoint for authorization issues",
             "outcome": "Found missing authorization check on DELETE endpoint. Any authenticated user can delete any resource.",
-            "success": True
+            "success": True,
         },
         {
             "task": "Review file upload handler for security issues",
             "outcome": "Found unrestricted file upload. No validation of file type or size. Potential for malicious file execution.",
-            "success": True
+            "success": True,
         },
         {
             "task": "Review password reset function",
             "outcome": "Missing rate limiting. Token generation uses weak random. Token doesn't expire.",
-            "success": True
+            "success": True,
         },
         {
             "task": "Review logging implementation",
             "outcome": "Found sensitive data (passwords, tokens) being logged. GDPR/compliance violation.",
-            "success": True
+            "success": True,
         },
         {
             "task": "Review error handling in payment processing",
             "outcome": "Error messages leak internal details. No retry logic. Missing transaction rollback on failure.",
-            "success": False  # One failure to show learning from errors
-        }
+            "success": False,  # One failure to show learning from errors
+        },
     ]
 
     # Track metrics across tasks
     version_history = [context.version]
     bullet_count_history = [len(context.bullets)]
-    confidence_history = [context.get_performance_stats()['avg_confidence']]
+    confidence_history = [context.get_performance_stats()["avg_confidence"]]
 
     for i, task_data in enumerate(tasks, 1):
         print(f"\n--- Task {i}/5: {task_data['task'][:50]}... ---")
 
         # Execute ACE cycle
         updated_context, trajectory = ace.execute_ace_cycle(
-            task=task_data['task'],
+            task=task_data["task"],
             context=context,
-            outcome=task_data['outcome'],
-            success=task_data['success'],
-            max_trajectory_steps=2  # Shorter for demo
+            outcome=task_data["outcome"],
+            success=task_data["success"],
+            max_trajectory_steps=2,  # Shorter for demo
         )
 
         context = updated_context
@@ -269,7 +264,7 @@ def demo_3_continuous_learning(ace: ACEFramework, context: ACEContext):
         version_history.append(context.version)
         bullet_count_history.append(len(context.bullets))
         stats = context.get_performance_stats()
-        confidence_history.append(stats['avg_confidence'])
+        confidence_history.append(stats["avg_confidence"])
 
         print(f"   Outcome: {'✅ Success' if task_data['success'] else '❌ Failure'}")
         print(f"   Trajectory steps: {len(trajectory)}")
@@ -282,7 +277,9 @@ def demo_3_continuous_learning(ace: ACEFramework, context: ACEContext):
     print("\nTask | Version | Bullets | Avg Confidence")
     print("-----|---------|---------|---------------")
     for i in range(len(version_history)):
-        print(f"  {i}  |   v{version_history[i]:<2}   |   {bullet_count_history[i]:<2}    |     {confidence_history[i]:.3f}")
+        print(
+            f"  {i}  |   v{version_history[i]:<2}   |   {bullet_count_history[i]:<2}    |     {confidence_history[i]:.3f}"
+        )
 
     # Show top bullets by confidence
     top_bullets = context.get_top_bullets(k=5, min_confidence=0.5)
@@ -294,9 +291,11 @@ def demo_3_continuous_learning(ace: ACEFramework, context: ACEContext):
 
     print_playbook_stats(context, "Final Playbook Statistics")
 
-    print("\n✅ Continuous learning demonstrated: playbook evolved from v1 to v{} over 5 tasks".format(
-        context.version
-    ))
+    print(
+        "\n✅ Continuous learning demonstrated: playbook evolved from v1 to v{} over 5 tasks".format(
+            context.version
+        )
+    )
 
     return context
 
@@ -394,18 +393,16 @@ def demo_4_integration_with_compression(ace: ACEFramework, context: ACEContext):
 
     try:
         compressor = SemanticCompressor(
-            model_name="all-MiniLM-L6-v2",
-            similarity_threshold=0.75,
-            skeleton_ratio=0.2
+            model_name="all-MiniLM-L6-v2", similarity_threshold=0.75, skeleton_ratio=0.2
         )
 
         skeleton = compressor.ingest_file(
             text=code_document,
             file_id="auth_module",
-            metadata={"type": "code", "language": "python"}
+            metadata={"type": "code", "language": "python"},
         )
 
-        print(f"\n✅ Document compressed:")
+        print("\n✅ Document compressed:")
         print(f"   Original tokens: {skeleton.total_tokens:,}")
         print(f"   Skeleton tokens: {skeleton.skeleton_tokens:,}")
         print(f"   Compression ratio: {skeleton.compression_ratio:.1f}x")
@@ -421,8 +418,11 @@ def demo_4_integration_with_compression(ace: ACEFramework, context: ACEContext):
     # Use ACE playbook bullets to create a search query
     # Get top security-related bullets from playbook
     security_bullets = [
-        b for b in context.bullets.values()
-        if any(keyword in b.text.lower() for keyword in ['security', 'vulnerability', 'sql', 'auth'])
+        b
+        for b in context.bullets.values()
+        if any(
+            keyword in b.text.lower() for keyword in ["security", "vulnerability", "sql", "auth"]
+        )
     ][:3]
 
     print("\n   Top security-related bullets from playbook:")
@@ -498,7 +498,7 @@ def main():
         print("  • Integration with compression enables meta-level optimization")
         print("  • Confidence scores track bullet performance over time")
 
-        print(f"\n📊 Final Playbook State:")
+        print("\n📊 Final Playbook State:")
         print(f"  Context ID: {context.context_id[:16]}...")
         print(f"  Version: v{context.version}")
         print(f"  Total bullets: {len(context.bullets)}")
@@ -524,8 +524,11 @@ def main():
     except Exception as e:
         print(f"\n\n❌ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
-        print("\n💡 Please report this issue: https://github.com/oimiragieo/token-saver-5000/issues")
+        print(
+            "\n💡 Please report this issue: https://github.com/oimiragieo/token-saver-5000/issues"
+        )
         return 1
 
     return 0

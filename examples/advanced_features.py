@@ -12,6 +12,12 @@ Demonstrates advanced features including:
 This example shows how to use the latest JSCCM-inspired adaptive features.
 """
 
+import sys
+import os
+
+# Add parent directory to path so imports work from examples/ directory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from src.semantic_compressor import SemanticCompressor
 from src.scar_compressor import SCAREnhancedCompressor
 from src.adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder

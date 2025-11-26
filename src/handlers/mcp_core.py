@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 22 MCP tool schemas
+- setup_mcp_tools: Returns list of all 30 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:

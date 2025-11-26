@@ -13,15 +13,16 @@ import time
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Add parent directory to path so imports work from examples/ directory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.file_sync_manager import FileSyncManager
 from src.version_manager import VersionManager
-from src.resource_manager import ResourceManager
+from src.resource_manager import ResourceManager, ResourceLimits
 from src.afm import FocusManager, AFMConfig
 
 print("=" * 70)
@@ -85,10 +86,12 @@ fault-tolerant quantum computation requires continued progress across multiple
 scientific and engineering disciplines.
 """
 
+
 def print_section(title):
     """Print section header"""
     print(f"\n{title}")
     print("-" * 70)
+
 
 # ============================================================================
 # TEST 1: Basic Compression - Prove it actually reduces tokens
@@ -140,17 +143,21 @@ print_section("TEST 3: FIDELITY MODULATION (5 Detail Levels)")
 
 test_nodes = node_ids[:1]  # Use top match
 
-for level in [FidelityLevel.ABSTRACT, FidelityLevel.OUTLINE,
-              FidelityLevel.DETAILED, FidelityLevel.RAW]:
+for level in [
+    FidelityLevel.ABSTRACT,
+    FidelityLevel.OUTLINE,
+    FidelityLevel.DETAILED,
+    FidelityLevel.RAW,
+]:
     result = compressor.modulate_region(test_nodes, level)
-    lines = result.split('\n')
-    content_lines = [l for l in lines if l.strip() and not l.startswith('=')]
+    lines = result.split("\n")
+    content_lines = [line for line in lines if line.strip() and not line.startswith("=")]
 
     print(f"\n{level.name} ({len(result)} chars, ~{len(result.split())//1.3:.0f} tokens):")
     for line in content_lines[:5]:  # Show first 5 lines
         print(f"  {line[:66]}...")
 
-print(f"\nVERDICT: PASS - Adaptive fidelity working!")
+print("\nVERDICT: PASS - Adaptive fidelity working!")
 
 # ============================================================================
 # TEST 4: File Sync - Prove staleness detection works
@@ -158,7 +165,7 @@ print(f"\nVERDICT: PASS - Adaptive fidelity working!")
 print_section("TEST 4: FILE SYNC (Staleness Detection)")
 
 # Create temporary file
-with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
     temp_file = f.name
     f.write(REAL_DOCUMENT)
 
@@ -175,20 +182,20 @@ try:
 
     # Modify file
     time.sleep(0.1)
-    with open(temp_file, 'w') as f:
+    with open(temp_file, "w") as f:
         f.write(REAL_DOCUMENT + "\n\nNEW SECTION: Additional research findings...")
 
     # Check sync again (should detect change)
     status2 = sync_manager.check_file_sync("test_doc")
-    print(f"\nAfter modification:")
+    print("\nAfter modification:")
     print(f"Sync status: {status2['in_sync']}")
     print(f"Reason: {status2.get('reason', 'N/A')}")
 
     # Test diff
     version_mgr = VersionManager()
-    version_mgr.add_version("test_doc", REAL_DOCUMENT,
-                           sync_manager._calculate_checksum(REAL_DOCUMENT),
-                           temp_file)
+    version_mgr.add_version(
+        "test_doc", REAL_DOCUMENT, sync_manager._calculate_checksum(REAL_DOCUMENT), temp_file
+    )
 
     new_content = REAL_DOCUMENT + "\n\nNEW SECTION: Additional research findings..."
     diff = version_mgr.diff_with_current_file("test_doc")
@@ -220,12 +227,13 @@ history = version_mgr.get_version_history("doc_v1")
 print(f"Version count: {len(history)}")
 for v in history[:3]:  # Show first 3 versions
     # Handle Unix timestamp (float) or ISO string
-    if isinstance(v['timestamp'], (int, float)):
+    if isinstance(v["timestamp"], (int, float)):
         from datetime import datetime
-        ts = datetime.fromtimestamp(v['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
+
+        ts = datetime.fromtimestamp(v["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
     else:
-        ts = str(v['timestamp'])[:19]
-    cs = str(v['checksum'])[:8] if v.get('checksum') else "unknown"
+        ts = str(v["timestamp"])[:19]
+    cs = str(v["checksum"])[:8] if v.get("checksum") else "unknown"
     print(f"  Version {v['version_id']}: {ts} - {cs}...")
 
 print(f"\nVERDICT: {'PASS - Version tracking works!' if len(history) >= 3 else 'FAIL'}")
@@ -235,13 +243,10 @@ print(f"\nVERDICT: {'PASS - Version tracking works!' if len(history) >= 3 else '
 # ============================================================================
 print_section("TEST 6: RESOURCE MANAGEMENT (Limit Enforcement)")
 
-from src.resource_manager import ResourceLimits
-
 # Create manager with small limits for testing
-manager = ResourceManager(ResourceLimits(
-    max_document_size_mb=0.01,  # 10KB limit
-    max_total_storage_mb=0.05   # 50KB limit
-))
+manager = ResourceManager(
+    ResourceLimits(max_document_size_mb=0.01, max_total_storage_mb=0.05)  # 10KB limit  # 50KB limit
+)
 
 # Try to add document within limit
 small_text = "Small document" * 100
@@ -297,7 +302,9 @@ print(f"Tokens used: {stats.total_tokens}")
 print(f"Compression: {(1 - stats.total_tokens/stats.budget_tokens)*100:.1f}% under budget")
 print(f"\nCritical safety info retained: {allergy_retained}")
 
-print(f"\nVERDICT: {'PASS - Safety info preserved!' if allergy_retained else 'FAIL - SAFETY ISSUE!'}")
+print(
+    f"\nVERDICT: {'PASS - Safety info preserved!' if allergy_retained else 'FAIL - SAFETY ISSUE!'}"
+)
 
 # ============================================================================
 # FINAL SUMMARY
@@ -310,7 +317,7 @@ results = [
     ("Basic Compression", compression_ratio > 5),
     ("Semantic Search", len(node_ids) > 0),
     ("Fidelity Modulation", True),
-    ("File Sync", not status2['in_sync']),
+    ("File Sync", not status2["in_sync"]),
     ("Version History", len(history) >= 3),  # Accept 3+ versions (persistent storage)
     ("Resource Management", not allowed2),
     ("AFM Safety Retention", allergy_retained),

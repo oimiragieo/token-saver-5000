@@ -89,6 +89,12 @@ Algorithm: PageRank (iterative)
 - Nodes with many high-similarity connections = important
 - Captures centrality in the semantic network
 
+Performance Optimization (v0.4.4):
+- PageRank results cached by graph structure hash
+- Cache key: (doc_id, node_count, edge_count, node_ids)
+- O(K×(N+M)) first computation → O(1) subsequent lookups
+- Automatic invalidation on graph structure changes
+
 Example:
 Node 0: importance = 0.052
 Node 5: importance = 0.087 ← More central
@@ -580,6 +586,7 @@ ace.execute_cycle(context_id, task, outcome)   # Generate → Reflect → Curate
 │  • Auto-save documents on ingest                             │
 │  • Resource limit enforcement                                │
 │  • AFM conversation export/import                            │
+│  • Lifespan management with async context manager (v0.4.4)  │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -664,6 +671,31 @@ Flow:
    → Auto-suggest modulate_region() calls
 4. Return: Formatted report with recommendations
 ```
+
+### Server Lifespan Management (v0.4.4)
+
+Implements MCP best practices with async context manager protocol:
+
+```python
+async def __aenter__(self):
+    """Resource initialization on server startup"""
+    - Load persisted documents from storage
+    - Load file sync metadata for staleness tracking
+    - Initialize all components
+    - Return server instance
+
+async def __aexit__(self, exc_type, exc_val, exc_tb):
+    """Graceful shutdown with state persistence"""
+    - Save file sync metadata to disk
+    - Log any shutdown errors without suppressing exceptions
+    - Return False (don't suppress exceptions)
+```
+
+Benefits:
+- Proper resource initialization before handling requests
+- Guaranteed state persistence on shutdown
+- Graceful error handling during cleanup
+- Follows FastMCP lifespan management pattern
 
 ---
 

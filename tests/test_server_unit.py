@@ -203,7 +203,7 @@ class TestSemanticModulatorServerInitialization:
         mock_blind_spot,
         mock_compressor,
     ):
-        """Test successful server initialization with all components"""
+        """Test successful server initialization with all components (v0.4.4 - lifespan management)"""
         with patch.object(SemanticModulatorServer, "_load_persisted_documents") as mock_load_docs:
             with patch.object(
                 SemanticModulatorServer, "_load_file_sync_metadata"
@@ -225,9 +225,10 @@ class TestSemanticModulatorServerInitialization:
                     assert isinstance(server.ace_contexts, ACEContextManager)
                     assert server.ace_contexts.max_contexts == 100
 
-                    # Verify initialization calls
-                    mock_load_docs.assert_called_once()
-                    mock_load_sync.assert_called_once()
+                    # Verify initialization calls (v0.4.4: loading moved to __aenter__)
+                    # Loading should NOT happen in __init__ anymore
+                    mock_load_docs.assert_not_called()
+                    mock_load_sync.assert_not_called()
                     mock_setup.assert_called_once()
 
     @patch("src.server.SemanticCompressor")
@@ -307,34 +308,36 @@ class TestSemanticModulatorServerInitialization:
 
 
 class TestLoadPersistedDocuments:
-    """Tests for _load_persisted_documents method"""
+    """Tests for _load_persisted_documents method (v0.4.4 - called in __aenter__)"""
 
+    @pytest.mark.asyncio
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
-    def test_load_documents_empty(self, mock_persistence_cls, mock_compressor_cls):
-        """Test loading when no persisted documents exist"""
+    async def test_load_documents_empty(self, mock_persistence_cls, mock_compressor_cls):
+        """Test loading when no persisted documents exist (v0.4.4 - async context manager)"""
         mock_persistence = Mock()
         mock_persistence.list_documents.return_value = []
         mock_persistence_cls.return_value = mock_persistence
 
-        with (
-            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
-            patch.object(SemanticModulatorServer, "_setup_handlers"),
-        ):
-            SemanticModulatorServer()
+        with (patch.object(SemanticModulatorServer, "_setup_handlers"),):
+            server = SemanticModulatorServer()
+
+            # Trigger __aenter__ to call _load_persisted_documents
+            await server.__aenter__()
 
             # Should log "No persisted documents found"
             # Verify list_documents was called
             assert mock_persistence.list_documents.called
             assert mock_persistence.load_document.call_count == 0
 
+    @pytest.mark.asyncio
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
     @patch("src.server.ResourceManager")
-    def test_load_documents_success(
+    async def test_load_documents_success(
         self, mock_resource_cls, mock_persistence_cls, mock_compressor_cls
     ):
-        """Test successful loading of persisted documents"""
+        """Test successful loading of persisted documents (v0.4.4 - async context manager)"""
         # Setup mocks
         mock_persistence = Mock()
         mock_persistence.list_documents.return_value = ["doc1", "doc2"]
@@ -381,11 +384,11 @@ class TestLoadPersistedDocuments:
         mock_resource = Mock()
         mock_resource_cls.return_value = mock_resource
 
-        with (
-            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
-            patch.object(SemanticModulatorServer, "_setup_handlers"),
-        ):
+        with (patch.object(SemanticModulatorServer, "_setup_handlers"),):
             server = SemanticModulatorServer()
+
+            # Trigger __aenter__ to call _load_persisted_documents
+            await server.__aenter__()
 
             # Verify documents loaded into compressor
             assert "doc1_n0" in server.compressor.chunks
@@ -398,10 +401,11 @@ class TestLoadPersistedDocuments:
             # Verify resource manager registration
             assert mock_resource.register_document.call_count == 2
 
+    @pytest.mark.asyncio
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
-    def test_load_documents_partial_failure(self, mock_persistence_cls, mock_compressor_cls):
-        """Test loading when some documents fail to load"""
+    async def test_load_documents_partial_failure(self, mock_persistence_cls, mock_compressor_cls):
+        """Test loading when some documents fail to load (v0.4.4 - async context manager)"""
         mock_persistence = Mock()
         mock_persistence.list_documents.return_value = ["doc1", "doc2", "doc3"]
 
@@ -447,11 +451,11 @@ class TestLoadPersistedDocuments:
         mock_compressor.file_metadata = {}
         mock_compressor_cls.return_value = mock_compressor
 
-        with (
-            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
-            patch.object(SemanticModulatorServer, "_setup_handlers"),
-        ):
+        with (patch.object(SemanticModulatorServer, "_setup_handlers"),):
             server = SemanticModulatorServer()
+
+            # Trigger __aenter__ to call _load_persisted_documents
+            await server.__aenter__()
 
             # Verify only successful documents loaded
             assert "doc1_n0" in server.compressor.chunks
@@ -459,20 +463,23 @@ class TestLoadPersistedDocuments:
             # doc2 should not be loaded
             assert "doc2_n0" not in server.compressor.chunks
 
+    @pytest.mark.asyncio
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
-    def test_load_documents_exception_handling(self, mock_persistence_cls, mock_compressor_cls):
-        """Test that exceptions during loading are caught and logged"""
+    async def test_load_documents_exception_handling(
+        self, mock_persistence_cls, mock_compressor_cls
+    ):
+        """Test that exceptions during loading are caught and logged (v0.4.4 - async)"""
         mock_persistence = Mock()
         mock_persistence.list_documents.side_effect = Exception("Database error")
         mock_persistence_cls.return_value = mock_persistence
 
         # Should not raise - exception should be caught
-        with (
-            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
-            patch.object(SemanticModulatorServer, "_setup_handlers"),
-        ):
+        with (patch.object(SemanticModulatorServer, "_setup_handlers"),):
             server = SemanticModulatorServer()
+
+            # Trigger __aenter__ - should not raise despite exception
+            await server.__aenter__()
 
             # Server should still be initialized
             assert server.persistence is not None
@@ -507,13 +514,14 @@ class TestLoadFileSyncMetadata:
                 or mock_sync.import_metadata.call_args[0][0] == {}
             )
 
+    @pytest.mark.asyncio
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
-    def test_load_sync_metadata_success(
+    async def test_load_sync_metadata_success(
         self, mock_sync_cls, mock_persistence_cls, mock_compressor_cls
     ):
-        """Test successful loading of file sync metadata"""
+        """Test successful loading of file sync metadata (v0.4.4 - async context manager)"""
         metadata = {
             "doc1": {
                 "file_path": "/path/to/doc1.txt",
@@ -534,11 +542,11 @@ class TestLoadFileSyncMetadata:
         mock_sync = Mock()
         mock_sync_cls.return_value = mock_sync
 
-        with (
-            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
-            patch.object(SemanticModulatorServer, "_setup_handlers"),
-        ):
-            SemanticModulatorServer()
+        with (patch.object(SemanticModulatorServer, "_setup_handlers"),):
+            server = SemanticModulatorServer()
+
+            # Trigger __aenter__ to call _load_file_sync_metadata
+            await server.__aenter__()
 
             # Verify import_metadata called with correct data
             mock_sync.import_metadata.assert_called_once_with(metadata)
