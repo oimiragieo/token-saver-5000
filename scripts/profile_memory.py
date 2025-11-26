@@ -36,7 +36,7 @@ import io
 import sys
 import tracemalloc
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 # Configure stdout for UTF-8 on Windows
 if sys.platform == "win32":
@@ -107,7 +107,7 @@ def test_singleton_memory_leak() -> Tuple[int, int]:
 
     tracemalloc.start()
     gc.collect()
-    snapshot1 = tracemalloc.take_snapshot()
+    snapshot1 = tracemalloc.take_snapshot()  # noqa: F841
 
     # First load - should allocate model
     print("\n1. Loading embedding model (first time)...")
@@ -136,7 +136,7 @@ def test_singleton_memory_leak() -> Tuple[int, int]:
 
     # Third load different model - should add to cache
     print("\n3. Loading different model (code embedder)...")
-    model3 = manager1.get_code_embedder()
+    model3 = manager1.get_code_embedder()  # noqa: F841
     snapshot4 = tracemalloc.take_snapshot()
 
     stats_after = manager1.get_cache_stats()
@@ -147,7 +147,7 @@ def test_singleton_memory_leak() -> Tuple[int, int]:
 
     # Calculate totals
     current, peak = tracemalloc.get_traced_memory()
-    print(f"\n📊 Total Memory Usage:")
+    print("\n📊 Total Memory Usage:")
     print(f"   Current: {format_memory(current)}")
     print(f"   Peak: {format_memory(peak)}")
 
@@ -245,7 +245,7 @@ def test_document_ingestion_leak() -> Tuple[int, int]:
 
     # Final check
     current, peak = tracemalloc.get_traced_memory()
-    print(f"\n📊 Total Memory Usage:")
+    print("\n📊 Total Memory Usage:")
     print(f"   Baseline: {format_memory(snapshot_baseline.statistics('lineno')[0].size)}")
     print(f"   Current: {format_memory(current)}")
     print(f"   Peak: {format_memory(peak)}")
@@ -369,7 +369,7 @@ def test_ace_context_persistence() -> Tuple[int, int]:
 
     # Final check
     current, peak = tracemalloc.get_traced_memory()
-    print(f"\n📊 Total Memory Usage:")
+    print("\n📊 Total Memory Usage:")
     print(f"   Baseline: {format_memory(snapshot_baseline.statistics('lineno')[0].size)}")
     print(f"   Current: {format_memory(current)}")
     print(f"   Peak: {format_memory(peak)}")
@@ -457,7 +457,7 @@ def test_file_sync_metadata() -> Tuple[int, int]:
 
     # Final check
     current, peak = tracemalloc.get_traced_memory()
-    print(f"\n📊 Total Memory Usage:")
+    print("\n📊 Total Memory Usage:")
     print(f"   Baseline: {format_memory(snapshot_baseline.statistics('lineno')[0].size)}")
     print(f"   Current: {format_memory(current)} ({len(sync_manager.file_metadata)} files tracked)")
     print(f"   Peak: {format_memory(peak)}")
@@ -563,7 +563,7 @@ def test_version_history_accumulation() -> Tuple[int, int]:
     # Final check
     current, peak = tracemalloc.get_traced_memory()
     version_count = len(version_manager.versions.get(doc_id, []))
-    print(f"\n📊 Total Memory Usage:")
+    print("\n📊 Total Memory Usage:")
     print(f"   Baseline: {format_memory(snapshot_baseline.statistics('lineno')[0].size)}")
     print(f"   Current: {format_memory(current)} ({version_count} versions retained)")
     print(f"   Peak: {format_memory(peak)}")

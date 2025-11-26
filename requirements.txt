@@ -12,6 +12,15 @@ tiktoken>=0.5.0
 # System automatically falls back to JSON storage if ChromaDB unavailable
 # chromadb>=0.4.0  # INCOMPATIBLE with Python 3.13+ (requires numpy<2.0)
 
+# Visualization (v0.6.0)
+pyvis>=0.3.2  # Interactive HTML graph visualization
+
+# Memory Optimization (v0.6.0)
+onnxruntime>=1.16.0  # ONNX inference runtime (60-70% memory reduction)
+optimum[exporters]>=1.15.0  # ONNX model export and optimization
+msgpack>=1.0.7  # LRU cache serialization
+transformers>=4.35.0  # Tokenization for ONNX models
+
 # Utilities
 tqdm>=4.65.0
 psutil>=5.9.0

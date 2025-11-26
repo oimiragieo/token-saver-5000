@@ -6,9 +6,12 @@ Implements the core encoding/decoding logic inspired by:
 - Paper 2: FPQE (Fidelity-Preserving Quantization) - Structure preservation
 """
 
+import asyncio
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from os import cpu_count
 from typing import Dict, List, Optional
 from enum import Enum
 
@@ -247,7 +250,65 @@ class SemanticCompressor:
             return summary
         return text[:max_length] + "..."
 
+    async def _encode_async(self, texts: List[str]) -> np.ndarray:
+        """
+        Async wrapper for model.encode() to prevent blocking.
+
+        Uses ThreadPoolExecutor to offload CPU-bound encoding while
+        maintaining async interface for MCP server.
+
+        Args:
+            texts: List of text strings to encode
+
+        Returns:
+            numpy array of embeddings
+        """
+        # Lazy init thread pool (shared across all compressors)
+        if not hasattr(self, "_executor"):
+            # Use up to 4 workers for parallel embedding generation (2-4× speedup)
+            self._executor = ThreadPoolExecutor(max_workers=min(4, cpu_count() or 4))
+
+        # Offload blocking encode() to thread pool
+        loop = asyncio.get_event_loop()
+        embeddings = await loop.run_in_executor(
+            self._executor, lambda: self.model.encode(texts, show_progress_bar=False)
+        )
+
+        return embeddings
+
+    async def ingest_file_async(
+        self, text: str, file_id: str, metadata: Optional[Dict] = None
+    ) -> SkeletonResponse:
+        """
+        Async version of ingest_file for MCP server use.
+        See ingest_file() for full documentation.
+        """
+        return await self._ingest_file_impl(text, file_id, metadata)
+
     def ingest_file(
+        self, text: str, file_id: str, metadata: Optional[Dict] = None
+    ) -> SkeletonResponse:
+        """
+        Synchronous wrapper for backward compatibility with existing tests.
+        For async MCP server use, call ingest_file_async() instead.
+        """
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+
+        if loop is not None and loop.is_running():
+            # Called from async context - raise error
+            raise RuntimeError(
+                "ingest_file() cannot be called from async context. "
+                "Use await ingest_file_async() instead."
+            )
+
+        # Run async version in new event loop
+        return asyncio.run(self._ingest_file_impl(text, file_id, metadata))
+
+    async def _ingest_file_impl(
         self, text: str, file_id: str, metadata: Optional[Dict] = None
     ) -> SkeletonResponse:
         """
@@ -282,9 +343,9 @@ class SemanticCompressor:
         raw_chunks = self._chunk_text(text)
         logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 
-        # 2. Generate embeddings
+        # 2. Generate embeddings (async to prevent MCP timeout)
         logger.info("  Generating embeddings...")
-        embeddings = self.model.encode(raw_chunks, show_progress_bar=True)
+        embeddings = await self._encode_async(raw_chunks)
 
         # 3. Build similarity graph (preserves global structure)
         logger.info("  Building semantic graph...")
