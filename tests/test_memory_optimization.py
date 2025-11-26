@@ -25,8 +25,11 @@ import os
 try:
     from src.embeddings_onnx import ONNXEmbeddingManager
 
+    # Check if onnxruntime is actually available
+    import onnxruntime  # noqa: F401
+
     ONNX_AVAILABLE = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     ONNX_AVAILABLE = False
 
 try:
@@ -381,6 +384,9 @@ class TestEmbeddingTierSwitching:
     def test_cache_stats_with_tier(self):
         """Test cache stats include tier information."""
         manager = EmbeddingManager(tier=EmbeddingTier.STANDARD, enable_cache=True)
+
+        # Explicitly set tier (singleton may have different tier from previous test)
+        manager.set_tier(EmbeddingTier.STANDARD)
 
         stats = manager.get_cache_stats()
 

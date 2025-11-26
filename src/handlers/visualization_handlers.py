@@ -43,7 +43,7 @@ def handle_export_graph_json(context: Dict[str, Any], args: Dict[str, Any]) -> s
     try:
         json_output = visualizer.export_json(file_id, config)
         return json_output
-    except ValueError as e:
+    except ValueError:
         raise SmartError.document_not_found(file_id)
     except Exception as e:
         logger.error(f"export_graph_json error: {e}")
@@ -83,7 +83,7 @@ def handle_visualize_graph_html(context: Dict[str, Any], args: Dict[str, Any]) -
         if "No graph found" in str(e):
             raise SmartError.document_not_found(file_id)
         raise
-    except ImportError as e:
+    except ImportError:
         raise ValueError(
             "pyvis is required for HTML visualization. " "Install with: pip install pyvis"
         )

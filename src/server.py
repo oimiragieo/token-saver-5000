@@ -288,7 +288,7 @@ class SemanticModulatorServer:
             """Handle tool calls via centralized router"""
             try:
                 context = self._build_context()
-                result = mcp_core.route_tool_call(name, arguments, context)
+                result = await mcp_core.route_tool_call(name, arguments, context)
                 return [TextContent(type="text", text=str(result))]
             except Exception as e:
                 logger.error(f"Error in {name}: {e}", exc_info=True)

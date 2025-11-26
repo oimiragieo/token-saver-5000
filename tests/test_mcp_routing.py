@@ -12,7 +12,7 @@ Coverage:
 """
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 from mcp.types import Tool
 
 from src.handlers import mcp_core
@@ -28,18 +28,20 @@ class TestSetupMCPTools:
         assert len(tools) > 0
 
     def test_correct_number_of_tools(self):
-        """Test that all 30 tools are registered (v0.4.2)"""
+        """Test that all 35 tools are registered (v0.6.0)"""
         tools = mcp_core.setup_mcp_tools()
 
-        # Expected count: 30 tools total
+        # Expected count: 35 tools total (v0.6.0)
         # - Document Compression: 9
+        # - Batch Processing: 1 (NEW in v0.6.0)
         # - Fidelity Advisor: 1
         # - Detection: 2
         # - AFM Dialogue: 6
         # - File Sync: 4
         # - Resource Management: 1
         # - ACE Framework: 7
-        assert len(tools) == 30, f"Expected 30 tools, got {len(tools)}"
+        # - Visualization: 4 (NEW in v0.6.0)
+        assert len(tools) == 35, f"Expected 35 tools, got {len(tools)}"
 
     def test_all_tools_have_required_fields(self):
         """Test that all tools have name, description, and inputSchema"""
@@ -196,30 +198,33 @@ class TestRouteToolCall:
             "save_file_sync_metadata": Mock(),
         }
 
-    def test_unknown_tool_raises_value_error(self):
+    @pytest.mark.asyncio
+    async def test_unknown_tool_raises_value_error(self):
         """Test that routing unknown tool name raises ValueError"""
         with pytest.raises(ValueError) as exc_info:
-            mcp_core.route_tool_call("nonexistent_tool", {}, self.mock_context)
+            await mcp_core.route_tool_call("nonexistent_tool", {}, self.mock_context)
 
         error_msg = str(exc_info.value)
         assert "Unknown tool" in error_msg
         assert "nonexistent_tool" in error_msg
         assert "Available tools" in error_msg
 
-    def test_error_message_lists_available_tools(self):
+    @pytest.mark.asyncio
+    async def test_error_message_lists_available_tools(self):
         """Test that error message for unknown tool lists all available tools"""
         try:
-            mcp_core.route_tool_call("invalid_tool", {}, self.mock_context)
+            await mcp_core.route_tool_call("invalid_tool", {}, self.mock_context)
             pytest.fail("Expected ValueError to be raised")
         except ValueError as e:
             error_msg = str(e)
-            # Should mention count of available tools
-            assert "30" in error_msg or "(30)" in error_msg or "30)" in error_msg
+            # Should mention count of available tools (v0.6.0: 35 tools)
+            assert "35" in error_msg or "(35)" in error_msg or "35)" in error_msg
             # Should list some tool names
             assert "ingest_context" in error_msg or "afm_add_message" in error_msg
 
-    @patch("src.handlers.compression_handlers.handle_ingest")
-    def test_routes_ingest_context_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.compression_handlers.handle_ingest", new_callable=AsyncMock)
+    async def test_routes_ingest_context_correctly(self, mock_handler):
         """Test that ingest_context routes to compression_handlers.handle_ingest"""
         # Configure mock to have __name__ and __module__ for logging
         mock_handler.__name__ = "handle_ingest"
@@ -227,101 +232,109 @@ class TestRouteToolCall:
         mock_handler.return_value = "success"
         args = {"text": "test", "file_id": "doc1"}
 
-        result = mcp_core.route_tool_call("ingest_context", args, self.mock_context)
+        result = await mcp_core.route_tool_call("ingest_context", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "success"
 
-    @patch("src.handlers.compression_handlers.handle_read_skeleton")
-    def test_routes_read_skeleton_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.compression_handlers.handle_read_skeleton", new_callable=AsyncMock)
+    async def test_routes_read_skeleton_correctly(self, mock_handler):
         """Test that read_skeleton routes to compression_handlers.handle_read_skeleton"""
         mock_handler.__name__ = "handle_read_skeleton"
         mock_handler.__module__ = "src.handlers.compression_handlers"
         mock_handler.return_value = "skeleton data"
         args = {"file_id": "doc1"}
 
-        result = mcp_core.route_tool_call("read_skeleton", args, self.mock_context)
+        result = await mcp_core.route_tool_call("read_skeleton", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "skeleton data"
 
-    @patch("src.handlers.afm_handlers.handle_afm_add_message")
-    def test_routes_afm_add_message_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.afm_handlers.handle_afm_add_message", new_callable=AsyncMock)
+    async def test_routes_afm_add_message_correctly(self, mock_handler):
         """Test that afm_add_message routes to afm_handlers.handle_afm_add_message"""
         mock_handler.__name__ = "handle_afm_add_message"
         mock_handler.__module__ = "src.handlers.afm_handlers"
         mock_handler.return_value = "message added"
         args = {"role": "user", "content": "Hello"}
 
-        result = mcp_core.route_tool_call("afm_add_message", args, self.mock_context)
+        result = await mcp_core.route_tool_call("afm_add_message", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "message added"
 
-    @patch("src.handlers.file_sync_handlers.handle_check_file_sync")
-    def test_routes_check_file_sync_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.file_sync_handlers.handle_check_file_sync", new_callable=AsyncMock)
+    async def test_routes_check_file_sync_correctly(self, mock_handler):
         """Test that check_file_sync routes to file_sync_handlers.handle_check_file_sync"""
         mock_handler.__name__ = "handle_check_file_sync"
         mock_handler.__module__ = "src.handlers.file_sync_handlers"
         mock_handler.return_value = "in_sync: true"
         args = {"file_id": "doc1"}
 
-        result = mcp_core.route_tool_call("check_file_sync", args, self.mock_context)
+        result = await mcp_core.route_tool_call("check_file_sync", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "in_sync: true"
 
-    @patch("src.handlers.resource_handlers.handle_check_resource_health")
-    def test_routes_check_resource_health_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.resource_handlers.handle_check_resource_health", new_callable=AsyncMock)
+    async def test_routes_check_resource_health_correctly(self, mock_handler):
         """Test that check_resource_health routes correctly"""
         mock_handler.__name__ = "handle_check_resource_health"
         mock_handler.__module__ = "src.handlers.resource_handlers"
         mock_handler.return_value = "healthy"
         args = {}
 
-        result = mcp_core.route_tool_call("check_resource_health", args, self.mock_context)
+        result = await mcp_core.route_tool_call("check_resource_health", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "healthy"
 
-    @patch("src.handlers.detection_handlers.handle_check_blind_spots")
-    def test_routes_check_blind_spots_correctly(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.detection_handlers.handle_check_blind_spots", new_callable=AsyncMock)
+    async def test_routes_check_blind_spots_correctly(self, mock_handler):
         """Test that check_blind_spots routes to detection_handlers"""
         mock_handler.__name__ = "handle_check_blind_spots"
         mock_handler.__module__ = "src.handlers.detection_handlers"
         mock_handler.return_value = "no blind spots"
         args = {"response": "test", "file_id": "doc1", "retrieved_node_ids": ["n1"]}
 
-        result = mcp_core.route_tool_call("check_blind_spots", args, self.mock_context)
+        result = await mcp_core.route_tool_call("check_blind_spots", args, self.mock_context)
 
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "no blind spots"
 
-    @patch("src.handlers.ace_handlers.handle_ace_generate")
-    def test_routes_ace_generate_with_handler_context(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.ace_handlers.handle_ace_generate", new_callable=AsyncMock)
+    async def test_routes_ace_generate_with_handler_context(self, mock_handler):
         """Test that ACE tools route correctly using HandlerContext (refactored v0.4.3)"""
         mock_handler.return_value = "generated"
         args = {"query": "test"}
 
-        result = mcp_core.route_tool_call("ace_generate", args, self.mock_context)
+        result = await mcp_core.route_tool_call("ace_generate", args, self.mock_context)
 
         # ACE handlers now use HandlerContext signature like all other handlers
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "generated"
 
-    @patch("src.handlers.ace_handlers.handle_ace_execute_cycle")
-    def test_routes_ace_execute_cycle_with_handler_context(self, mock_handler):
+    @pytest.mark.asyncio
+    @patch("src.handlers.ace_handlers.handle_ace_execute_cycle", new_callable=AsyncMock)
+    async def test_routes_ace_execute_cycle_with_handler_context(self, mock_handler):
         """Test that ace_execute_cycle routes correctly using HandlerContext (refactored v0.4.3)"""
         mock_handler.return_value = "cycle executed"
         args = {"context_id": "ctx1"}
 
-        result = mcp_core.route_tool_call("ace_execute_cycle", args, self.mock_context)
+        result = await mcp_core.route_tool_call("ace_execute_cycle", args, self.mock_context)
 
         # ACE handlers now use HandlerContext signature like all other handlers
         mock_handler.assert_called_once_with(self.mock_context, args)
         assert result == "cycle executed"
 
-    def test_all_registered_tools_have_handlers(self):
+    @pytest.mark.asyncio
+    async def test_all_registered_tools_have_handlers(self):
         """Test that every tool in setup_mcp_tools has a corresponding handler"""
         tools = mcp_core.setup_mcp_tools()
         tool_names = {tool.name for tool in tools}
@@ -333,16 +346,22 @@ class TestRouteToolCall:
             try:
                 # This will call the actual handler, but that's OK for this test
                 # We just want to verify the routing doesn't raise "Unknown tool"
-                with patch("src.handlers.compression_handlers.handle_ingest") as mock:
-                    with patch("src.handlers.afm_handlers.handle_afm_add_message") as mock2:
-                        with patch("src.handlers.ace_handlers.handle_ace_generate") as mock3:
+                with patch(
+                    "src.handlers.compression_handlers.handle_ingest", new_callable=AsyncMock
+                ) as mock:
+                    with patch(
+                        "src.handlers.afm_handlers.handle_afm_add_message", new_callable=AsyncMock
+                    ) as mock2:
+                        with patch(
+                            "src.handlers.ace_handlers.handle_ace_generate", new_callable=AsyncMock
+                        ) as mock3:
                             mock.return_value = "test"
                             mock2.return_value = "test"
                             mock3.return_value = "test"
 
                             # Try to route - should not raise "Unknown tool" error
                             try:
-                                mcp_core.route_tool_call(tool_name, {}, self.mock_context)
+                                await mcp_core.route_tool_call(tool_name, {}, self.mock_context)
                             except ValueError as e:
                                 # OK if it's a validation error from the handler
                                 # NOT OK if it's "Unknown tool"
@@ -356,40 +375,43 @@ class TestRouteToolCall:
                 # Setup exceptions are fine, we just care about routing
                 pass
 
-    def test_context_parameter_is_passed_to_handlers(self):
+    @pytest.mark.asyncio
+    @patch("src.handlers.compression_handlers.handle_ingest", new_callable=AsyncMock)
+    async def test_context_parameter_is_passed_to_handlers(self, mock_handler):
         """Test that context dict is correctly passed to handlers"""
-        with patch("src.handlers.compression_handlers.handle_ingest") as mock_handler:
-            mock_handler.__name__ = "handle_ingest"
-            mock_handler.__module__ = "src.handlers.compression_handlers"
-            mock_handler.return_value = "success"
-            args = {"text": "test", "file_id": "doc1"}
+        mock_handler.__name__ = "handle_ingest"
+        mock_handler.__module__ = "src.handlers.compression_handlers"
+        mock_handler.return_value = "success"
+        args = {"text": "test", "file_id": "doc1"}
 
-            mcp_core.route_tool_call("ingest_context", args, self.mock_context)
+        await mcp_core.route_tool_call("ingest_context", args, self.mock_context)
 
-            # Verify first argument to handler is the context dict
-            call_args = mock_handler.call_args
-            assert call_args[0][0] == self.mock_context
+        # Verify first argument to handler is the context dict
+        call_args = mock_handler.call_args
+        assert call_args[0][0] == self.mock_context
 
-    def test_args_parameter_is_passed_to_handlers(self):
+    @pytest.mark.asyncio
+    @patch("src.handlers.compression_handlers.handle_ingest", new_callable=AsyncMock)
+    async def test_args_parameter_is_passed_to_handlers(self, mock_handler):
         """Test that args dict is correctly passed to handlers"""
-        with patch("src.handlers.compression_handlers.handle_ingest") as mock_handler:
-            mock_handler.__name__ = "handle_ingest"
-            mock_handler.__module__ = "src.handlers.compression_handlers"
-            mock_handler.return_value = "success"
-            args = {"text": "test content", "file_id": "doc123"}
+        mock_handler.__name__ = "handle_ingest"
+        mock_handler.__module__ = "src.handlers.compression_handlers"
+        mock_handler.return_value = "success"
+        args = {"text": "test content", "file_id": "doc123"}
 
-            mcp_core.route_tool_call("ingest_context", args, self.mock_context)
+        await mcp_core.route_tool_call("ingest_context", args, self.mock_context)
 
-            # Verify second argument to handler is the args dict
-            call_args = mock_handler.call_args
-            assert call_args[0][1] == args
-            assert call_args[0][1]["file_id"] == "doc123"
+        # Verify second argument to handler is the args dict
+        call_args = mock_handler.call_args
+        assert call_args[0][1] == args
+        assert call_args[0][1]["file_id"] == "doc123"
 
 
 class TestRouterIntegrity:
     """Tests for router integrity and consistency"""
 
-    def test_router_count_matches_tool_count(self):
+    @pytest.mark.asyncio
+    async def test_router_count_matches_tool_count(self):
         """Test that internal router has same count as setup_mcp_tools"""
         tools = mcp_core.setup_mcp_tools()
 
@@ -408,15 +430,23 @@ class TestRouterIntegrity:
         for tool_name in tool_names:
             try:
                 # Try routing with mocked handlers
-                with patch("src.handlers.compression_handlers.handle_ingest", return_value="ok"):
+                with patch(
+                    "src.handlers.compression_handlers.handle_ingest",
+                    new_callable=AsyncMock,
+                    return_value="ok",
+                ):
                     with patch(
-                        "src.handlers.afm_handlers.handle_afm_add_message", return_value="ok"
+                        "src.handlers.afm_handlers.handle_afm_add_message",
+                        new_callable=AsyncMock,
+                        return_value="ok",
                     ):
                         with patch(
-                            "src.handlers.ace_handlers.handle_ace_generate", return_value="ok"
+                            "src.handlers.ace_handlers.handle_ace_generate",
+                            new_callable=AsyncMock,
+                            return_value="ok",
                         ):
                             try:
-                                mcp_core.route_tool_call(tool_name, {}, mock_context)
+                                await mcp_core.route_tool_call(tool_name, {}, mock_context)
                                 routable_count += 1
                             except ValueError as e:
                                 if "Unknown tool" in str(e):

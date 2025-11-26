@@ -69,7 +69,7 @@ class ONNXEmbeddingManager:
             return
 
         try:
-            import onnxruntime as ort
+            import onnxruntime as ort  # noqa: F401 - Check availability
             from transformers import AutoTokenizer
             from optimum.onnxruntime import ORTModelForFeatureExtraction
 

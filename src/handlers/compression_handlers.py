@@ -922,8 +922,8 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
                 f"documents[{i}].file_id must be a string, got {type(file_id).__name__}"
             )
 
-        # Validate text
-        if not text:
+        # Validate text exists (allow empty strings for batch error isolation)
+        if text is None:
             raise SmartError.missing_required_field(
                 f"documents[{i}].text", "batch_ingest_documents"
             )
