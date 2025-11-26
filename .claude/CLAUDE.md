@@ -157,29 +157,30 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **591 comprehensive tests** (582 passing, 9 skipped, 98.5% pass rate)
-  - Was 506 in v0.6.0, 446 in v0.5.0-beta, 436 in v0.4.4, 427 in v0.4.3
-  - 85 new tests added in post-v0.6.0 (Phase 1 production readiness):
+- ✅ **630 comprehensive tests** (621 passing, 9 skipped, 98.6% pass rate)
+  - Was 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 436 in v0.4.4, 427 in v0.4.3
+  - 124 new tests added in Phase 1 production readiness:
     * 53 persistence comprehensive tests (persistence.py: 32% → 65% coverage)
     * 25 cache comprehensive tests (embedding_cache.py: 86% → 99% coverage)
     * 7 semantic fidelity benchmarks (semantic_ssim.py: 0% → 89%)
+    * 39 ACE handlers comprehensive tests (ace_handlers.py: 37% → 100% coverage)
     * (v0.6.0 tests: 18 batch processing, 16 visualization, 24 memory optimization)
   - Zero tech debt introduced
 
 - ✅ **Test Coverage Improvements (Phase 1 Production Readiness - In Progress):**
+  - handlers/ace_handlers.py: 37% → **100%** ✅ (39 tests, 63pp improvement, exceeded 80% target by 20pp)
   - handlers/resource_handlers.py: 16% → **100%** ✅ (20 tests, full coverage achieved)
+  - handlers/detection_handlers.py: 25% → **100%** ✅ (12 tests, full coverage achieved)
   - handlers/file_sync_handlers.py: 13% → **69%** (18 tests, 56pp improvement, missed 80% target by 11pp)
-  - **Next Targets:** detection_handlers (25%), ace_handlers (37%), afm_handlers (40%)
+  - **Next Targets:** afm_handlers (40%)
 
-- ⚠️ **Test Coverage Baseline (66% overall - below 70% production threshold):**
-  - **Excellent (90%+):** code_compressor (99%), semantic_compressor (99%), embedding_cache (99%), handlers/resource_handlers (100%), ace_framework (96%), server (90%), version_manager (90%), fidelity_advisor (90%)
+- ⚠️ **Test Coverage Baseline (67% overall - approaching 70% production threshold):**
+  - **Excellent (90%+):** handlers/ace_handlers (100%), handlers/resource_handlers (100%), handlers/detection_handlers (100%), code_compressor (99%), semantic_compressor (99%), embedding_cache (99%), ace_framework (96%), server (90%), version_manager (90%), fidelity_advisor (90%)
   - **Good (70-89%):** afm (83%), batch_manager (81%), scar_compressor (81%), compression_handlers (81%), file_sync_manager (86%), compression_advisor (87%), error_helpers (86%), embeddings_tfidf (84%), handlers/file_sync_handlers (69%)
   - **Critical Gaps (<50%):**
     * embeddings_onnx.py (19%)
-    * handlers/detection_handlers.py (25%)
     * adaptive_rate_allocator.py (25%)
     * resource_manager.py (31%)
-    * handlers/ace_handlers.py (37%)
     * handlers/afm_handlers.py (40%)
     * handlers/visualization_handlers.py (45%)
   - **Experimental (0% - not production critical):** multimodal_compressor, toon_serializer, training_utils
