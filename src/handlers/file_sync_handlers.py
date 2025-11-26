@@ -286,16 +286,18 @@ This document either:
     lines = [f"📜 Version History: {doc_id}", "=" * 70, ""]
 
     for version in history:
-        timestamp = version.get("timestamp", "Unknown")
+        timestamp_raw = version.get("timestamp", None)
         version_id = version.get("version_id", "?")
         file_path = version.get("file_path", "N/A")
         checksum = version.get("checksum", "N/A")
         size = version.get("size_bytes", 0)
         stats = version.get("compression_stats", {})
 
-        # Format timestamp (remove microseconds for readability)
-        if "." in timestamp:
-            timestamp = timestamp.split(".")[0]
+        # Format timestamp (convert float to datetime string, remove microseconds)
+        if timestamp_raw and isinstance(timestamp_raw, (int, float)):
+            timestamp = datetime.fromtimestamp(timestamp_raw).isoformat().split(".")[0]
+        else:
+            timestamp = str(timestamp_raw) if timestamp_raw else "Unknown"
 
         lines.append(f"Version {version_id} - {timestamp}")
         lines.append(f"  File: {file_path}")
