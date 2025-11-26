@@ -24,6 +24,7 @@ from src.resource_manager import ResourceManager
 from src.file_sync_manager import FileSyncManager
 from src.version_manager import VersionManager
 from src.ace_framework import ACEFramework
+from src.path_validator import PathValidator
 
 # Avoid circular import: server.py imports HandlerContext from this module
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ class HandlerContext(TypedDict, total=True):
         resource_manager: Resource limits enforcement (100MB/doc, 1GB total)
         sync_manager: File sync staleness detection (mtime + MD5)
         version_manager: Version history with diffs
+        path_validator: Path validation (prevents CWE-22 path traversal)
         ace_framework: ACE (Agentic Context Engineering) framework
         ace_contexts: ACE context manager with LRU eviction
         validate_file_id: Validation helper for file IDs
@@ -92,6 +94,7 @@ class HandlerContext(TypedDict, total=True):
     # File sync and versioning
     sync_manager: ReadOnly[FileSyncManager]
     version_manager: ReadOnly[VersionManager]
+    path_validator: ReadOnly[PathValidator]  # Security: Prevents path traversal attacks
 
     # ACE Framework
     ace_framework: ReadOnly[ACEFramework]

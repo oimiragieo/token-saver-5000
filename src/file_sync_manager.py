@@ -74,6 +74,10 @@ class FileSyncManager:
         """
         Register a file when it's ingested with automatic LRU eviction (v0.4.2).
 
+        **Security (v0.6.1):**
+        - file_path MUST be an absolute path (validated by PathValidator at entry point)
+        - This is a defense-in-depth check to prevent path traversal attacks (CWE-22)
+
         **Automatic LRU Eviction:**
         - If max_entries > 0 and entry count exceeds limit, evicts oldest entry
         - Eviction based on ingestion_time (least recently ingested removed first)
@@ -81,12 +85,25 @@ class FileSyncManager:
 
         Args:
             doc_id: Document ID in MCP
-            file_path: Path to source file (None if text-only)
+            file_path: Path to source file (None if text-only, MUST be absolute if provided)
             content: The content that was ingested
 
         Returns:
             FileMetadata object
+
+        Raises:
+            ValueError: If file_path is not absolute (security misconfiguration)
         """
+        # SECURITY CHECK: Verify file_path is absolute (defense-in-depth)
+        # Path validation should happen at entry point (handle_ingest), but we verify here
+        # to prevent bugs if file_sync_manager is called directly
+        if file_path and not os.path.isabs(file_path):
+            raise ValueError(
+                f"Security violation: file_path must be absolute (got: {file_path})\n"
+                "This indicates a security misconfiguration. File paths must be validated "
+                "by PathValidator before being passed to FileSyncManager."
+            )
+
         # Calculate checksum (outside lock - no shared state)
         checksum = self._calculate_checksum(content)
 

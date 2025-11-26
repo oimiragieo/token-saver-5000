@@ -13,6 +13,7 @@ Architecture:
 
 import asyncio
 import logging
+import os
 from collections import OrderedDict
 from typing import Any, Dict, List
 
@@ -164,6 +165,18 @@ class SemanticModulatorServer:
         self.version_manager = VersionManager()
         logger.info("File sync and version management enabled")
 
+        # Path validation for security (NEW in v0.6.1 - fixes CWE-22)
+        from .path_validator import PathValidator
+
+        # Allow current directory and user's home directory
+        allowed_dirs = [
+            os.getcwd(),  # Current working directory
+            os.path.expanduser("~"),  # User's home directory
+        ]
+        self.path_validator = PathValidator(allowed_base_dirs=allowed_dirs)
+        logger.info(f"PathValidator initialized with {len(allowed_dirs)} allowed directories")
+        logger.info("  Security: File paths restricted to prevent path traversal attacks (CWE-22)")
+
         # ACE Framework for evolving contexts (NEW in v0.4.1!)
         self.ace_framework = ACEFramework(
             deduplication_threshold=0.85,
@@ -267,6 +280,7 @@ class SemanticModulatorServer:
             "resource_manager": self.resource_manager,
             "sync_manager": self.sync_manager,
             "version_manager": self.version_manager,
+            "path_validator": self.path_validator,  # Security: CWE-22 path traversal prevention
             "ace_framework": self.ace_framework,
             "ace_contexts": self.ace_contexts,
             "validate_file_id": self._validate_file_id,

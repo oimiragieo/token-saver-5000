@@ -143,8 +143,20 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     text = args["text"]
     file_id = args["file_id"]
-    file_path = args.get("file_path")  # NEW: Optional file path for sync tracking
+    file_path = args.get("file_path")  # Optional file path for sync tracking
     metadata = args.get("metadata")
+
+    # SECURITY: Validate file_path to prevent path traversal (CWE-22)
+    if file_path:
+        try:
+            # PathValidator resolves .., symlinks, and validates against allowed directories
+            file_path = context["path_validator"].validate(file_path)
+            logger.info(f"File path validated: {file_path}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid file_path: {str(e)}\n"
+                "💡 Security: File paths must be within allowed directories to prevent path traversal attacks"
+            ) from e
 
     # Validation
     if not text or len(text.strip()) == 0:

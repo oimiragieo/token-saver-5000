@@ -16,13 +16,14 @@ to prevent unbounded memory growth (v0.4.2 - Week 3 Day 13).
 - Configurable limits via DEFAULT_VERSION_RETENTION constant
 """
 
+import difflib
 import json
 import logging
+import os
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-import difflib
 
 from .constants import DEFAULT_VERSION_RETENTION
 
@@ -105,6 +106,10 @@ class VersionManager:
         """
         Add a new version of a document with automatic pruning.
 
+        **Security (v0.6.1):**
+        - file_path MUST be an absolute path (validated by PathValidator at entry point)
+        - This is a defense-in-depth check to prevent path traversal attacks (CWE-22)
+
         **Automatic Pruning (v0.4.2):**
         - After adding a version, if total versions exceed max_versions,
           the oldest versions are automatically removed
@@ -115,13 +120,26 @@ class VersionManager:
             doc_id: Document identifier
             content: Full document content
             checksum: MD5 checksum
-            file_path: Source file path
+            file_path: Source file path (MUST be absolute if provided)
             metadata: Additional metadata
             compression_stats: Compression statistics
 
         Returns:
             DocumentVersion object (the newly added version)
+
+        Raises:
+            ValueError: If file_path is not absolute (security misconfiguration)
         """
+        # SECURITY CHECK: Verify file_path is absolute (defense-in-depth)
+        # Path validation should happen at entry point (handle_ingest), but we verify here
+        # to prevent bugs if version_manager is called directly
+        if file_path and not os.path.isabs(file_path):
+            raise ValueError(
+                f"Security violation: file_path must be absolute (got: {file_path})\n"
+                "This indicates a security misconfiguration. File paths must be validated "
+                "by PathValidator before being passed to VersionManager."
+            )
+
         # Get next version number (v0.4.2: use counter, not list length)
         # This ensures version_id increments correctly even after pruning
         if doc_id in self._version_counters:

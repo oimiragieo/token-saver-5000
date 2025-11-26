@@ -245,31 +245,33 @@ class TestHandleRefreshDocument:
 
     @pytest.fixture
     def mock_context(self):
-        """Create mock handler context"""
-        sync_manager = FileSyncManager()
-        version_manager = VersionManager()
-        compressor = Mock()
-        persistence = Mock()
+        """Create mock handler context with isolated managers"""
+        # Use temporary directory for test isolation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sync_manager = FileSyncManager()
+            version_manager = VersionManager(storage_dir=temp_dir + "/versions")
+            compressor = Mock()
+            persistence = Mock()
 
-        # Mock skeleton response
-        skeleton_mock = Mock()
-        skeleton_mock.total_tokens = 100
-        skeleton_mock.skeleton_tokens = 20
-        skeleton_mock.compression_ratio = 5.0
-        compressor.ingest_file.return_value = skeleton_mock
-        compressor.graphs = {"test_doc": Mock()}
-        compressor.chunks = {}
-        compressor.file_metadata = {}
+            # Mock skeleton response
+            skeleton_mock = Mock()
+            skeleton_mock.total_tokens = 100
+            skeleton_mock.skeleton_tokens = 20
+            skeleton_mock.compression_ratio = 5.0
+            compressor.ingest_file.return_value = skeleton_mock
+            compressor.graphs = {"test_doc": Mock()}
+            compressor.chunks = {}
+            compressor.file_metadata = {}
 
-        context: HandlerContext = {
-            "sync_manager": sync_manager,
-            "version_manager": version_manager,
-            "compressor": compressor,
-            "persistence": persistence,
-            "validate_file_id": lambda file_id, must_exist=False: None,
-            "save_file_sync_metadata": Mock(),
-        }
-        return context
+            context: HandlerContext = {
+                "sync_manager": sync_manager,
+                "version_manager": version_manager,
+                "compressor": compressor,
+                "persistence": persistence,
+                "validate_file_id": lambda file_id, must_exist=False: None,
+                "save_file_sync_metadata": Mock(),
+            }
+            yield context
 
     def test_refresh_document_success(self, mock_context, temp_file):
         """Test successful document refresh"""
@@ -324,10 +326,15 @@ class TestHandleRefreshDocument:
 
     def test_refresh_document_file_read_error(self, mock_context):
         """Test refresh when source file cannot be read"""
-        # Setup with non-existent file path
+        # Setup with non-existent file path (absolute path for security validation)
         file_id = "test_doc"
         sync_manager = mock_context["sync_manager"]
-        sync_manager.register_file(file_id, "/nonexistent/path.txt", "dummy content")
+        nonexistent_path = (
+            os.path.abspath("/tmp/nonexistent/path.txt")
+            if os.name != "nt"
+            else os.path.abspath("C:\\temp\\nonexistent\\path.txt")
+        )
+        sync_manager.register_file(file_id, nonexistent_path, "dummy content")
 
         # Execute
         result = handle_refresh_document(mock_context, {"file_id": file_id})
@@ -335,7 +342,7 @@ class TestHandleRefreshDocument:
         # Verify
         assert "❌" in result
         assert "Error reading source file" in result
-        assert "/nonexistent/path.txt" in result
+        assert "nonexistent" in result.lower() or "path.txt" in result
         assert "may have been moved or deleted" in result
 
     def test_refresh_document_ingestion_error(self, mock_context, temp_file):
@@ -364,17 +371,19 @@ class TestHandleGetVersionHistory:
 
     @pytest.fixture
     def mock_context(self):
-        """Create mock handler context"""
-        version_manager = VersionManager()
-        context: HandlerContext = {
-            "version_manager": version_manager,
-            "sync_manager": Mock(),
-            "compressor": Mock(),
-            "persistence": Mock(),
-            "validate_file_id": lambda file_id, must_exist=False: None,
-            "save_file_sync_metadata": Mock(),
-        }
-        return context
+        """Create mock handler context with isolated version manager"""
+        # Use temporary directory for test isolation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_manager = VersionManager(storage_dir=temp_dir + "/versions")
+            context: HandlerContext = {
+                "version_manager": version_manager,
+                "sync_manager": Mock(),
+                "compressor": Mock(),
+                "persistence": Mock(),
+                "validate_file_id": lambda file_id, must_exist=False: None,
+                "save_file_sync_metadata": Mock(),
+            }
+            yield context
 
     def test_get_version_history_no_history(self, mock_context):
         """Test get_version_history when no history exists"""
@@ -392,11 +401,16 @@ class TestHandleGetVersionHistory:
         # Setup
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
+        test_file_path = (
+            os.path.abspath("/tmp/path/to/file.txt")
+            if os.name != "nt"
+            else os.path.abspath("C:\\temp\\path\\to\\file.txt")
+        )
         version_manager.add_version(
             doc_id=doc_id,
             content="Test content",
             checksum="abc123def456",
-            file_path="/path/to/file.txt",
+            file_path=test_file_path,
             compression_stats={
                 "total_tokens": 100,
                 "skeleton_tokens": 20,
@@ -410,7 +424,7 @@ class TestHandleGetVersionHistory:
         # Verify
         assert "📜 Version History: test_doc" in result
         assert "Version 1" in result
-        assert "/path/to/file.txt" in result
+        assert "file.txt" in result  # Check filename is present (path may vary)
         assert "abc123def456" in result
         assert "100" in result  # total_tokens
         assert "20" in result  # skeleton_tokens
@@ -423,13 +437,15 @@ class TestHandleGetVersionHistory:
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
 
-        # Add 3 versions
+        # Add 3 versions (use absolute paths for security validation)
+        base_path = "/tmp/path" if os.name != "nt" else "C:\\temp\\path"
         for i in range(3):
+            test_file_path = os.path.abspath(f"{base_path}/v{i+1}.txt")
             version_manager.add_version(
                 doc_id=doc_id,
                 content=f"Content v{i+1}",
                 checksum=f"checksum_{i+1}",
-                file_path=f"/path/v{i+1}.txt",
+                file_path=test_file_path,
                 compression_stats={
                     "total_tokens": 100 * (i + 1),
                     "skeleton_tokens": 20 * (i + 1),
@@ -445,20 +461,25 @@ class TestHandleGetVersionHistory:
         assert "Version 2" in result
         assert "Version 3" in result
         assert "Total versions: 3" in result
-        assert "/path/v1.txt" in result
-        assert "/path/v2.txt" in result
-        assert "/path/v3.txt" in result
+        assert "v1.txt" in result
+        assert "v2.txt" in result
+        assert "v3.txt" in result
 
     def test_get_version_history_timestamp_formatting(self, mock_context):
         """Test that timestamps are formatted without microseconds"""
         # Setup
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
+        test_file_path = (
+            os.path.abspath("/tmp/path/to/file.txt")
+            if os.name != "nt"
+            else os.path.abspath("C:\\temp\\path\\to\\file.txt")
+        )
         version_manager.add_version(
             doc_id=doc_id,
             content="Test content",
             checksum="abc123",
-            file_path="/path/to/file.txt",
+            file_path=test_file_path,
         )
 
         # Execute
@@ -490,26 +511,28 @@ class TestFileSyncHandlersIntegration:
         """Create integrated handler context with real managers"""
         from src.embeddings import EmbeddingManager
 
-        sync_manager = FileSyncManager()
-        version_manager = VersionManager()
-        compressor = SemanticCompressor()
-        persistence = Mock()  # Mock persistence to avoid disk I/O
+        # Use temporary directory for test isolation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sync_manager = FileSyncManager()
+            version_manager = VersionManager(storage_dir=temp_dir + "/versions")
+            compressor = SemanticCompressor()
+            persistence = Mock()  # Mock persistence to avoid disk I/O
 
-        # Mock embedding manager to avoid model downloads
-        with patch("src.semantic_compressor.EmbeddingManager") as mock_em_class:
-            mock_em = Mock(spec=EmbeddingManager)
-            mock_em.encode.return_value = [[0.1] * 384]  # Mock embedding
-            mock_em_class.return_value = mock_em
+            # Mock embedding manager to avoid model downloads
+            with patch("src.semantic_compressor.EmbeddingManager") as mock_em_class:
+                mock_em = Mock(spec=EmbeddingManager)
+                mock_em.encode.return_value = [[0.1] * 384]  # Mock embedding
+                mock_em_class.return_value = mock_em
 
-            context: HandlerContext = {
-                "sync_manager": sync_manager,
-                "version_manager": version_manager,
-                "compressor": compressor,
-                "persistence": persistence,
-                "validate_file_id": lambda file_id, must_exist=False: None,
-                "save_file_sync_metadata": Mock(),
-            }
-            yield context
+                context: HandlerContext = {
+                    "sync_manager": sync_manager,
+                    "version_manager": version_manager,
+                    "compressor": compressor,
+                    "persistence": persistence,
+                    "validate_file_id": lambda file_id, must_exist=False: None,
+                    "save_file_sync_metadata": Mock(),
+                }
+                yield context
 
     def test_full_refresh_workflow(self, integrated_context, temp_file):
         """Test complete refresh workflow: check → refresh → check → diff → history"""

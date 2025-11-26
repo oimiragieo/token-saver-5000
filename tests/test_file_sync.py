@@ -401,11 +401,18 @@ class TestVersionManager:
 
     def test_add_version(self):
         """Test adding a new version"""
+        # Use absolute path for security validation (v0.6.1)
+        test_file_path = (
+            os.path.abspath("/tmp/test_file.txt")
+            if os.name != "nt"
+            else os.path.abspath("C:\\temp\\test_file.txt")
+        )
+
         version = self.version_manager.add_version(
             doc_id="test_doc",
             content="First version content",
             checksum="abc123",
-            file_path="/path/to/file.txt",
+            file_path=test_file_path,
             metadata={"author": "test"},
             compression_stats={"ratio": 5.0},
         )
@@ -414,7 +421,7 @@ class TestVersionManager:
         assert version.doc_id == "test_doc"
         assert version.content == "First version content"
         assert version.checksum == "abc123"
-        assert version.file_path == "/path/to/file.txt"
+        assert version.file_path == test_file_path
 
     def test_add_multiple_versions(self):
         """Test adding multiple versions of same document"""
