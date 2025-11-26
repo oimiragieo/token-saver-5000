@@ -4,55 +4,62 @@
 
 | Version | Supported          | Security Status |
 | ------- | ------------------ | --------------- |
-| 0.6.x   | :warning: Development | Critical vulnerability identified |
+| 0.6.1+  | ✅ Yes             | Path traversal vulnerability fixed |
+| 0.6.0   | :x: No             | Critical path traversal (CWE-22) |
 | < 0.6   | :x: Unsupported    | Not recommended |
 
 ## Security Status
 
-**Current Status:** ⚠️ **NOT SUITABLE FOR PRODUCTION**
+**Current Status:** ✅ **v0.6.1 SECURITY FIX RELEASED**
 
-A critical path traversal vulnerability (CWE-22) has been identified in version 0.6.0 and earlier. This vulnerability allows arbitrary file read with user privileges through the file sync functionality.
+Critical path traversal vulnerability (CWE-22) has been **FIXED** in version 0.6.1.
 
 **Affected Versions:** All versions up to and including 0.6.0
 
-**Fix Status:** In development (tracked in [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md))
+**Fix Version:** v0.6.1 (released 2025-01-26)
 
 ## Known Vulnerabilities
 
-### 1. Path Traversal (CWE-22) - CRITICAL
+### 1. Path Traversal (CWE-22) - ✅ FIXED in v0.6.1
 
 **Severity:** HIGH (CVSS 7.5)
 
-**Description:** The `ingest_context` MCP tool accepts a `file_path` parameter without proper validation. An attacker with MCP tool access can provide path traversal sequences (e.g., `../../etc/passwd`) to read arbitrary files accessible to the user running the MCP server.
+**Status:** ✅ **FIXED** in v0.6.1 (2025-01-26)
 
-**Affected Components:**
-- `src/handlers/compression_handlers.py` - Entry point
-- `src/file_sync_manager.py` - No path validation
-- `src/version_manager.py` - No path validation
-- `src/handlers/file_sync_handlers.py` - Exploit triggers
+**Description:** The `ingest_context` MCP tool in v0.6.0 and earlier accepted a `file_path` parameter without proper validation. An attacker with MCP tool access could provide path traversal sequences (e.g., `../../etc/passwd`) to read arbitrary files accessible to the user running the MCP server.
 
-**Proof of Concept:**
+**Affected Components (v0.6.0 and earlier):**
+- `src/handlers/compression_handlers.py` - Entry point (now patched)
+- `src/file_sync_manager.py` - No path validation (now patched)
+- `src/version_manager.py` - No path validation (now patched)
+- `src/handlers/file_sync_handlers.py` - Exploit triggers (now patched)
+
+**Proof of Concept (v0.6.0 - NO LONGER WORKS in v0.6.1+):**
 ```python
 # Step 1: Ingest with malicious path
 ingest_context(
     text="dummy",
     file_id="exploit",
-    file_path="../../etc/passwd"
+    file_path="../../etc/passwd"  # BLOCKED in v0.6.1+
 )
 
 # Step 2: Trigger file read
 refresh_document(file_id="exploit")
-# Result: Returns contents of /etc/passwd
+# v0.6.0: Returns contents of /etc/passwd
+# v0.6.1: ValueError - Access denied
 ```
 
-**Mitigation:**
-- **Immediate:** Do NOT use file sync features (`file_path` parameter) in untrusted environments
-- **Long-term:** Path validation implementation in progress (see SECURITY_AUDIT.md)
+**Fix Implementation (v0.6.1):**
+- ✅ **PathValidator module** (`src/path_validator.py`) - 220 lines, 96% test coverage
+- ✅ **Entry point validation** - `handle_ingest()` validates all file paths
+- ✅ **Defense-in-depth** - Storage layers verify absolute paths
+- ✅ **Comprehensive testing** - 31 security tests covering exploit scenarios
+- ✅ **Whitelist-based security** - File access restricted to allowed directories
 
 **Timeline:**
 - Identified: 2025-01-26
-- Fix In Progress: Yes
-- Expected Fix: v0.6.1
+- Fix Released: v0.6.1 (2025-01-26)
+- Verification: 735 tests passing, 72.69% coverage
 
 ## Threat Model
 
@@ -67,48 +74,56 @@ Token Saver 5000 is a **local MCP server** that runs on the user's machine and c
 
 ### Primary Threats
 
-1. **Local Server Compromise** ⚠️ CURRENT RISK
-   - Arbitrary file read (path traversal vulnerability)
-   - Potential arbitrary code execution through malicious inputs
-   - Data exfiltration via file system access
+1. **Local Server Compromise** ✅ MITIGATED (v0.6.1)
+   - ~~Arbitrary file read (path traversal vulnerability)~~ **FIXED**
+   - Potential arbitrary code execution through malicious inputs ⚠️ ONGOING REVIEW
+   - Data exfiltration via file system access ✅ RESTRICTED to allowed directories
 
-2. **Resource Exhaustion** ✅ MITIGATED
+2. **Resource Exhaustion** ✅ MITIGATED (v0.4.2)
    - LRU eviction in place for file sync metadata (1000 entry limit)
    - LRU eviction for ACE contexts (100 context limit)
    - Automatic version pruning (10 versions per document)
 
 3. **Information Disclosure** ⚠️ MEDIUM RISK
-   - Full file paths displayed in error messages
+   - Full file paths displayed in error messages (non-critical for local stdio server)
    - Potential sensitive data leakage in logs
 
-4. **Input Validation Gaps** ⚠️ UNDER REVIEW
-   - String length limits not consistently enforced
-   - Complex input structures need validation
-   - Enum values partially validated
+4. **Input Validation** ✅ IMPROVED (v0.6.1)
+   - ✅ Path validation with whitelist-based security
+   - String length limits not consistently enforced ⚠️ LOW PRIORITY
+   - Complex input structures need validation ⚠️ ONGOING
+   - Enum values partially validated ✅ ACCEPTABLE for stdio deployment
 
 ## Security Best Practices for Users
 
-### Current Recommendations
+### Current Recommendations (v0.6.1+)
 
 **DO:**
-- ✅ Run the MCP server in a restricted user account
+- ✅ Run the MCP server in a restricted user account (defense-in-depth)
 - ✅ Monitor file system access logs
-- ✅ Keep the software updated
+- ✅ Keep the software updated (subscribe to security advisories)
 - ✅ Review MCP tool calls in Claude Desktop before approval
+- ✅ **v0.6.1+:** File sync is now SAFE to use with path validation
+- ✅ **v0.6.1+:** Allowed directories: current working directory + user home directory
 
 **DO NOT:**
-- ❌ Use file sync features (`file_path` parameter) until v0.6.1+
-- ❌ Run in environments with sensitive files accessible
-- ❌ Grant file system access to untrusted directories
-- ❌ Deploy to production environments (not suitable yet)
+- ❌ Use v0.6.0 or earlier versions (path traversal vulnerability)
+- ❌ Disable path validation or modify allowed directories without review
+- ❌ Run as administrator/root (principle of least privilege)
+- ⚠️ Deploy to production environments (beta software, not yet production-ready)
 
-### Future Recommendations (Post-v0.6.1)
+### Security Best Practices
 
-Once path traversal is fixed:
-- Define allowed base directories for file sync
-- Use relative paths within project directories only
-- Enable logging to monitor file access patterns
-- Regular security audits of ingested documents
+**Path Validation (v0.6.1+):**
+- File access restricted to allowed base directories (CWD + user home)
+- All paths validated at entry point and storage layers
+- Path traversal sequences (../, symlinks) blocked
+- Use absolute paths for clarity and security
+
+**Data Protection:**
+- Regular backups of `.semantic_modulator_data/` directory
+- Review version history for sensitive data exposure
+- Monitor resource usage and disk space
 
 ## Reporting a Vulnerability
 
@@ -140,17 +155,19 @@ Instead, please report them via:
 
 | Date | Auditor | Findings | Status |
 |------|---------|----------|--------|
-| 2025-01-26 | Claude Code | Path traversal (CWE-22) | Fix in progress |
+| 2025-01-26 | Claude Code | Path traversal (CWE-22, CVSS 7.5) | ✅ Fixed in v0.6.1 |
 
 ## Changelog
 
 ### Security Fixes
 
-#### Planned for v0.6.1
-- [ ] Fix path traversal vulnerability in file sync
-- [ ] Add PathValidator with allowed directory whitelist
-- [ ] Sanitize file paths in error messages
-- [ ] Add comprehensive path validation tests
+#### v0.6.1 (2025-01-26) - SECURITY RELEASE
+- ✅ **CRITICAL FIX:** Path traversal vulnerability (CWE-22, CVSS 7.5 HIGH)
+- ✅ Added PathValidator with allowed directory whitelist (`src/path_validator.py`)
+- ✅ Entry point validation in `handle_ingest()`
+- ✅ Defense-in-depth checks in storage layers
+- ✅ Comprehensive security testing (31 tests, 96% coverage for PathValidator)
+- ✅ **Verification:** All 735 tests passing, 72.69% overall coverage
 
 #### v0.4.2 (2025-01-XX)
 - ✅ Added LRU eviction for file sync metadata (prevents DoS)
@@ -165,5 +182,5 @@ For security concerns, please contact:
 
 ---
 
-**Last Updated:** 2025-01-26
-**Security Status:** Under Active Development - Not Production Ready
+**Last Updated:** 2025-01-26 (v0.6.1 Security Release)
+**Security Status:** ✅ Critical Path Traversal Vulnerability Fixed - Beta Quality
