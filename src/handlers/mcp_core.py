@@ -6,12 +6,12 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 30 MCP tool schemas
+- setup_mcp_tools: Returns list of all 35 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
 - All tool schemas centralized here for maintainability
-- Router delegates to handler modules (compression, AFM, file sync, etc.)
+- Router delegates to handler modules (compression, AFM, file sync, visualization, etc.)
 - Handlers receive context dict with all necessary server components
 """
 
@@ -27,13 +27,14 @@ from . import file_sync_handlers as fs
 from . import resource_handlers as rh
 from . import detection_handlers as dh
 from . import ace_handlers as ace
+from . import visualization_handlers as vh
 
 logger = logging.getLogger("semantic-modulator")
 
 
 def setup_mcp_tools() -> List[Tool]:
     """
-    Define all 31 MCP tools available in the Semantic Modulator server.
+    Define all 35 MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
@@ -41,6 +42,7 @@ def setup_mcp_tools() -> List[Tool]:
     Tool Categories:
     - Document Compression (9): ingest, read_skeleton, modulate_region, search, stats, list, delete, adapt, multilevel
     - Batch Processing (1): batch_ingest_documents
+    - Graph Visualization (4): export_graph_json, visualize_graph_html, export_graph_graphml, explain_compression_decision
     - Fidelity Advisor (1): recommend_fidelity
     - Detection (2): check_blind_spots, detect_hallucination
     - AFM Dialogue (6): add_message, build_context, get_stats, clear, export, import
@@ -892,6 +894,110 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["use_case", "num_nodes"],
             },
         ),
+        # === GRAPH VISUALIZATION TOOLS (4) ===
+        Tool(
+            name="export_graph_json",
+            description=(
+                "📊 Export semantic graph as JSON for programmatic access. "
+                "Returns a structured JSON representation of the semantic graph with nodes, edges, "
+                "importance scores, and statistics. Perfect for custom analysis or integration with "
+                "other tools."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Document ID to export",
+                    },
+                    "max_nodes": {
+                        "type": "integer",
+                        "description": "Maximum nodes to include (default: 50)",
+                        "minimum": 1,
+                    },
+                    "min_importance": {
+                        "type": "number",
+                        "description": "Minimum importance score to include (default: 0.0)",
+                        "minimum": 0.0,
+                    },
+                },
+                "required": ["file_id"],
+            },
+        ),
+        Tool(
+            name="visualize_graph_html",
+            description=(
+                "🎨 Generate interactive HTML visualization of the semantic graph. "
+                "Creates a beautiful, interactive web page with draggable nodes, zoom/pan, "
+                "color-coded importance, and edge weights. Great for exploring and presenting "
+                "compression decisions. Requires pyvis library."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Document ID to visualize",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save HTML file (e.g., 'graph.html')",
+                    },
+                    "max_nodes": {
+                        "type": "integer",
+                        "description": "Maximum nodes to visualize (default: 50)",
+                        "minimum": 1,
+                    },
+                },
+                "required": ["file_id", "output_path"],
+            },
+        ),
+        Tool(
+            name="export_graph_graphml",
+            description=(
+                "📁 Export semantic graph as GraphML for analysis tools. "
+                "GraphML is a standard XML format supported by Gephi, Cytoscape, igraph, "
+                "and NetworkX. Perfect for advanced network analysis, visualization, "
+                "and research workflows."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Document ID to export",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save GraphML file (e.g., 'graph.graphml')",
+                    },
+                },
+                "required": ["file_id", "output_path"],
+            },
+        ),
+        Tool(
+            name="explain_compression_decision",
+            description=(
+                "🔍 Explain why a specific node was kept or dropped during compression. "
+                "Provides detailed analysis including importance score ranking, connectivity, "
+                "key entities, and relationships with other nodes. Perfect for understanding "
+                "and debugging compression decisions."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Document ID",
+                    },
+                    "node_id": {
+                        "type": "string",
+                        "description": "Node ID to explain (e.g., 'quantum_paper_n3')",
+                    },
+                },
+                "required": ["file_id", "node_id"],
+            },
+        ),
     ]
 
 
@@ -957,6 +1063,11 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "get_version_history": fs.handle_get_version_history,
         # Resource Management (1 tool)
         "check_resource_health": rh.handle_check_resource_health,
+        # Graph Visualization (4 tools)
+        "export_graph_json": vh.handle_export_graph_json,
+        "visualize_graph_html": vh.handle_visualize_graph_html,
+        "export_graph_graphml": vh.handle_export_graph_graphml,
+        "explain_compression_decision": vh.handle_explain_compression_decision,
         # ACE Framework (7 tools) - now using HandlerContext like all other handlers
         "ace_generate": ace.handle_ace_generate,
         "ace_reflect": ace.handle_ace_reflect,
