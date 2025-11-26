@@ -514,9 +514,10 @@ class TestCodeSkeleton:
             code=SAMPLE_PYTHON_CODE, file_id="score_test", filepath="test.py"
         )
 
-        skeleton = compressor.generate_code_skeleton("score_test")
+        # Show at least 2 chunks to ensure we get a non-import chunk
+        skeleton = compressor.generate_code_skeleton("score_test", show_top_n=2)
 
-        # Should include importance scores
+        # Should include importance scores (for function/class chunks)
         assert "importance:" in skeleton
 
     def test_generate_code_skeleton_shows_docstrings(self, mock_embedding_manager_class):
