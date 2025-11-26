@@ -157,15 +157,13 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **618 comprehensive tests** (603+ passing, ~15 skipped for optional dependencies, ~98% pass rate)
+- ✅ **591 comprehensive tests** (576+ passing, ~15 skipped for optional dependencies, ~97% pass rate)
   - Was 506 in v0.6.0, 446 in v0.5.0-beta, 436 in v0.4.4, 427 in v0.4.3
-  - 112 new tests added in post-v0.6.0 (Phase 1 production readiness):
+  - 85 new tests added in post-v0.6.0 (Phase 1 production readiness):
     * 53 persistence comprehensive tests (persistence.py: 32% → 65% coverage)
     * 25 cache comprehensive tests (embedding_cache.py: 86% → 99% coverage)
     * 7 semantic fidelity benchmarks (semantic_ssim.py: 0% → 89%)
-    * 18 batch processing tests (v0.6.0)
-    * 16 visualization tests (v0.6.0)
-    * 24 memory optimization tests (v0.6.0, with skip decorators)
+    * (v0.6.0 tests: 18 batch processing, 16 visualization, 24 memory optimization)
   - Zero tech debt introduced
 
 - ✅ **Code Quality:**
