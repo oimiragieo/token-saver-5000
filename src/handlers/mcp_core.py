@@ -33,13 +33,14 @@ logger = logging.getLogger("semantic-modulator")
 
 def setup_mcp_tools() -> List[Tool]:
     """
-    Define all 30 MCP tools available in the Semantic Modulator server.
+    Define all 31 MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
 
     Tool Categories:
     - Document Compression (9): ingest, read_skeleton, modulate_region, search, stats, list, delete, adapt, multilevel
+    - Batch Processing (1): batch_ingest_documents
     - Fidelity Advisor (1): recommend_fidelity
     - Detection (2): check_blind_spots, detect_hallucination
     - AFM Dialogue (6): add_message, build_context, get_stats, clear, export, import
@@ -799,6 +800,52 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["task", "outcome", "success"],
             },
         ),
+        # === BATCH PROCESSING TOOL (1) ===
+        Tool(
+            name="batch_ingest_documents",
+            description=(
+                "🚀 Batch ingest multiple documents concurrently for 4× faster throughput. "
+                "Processes documents in parallel with bounded concurrency, progress tracking, "
+                "and error isolation. One document failure won't block the entire batch. "
+                "Returns detailed results for each document including success status and processing time. "
+                "Ideal for enterprise-scale document ingestion."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "documents": {
+                        "type": "array",
+                        "description": "List of documents to ingest",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "file_id": {
+                                    "type": "string",
+                                    "description": "Unique identifier for this document",
+                                },
+                                "text": {
+                                    "type": "string",
+                                    "description": "Document text content",
+                                },
+                                "metadata": {
+                                    "type": "object",
+                                    "description": "Optional metadata for the document",
+                                },
+                            },
+                            "required": ["file_id", "text"],
+                        },
+                        "minItems": 1,
+                    },
+                    "max_concurrent": {
+                        "type": "integer",
+                        "description": "Maximum concurrent ingestions (default: 4, range: 1-8)",
+                        "minimum": 1,
+                        "maximum": 8,
+                    },
+                },
+                "required": ["documents"],
+            },
+        ),
         # === FIDELITY ADVISOR TOOL (1) ===
         Tool(
             name="recommend_fidelity",
@@ -848,7 +895,7 @@ def setup_mcp_tools() -> List[Tool]:
     ]
 
 
-def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) -> str:
+async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) -> str:
     """
     Route MCP tool calls to appropriate handler functions.
 
@@ -889,6 +936,8 @@ def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) ->
         "delete_document": ch.handle_delete_document,
         "adapt_to_context_window": ch.handle_adapt_to_context_window,
         "multilevel_encode": ch.handle_multilevel_encode,
+        # Batch Processing (1 tool)
+        "batch_ingest_documents": ch.handle_batch_ingest,
         # Fidelity Advisor (1 tool)
         "recommend_fidelity": ch.handle_recommend_fidelity,
         # Detection (2 tools)
@@ -927,10 +976,10 @@ def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) ->
             f"💡 Tip: Use list_tools() to see all available tools with descriptions"
         )
 
-    # Route to handler
+    # Route to handler (async)
     handler = router[name]
     handler_module = getattr(handler, "__module__", "unknown")
     handler_name = getattr(handler, "__name__", "unknown")
     logger.info(f"Routing '{name}' to {handler_module}.{handler_name}")
 
-    return handler(context, args)
+    return await handler(context, args)

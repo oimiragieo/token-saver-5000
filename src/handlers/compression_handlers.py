@@ -127,7 +127,7 @@ def validate_token_count(available_tokens: int, max_tokens: int = None) -> None:
 # ===========================
 
 
-def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle ingest_context tool call.
 
     Args:
@@ -178,7 +178,7 @@ def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     )
 
     try:
-        skeleton = context["compressor"].ingest_file(text, file_id, metadata)
+        skeleton = await context["compressor"].ingest_file_async(text, file_id, metadata)
     except Exception as e:
         raise RuntimeError(
             f"Failed to ingest document: {str(e)}\n"
@@ -274,7 +274,7 @@ Next steps:
     return result
 
 
-def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle read_skeleton tool call.
 
     Args:
@@ -332,7 +332,7 @@ Proceeding with cached version...
         ) from e
 
 
-def handle_modulate_region(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_modulate_region(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle modulate_region tool call.
 
     Args:
@@ -407,7 +407,7 @@ Proceeding with cached version...
         ) from e
 
 
-def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle search_semantic tool call.
 
     Args:
@@ -440,7 +440,7 @@ def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) -> str
     return "\n".join(result_lines)
 
 
-def handle_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle get_stats tool call.
 
     Args:
@@ -481,7 +481,7 @@ Files: {', '.join(stats['files'])}
     return result
 
 
-def handle_list_documents(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_list_documents(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle list_documents tool call.
 
     Args:
@@ -554,7 +554,7 @@ No documents ingested yet.
     return "\n".join(result_lines)
 
 
-def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle delete_document tool call.
 
     Args:
@@ -665,7 +665,7 @@ Memory freed: ~{node_count * 2}KB (estimated)
 """
 
 
-def handle_adapt_to_context_window(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_adapt_to_context_window(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle adapt_to_context_window tool call (JSCCM-inspired).
 
     Args:
@@ -713,7 +713,7 @@ def handle_adapt_to_context_window(context: HandlerContext, args: Dict[str, Any]
         ) from e
 
 
-def handle_multilevel_encode(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_multilevel_encode(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle multilevel_encode tool call (JSCCM-inspired).
 
     Args:
@@ -749,7 +749,7 @@ def handle_multilevel_encode(context: HandlerContext, args: Dict[str, Any]) -> s
         ) from e
 
 
-def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle recommend_fidelity tool call (NEW in v0.4.1).
 
     Args:
@@ -838,5 +838,163 @@ def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any]) -> 
             f"to retrieve {num_nodes} nodes (~{rec.token_estimate} tokens)"
         ),
     }
+
+    return json.dumps(response, indent=2)
+
+
+# ===========================
+# Batch Processing Handler
+# ===========================
+
+
+async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """
+    Handle batch_ingest_documents MCP tool (v0.6.0).
+
+    Ingests multiple documents concurrently with bounded parallelism,
+    progress tracking, and error isolation.
+
+    Args:
+        context: Server context dict
+        args: Tool arguments:
+            - documents: List of {file_id, text, metadata} objects
+            - max_concurrent: Optional max concurrent ingestions (default 4)
+
+    Returns:
+        JSON string with batch results:
+        {
+            "total": 10,
+            "successful": 9,
+            "failed": 1,
+            "results": [
+                {"file_id": "doc1", "success": true, "processing_time": 1.2},
+                {"file_id": "doc2", "success": false, "error": "ValueError: text too short"}
+            ],
+            "summary": "Batch complete: 9/10 succeeded in 12.5s"
+        }
+
+    Raises:
+        ValueError: If validation fails
+    """
+    from ..batch_manager import BatchCompressionManager, BatchDocument
+
+    # Extract arguments
+    documents_list = args.get("documents", [])
+    max_concurrent = args.get("max_concurrent", 4)
+
+    # Validate arguments
+    if not documents_list:
+        raise SmartError.missing_required_field("documents", "batch_ingest_documents")
+
+    if not isinstance(documents_list, list):
+        raise ValueError(
+            f"documents must be a list, got {type(documents_list).__name__}\n"
+            "💡 Tip: Provide a list of objects with 'file_id' and 'text' fields"
+        )
+
+    if not (1 <= max_concurrent <= 8):
+        raise ValueError(
+            f"max_concurrent must be between 1 and 8, got {max_concurrent}\n"
+            "💡 Tip: Use 4 for balanced performance, 1 for sequential, 8 for maximum throughput"
+        )
+
+    # Validate each document
+    batch_documents = []
+    for i, doc in enumerate(documents_list):
+        if not isinstance(doc, dict):
+            raise ValueError(
+                f"Document {i} must be an object, got {type(doc).__name__}\n"
+                "💡 Tip: Each document should have 'file_id' and 'text' fields"
+            )
+
+        file_id = doc.get("file_id")
+        text = doc.get("text")
+        metadata = doc.get("metadata", {})
+
+        # Validate file_id
+        if not file_id:
+            raise SmartError.missing_required_field(
+                f"documents[{i}].file_id", "batch_ingest_documents"
+            )
+
+        if not isinstance(file_id, str):
+            raise ValueError(
+                f"documents[{i}].file_id must be a string, got {type(file_id).__name__}"
+            )
+
+        # Validate text
+        if not text:
+            raise SmartError.missing_required_field(
+                f"documents[{i}].text", "batch_ingest_documents"
+            )
+
+        if not isinstance(text, str):
+            raise ValueError(f"documents[{i}].text must be a string, got {type(text).__name__}")
+
+        # Create BatchDocument
+        batch_documents.append(BatchDocument(file_id=file_id, text=text, metadata=metadata))
+
+    # Log batch operation
+    logger.info(
+        f"Starting batch ingestion: {len(batch_documents)} documents, "
+        f"max_concurrent={max_concurrent}"
+    )
+
+    # Create batch manager and execute
+    manager = BatchCompressionManager(
+        compressor=context["compressor"], max_concurrent=max_concurrent
+    )
+
+    import time
+
+    start_time = time.time()
+    results = await manager.compress_batch(batch_documents)
+    total_time = time.time() - start_time
+
+    # Format results
+    successful = sum(1 for r in results if r.success)
+    failed = len(results) - successful
+
+    result_list = []
+    for result in results:
+        entry = {
+            "file_id": result.file_id,
+            "success": result.success,
+            "processing_time": round(result.processing_time, 2),
+        }
+
+        if result.success:
+            # Include skeleton summary
+            if result.result:
+                entry["skeleton_preview"] = result.result.skeleton_text[:200] + "..."
+                entry["compression_ratio"] = result.result.compression_ratio
+        else:
+            entry["error"] = result.error
+
+        result_list.append(entry)
+
+    # Create response
+    response = {
+        "total": len(results),
+        "successful": successful,
+        "failed": failed,
+        "max_concurrent": max_concurrent,
+        "total_time": round(total_time, 2),
+        "avg_time_per_doc": round(total_time / len(results), 2) if results else 0.0,
+        "results": result_list,
+        "summary": (
+            f"Batch complete: {successful}/{len(results)} succeeded in {total_time:.1f}s "
+            f"(avg {total_time/len(results):.2f}s/doc)"
+        ),
+    }
+
+    if failed > 0:
+        failed_ids = [r.file_id for r in results if not r.success]
+        response["failed_file_ids"] = failed_ids
+        response["tip"] = (
+            f"⚠️ {failed} documents failed. Check error messages for each failed document."
+        )
+
+    logger.info(response["summary"])
 
     return json.dumps(response, indent=2)
