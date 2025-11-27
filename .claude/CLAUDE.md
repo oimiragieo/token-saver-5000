@@ -105,14 +105,20 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - Always run linting before committing (`ruff check src/`)
 - Use `black` for consistent code formatting
 
-## Token Saver 5000 Project Specifics (v0.6.1)
+## Token Saver 5000 Project Specifics (v0.7.0 - IN PROGRESS)
 
 ### Project Overview
 **Token Saver 5000** is an MCP server implementing research-backed semantic compression for AI interactions. It achieves **85-90% token reduction (proven: 87.4%)** through graph-based semantic analysis.
 
 > **Proven Performance:** 7.9× compression (485 → 61 tokens) on real quantum computing document. See `demo_proof.py`.
 
-**Latest Release (v0.6.1 - Security Hardening - COMPLETE):**
+**Current Release (v0.7.0 - Enterprise Production Readiness - IN PROGRESS):**
+- ✅ **Week 1-2 Complete:** Reliability Infrastructure (TimeoutManager, CircuitBreaker, RetryPolicy, RateLimiter, GracefulDegradation)
+- ✅ **Week 3-4 Complete:** Comprehensive Testing Suite (100 new tests: integration, performance, chaos, E2E)
+- ⏳ **Week 5-6 Planned:** Observability & Monitoring (OpenTelemetry, Prometheus, structured logging)
+- ⏳ **Week 7-8 Planned:** DevOps & Operational Excellence (Kubernetes, CI/CD, deployment automation)
+
+**Previous Release (v0.6.1 - Security Hardening - COMPLETE):**
 - 🔒 **Critical Security Fix: Path Traversal Prevention (CWE-22):**
   - **Issue:** File paths in `ingest_context()` were not validated, allowing arbitrary file read via `../../etc/passwd`
   - **Impact:** CVSS 7.5 HIGH - Arbitrary file read when combined with `refresh_document()` tool
@@ -170,9 +176,16 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **735 comprehensive tests** (735 passing, 11 skipped, 100% pass rate - v0.6.1)
-  - Was 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
-  - 70 new tests added in v0.6.1 security hardening:
+- ✅ **864 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 3-4)
+  - Was 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+  - 100 new tests added in v0.7.0 Week 3-4 comprehensive testing suite:
+    * 50 integration workflow tests (complete workflows: ingest → compress → expand → refresh → versions)
+    * 15 performance benchmark tests (throughput, latency, memory, cache, burst capacity)
+    * 20 chaos engineering tests (disk failures, model crashes, network issues, data corruption)
+    * 15 E2E scenario tests (research papers, codebase documentation, dialogue management)
+  - 29 new tests added in v0.7.0 Week 1-2 reliability infrastructure:
+    * 29 reliability tests (TimeoutManager, CircuitBreaker, RetryPolicy, RateLimiter, GracefulDegradation)
+  - 70 tests added in v0.6.1 security hardening:
     * 31 path validation security tests (path_validator.py: 96% coverage)
     * 39 test fixes for path security compliance (absolute path requirements)
   - 159 tests added in Phase 1 production readiness:
@@ -216,6 +229,7 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - Real-time staleness detection for cached documents
 
 ### Key Test Files
+- `tests/conftest.py` - Shared test fixtures and infrastructure (380 lines - v0.7.0 Week 3-4)
 - `tests/test_functional.py` - Core compression features (19 tests)
 - `tests/test_token_savings.py` - Compression benchmarks (21 tests)
 - `tests/test_afm.py` - Dialogue memory (29 tests, allergy retention)
@@ -235,7 +249,12 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - `tests/test_persistence_comprehensive.py` - Persistence layer comprehensive (53 tests - Phase 1)
 - `tests/test_cache_comprehensive.py` - LRU cache comprehensive (25 tests - Phase 1)
 - `tests/test_semantic_fidelity.py` - Semantic SSIM fidelity benchmarks (7 tests - Phase 1)
-- `tests/test_path_validator.py` - Path traversal security (31 tests - v0.6.1 - NEW!)
+- `tests/test_path_validator.py` - Path traversal security (31 tests - v0.6.1)
+- `tests/test_reliability.py` - Reliability infrastructure (29 tests - v0.7.0 Week 1-2)
+- `tests/test_integration_workflows.py` - Integration workflows (50 tests - v0.7.0 Week 3-4 - NEW!)
+- `tests/test_performance.py` - Performance benchmarks (15 tests - v0.7.0 Week 3-4 - NEW!)
+- `tests/test_chaos_engineering.py` - Chaos engineering (20 tests - v0.7.0 Week 3-4 - NEW!)
+- `tests/test_e2e_scenarios.py` - End-to-end scenarios (15 tests - v0.7.0 Week 3-4 - NEW!)
 
 ### Important Implementation Details
 **Path Validation Security (v0.6.1 - CWE-22 Prevention):**
