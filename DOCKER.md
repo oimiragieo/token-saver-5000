@@ -2,15 +2,27 @@
 
 Run Token Saver 5000 as a Docker container for easy deployment and isolation.
 
+> **Production Kubernetes Deployment:** For production environments, see [deployment/kubernetes/README.md](deployment/kubernetes/README.md) for comprehensive Kubernetes manifests with health checks, autoscaling, and monitoring.
+
 ## Quick Start
 
 ```bash
-# Start the container
-docker-compose up -d
+# Build the multi-stage Docker image
+docker build -t token-saver-5000:latest .
 
-# Test it works
-echo '{"jsonrpc": "2.0", "method": "initialize", "params": {}, "id": 1}' | \
-  docker exec -i token-saver-mcp python -m src.server
+# Run in stdio mode (default, for local Claude Desktop/Code integration)
+docker run -d \
+  --name token-saver-mcp \
+  -v token-saver-data:/data \
+  token-saver-5000:latest
+
+# Run with HTTP server enabled (for Kubernetes health checks and metrics)
+docker run -d \
+  --name token-saver-mcp \
+  -e HTTP_ENABLED=true \
+  -p 8080:8080 \
+  -v token-saver-data:/data \
+  token-saver-5000:latest
 ```
 
 ## Claude Desktop Integration
@@ -34,17 +46,34 @@ echo '{"jsonrpc": "2.0", "method": "initialize", "params": {}, "id": 1}' | \
 
 Restart Claude Desktop. The 30 MCP tools will be available.
 
-## Manual Build
+## Docker Image Features
+
+The multi-stage Dockerfile provides:
+
+- **Security:** Non-root user (uid 1000), read-only filesystem support, dropped capabilities
+- **Size Optimization:** <500MB target image (~450MB expected) via builder + runtime stages
+- **Hybrid Deployment:** Supports both stdio mode (MCP) and HTTP mode (Kubernetes)
+- **Health Checks:** Built-in health check for liveness probe (when HTTP_ENABLED=true)
+- **Model Caching:** Pre-downloads sentence-transformers model during build
+
+### Environment Variables
+
+- `HTTP_ENABLED` (default: false) - Enable HTTP server for health checks and metrics
+- `HTTP_HOST` (default: 0.0.0.0) - HTTP server bind address
+- `HTTP_PORT` (default: 8080) - HTTP server port
+- `DATA_DIR` (default: /data) - Persistent data directory
+
+### Build Options
 
 ```bash
-# Build image
+# Standard build
 docker build -t token-saver-5000:latest .
 
-# Run container
-docker run -d \
-  --name token-saver-mcp \
-  -v token-saver-data:/data \
-  token-saver-5000:latest
+# Build with custom tag
+docker build -t token-saver-5000:v0.7.0 .
+
+# Multi-platform build (requires buildx)
+docker buildx build --platform linux/amd64,linux/arm64 -t token-saver-5000:latest .
 ```
 
 ## Persistent Storage
@@ -75,33 +104,43 @@ docker logs token-saver-mcp
 
 ## Production Deployment
 
-For production, configure resource limits in `docker-compose.yml`:
+> **Recommended:** For production Kubernetes deployments, see [deployment/kubernetes/README.md](deployment/kubernetes/README.md) for:
+> - Horizontal Pod Autoscaling (2-10 replicas based on CPU/memory)
+> - Prometheus metrics and alerting (16 production-ready alerts)
+> - Zero-downtime rolling updates
+> - Health probes (liveness, readiness, startup)
+> - High availability (pod anti-affinity)
 
-```yaml
-services:
-  token-saver-mcp:
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
+### Docker Standalone Production
+
+For standalone Docker production deployments:
+
+```bash
+# Run with HTTP server for monitoring
+docker run -d \
+  --name token-saver-mcp \
+  --restart unless-stopped \
+  -e HTTP_ENABLED=true \
+  -p 8080:8080 \
+  -v /opt/token-saver/data:/data \
+  --memory="2g" \
+  --cpus="1.0" \
+  --read-only \
+  --security-opt=no-new-privileges \
+  token-saver-5000:latest
 ```
 
-Mount persistent storage:
+**Health Check Endpoints:**
+- `GET /health/liveness` - Always returns 200 if container is running
+- `GET /health/readiness` - Returns 200 if all components healthy, 503 if unhealthy
+- `GET /health/diagnostics` - Detailed performance metrics and resource usage
+- `GET /metrics` - Prometheus metrics in text format
 
-```yaml
-    volumes:
-      - ./data:/data  # Explicit local directory
-```
+**Monitoring:**
+```bash
+# Check health
+curl http://localhost:8080/health/readiness
 
-Enable health checks:
-
-```yaml
-    healthcheck:
-      test: ["CMD", "python", "-c", "import src.server"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+# View metrics
+curl http://localhost:8080/metrics
 ```

@@ -33,6 +33,15 @@ services:
       - STORAGE_BACKEND=chromadb  # or 'json' for simpler setup
       - DATA_DIR=/data
       - LOG_LEVEL=INFO
+      # HTTP server for health checks and metrics (disabled by default)
+      # Uncomment for production monitoring:
+      # - HTTP_ENABLED=true
+      # - HTTP_HOST=0.0.0.0
+      # - HTTP_PORT=8080
+
+    # Expose HTTP port for health checks and metrics (if HTTP_ENABLED=true)
+    # ports:
+    #   - "8080:8080"
 
     # Restart policy
     restart: unless-stopped
@@ -40,6 +49,14 @@ services:
     # stdin/stdout must stay open for MCP protocol
     stdin_open: true
     tty: false
+
+    # Health check (requires HTTP_ENABLED=true)
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/health/liveness"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 10s
 
 volumes:
   token-saver-data:

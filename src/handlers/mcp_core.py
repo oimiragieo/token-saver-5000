@@ -28,8 +28,8 @@ from . import detection_handlers as dh
 from . import ace_handlers as ace
 from . import visualization_handlers as vh
 
-# Import structured logging for performance tracking
-from ..structured_logging import get_logger, track_performance
+# Import structured logging for operation tracking
+from ..structured_logging import get_logger
 
 logger = get_logger("semantic-modulator")
 
@@ -1003,10 +1003,9 @@ def setup_mcp_tools() -> List[Tool]:
     ]
 
 
-@track_performance
 async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) -> str:
     """
-    Route MCP tool calls to appropriate handler functions with automatic performance tracking.
+    Route MCP tool calls to appropriate handler functions.
 
     This function automatically logs:
     - Request ID (correlation)
