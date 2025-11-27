@@ -38,13 +38,13 @@ class TestThroughputPerformance:
 
         for i in range(num_docs):
             doc_id = f"throughput_test_{i}"
-            await compressor.ingest_context(doc_id, large_document)
+            await compressor.ingest_file_async(large_document, doc_id)
 
         elapsed = time.perf_counter() - start
         throughput = num_docs / elapsed
 
         assert throughput > 2.0, f"Throughput {throughput:.2f} docs/sec too slow (expected > 2)"
-        assert len(compressor.documents) == num_docs
+        assert len(compressor.graphs) == num_docs
 
     @pytest.mark.asyncio
     async def test_throughput_batch_ingestion(self, compressor, performance_documents):
@@ -58,19 +58,23 @@ class TestThroughputPerformance:
         # Sequential baseline
         sequential_start = time.perf_counter()
         for i, doc in enumerate(performance_documents[:20]):
-            await compressor.ingest_context(f"seq_{i}", doc)
+            await compressor.ingest_file_async(doc, f"seq_{i}")
         sequential_elapsed = time.perf_counter() - sequential_start
 
         # Reset compressor
-        compressor.documents.clear()
-        compressor.semantic_graphs.clear()
+        compressor.graphs.clear()
+        compressor.chunks.clear()
+        compressor.file_metadata.clear()
 
         # Batch processing
+        from src.batch_manager import BatchDocument
+
         batch_start = time.perf_counter()
         manager = BatchCompressionManager(compressor)
-        results = await manager.ingest_batch(
-            [(f"batch_{i}", doc) for i, doc in enumerate(performance_documents[:20])]
-        )
+        batch_docs = [
+            BatchDocument(f"batch_{i}", doc, {}) for i, doc in enumerate(performance_documents[:20])
+        ]
+        results = await manager.compress_batch(batch_docs)
         batch_elapsed = time.perf_counter() - batch_start
 
         speedup = sequential_elapsed / batch_elapsed
@@ -125,7 +129,7 @@ class TestLatencyPerformance:
         for i in range(50):
             doc = f"Test document {i} with some content to analyze. " * 10
             start = time.perf_counter()
-            await compressor.ingest_context(f"latency_p50_{i}", doc)
+            await compressor.ingest_file_async(doc, f"latency_p50_{i}")
             elapsed = time.perf_counter() - start
             latencies.append(elapsed)
 
@@ -149,7 +153,7 @@ class TestLatencyPerformance:
 
         for i in range(50):
             doc_id = f"latency_p95_{i}"
-            await compressor.ingest_context(doc_id, large_document)
+            await compressor.ingest_file_async(large_document, doc_id)
 
             start = time.perf_counter()
             await compressor.compress_document(doc_id)
@@ -176,7 +180,7 @@ class TestLatencyPerformance:
         # Prepare compressed documents
         for i in range(50):
             doc_id = f"latency_p99_{i}"
-            await compressor.ingest_context(doc_id, large_document)
+            await compressor.ingest_file_async(large_document, doc_id)
             await compressor.compress_document(doc_id)
 
         # Measure expansion latency
@@ -211,7 +215,7 @@ class TestMemoryUsagePerformance:
         # Ingest 100 small documents
         for i in range(100):
             doc = f"Small test document {i}. " * 5
-            await compressor.ingest_context(f"baseline_{i}", doc)
+            await compressor.ingest_file_async(doc, f"baseline_{i}")
 
         after_rss = process.memory_info().rss / 1024 / 1024  # MB
         growth = after_rss - baseline_rss
@@ -258,22 +262,29 @@ class TestMemoryUsagePerformance:
         baseline_rss = process.memory_info().rss / 1024 / 1024  # MB
 
         # First batch
+        from src.batch_manager import BatchDocument
+
         manager = BatchCompressionManager(compressor)
-        await manager.ingest_batch(
-            [(f"batch1_{i}", doc) for i, doc in enumerate(performance_documents[:50])]
-        )
+        batch1_docs = [
+            BatchDocument(f"batch1_{i}", doc, {})
+            for i, doc in enumerate(performance_documents[:50])
+        ]
+        await manager.compress_batch(batch1_docs)
 
         after_batch1_rss = process.memory_info().rss / 1024 / 1024  # MB
         batch1_growth = after_batch1_rss - baseline_rss
 
         # Clear compressor state
-        compressor.documents.clear()
-        compressor.semantic_graphs.clear()
+        compressor.graphs.clear()
+        compressor.chunks.clear()
+        compressor.file_metadata.clear()
 
         # Second batch (should not grow significantly - cache reuse)
-        await manager.ingest_batch(
-            [(f"batch2_{i}", doc) for i, doc in enumerate(performance_documents[50:100])]
-        )
+        batch2_docs = [
+            BatchDocument(f"batch2_{i}", doc, {})
+            for i, doc in enumerate(performance_documents[50:100])
+        ]
+        await manager.compress_batch(batch2_docs)
 
         after_batch2_rss = process.memory_info().rss / 1024 / 1024  # MB
         batch2_growth = after_batch2_rss - after_batch1_rss
@@ -304,23 +315,27 @@ class TestCacheEffectiveness:
 
         # Warm up cache
         for i in range(10):
-            await compressor.ingest_context(f"warmup_{i}", doc)
+            await compressor.ingest_file_async(doc, f"warmup_{i}")
 
         # Get baseline cache stats
         from src.embeddings import get_embedding_manager
 
         manager = get_embedding_manager()
-        initial_stats = manager.embedding_cache.cache_stats()
-        initial_hits = initial_stats.get("hits", 0)
-        initial_total = initial_stats.get("total_requests", 0)
+        cache_stats_wrapper = manager.get_cache_stats()
+        initial_lru = cache_stats_wrapper.get("lru_cache", {})
+        initial_hits = initial_lru.get("hits", 0)
+        initial_misses = initial_lru.get("misses", 0)
+        initial_total = initial_hits + initial_misses
 
         # Repeat ingestion (should hit cache)
         for i in range(100):
-            await compressor.ingest_context(f"repeat_{i}", doc)
+            await compressor.ingest_file_async(doc, f"repeat_{i}")
 
-        final_stats = manager.embedding_cache.cache_stats()
-        final_hits = final_stats.get("hits", 0)
-        final_total = final_stats.get("total_requests", 0)
+        cache_stats_wrapper2 = manager.get_cache_stats()
+        final_lru = cache_stats_wrapper2.get("lru_cache", {})
+        final_hits = final_lru.get("hits", 0)
+        final_misses = final_lru.get("misses", 0)
+        final_total = final_hits + final_misses
 
         new_hits = final_hits - initial_hits
         new_requests = final_total - initial_total
@@ -348,9 +363,9 @@ class TestCacheEffectiveness:
         # Fill cache with diverse documents
         for i in range(1000):
             doc = f"Cache overhead test document {i} with unique content. " * 10
-            await compressor.ingest_context(f"cache_overhead_{i}", doc)
+            await compressor.ingest_file_async(doc, f"cache_overhead_{i}")
 
-        final_stats = manager.embedding_cache.cache_stats()
+        final_stats = manager.get_cache_stats()
         final_size = final_stats.get("current_size", 0)
         cache_growth = final_size - initial_size
 
@@ -375,14 +390,14 @@ class TestCacheEffectiveness:
         capacity = 10000
         for i in range(capacity - 100):
             doc = f"Eviction test document {i}. " * 5
-            await compressor.ingest_context(f"eviction_{i}", doc)
+            await compressor.ingest_file_async(doc, f"eviction_{i}")
 
         # Measure eviction time (trigger by adding more entries)
         eviction_times = []
         for i in range(200):  # Trigger evictions
             doc = f"Eviction trigger document {i}. " * 5
             start = time.perf_counter()
-            await compressor.ingest_context(f"trigger_{i}", doc)
+            await compressor.ingest_file_async(doc, f"trigger_{i}")
             elapsed = time.perf_counter() - start
             eviction_times.append(elapsed)
 
@@ -409,7 +424,7 @@ class TestBurstCapacity:
         start = time.perf_counter()
 
         tasks = [
-            compressor.ingest_context(f"concurrent_10_{i}", doc)
+            compressor.ingest_file_async(doc, f"concurrent_10_{i}")
             for i, doc in enumerate(performance_documents[:10])
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -435,7 +450,7 @@ class TestBurstCapacity:
         start = time.perf_counter()
 
         tasks = [
-            compressor.ingest_context(f"concurrent_50_{i}", doc)
+            compressor.ingest_file_async(doc, f"concurrent_50_{i}")
             for i, doc in enumerate(performance_documents[:50])
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -464,10 +479,14 @@ class TestBurstCapacity:
         start = time.perf_counter()
 
         # Use BatchCompressionManager for rate limiting
+        from src.batch_manager import BatchDocument
+
         manager = BatchCompressionManager(compressor, max_concurrent=4)
-        results = await manager.ingest_batch(
-            [(f"concurrent_100_{i}", doc) for i, doc in enumerate(performance_documents[:100])]
-        )
+        batch_docs = [
+            BatchDocument(f"concurrent_100_{i}", doc, {})
+            for i, doc in enumerate(performance_documents[:100])
+        ]
+        results = await manager.compress_batch(batch_docs)
 
         elapsed = time.perf_counter() - start
 

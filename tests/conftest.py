@@ -81,8 +81,16 @@ def persistence_manager():
 
 @pytest.fixture
 def path_validator():
-    """Create a PathValidator instance for testing."""
-    return PathValidator()
+    """Create a PathValidator instance for testing with temp directory access."""
+    import os
+    import tempfile
+
+    # Allow both project directory and system temp directory for tests
+    allowed_dirs = [
+        os.getcwd(),  # Project directory
+        tempfile.gettempdir(),  # System temp directory (for pytest tmp_path)
+    ]
+    return PathValidator(allowed_base_dirs=allowed_dirs)
 
 
 # ===========================
@@ -108,6 +116,7 @@ def handler_context(
     return {
         "compressor": compressor,
         "afm": afm,
+        "focus_manager": afm,  # AFM is the FocusManager
         "sync_manager": file_sync_manager,
         "version_manager": version_manager,
         "ace_contexts": {},

@@ -113,13 +113,11 @@ class TestBasicWorkflows:
         ]
 
         for level in fidelity_levels:
-            expanded = compressor.expand_nodes(test_nodes, fidelity_level=level)
+            expanded = compressor.modulate_region(test_nodes, fidelity_level=level)
             assert len(expanded) > 0
             # Higher fidelity should produce more tokens (generally)
             if level == FidelityLevel.RAW:
-                assert any(
-                    "learning" in exp.lower() or "quantum" in exp.lower() for exp in expanded
-                )
+                assert "learning" in expanded.lower() or "quantum" in expanded.lower()
 
     @pytest.mark.asyncio
     async def test_compress_then_refresh_workflow(self, handler_context, temp_file):
@@ -276,12 +274,11 @@ class TestBasicWorkflows:
 
         # Expand all nodes at RAW fidelity
         doc_nodes = [nid for nid in compressor.chunks.keys() if nid.startswith("semantic_test_")]
-        expanded = compressor.expand_nodes(doc_nodes, fidelity_level=FidelityLevel.RAW)
+        expanded = compressor.modulate_region(doc_nodes, fidelity_level=FidelityLevel.RAW)
 
         # Verify semantic content preserved
-        expanded_text = " ".join(expanded)
-        # Key concepts from sample_text_medium should appear
-        assert "quantum" in expanded_text.lower() or "qubit" in expanded_text.lower()
+        # modulate_region returns a single string, not a list
+        assert "quantum" in expanded.lower() or "qubit" in expanded.lower()
 
     @pytest.mark.asyncio
     async def test_multi_document_cross_reference(self, compressor):
@@ -309,9 +306,7 @@ class TestBasicWorkflows:
         matches = compressor.semantic_search("quantum machine learning", top_k=10)
 
         # Should find nodes from both_doc with high relevance
-        {
-            match.get("file_id", match.get("node_id", "").split("_")[0]) for match in matches
-        }
+        {match.get("file_id", match.get("node_id", "").split("_")[0]) for match in matches}
         # both_doc should be most relevant
         assert len(matches) > 0
 
@@ -704,7 +699,7 @@ class TestVersionHistory:
         """Test automatic pruning keeps only last N versions."""
         # Create version manager with small retention limit
 
-        small_vm = VersionManager(version_retention=3)
+        small_vm = VersionManager(max_versions=3)
         handler_context["version_manager"] = small_vm
 
         # Create 10 versions
@@ -734,11 +729,12 @@ class TestVersionHistory:
     @pytest.mark.asyncio
     async def test_version_history_manual_pruning(self, handler_context):
         """Test manual version pruning."""
-        version_manager = handler_context["version_manager"]
+        # Create version manager with max_versions limit
+        vm_with_limit = VersionManager(max_versions=2)
 
         # Add multiple versions manually
         for i in range(5):
-            version_manager.add_version(
+            vm_with_limit.add_version(
                 doc_id="manual_prune",
                 content=f"Version {i}",
                 file_path=None,
@@ -746,10 +742,10 @@ class TestVersionHistory:
                 metadata={},
             )
 
-        # Manual prune to keep only 2
-        version_manager.prune_old_versions("manual_prune", keep_versions=2)
+        # Manual prune (uses max_versions=2 from initialization)
+        vm_with_limit.prune_old_versions("manual_prune")
 
-        history = version_manager.get_version_history("manual_prune")
+        history = vm_with_limit.get_version_history("manual_prune")
         assert len(history) == 2
 
     @pytest.mark.asyncio

@@ -221,19 +221,22 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     # NEW: Register with file sync manager and version manager
     checksum = hashlib.md5(text.encode()).hexdigest()
     context["sync_manager"].register_file(file_id, file_path, text)
-    context["version_manager"].add_version(
-        doc_id=file_id,
-        content=text,
-        checksum=checksum,
-        file_path=file_path,
-        metadata=metadata or {},
-        compression_stats={
-            "total_tokens": skeleton.total_tokens,
-            "skeleton_tokens": skeleton.skeleton_tokens,
-            "compression_ratio": skeleton.compression_ratio,
-        },
-    )
-    logger.info(f"✅ Registered file sync tracking for {file_id}")
+    try:
+        context["version_manager"].add_version(
+            doc_id=file_id,
+            content=text,
+            checksum=checksum,
+            file_path=file_path,
+            metadata=metadata or {},
+            compression_stats={
+                "total_tokens": skeleton.total_tokens,
+                "skeleton_tokens": skeleton.skeleton_tokens,
+                "compression_ratio": skeleton.compression_ratio,
+            },
+        )
+        logger.info(f"✅ Registered version history for {file_id}")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to save version history for {file_id}: {e}")
 
     # Save file sync metadata to persistence
     try:
