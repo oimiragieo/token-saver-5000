@@ -115,7 +115,7 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 **Current Release (v0.7.0 - Enterprise Production Readiness - IN PROGRESS):**
 - ✅ **Week 1-2 Complete:** Reliability Infrastructure (TimeoutManager, CircuitBreaker, RetryPolicy, RateLimiter, GracefulDegradation)
 - ✅ **Week 3-4 Complete:** Comprehensive Testing Suite (100 new tests: integration, performance, chaos, E2E)
-- ⏳ **Week 5-6 Planned:** Observability & Monitoring (OpenTelemetry, Prometheus, structured logging)
+- ✅ **Week 5-6 Complete:** Observability & Monitoring (StructuredLogger, Prometheus metrics, OpenTelemetry tracing, HealthChecker)
 - ⏳ **Week 7-8 Planned:** DevOps & Operational Excellence (Kubernetes, CI/CD, deployment automation)
 
 **Previous Release (v0.6.1 - Security Hardening - COMPLETE):**
@@ -176,8 +176,13 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **864 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 3-4)
-  - Was 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+- ✅ **1,032 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 5-6)
+  - Was 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+  - 168 new tests added in v0.7.0 Week 5-6 observability infrastructure:
+    * 43 structured logging tests (JSON/human formatters, async context propagation, OTEL integration - 91% coverage)
+    * 29 Prometheus metrics tests (7 metrics, cardinality control, graceful degradation - 86% coverage)
+    * 53 OpenTelemetry tracing tests (span creation, async propagation, exception handling - 85% coverage)
+    * 43 health check tests (liveness/readiness/diagnostics, component health - 91% coverage)
   - 100 new tests added in v0.7.0 Week 3-4 comprehensive testing suite:
     * 50 integration workflow tests (complete workflows: ingest → compress → expand → refresh → versions)
     * 15 performance benchmark tests (throughput, latency, memory, cache, burst capacity)
@@ -251,10 +256,14 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - `tests/test_semantic_fidelity.py` - Semantic SSIM fidelity benchmarks (7 tests - Phase 1)
 - `tests/test_path_validator.py` - Path traversal security (31 tests - v0.6.1)
 - `tests/test_reliability.py` - Reliability infrastructure (29 tests - v0.7.0 Week 1-2)
-- `tests/test_integration_workflows.py` - Integration workflows (50 tests - v0.7.0 Week 3-4 - NEW!)
-- `tests/test_performance.py` - Performance benchmarks (15 tests - v0.7.0 Week 3-4 - NEW!)
-- `tests/test_chaos_engineering.py` - Chaos engineering (20 tests - v0.7.0 Week 3-4 - NEW!)
-- `tests/test_e2e_scenarios.py` - End-to-end scenarios (15 tests - v0.7.0 Week 3-4 - NEW!)
+- `tests/test_integration_workflows.py` - Integration workflows (50 tests - v0.7.0 Week 3-4)
+- `tests/test_performance.py` - Performance benchmarks (15 tests - v0.7.0 Week 3-4)
+- `tests/test_chaos_engineering.py` - Chaos engineering (20 tests - v0.7.0 Week 3-4)
+- `tests/test_e2e_scenarios.py` - End-to-end scenarios (15 tests - v0.7.0 Week 3-4)
+- `tests/test_structured_logging.py` - Structured logging (43 tests - v0.7.0 Week 5-6 - NEW!)
+- `tests/test_metrics.py` - Prometheus metrics (29 tests - v0.7.0 Week 5-6 - NEW!)
+- `tests/test_observability.py` - OpenTelemetry tracing (53 tests - v0.7.0 Week 5-6 - NEW!)
+- `tests/test_health.py` - Health checks & diagnostics (43 tests - v0.7.0 Week 5-6 - NEW!)
 
 ### Important Implementation Details
 **Path Validation Security (v0.6.1 - CWE-22 Prevention):**
@@ -272,6 +281,67 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   * Defense-in-depth: `FileSyncManager.register_file()` and `VersionManager.add_version()` verify absolute paths
   * HandlerContext: PathValidator instance available to all handlers
 - **Testing:** 31 comprehensive security tests covering exploit scenarios
+
+**Observability & Monitoring Infrastructure (v0.7.0 Week 5-6 - <100ms Overhead):**
+- **Structured Logging (`src/structured_logging.py` - 540 lines, 91% coverage):**
+  - **Purpose:** Production-grade JSON and human-readable logging with async context propagation
+  - **Key Features:**
+    * Dual formatters: JSONFormatter (ISO 8601 timestamps) and HumanReadableFormatter (colored, aligned)
+    * Async-aware context propagation via `contextvars.ContextVar`
+    * Operation tracking context manager with automatic request ID generation
+    * OpenTelemetry trace correlation (trace_id, span_id injected into logs)
+    * Log sampling (1% DEBUG in production, configurable)
+    * Singleton pattern for global logger access
+  - **Performance:** <10ms overhead per log operation
+  - **Usage:** `from src.structured_logging import get_logger; logger = get_logger(); logger.info("msg", key=value)`
+  - **Testing:** 43 comprehensive tests covering formatters, async context, OTEL integration
+
+- **Prometheus Metrics (`src/metrics.py` - 330 lines, 86% coverage):**
+  - **Purpose:** Time-series metrics collection with cardinality control to prevent metric explosion
+  - **Metrics Tracked (7 total):**
+    * `compression_ratio` (Histogram): Compression effectiveness by fidelity level
+    * `processing_latency_seconds` (Histogram): Operation latency by operation and fidelity
+    * `documents_processed_total` (Counter): Processed documents by operation, fidelity, status
+    * `cache_hit_ratio` (Gauge): Current cache hit rate (0.0-1.0)
+    * `active_documents` (Gauge): Currently loaded documents
+    * `errors_total` (Counter): Errors by error_type and operation
+    * `batch_size` (Histogram): Batch processing sizes
+  - **Cardinality Control:** Validated label values (fidelity: 5 values, operations: 5 values, status: 2 values)
+  - **Graceful Degradation:** NoOp implementation when prometheus_client unavailable
+  - **Export:** Prometheus text format via `generate_metrics_text()`
+  - **Usage:** `from src.metrics import get_metrics; metrics = get_metrics(); metrics.record_compression_ratio(7.5, "BALANCED")`
+  - **Testing:** 29 comprehensive tests covering all 7 metrics, cardinality control, graceful degradation
+
+- **OpenTelemetry Tracing (`src/observability.py` - 717 lines, 85% coverage):**
+  - **Purpose:** Distributed tracing with OTLP export for trace backends (Jaeger, Zipkin, etc.)
+  - **Key Features:**
+    * Async-safe context propagation via `contextvars.ContextVar`
+    * Span creation context manager with attributes
+    * Trace sampling (10% production, 100% development)
+    * Integration with structured logging (trace correlation via trace_id/span_id)
+    * Exception recording with span status tracking
+    * OTLP/gRPC export (console fallback when OTLP unavailable)
+    * Singleton pattern for global observability manager
+  - **Performance:** <50ms overhead per traced operation
+  - **Usage:** `from src.observability import get_observability; obs = get_observability(); with obs.trace("compress", doc_id="abc"): ...`
+  - **Testing:** 53 comprehensive tests covering span creation, async propagation, exception handling, OTLP export
+
+- **Health Checks & Diagnostics (`src/health.py` - 500 lines, 91% coverage):**
+  - **Purpose:** Three-tier health checks (liveness, readiness, diagnostics) for production monitoring
+  - **Health Tiers:**
+    * `check_liveness()`: Simple alive/dead check (always returns healthy for running server)
+    * `check_readiness()`: Component health check (embedding manager, persistence, cache, disk space)
+    * `get_diagnostics()`: Detailed diagnostics (performance metrics, resource usage, cache stats)
+  - **Component Health Monitoring:**
+    * Embedding manager health (model loaded, inference working)
+    * Persistence health (storage accessible, read/write working)
+    * Cache health (LRU eviction working, hit rate tracking)
+    * Disk space health (sufficient space for operations)
+  - **Performance Metrics:** p50/p95/p99 latency percentiles (tracked via rolling window)
+  - **Result Caching:** 10-second cache to avoid expensive checks
+  - **Health Status:** healthy/degraded/unhealthy with detailed component messages
+  - **Usage:** `from src.health import get_health; health = get_health(); readiness = health.check_readiness()`
+  - **Testing:** 43 comprehensive tests covering liveness/readiness/diagnostics, component health, caching
 
 **File Sync System:**
 - `src/file_sync_manager.py` - Tracks file changes via mtime + MD5 with LRU eviction (v0.4.2)
