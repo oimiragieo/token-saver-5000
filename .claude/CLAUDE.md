@@ -116,7 +116,29 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - ✅ **Week 1-2 Complete:** Reliability Infrastructure (TimeoutManager, CircuitBreaker, RetryPolicy, RateLimiter, GracefulDegradation)
 - ✅ **Week 3-4 Complete:** Comprehensive Testing Suite (100 new tests: integration, performance, chaos, E2E)
 - ✅ **Week 5-6 Complete:** Observability & Monitoring (StructuredLogger, Prometheus metrics, OpenTelemetry tracing, HealthChecker)
-- ⏳ **Week 7-8 Planned:** DevOps & Operational Excellence (Kubernetes, CI/CD, deployment automation)
+- ✅ **Week 7-8 Complete:** DevOps & Operational Excellence
+  - **HTTP Server for Production Monitoring** (src/http_server.py, 415 lines, 32 tests):
+    * Optional aiohttp async server for Kubernetes health checks and metrics
+    * 5 endpoints: /health/liveness, /health/readiness, /health/diagnostics, /metrics, / (root)
+    * Environment-based configuration: HTTP_ENABLED (default: false), HTTP_HOST, HTTP_PORT
+    * Zero-overhead when disabled (maintains stdio-only mode for local MCP use)
+    * Integration with existing src/health.py and src/metrics.py modules
+  - **Docker Multi-Stage Build** (Dockerfile, 134 lines):
+    * Builder + runtime stages for <500MB target image (~450MB expected)
+    * Security: Non-root user (uid 1000), read-only filesystem, dropped capabilities
+    * Hybrid deployment: Supports both stdio mode (default) and HTTP mode (Kubernetes)
+  - **Kubernetes Production Manifests** (deployment/kubernetes/, 14 files):
+    * Core: Namespace, ConfigMap, Secret, Service, Deployment (2 replicas, 3-tier health probes)
+    * Scaling: HPA (2-10 replicas, CPU 70%, memory 80%)
+    * Monitoring: ServiceMonitor (Prometheus scraping), PrometheusRule (16 alerting rules)
+    * High availability: Pod anti-affinity, zero-downtime rolling updates
+  - **GitHub Actions CI/CD** (.github/workflows/, 10 files):
+    * test.yml: Matrix testing (Python 3.10/3.11/3.12), pip caching, coverage enforcement
+    * lint.yml: Black, Ruff, Bandit security scanning, complexity analysis
+    * build.yml: Docker builds with layer caching, Trivy CVE scanning, SBOM generation
+    * deploy.yml: Kubernetes deployment, staging auto-deploy, production approval-gated
+  - **Test Coverage:** 32 new HTTP server tests (100% pass rate, 1,032 → 1,064 total tests)
+  - **Dependencies:** Added aiohttp>=3.9.0 for HTTP server
 
 **Previous Release (v0.6.1 - Security Hardening - COMPLETE):**
 - 🔒 **Critical Security Fix: Path Traversal Prevention (CWE-22):**
@@ -176,8 +198,10 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **1,032 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 5-6)
-  - Was 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+- ✅ **1,064 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 7-8)
+  - Was 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+  - 32 new tests added in v0.7.0 Week 7-8 DevOps infrastructure:
+    * 32 HTTP server tests (endpoints, integration, configuration, lifecycle, edge cases - 100% pass rate)
   - 168 new tests added in v0.7.0 Week 5-6 observability infrastructure:
     * 43 structured logging tests (JSON/human formatters, async context propagation, OTEL integration - 91% coverage)
     * 29 Prometheus metrics tests (7 metrics, cardinality control, graceful degradation - 86% coverage)
@@ -255,6 +279,7 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - `tests/test_cache_comprehensive.py` - LRU cache comprehensive (25 tests - Phase 1)
 - `tests/test_semantic_fidelity.py` - Semantic SSIM fidelity benchmarks (7 tests - Phase 1)
 - `tests/test_path_validator.py` - Path traversal security (31 tests - v0.6.1)
+- `tests/test_http_server.py` - HTTP server endpoints and integration (32 tests - v0.7.0 Week 7-8)
 - `tests/test_reliability.py` - Reliability infrastructure (29 tests - v0.7.0 Week 1-2)
 - `tests/test_integration_workflows.py` - Integration workflows (50 tests - v0.7.0 Week 3-4)
 - `tests/test_performance.py` - Performance benchmarks (15 tests - v0.7.0 Week 3-4)

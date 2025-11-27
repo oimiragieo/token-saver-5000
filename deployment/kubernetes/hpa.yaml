@@ -1,0 +1,117 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: token-saver-5000-hpa
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+  annotations:
+    description: "Horizontal Pod Autoscaler for Token Saver 5000 - scales based on CPU/memory usage"
+spec:
+  # Target deployment to scale
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: token-saver-5000
+
+  # Replica bounds
+  minReplicas: 2   # High availability - always maintain 2 pods minimum
+  maxReplicas: 10  # Cost control - cap at 10 pods maximum
+
+  # Scaling behavior configuration (fine-tuned for production)
+  behavior:
+    scaleDown:
+      # Conservative scale-down to avoid thrashing
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50              # Scale down by max 50% of current replicas
+        periodSeconds: 60      # Per minute
+      - type: Pods
+        value: 1               # Or max 1 pod per minute
+        periodSeconds: 60
+      selectPolicy: Min        # Use the more conservative policy
+
+    scaleUp:
+      # Aggressive scale-up to handle traffic spikes
+      stabilizationWindowSeconds: 0  # Scale up immediately (no delay)
+      policies:
+      - type: Percent
+        value: 100             # Scale up by max 100% of current replicas (double)
+        periodSeconds: 15      # Every 15 seconds
+      - type: Pods
+        value: 2               # Or max 2 pods every 15 seconds
+        periodSeconds: 15
+      selectPolicy: Max        # Use the more aggressive policy
+
+  # Metrics to trigger scaling
+  metrics:
+  # CPU utilization target
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale up when average CPU > 70%
+                                 # Scale down when average CPU < 70%
+
+  # Memory utilization target
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale up when average memory > 80%
+                                 # Scale down when average memory < 80%
+                                 # Higher threshold than CPU (memory is less spiky)
+
+  # Optional: Custom metrics (requires Prometheus Adapter)
+  # Example: Scale based on request rate or compression latency
+  # - type: Pods
+  #   pods:
+  #     metric:
+  #       name: compression_requests_per_second
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "100"  # Scale up when > 100 req/s per pod
+  #
+  # - type: Pods
+  #   pods:
+  #     metric:
+  #       name: compression_latency_p95
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "500m"  # Scale up when p95 latency > 500ms
+
+---
+# Optional: VerticalPodAutoscaler (VPA) for right-sizing resources
+# VPA automatically adjusts CPU/memory requests based on actual usage
+# Note: VPA and HPA can conflict - use cautiously together
+#
+# apiVersion: autoscaling.k8s.io/v1
+# kind: VerticalPodAutoscaler
+# metadata:
+#   name: token-saver-5000-vpa
+#   namespace: token-saver-5000
+# spec:
+#   targetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: token-saver-5000
+#
+#   # Update mode
+#   updatePolicy:
+#     updateMode: "Auto"  # Options: Off, Initial, Recreate, Auto
+#
+#   # Resource policy
+#   resourcePolicy:
+#     containerPolicies:
+#     - containerName: token-saver
+#       minAllowed:
+#         cpu: 500m
+#         memory: 1Gi
+#       maxAllowed:
+#         cpu: 2000m
+#         memory: 2Gi
+#       controlledResources: ["cpu", "memory"]

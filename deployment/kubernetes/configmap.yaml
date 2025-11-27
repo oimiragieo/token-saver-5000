@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: token-saver-5000-config
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+  annotations:
+    description: "Environment configuration for Token Saver 5000 MCP server"
+data:
+  # HTTP server configuration (health checks + metrics)
+  HTTP_ENABLED: "true"
+  HTTP_HOST: "0.0.0.0"  # Bind to all interfaces (required for Kubernetes pod networking)
+  HTTP_PORT: "8080"
+
+  # Logging configuration
+  LOG_LEVEL: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  LOG_FORMAT: "json"  # Options: json, text (json recommended for production)
+
+  # Storage backend configuration
+  STORAGE_BACKEND: "json"  # Options: json, chromadb (chromadb requires additional dependencies)
+  DATA_DIR: "/data"        # Persistent storage directory (mounted volume)
+
+  # Compression configuration
+  # DEFAULT_COMPRESSION_RATIO: "0.3"  # Target 70% compression (0.3 = 30% of original)
+  # MAX_NODE_IMPORTANCE: "0.9"        # Maximum importance score for nodes
+
+  # Memory optimization configuration (v0.6.0+ features)
+  # EMBEDDING_TIER: "STANDARD"  # Options: STANDARD, ONNX, TFIDF
+  # CACHE_CAPACITY: "10000"     # LRU cache size (number of embeddings)
+  # CACHE_TTL: "3600"           # Cache TTL in seconds (0 = no expiration)
+
+  # File sync configuration
+  # MAX_FILE_SYNC_ENTRIES: "1000"  # LRU limit for file metadata
+  # MAX_VERSION_RETENTION: "10"    # Keep last N versions per document
+
+  # ACE Framework configuration
+  # MAX_ACE_CONTEXTS: "100"  # LRU limit for ACE contexts
+
+  # Batch processing configuration (v0.6.0+ features)
+  # BATCH_CONCURRENCY: "4"    # Concurrent document processing limit
+  # BATCH_TIMEOUT: "300"      # Batch processing timeout in seconds
+
+  # Health check configuration
+  HEALTH_CHECK_INTERVAL: "10"  # Seconds between health checks
+  READINESS_TIMEOUT: "5"       # Seconds to wait for readiness response
+
+  # Prometheus metrics configuration
+  METRICS_ENABLED: "true"      # Enable Prometheus metrics endpoint
+  METRICS_PATH: "/metrics"     # Metrics endpoint path
+
+  # Python runtime configuration
+  PYTHONUNBUFFERED: "1"        # Disable output buffering (important for logs)
+  PYTHONDONTWRITEBYTECODE: "1" # Don't create .pyc files (cleaner container)
+
+  # Optional: Model download configuration
+  # SENTENCE_TRANSFORMERS_HOME: "/tmp/.cache/torch/sentence_transformers"
+  # TRANSFORMERS_CACHE: "/tmp/.cache/huggingface/transformers"
+
+---
+# Optional: ConfigMap for application configuration files
+# Use this for JSON/YAML configuration files instead of environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: token-saver-5000-app-config
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+  annotations:
+    description: "Application configuration files for Token Saver 5000"
+data:
+  # Example: compression_config.json
+  compression_config.json: |
+    {
+      "compression_ratio": 0.3,
+      "max_node_importance": 0.9,
+      "min_importance_threshold": 0.2,
+      "enable_code_compression": true,
+      "enable_semantic_compression": true,
+      "enable_scar_compression": false
+    }
+
+  # Example: embeddings_config.json
+  embeddings_config.json: |
+    {
+      "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+      "cache_enabled": true,
+      "cache_capacity": 10000,
+      "embedding_tier": "STANDARD"
+    }
+
+  # Example: monitoring_config.json
+  monitoring_config.json: |
+    {
+      "metrics_enabled": true,
+      "metrics_port": 8080,
+      "metrics_path": "/metrics",
+      "health_check_enabled": true,
+      "health_check_port": 8080
+    }

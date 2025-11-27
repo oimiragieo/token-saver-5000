@@ -1,0 +1,58 @@
+# yamllint configuration for Token Saver 5000 Kubernetes manifests
+# Install yamllint: pip install yamllint
+# Usage: yamllint deployment/kubernetes/
+
+extends: default
+
+rules:
+  # Line length - allow longer lines for readability
+  line-length:
+    max: 120
+    level: warning
+
+  # Indentation - 2 spaces (Kubernetes standard)
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Comments
+  comments:
+    min-spaces-from-content: 2
+    require-starting-space: true
+
+  # Document start/end
+  document-start:
+    present: false  # Allow documents without ---
+
+  # Truthy values
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: true
+
+  # Empty values
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Quoted strings
+  quoted-strings:
+    quote-type: double
+    required: false  # Don't require all strings to be quoted
+
+  # Key ordering
+  key-ordering: disable  # Allow flexible key ordering
+
+  # Brackets
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+  # Braces
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+# Ignore specific files
+ignore: |
+  kustomization.yaml

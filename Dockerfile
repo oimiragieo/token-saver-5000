@@ -1,43 +1,133 @@
-# Token Saver 5000 MCP Server - Docker Image
-FROM python:3.11-slim
+# Multi-stage Dockerfile for Token Saver 5000 MCP Server
+# Builder stage: Install dependencies and download models
+# Runtime stage: Minimal image with only runtime dependencies
+# Target image size: <500MB
+
+# ==============================================================================
+# Builder Stage: Install dependencies and download models
+# ==============================================================================
+FROM python:3.12-slim AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies in a virtual environment
+# Using venv ensures clean separation from system packages
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies with pip cache
+# --no-cache-dir reduces image size
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Download sentence-transformers model in builder stage
+# This reduces runtime startup time and ensures model is cached
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# ==============================================================================
+# Runtime Stage: Minimal image with only runtime dependencies
+# ==============================================================================
+FROM python:3.12-slim AS runtime
+
+# Install runtime system dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (for better caching)
-COPY requirements.txt .
+# Create non-root user for security
+# Running as non-root is a security best practice
+RUN useradd -m -u 1000 -s /bin/bash mcp && \
+    mkdir -p /app /data && \
+    chown -R mcp:mcp /app /data
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Set working directory
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-COPY pyproject.toml .
+COPY --chown=mcp:mcp src/ /app/src/
+COPY --chown=mcp:mcp pyproject.toml /app/
 
-# Pre-download embedding model (avoids first-run delay)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-
-# Create directories for persistent data
-RUN mkdir -p /data/chromadb /data/json_backup /data/afm_exports
+# Copy sentence-transformers cache from builder
+# This includes the pre-downloaded model
+COPY --from=builder /root/.cache /home/mcp/.cache
+RUN chown -R mcp:mcp /home/mcp/.cache
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV STORAGE_BACKEND=json
-ENV DATA_DIR=/data
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    # HTTP server configuration (optional, disabled by default)
+    HTTP_ENABLED=false \
+    HTTP_HOST=0.0.0.0 \
+    HTTP_PORT=8080 \
+    # Data storage directory
+    DATA_DIR=/data \
+    # Python path
+    PYTHONPATH=/app
 
-# Expose volume for persistence
+# Switch to non-root user
+USER mcp
+
+# Health check (requires HTTP_ENABLED=true)
+# Kubernetes will use /health/liveness and /health/readiness endpoints
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD if [ "$HTTP_ENABLED" = "true" ]; then curl -f http://localhost:${HTTP_PORT}/health/liveness || exit 1; else exit 0; fi
+
+# Expose HTTP port (for health checks and metrics)
+# Only used if HTTP_ENABLED=true
+EXPOSE 8080
+
+# Volume for persistent data (semantic modulator data, version history)
 VOLUME ["/data"]
 
-# Health check (optional - checks if server starts)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "from src import __version__; print(__version__)" || exit 1
+# Default command: Run MCP server in stdio mode
+# Override with HTTP-enabled startup for Kubernetes deployment
+CMD ["python", "-m", "src.server"]
 
-# Run the MCP server via stdio
-ENTRYPOINT ["python", "-m", "src.server"]
+# ==============================================================================
+# Build Instructions
+# ==============================================================================
+# Build image:
+#   docker build -t token-saver-5000:latest .
+#
+# Run with stdio mode (default):
+#   docker run -i token-saver-5000:latest
+#
+# Run with HTTP server enabled (for Kubernetes):
+#   docker run -e HTTP_ENABLED=true -p 8080:8080 token-saver-5000:latest
+#
+# Run with volume for persistent data:
+#   docker run -v $(pwd)/data:/data -i token-saver-5000:latest
+#
+# Development mode with source code mounted:
+#   docker run -v $(pwd)/src:/app/src -e HTTP_ENABLED=true -p 8080:8080 token-saver-5000:latest
+#
+# ==============================================================================
+# Image Size Optimization
+# ==============================================================================
+# Expected image size: ~450MB
+# - python:3.12-slim base: ~150MB
+# - Python dependencies: ~150MB
+# - sentence-transformers model (all-MiniLM-L6-v2): ~80MB
+# - Application code: ~10MB
+# - System dependencies: ~60MB
+#
+# Further optimization options:
+# 1. Use ONNX models instead of PyTorch: Saves ~250MB, reduces to ~200MB
+# 2. Use python:3.12-alpine: Saves ~50MB, but may require additional dependencies
+# 3. Use multi-arch builds: Build for amd64 and arm64 platforms
+# 4. Layer caching: Separating requirements.txt changes from code changes
+# ==============================================================================

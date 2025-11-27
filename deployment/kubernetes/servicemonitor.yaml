@@ -1,0 +1,102 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: token-saver-5000
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+    # Label for Prometheus Operator to discover this ServiceMonitor
+    # Adjust based on your Prometheus Operator configuration
+    prometheus: kube-prometheus  # Common label for kube-prometheus-stack
+  annotations:
+    description: "Prometheus ServiceMonitor for Token Saver 5000 metrics scraping"
+spec:
+  # Selector to match the Service (not the Deployment)
+  selector:
+    matchLabels:
+      app: token-saver-5000
+      component: mcp-server
+
+  # Namespace selector - where to look for matching Services
+  # Default: Same namespace as ServiceMonitor
+  namespaceSelector:
+    matchNames:
+    - token-saver-5000
+
+  # Endpoints to scrape
+  endpoints:
+  # Metrics endpoint
+  - port: http-metrics  # Must match Service port name
+    path: /metrics      # Metrics endpoint path
+    interval: 15s       # Scrape every 15 seconds
+    scrapeTimeout: 10s  # Timeout after 10 seconds
+    scheme: http        # HTTP (not HTTPS)
+
+    # Optional: Relabeling rules
+    # Useful for adding/modifying labels on scraped metrics
+    relabelings:
+    # Add namespace label to all metrics
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace
+      action: replace
+
+    # Add pod label to all metrics
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+      action: replace
+
+    # Add service label to all metrics
+    - sourceLabels: [__meta_kubernetes_service_name]
+      targetLabel: service
+      action: replace
+
+    # Optional: Metric relabeling (applied after scraping)
+    # metricRelabelings:
+    # # Drop metrics with specific labels
+    # - sourceLabels: [__name__]
+    #   regex: "go_.*"  # Drop Go runtime metrics (reduce cardinality)
+    #   action: drop
+    #
+    # # Rename metric labels
+    # - sourceLabels: [instance]
+    #   targetLabel: pod_ip
+    #   action: replace
+
+  # Health check endpoint (optional, for debugging)
+  # - port: http-health
+  #   path: /health/liveness
+  #   interval: 30s
+  #   scrapeTimeout: 5s
+  #   scheme: http
+
+---
+# Optional: PodMonitor for direct pod scraping (alternative to ServiceMonitor)
+# Useful when you need pod-level metrics or don't want a Service
+#
+# apiVersion: monitoring.coreos.com/v1
+# kind: PodMonitor
+# metadata:
+#   name: token-saver-5000-pods
+#   namespace: token-saver-5000
+#   labels:
+#     app: token-saver-5000
+#     prometheus: kube-prometheus
+# spec:
+#   # Selector to match pods directly
+#   selector:
+#     matchLabels:
+#       app: token-saver-5000
+#       component: mcp-server
+#
+#   # Namespace selector
+#   namespaceSelector:
+#     matchNames:
+#     - token-saver-5000
+#
+#   # Pod endpoints to scrape
+#   podMetricsEndpoints:
+#   - port: http-health  # Must match container port name
+#     path: /metrics
+#     interval: 15s
+#     scrapeTimeout: 10s

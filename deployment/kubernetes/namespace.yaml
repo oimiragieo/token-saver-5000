@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: token-saver-5000
+  labels:
+    name: token-saver-5000
+    app: token-saver-5000
+    environment: production  # Change to: staging, development, etc.
+  annotations:
+    description: "Token Saver 5000 MCP server - Semantic compression engine with 85-90% token reduction"

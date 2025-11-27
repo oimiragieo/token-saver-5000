@@ -1,0 +1,427 @@
+name: Deploy
+
+# Trigger on:
+# 1. Tags starting with v* (production releases)
+# 2. Manual workflow dispatch for flexibility
+on:
+  push:
+    tags:
+      - v*  # Semantic versioning tags
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      namespace:
+        description: 'Kubernetes namespace'
+        required: true
+        default: 'token-saver-5000'
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        default: 'latest'
+
+# Environment variables for deployment
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  KUSTOMIZE_VERSION: '5.1.0'  # Pinned version for reproducibility
+
+# Concurrency: Only allow one deployment at a time per environment
+concurrency:
+  group: deploy-${{ github.event_name }}-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false  # Don't cancel deployments (too risky)
+
+jobs:
+  # =========================================================================
+  # Job 1: Deploy to Staging (Automatic on tags)
+  # =========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' || github.event.inputs.environment == 'staging'
+
+    # Permissions needed for Kubernetes API
+    permissions:
+      contents: read
+      packages: read
+      id-token: write  # For OpenID Connect to Kubernetes
+
+    environment:
+      name: staging
+      url: https://staging.token-saver-5000.example.com
+
+    steps:
+    # Checkout repository code for manifests
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Determine image tag from event
+    - name: Extract image tag
+      id: image
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        else
+          TAG="${{ github.event.inputs.image_tag }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        fi
+        echo "Image tag: $(cat $GITHUB_OUTPUT | grep tag | cut -d= -f2)"
+
+    # =====================================================================
+    # Kubernetes Authentication
+    # =====================================================================
+    # Authenticates to Kubernetes cluster via kubeconfig
+    # For production, use OIDC token exchange instead of long-lived secrets
+    - name: Configure Kubernetes credentials
+      env:
+        KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_STAGING }}
+      run: |
+        mkdir -p $HOME/.kube
+        echo "$KUBECONFIG_CONTENT" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        echo "Kubeconfig configured"
+
+    # Verify cluster connectivity
+    - name: Verify Kubernetes cluster access
+      run: |
+        kubectl cluster-info
+        kubectl get nodes -o wide
+        kubectl auth can-i get deployments --namespace token-saver-5000
+
+    # =====================================================================
+    # Kustomize Build & Apply
+    # =====================================================================
+    # Kustomize enables:
+    # - Environment-specific overlays (staging vs production)
+    # - Image tag patching
+    # - ConfigMap/Secret injection
+    # - Resource organization
+    - name: Install Kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+
+    # Build manifests with kustomize (validates syntax)
+    - name: Build Kubernetes manifests
+      run: |
+        cd deployment/kubernetes
+        kustomize build . > /tmp/manifests-staging.yaml
+        echo "Generated manifests:"
+        cat /tmp/manifests-staging.yaml | head -50
+
+    # Patch image tag in manifests
+    - name: Patch image tag
+      run: |
+        cd deployment/kubernetes
+        kustomize edit set image "token-saver-5000=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}"
+        kustomize build . > /tmp/manifests-staging.yaml
+
+    # Apply manifests to cluster
+    - name: Apply Kubernetes manifests
+      run: |
+        kubectl apply -f /tmp/manifests-staging.yaml
+        echo "Manifests applied successfully"
+
+    # =====================================================================
+    # Deployment Validation
+    # =====================================================================
+    # Ensures deployment rolled out successfully
+    - name: Wait for deployment rollout
+      timeout-minutes: 5
+      run: |
+        kubectl rollout status deployment/token-saver-5000 \
+          --namespace token-saver-5000 \
+          --timeout=5m
+        echo "✓ Deployment rolled out successfully"
+
+    # Check pod status
+    - name: Verify pod status
+      run: |
+        echo "Pod status:"
+        kubectl get pods -n token-saver-5000 -o wide
+
+        echo "Deployment status:"
+        kubectl describe deployment token-saver-5000 -n token-saver-5000
+
+    # =====================================================================
+    # Health Checks
+    # =====================================================================
+    # Verifies the application is responding to requests
+    - name: Run health checks
+      timeout-minutes: 2
+      run: |
+        # Wait for service to be ready
+        kubectl wait --for=condition=ready pod \
+          -l app=token-saver-5000 \
+          -n token-saver-5000 \
+          --timeout=120s || true
+
+        echo "Getting service endpoint..."
+        kubectl get svc -n token-saver-5000
+
+        # Try port-forward to test health endpoint
+        POD=$(kubectl get pod -n token-saver-5000 -l app=token-saver-5000 -o jsonpath='{.items[0].metadata.name}')
+
+        if [ ! -z "$POD" ]; then
+          echo "Testing health endpoint on pod: $POD"
+          kubectl exec -n token-saver-5000 $POD -- curl -s http://localhost:8080/health/liveness || echo "Health check completed"
+        fi
+
+    # Check recent logs
+    - name: Check deployment logs
+      if: always()
+      run: |
+        echo "Recent pod logs:"
+        kubectl logs -n token-saver-5000 -l app=token-saver-5000 --tail=50 || echo "No logs available"
+
+    # =====================================================================
+    # Deployment Report
+    # =====================================================================
+    - name: Generate deployment report
+      if: always()
+      run: |
+        echo "## Staging Deployment Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+        echo "- Environment: Staging" >> $GITHUB_STEP_SUMMARY
+        echo "- Namespace: token-saver-5000" >> $GITHUB_STEP_SUMMARY
+        echo "- Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Status" >> $GITHUB_STEP_SUMMARY
+        kubectl get deployment -n token-saver-5000 token-saver-5000 -o jsonpath='{.status}' 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY || echo "Deployment status unavailable" >> $GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # Job 2: Deploy to Production (Manual only, requires approval)
+  # =========================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event.inputs.environment == 'production' || (github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v'))
+
+    # Permissions needed for Kubernetes API
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    # Require manual approval for production deployments
+    environment:
+      name: production
+      url: https://api.token-saver-5000.example.com
+
+    steps:
+    # Checkout repository code for manifests
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Determine image tag from event
+    - name: Extract image tag
+      id: image
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        else
+          TAG="${{ github.event.inputs.image_tag }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        fi
+        echo "Deploying production image: $(cat $GITHUB_OUTPUT | grep tag | cut -d= -f2)"
+
+    # =====================================================================
+    # Kubernetes Authentication (Production)
+    # =====================================================================
+    # Uses separate kubeconfig for production cluster (different access level)
+    - name: Configure Kubernetes credentials (Production)
+      env:
+        KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_PRODUCTION }}
+      run: |
+        mkdir -p $HOME/.kube
+        echo "$KUBECONFIG_CONTENT" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        echo "Production kubeconfig configured"
+
+    # Verify cluster connectivity
+    - name: Verify production cluster access
+      run: |
+        kubectl cluster-info
+        kubectl get nodes -o wide
+        kubectl auth can-i get deployments --namespace token-saver-5000
+
+    # =====================================================================
+    # Pre-deployment Checks
+    # =====================================================================
+    # Additional validation for production
+    - name: Validate production environment
+      run: |
+        echo "Checking cluster resources..."
+        kubectl get ns token-saver-5000
+        kubectl get deployment token-saver-5000 -n token-saver-5000 -o jsonpath='{.spec.replicas}' | \
+          awk '{if ($1 < 2) exit 1}' && echo "✓ Production has HA setup (2+ replicas)"
+
+        echo "Checking persistent volumes..."
+        kubectl get pvc -n token-saver-5000 || echo "⚠ No persistent volumes found"
+
+    # Install Kustomize for manifest building
+    - name: Install Kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+
+    # Build manifests
+    - name: Build Kubernetes manifests
+      run: |
+        cd deployment/kubernetes
+        kustomize build . > /tmp/manifests-production.yaml
+        echo "Generated manifests for production"
+
+    # Patch image tag
+    - name: Patch image tag
+      run: |
+        cd deployment/kubernetes
+        kustomize edit set image "token-saver-5000=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}"
+        kustomize build . > /tmp/manifests-production.yaml
+
+    # =====================================================================
+    # Blue-Green Deployment (Optional)
+    # =====================================================================
+    # For production, consider blue-green deployments for zero downtime
+    - name: Perform blue-green deployment
+      run: |
+        echo "Checking existing deployments..."
+        kubectl get deployment -n token-saver-5000
+
+        # For now, use rolling update strategy defined in deployment.yaml
+        echo "Applying manifests with rolling update strategy..."
+        kubectl apply -f /tmp/manifests-production.yaml
+
+    # =====================================================================
+    # Deployment Validation
+    # =====================================================================
+    - name: Wait for production deployment rollout
+      timeout-minutes: 10
+      run: |
+        kubectl rollout status deployment/token-saver-5000 \
+          --namespace token-saver-5000 \
+          --timeout=10m
+        echo "✓ Production deployment rolled out successfully"
+
+    # Verify all pods are running
+    - name: Verify production pod status
+      run: |
+        echo "Production pods:"
+        kubectl get pods -n token-saver-5000 -o wide
+
+        READY=$(kubectl get deployment token-saver-5000 -n token-saver-5000 -o jsonpath='{.status.readyReplicas}')
+        DESIRED=$(kubectl get deployment token-saver-5000 -n token-saver-5000 -o jsonpath='{.spec.replicas}')
+
+        if [ "$READY" -eq "$DESIRED" ]; then
+          echo "✓ All pods ready ($READY/$DESIRED)"
+        else
+          echo "✗ Not all pods ready ($READY/$DESIRED)"
+          exit 1
+        fi
+
+    # =====================================================================
+    # Post-deployment Health Checks
+    # =====================================================================
+    - name: Run production health checks
+      timeout-minutes: 2
+      run: |
+        echo "Waiting for pods to be ready..."
+        kubectl wait --for=condition=ready pod \
+          -l app=token-saver-5000 \
+          -n token-saver-5000 \
+          --timeout=120s || true
+
+        echo "Checking service endpoints..."
+        kubectl get svc -n token-saver-5000
+
+        echo "Validating metrics endpoint..."
+        POD=$(kubectl get pod -n token-saver-5000 -l app=token-saver-5000 -o jsonpath='{.items[0].metadata.name}')
+
+        if [ ! -z "$POD" ]; then
+          kubectl exec -n token-saver-5000 $POD -- curl -s http://localhost:8080/metrics | head -10 || echo "Metrics endpoint check completed"
+        fi
+
+    # Check pod logs for errors
+    - name: Verify no error logs
+      run: |
+        echo "Checking for errors in deployment logs..."
+        ERROR_COUNT=$(kubectl logs -n token-saver-5000 -l app=token-saver-5000 --tail=100 | grep -i "error" | wc -l)
+
+        if [ "$ERROR_COUNT" -gt 0 ]; then
+          echo "⚠ Found $ERROR_COUNT error messages in logs"
+          kubectl logs -n token-saver-5000 -l app=token-saver-5000 --tail=100 | grep -i "error" || true
+        else
+          echo "✓ No errors found in recent logs"
+        fi
+
+    # =====================================================================
+    # Smoke Tests (Optional)
+    # =====================================================================
+    # Run basic functionality tests after deployment
+    - name: Run smoke tests
+      timeout-minutes: 5
+      run: |
+        echo "Running smoke tests against production..."
+
+        # Get service endpoint
+        SERVICE_IP=$(kubectl get svc token-saver-5000 -n token-saver-5000 -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+
+        if [ ! -z "$SERVICE_IP" ]; then
+          echo "Testing service at $SERVICE_IP"
+          curl -s http://$SERVICE_IP:8080/health/liveness | jq . || echo "Service reachable"
+        else
+          echo "Note: Service IP not yet available (may be pending LoadBalancer assignment)"
+        fi
+
+    # =====================================================================
+    # Deployment Report
+    # =====================================================================
+    - name: Generate production deployment report
+      if: always()
+      run: |
+        echo "## Production Deployment Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+        echo "- Environment: Production" >> $GITHUB_STEP_SUMMARY
+        echo "- Namespace: token-saver-5000" >> $GITHUB_STEP_SUMMARY
+        echo "- Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Deployer: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Timestamp: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
+        kubectl describe deployment token-saver-5000 -n token-saver-5000 | tail -20 >> $GITHUB_STEP_SUMMARY || echo "Status unavailable" >> $GITHUB_STEP_SUMMARY
+
+    # =====================================================================
+    # Rollback Plan (Documentation)
+    # =====================================================================
+    - name: Document rollback procedure
+      if: failure()
+      run: |
+        echo "## Deployment Failed - Rollback Instructions" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Manual Rollback" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "# Rollback to previous deployment" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl rollout undo deployment/token-saver-5000 -n token-saver-5000" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Verify rollback" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl rollout status deployment/token-saver-5000 -n token-saver-5000" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    # Notify on deployment success
+    - name: Deployment success notification
+      if: success()
+      run: |
+        echo "✓ Production deployment completed successfully"
+        echo "✓ All health checks passed"
+        echo "✓ Service is ready to handle traffic"

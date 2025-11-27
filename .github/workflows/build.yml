@@ -1,0 +1,216 @@
+name: Build
+
+# Trigger on:
+# 1. Push to main branch (automatic builds)
+# 2. Tags starting with v* (semantic versioning)
+# 3. Manual workflow dispatch for testing
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - v*  # Semantic versioning tags (v1.0.0, v0.6.1, etc.)
+  workflow_dispatch:
+    inputs:
+      push_to_registry:
+        description: 'Push image to registry'
+        required: false
+        default: 'false'
+
+# Environment variables for Docker builds
+env:
+  REGISTRY: ghcr.io  # GitHub Container Registry
+  IMAGE_NAME: ${{ github.repository }}  # token-saver-5000
+
+# Concurrency: Cancel previous builds if new commits are pushed
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    # Permissions needed for GHCR push and GitHub API
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    # Environment variables specific to this job
+    env:
+      DOCKER_BUILDKIT: 1  # Enable BuildKit for advanced caching
+
+    steps:
+    # Checkout repository code
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better metadata
+
+    # Set up Docker buildx for advanced build features
+    # Enables:
+    # - Multi-stage caching
+    # - Multi-platform builds
+    # - Advanced layer caching
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        buildkitd-flags: --debug  # Enable debug logging for troubleshooting
+
+    # Login to GitHub Container Registry
+    # Uses GITHUB_TOKEN which has automatic permissions
+    - name: Log in to GitHub Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    # ========================================================================
+    # Determine Docker Image Tags
+    # ========================================================================
+    # Tags are set based on trigger type:
+    # - Push to main: latest, short-sha, date
+    # - Tags (v*): latest, version-tag, short-sha
+    # - PR: short-sha only (not pushed)
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix={{branch}}-
+          type=raw,value={{date 'YYYY-MM-DD'}}
+
+    # ========================================================================
+    # Build and Push Docker Image
+    # ========================================================================
+    # Multi-stage build with advanced caching:
+    # - type=gha: Uses GitHub Actions cache (fast, free)
+    # - type=registry: Uses registry cache (for multi-arch builds)
+    # - Builder stage: Compiles dependencies
+    # - Runtime stage: Minimal production image
+    - name: Build and push Docker image
+      id: docker_build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}  # Don't push on PR
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        # Cache configuration for faster builds
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        # BuildKit settings for advanced features
+        builder: ${{ steps.buildx.outputs.name }}
+        # Build arguments (optional)
+        build-args: |
+          BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+
+    # ========================================================================
+    # Image Scanning with Trivy (Optional but Recommended)
+    # ========================================================================
+    # Trivy scans for:
+    # - CVE vulnerabilities in dependencies
+    # - Misconfigurations
+    # - Secret exposure
+    - name: Scan image for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+      continue-on-error: true  # Don't fail build on vulnerabilities (advisory only)
+
+    # Upload Trivy scan results to GitHub Security tab
+    - name: Upload Trivy scan results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+        category: 'trivy-scan'
+      continue-on-error: true
+
+    # ========================================================================
+    # Test Image Locally (Quick Smoke Test)
+    # ========================================================================
+    # Ensures the image is buildable and runs without errors
+    - name: Test Docker image (smoke test)
+      if: github.event_name == 'pull_request'
+      run: |
+        # Build image locally for PR testing
+        docker build -t token-saver-5000:test -f Dockerfile .
+        echo "Image built successfully"
+        # Verify image has required files
+        docker run --rm token-saver-5000:test test -d /app/src || exit 1
+        echo "Image structure verified"
+
+    # ========================================================================
+    # Image Size Report
+    # ========================================================================
+    # Reports final image size to help track bloat
+    - name: Report image size
+      run: |
+        echo "## Docker Image Build Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Image Information" >> $GITHUB_STEP_SUMMARY
+        echo "- Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Tags: ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Digest: ${{ steps.docker_build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Dockerfile: Multi-stage (Builder + Runtime)" >> $GITHUB_STEP_SUMMARY
+        echo "- Base Image: python:3.12-slim" >> $GITHUB_STEP_SUMMARY
+        echo "- Cache: GitHub Actions (GHA)" >> $GITHUB_STEP_SUMMARY
+        echo "- Target Size: < 500MB" >> $GITHUB_STEP_SUMMARY
+
+    # ========================================================================
+    # Generate SBOM (Software Bill of Materials)
+    # ========================================================================
+    # Creates a detailed list of all dependencies in the image
+    # Useful for compliance, vulnerability scanning, and auditing
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+      continue-on-error: true
+
+    # Upload SBOM as artifact
+    - name: Upload SBOM
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.spdx.json
+        retention-days: 30
+
+    # ========================================================================
+    # Notify on Build Success
+    # ========================================================================
+    - name: Build success notification
+      if: success()
+      run: |
+        echo "✓ Docker image built and pushed successfully"
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        echo "Tags: ${{ steps.meta.outputs.tags }}"
+
+    # ========================================================================
+    # Notify on Build Failure
+    # ========================================================================
+    - name: Build failure notification
+      if: failure()
+      run: |
+        echo "✗ Docker image build failed"
+        exit 1

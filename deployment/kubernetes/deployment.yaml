@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: token-saver-5000
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    version: v0.7.0
+    component: mcp-server
+  annotations:
+    description: "Token Saver 5000 MCP server - Semantic compression engine with 85-90% token reduction"
+spec:
+  # Replicas controlled by HPA - this is the baseline
+  replicas: 2
+
+  # Deployment strategy - rolling update with zero downtime
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Allow 1 extra pod during rollout
+      maxUnavailable: 0  # Ensure at least 2 pods always running (HA)
+
+  selector:
+    matchLabels:
+      app: token-saver-5000
+      component: mcp-server
+
+  template:
+    metadata:
+      labels:
+        app: token-saver-5000
+        version: v0.7.0
+        component: mcp-server
+      annotations:
+        # Prometheus scraping annotations (alternative to ServiceMonitor)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      # Security context for the entire pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000      # Non-root user
+        fsGroup: 1000        # Group for volume permissions
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Spread pods across nodes for HA
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - token-saver-5000
+              topologyKey: kubernetes.io/hostname
+
+      # Graceful termination - allow 30s for cleanup
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - name: token-saver
+        image: token-saver-5000:latest
+        imagePullPolicy: IfNotPresent
+
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: token-saver-5000-config
+
+        # Additional environment variables (if needed from secrets)
+        # env:
+        # - name: API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: token-saver-5000-secrets
+        #       key: api-key
+
+        ports:
+        - containerPort: 8080
+          name: http-health
+          protocol: TCP
+
+        # Resource allocation
+        # Requests: Guaranteed minimum resources
+        # Limits: Maximum resources allowed (prevent resource hogging)
+        resources:
+          requests:
+            memory: "1Gi"     # Minimum for embedding models (~400MB) + operating headroom
+            cpu: "500m"       # 0.5 CPU cores minimum
+          limits:
+            memory: "2Gi"     # Maximum to prevent OOM in production
+            cpu: "2000m"      # 2 CPU cores maximum for compression workloads
+
+        # Liveness probe - restart if server becomes unresponsive
+        # Initial delay accounts for model loading time
+        livenessProbe:
+          httpGet:
+            path: /health/liveness
+            port: http-health
+            scheme: HTTP
+          initialDelaySeconds: 30  # Allow time for embedding model download/load
+          periodSeconds: 10        # Check every 10 seconds
+          timeoutSeconds: 5        # Timeout after 5 seconds
+          successThreshold: 1      # Mark healthy after 1 success
+          failureThreshold: 3      # Restart after 3 consecutive failures (30s total)
+
+        # Readiness probe - remove from service if not ready to serve traffic
+        # Faster initial delay since readiness is less critical than liveness
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: http-health
+            scheme: HTTP
+          initialDelaySeconds: 10  # Start checking readiness earlier
+          periodSeconds: 10        # Check every 10 seconds
+          timeoutSeconds: 5        # Timeout after 5 seconds
+          successThreshold: 1      # Mark ready after 1 success
+          failureThreshold: 3      # Mark unready after 3 consecutive failures
+
+        # Startup probe - protect slow-starting containers
+        # Useful for initial model download which may take longer
+        startupProbe:
+          httpGet:
+            path: /health/liveness
+            port: http-health
+            scheme: HTTP
+          initialDelaySeconds: 0   # Start checking immediately
+          periodSeconds: 10        # Check every 10 seconds
+          timeoutSeconds: 5        # Timeout after 5 seconds
+          successThreshold: 1      # Mark started after 1 success
+          failureThreshold: 12     # Allow up to 120s for startup (12 * 10s)
+
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          # readOnly: false  # Need write access for persistence
+
+        - name: cache
+          mountPath: /tmp/.cache
+          # Embedding model cache directory
+
+        # Container security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true  # Immutable root filesystem
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL  # Drop all Linux capabilities
+
+      # Volumes
+      volumes:
+      - name: data
+        # For production, use persistentVolumeClaim instead of emptyDir
+        # persistentVolumeClaim:
+        #   claimName: token-saver-5000-data
+        emptyDir: {}  # Temporary storage (data lost on pod restart)
+
+      - name: cache
+        emptyDir: {}  # Temporary cache for embedding models

@@ -1,0 +1,108 @@
+# Kustomization file for Token Saver 5000 Kubernetes deployment
+# Deploy with: kubectl apply -k deployment/kubernetes/
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace for all resources
+namespace: token-saver-5000
+
+# Common labels applied to all resources
+commonLabels:
+  app: token-saver-5000
+  managed-by: kustomize
+
+# Common annotations applied to all resources
+commonAnnotations:
+  version: v0.7.0
+  project: token-saver-5000
+
+# Resources to deploy (in order)
+resources:
+  # Namespace (create if doesn't exist)
+  - namespace.yaml
+
+  # Configuration (no dependencies)
+  - configmap.yaml
+  - secret.yaml
+
+  # Core resources (depend on ConfigMap/Secret)
+  - deployment.yaml
+  - service.yaml
+
+  # Autoscaling (depends on Deployment)
+  - hpa.yaml
+
+  # Monitoring (depends on Service, requires Prometheus Operator)
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+
+# ConfigMap generator (alternative to configmap.yaml)
+# Uncomment to generate ConfigMap from env file or literals
+# configMapGenerator:
+# - name: token-saver-5000-config
+#   envs:
+#   - config.env
+#   literals:
+#   - HTTP_ENABLED=true
+#   - HTTP_PORT=8080
+
+# Secret generator (alternative to secret.yaml)
+# Uncomment to generate Secret from env file or literals
+# secretGenerator:
+# - name: token-saver-5000-secrets
+#   envs:
+#   - secrets.env
+#   literals:
+#   - api-key=your-api-key-here
+
+# Images - update image tags here instead of deployment.yaml
+images:
+- name: token-saver-5000
+  newName: ghcr.io/your-org/token-saver-5000  # Update with your registry
+  newTag: v0.7.0  # Update with your version tag
+
+# Replicas - override replica count
+# replicas:
+# - name: token-saver-5000
+#   count: 3  # Override default 2 replicas
+
+# Patches - strategic merge patches for customization
+# Example: Override resource limits for production
+# patchesStrategicMerge:
+# - |-
+#   apiVersion: apps/v1
+#   kind: Deployment
+#   metadata:
+#     name: token-saver-5000
+#   spec:
+#     template:
+#       spec:
+#         containers:
+#         - name: token-saver
+#           resources:
+#             limits:
+#               memory: 4Gi
+#               cpu: 4000m
+
+# Patches - JSON patches for precise modifications
+# patchesJson6902:
+# - target:
+#     group: apps
+#     version: v1
+#     kind: Deployment
+#     name: token-saver-5000
+#   patch: |-
+#     - op: replace
+#       path: /spec/replicas
+#       value: 5
+
+# Variables - substitute values in manifests
+# vars:
+# - name: NAMESPACE
+#   objref:
+#     kind: Namespace
+#     name: token-saver-5000
+#     apiVersion: v1
+#   fieldref:
+#     fieldpath: metadata.name

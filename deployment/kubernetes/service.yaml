@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: token-saver-5000
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+  annotations:
+    description: "Internal service for Token Saver 5000 MCP server health checks and metrics"
+    # Prometheus scraping via ServiceMonitor (not annotations)
+    # ServiceMonitor provides more control than annotation-based discovery
+spec:
+  # ClusterIP - internal only, not exposed outside cluster
+  # For external access, create an Ingress or LoadBalancer service separately
+  type: ClusterIP
+
+  # Selector matches Deployment pod labels
+  selector:
+    app: token-saver-5000
+    component: mcp-server
+
+  # Session affinity - none (stateless service)
+  sessionAffinity: None
+
+  ports:
+  # Health check port (liveness, readiness probes)
+  - name: http-health
+    port: 8080           # Service port
+    targetPort: http-health  # Matches container port name
+    protocol: TCP
+
+  # Metrics port for Prometheus scraping
+  # Note: Same target port as health, different service port for clarity
+  - name: http-metrics
+    port: 9090           # Service port for Prometheus scraping
+    targetPort: http-health  # Same container port (8080), different path (/metrics)
+    protocol: TCP
+
+  # Optional: MCP server port (if stdio mode is replaced with TCP mode)
+  # - name: mcp-server
+  #   port: 3000
+  #   targetPort: 3000
+  #   protocol: TCP
+
+---
+# Optional: Headless service for StatefulSet or direct pod access
+# Useful for debugging or specific pod targeting
+apiVersion: v1
+kind: Service
+metadata:
+  name: token-saver-5000-headless
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: mcp-server
+  annotations:
+    description: "Headless service for direct pod access (debugging, StatefulSet)"
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service - returns pod IPs directly
+
+  selector:
+    app: token-saver-5000
+    component: mcp-server
+
+  ports:
+  - name: http-health
+    port: 8080
+    targetPort: http-health
+    protocol: TCP
+
+  - name: http-metrics
+    port: 9090
+    targetPort: http-health
+    protocol: TCP
