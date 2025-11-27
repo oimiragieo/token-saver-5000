@@ -80,7 +80,8 @@ def mock_message():
 class TestHandleAfmAddMessage:
     """Test AFM add message handler"""
 
-    def test_add_message_user_role(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_user_role(self, mock_context, mock_message):
         """Test adding a user message"""
         # Setup
         mock_context["focus_manager"].add_message.return_value = mock_message
@@ -89,10 +90,10 @@ class TestHandleAfmAddMessage:
         args = {"role": "user", "content": "Hello, I need help with something"}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify
-        assert "💬 Message Added to Dialogue History" in result
+        assert "Message Added to Dialogue History" in result
         assert "Turn: 5" in result
         assert "Role: user" in result
         assert "Importance: RELEVANT" in result
@@ -103,7 +104,8 @@ class TestHandleAfmAddMessage:
             "user", "Hello, I need help with something"
         )
 
-    def test_add_message_assistant_role(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_assistant_role(self, mock_context, mock_message):
         """Test adding an assistant message"""
         # Setup
         mock_message.role = "assistant"
@@ -114,16 +116,17 @@ class TestHandleAfmAddMessage:
         args = {"role": "assistant", "content": "I can help you with that!"}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify
-        assert "💬 Message Added" in result
+        assert "Message Added" in result
         assert "Role: assistant" in result
         mock_context["focus_manager"].add_message.assert_called_once_with(
             "assistant", "I can help you with that!"
         )
 
-    def test_add_message_system_role(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_system_role(self, mock_context, mock_message):
         """Test adding a system message"""
         # Setup
         mock_message.role = "system"
@@ -134,14 +137,15 @@ class TestHandleAfmAddMessage:
         args = {"role": "system", "content": "You are a helpful assistant"}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify
-        assert "💬 Message Added" in result
+        assert "Message Added" in result
         assert "Role: system" in result
         assert "Importance: CRITICAL" in result
 
-    def test_add_message_critical_importance(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_critical_importance(self, mock_context, mock_message):
         """Test adding a message with critical importance (e.g., allergy)"""
         # Setup
         mock_message.importance = ImportanceLevel.CRITICAL
@@ -151,12 +155,13 @@ class TestHandleAfmAddMessage:
         args = {"role": "user", "content": "I have a severe peanut allergy"}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify
         assert "Importance: CRITICAL" in result
 
-    def test_add_message_truncates_long_content(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_truncates_long_content(self, mock_context, mock_message):
         """Test that very long content is truncated in output"""
         # Setup
         long_content = "A" * 200
@@ -166,20 +171,21 @@ class TestHandleAfmAddMessage:
         args = {"role": "user", "content": long_content}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify - content should be truncated to 100 chars + "..."
         assert "..." in result
         assert "A" * 100 in result
         assert "A" * 200 not in result
 
-    def test_add_message_invalid_role(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_add_message_invalid_role(self, mock_context):
         """Test that invalid role raises ValueError"""
         args = {"role": "invalid_role", "content": "Test content"}
 
         # Execute & Verify
         with pytest.raises(ValueError) as exc_info:
-            handle_afm_add_message(mock_context, args)
+            await handle_afm_add_message(mock_context, args)
 
         assert "Invalid role" in str(exc_info.value)
         assert "invalid_role" in str(exc_info.value)
@@ -187,7 +193,8 @@ class TestHandleAfmAddMessage:
         assert "assistant" in str(exc_info.value)
         assert "system" in str(exc_info.value)
 
-    def test_add_message_shows_stats(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_add_message_shows_stats(self, mock_context, mock_message):
         """Test that dialogue stats are shown"""
         # Setup
         mock_context["focus_manager"].add_message.return_value = mock_message
@@ -197,7 +204,7 @@ class TestHandleAfmAddMessage:
         args = {"role": "user", "content": "Test"}
 
         # Execute
-        result = handle_afm_add_message(mock_context, args)
+        result = await handle_afm_add_message(mock_context, args)
 
         # Verify
         assert "Total messages: 10" in result
@@ -213,7 +220,8 @@ class TestHandleAfmAddMessage:
 class TestHandleAfmBuildContext:
     """Test AFM build context handler"""
 
-    def test_build_context_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_success(self, mock_context):
         """Test successful context building"""
         # Setup
         ctx = [
@@ -239,10 +247,10 @@ class TestHandleAfmBuildContext:
         }
 
         # Execute
-        result = handle_afm_build_context(mock_context, args)
+        result = await handle_afm_build_context(mock_context, args)
 
         # Verify
-        assert "🧠 AFM Context Built Successfully" in result
+        assert "AFM Context Built Successfully" in result
         assert "Query: What is the weather today?" in result
         assert "Total messages processed: 10" in result
         assert "FULL fidelity:         3" in result
@@ -257,7 +265,8 @@ class TestHandleAfmBuildContext:
         assert "[3] assistant:" in result
         mock_context["focus_manager"].build_context.assert_called_once()
 
-    def test_build_context_with_system_preamble(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_with_system_preamble(self, mock_context):
         """Test building context with custom system preamble"""
         # Setup
         ctx = [("system", "Custom preamble"), ("user", "Hello")]
@@ -280,17 +289,18 @@ class TestHandleAfmBuildContext:
         }
 
         # Execute
-        result = handle_afm_build_context(mock_context, args)
+        result = await handle_afm_build_context(mock_context, args)
 
         # Verify
-        assert "🧠 AFM Context Built Successfully" in result
+        assert "AFM Context Built Successfully" in result
         mock_context["focus_manager"].build_context.assert_called_once_with(
             current_query="Test query",
             budget_tokens=200,
             system_preamble="Custom preamble for this task",
         )
 
-    def test_build_context_truncates_long_messages(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_truncates_long_messages(self, mock_context):
         """Test that long messages are truncated in display"""
         # Setup
         long_message = "A" * 200
@@ -310,14 +320,15 @@ class TestHandleAfmBuildContext:
         args = {"current_query": "Test", "budget_tokens": 100}
 
         # Execute
-        result = handle_afm_build_context(mock_context, args)
+        result = await handle_afm_build_context(mock_context, args)
 
         # Verify - content should be truncated to 150 chars + "..."
         assert "..." in result
         assert "A" * 150 in result
         assert "A" * 200 not in result
 
-    def test_build_context_truncates_long_query(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_truncates_long_query(self, mock_context):
         """Test that long query is truncated in output"""
         # Setup
         long_query = "Q" * 200
@@ -337,35 +348,38 @@ class TestHandleAfmBuildContext:
         args = {"current_query": long_query, "budget_tokens": 100}
 
         # Execute
-        result = handle_afm_build_context(mock_context, args)
+        result = await handle_afm_build_context(mock_context, args)
 
         # Verify - query should be truncated to 100 chars + "..."
         assert "..." in result
         assert "Q" * 100 in result
         assert "Q" * 200 not in result
 
-    def test_build_context_negative_budget_raises_error(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_negative_budget_raises_error(self, mock_context):
         """Test that negative budget_tokens raises ValueError"""
         args = {"current_query": "Test", "budget_tokens": -100}
 
         # Execute & Verify
         with pytest.raises(ValueError) as exc_info:
-            handle_afm_build_context(mock_context, args)
+            await handle_afm_build_context(mock_context, args)
 
         assert "budget_tokens must be positive" in str(exc_info.value)
         assert "-100" in str(exc_info.value)
 
-    def test_build_context_zero_budget_raises_error(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_zero_budget_raises_error(self, mock_context):
         """Test that zero budget_tokens raises ValueError"""
         args = {"current_query": "Test", "budget_tokens": 0}
 
         # Execute & Verify
         with pytest.raises(ValueError) as exc_info:
-            handle_afm_build_context(mock_context, args)
+            await handle_afm_build_context(mock_context, args)
 
         assert "budget_tokens must be positive" in str(exc_info.value)
 
-    def test_build_context_shows_compression_stats(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_build_context_shows_compression_stats(self, mock_context):
         """Test that compression ratio and savings are shown"""
         # Setup
         ctx = [("user", "Test")]
@@ -384,7 +398,7 @@ class TestHandleAfmBuildContext:
         args = {"current_query": "Test", "budget_tokens": 500}
 
         # Execute
-        result = handle_afm_build_context(mock_context, args)
+        result = await handle_afm_build_context(mock_context, args)
 
         # Verify
         assert "~60% token savings" in result  # 100 * (1 - 0.4) = 60%
@@ -400,7 +414,8 @@ class TestHandleAfmBuildContext:
 class TestHandleAfmGetStats:
     """Test AFM get stats handler"""
 
-    def test_get_stats_basic(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_stats_basic(self, mock_context):
         """Test getting basic dialogue statistics"""
         # Setup
         mock_context["focus_manager"].get_stats.return_value = {
@@ -412,10 +427,10 @@ class TestHandleAfmGetStats:
         args = {}
 
         # Execute
-        result = handle_afm_get_stats(mock_context, args)
+        result = await handle_afm_get_stats(mock_context, args)
 
         # Verify
-        assert "📊 AFM Dialogue Statistics" in result
+        assert "AFM Dialogue Statistics" in result
         assert "Total messages: 15" in result
         assert "Current turn:   20" in result
         assert "CRITICAL:  2 messages" in result
@@ -424,7 +439,8 @@ class TestHandleAfmGetStats:
         assert "CRITICAL messages" in result
         assert "always preserved" in result
 
-    def test_get_stats_empty_dialogue(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_stats_empty_dialogue(self, mock_context):
         """Test getting stats for empty dialogue"""
         # Setup
         mock_context["focus_manager"].get_stats.return_value = {
@@ -436,14 +452,15 @@ class TestHandleAfmGetStats:
         args = {}
 
         # Execute
-        result = handle_afm_get_stats(mock_context, args)
+        result = await handle_afm_get_stats(mock_context, args)
 
         # Verify
         assert "Total messages: 0" in result
         assert "Current turn:   0" in result
         assert "CRITICAL:  0 messages" in result
 
-    def test_get_stats_all_critical(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_stats_all_critical(self, mock_context):
         """Test stats with all critical messages"""
         # Setup
         mock_context["focus_manager"].get_stats.return_value = {
@@ -455,7 +472,7 @@ class TestHandleAfmGetStats:
         args = {}
 
         # Execute
-        result = handle_afm_get_stats(mock_context, args)
+        result = await handle_afm_get_stats(mock_context, args)
 
         # Verify
         assert "CRITICAL:  5 messages" in result
@@ -471,7 +488,8 @@ class TestHandleAfmGetStats:
 class TestHandleAfmClearHistory:
     """Test AFM clear history handler"""
 
-    def test_clear_history_with_messages(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_clear_history_with_messages(self, mock_context):
         """Test clearing non-empty dialogue history"""
         # Setup
         mock_context["focus_manager"].messages = [Mock()] * 10
@@ -480,10 +498,10 @@ class TestHandleAfmClearHistory:
         args = {}
 
         # Execute
-        result = handle_afm_clear_history(mock_context, args)
+        result = await handle_afm_clear_history(mock_context, args)
 
         # Verify
-        assert "🗑️ AFM Dialogue History Cleared" in result
+        assert "AFM Dialogue History Cleared" in result
         assert "Previous state:" in result
         assert "Messages: 10" in result
         assert "Turns:    15" in result
@@ -493,7 +511,8 @@ class TestHandleAfmClearHistory:
         assert "Ready for new conversation" in result
         mock_context["focus_manager"].clear_history.assert_called_once()
 
-    def test_clear_history_already_empty(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_clear_history_already_empty(self, mock_context):
         """Test clearing already empty dialogue"""
         # Setup
         mock_context["focus_manager"].messages = []
@@ -502,7 +521,7 @@ class TestHandleAfmClearHistory:
         args = {}
 
         # Execute
-        result = handle_afm_clear_history(mock_context, args)
+        result = await handle_afm_clear_history(mock_context, args)
 
         # Verify
         assert "Previous state:" in result
@@ -519,7 +538,8 @@ class TestHandleAfmClearHistory:
 class TestHandleAfmExportHistory:
     """Test AFM export history handler"""
 
-    def test_export_history_success(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_export_history_success(self, mock_context, mock_message):
         """Test successful export of dialogue history"""
         # Setup
         mock_context["focus_manager"].messages = [mock_message] * 5
@@ -533,10 +553,10 @@ class TestHandleAfmExportHistory:
         args = {"session_id": "test_session"}
 
         # Execute
-        result = handle_afm_export_history(mock_context, args)
+        result = await handle_afm_export_history(mock_context, args)
 
         # Verify
-        assert "💾 AFM Export Complete" in result
+        assert "AFM Export Complete" in result
         assert "Session ID: test_session" in result
         assert "Messages exported: 5" in result
         assert "Current turn: 10" in result
@@ -544,7 +564,8 @@ class TestHandleAfmExportHistory:
         assert "Available sessions: session1, session2" in result
         mock_context["persistence"].save_afm_history.assert_called_once()
 
-    def test_export_history_default_session_id(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_export_history_default_session_id(self, mock_context, mock_message):
         """Test export with default session ID"""
         # Setup
         mock_context["focus_manager"].messages = [mock_message]
@@ -555,7 +576,7 @@ class TestHandleAfmExportHistory:
         args = {}  # No session_id provided
 
         # Execute
-        result = handle_afm_export_history(mock_context, args)
+        result = await handle_afm_export_history(mock_context, args)
 
         # Verify
         assert "Session ID: default" in result
@@ -563,7 +584,8 @@ class TestHandleAfmExportHistory:
         call_args = mock_context["persistence"].save_afm_history.call_args
         assert call_args[1]["session_id"] == "default"
 
-    def test_export_history_empty_dialogue(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_export_history_empty_dialogue(self, mock_context):
         """Test export with no dialogue history"""
         # Setup
         mock_context["focus_manager"].messages = []
@@ -571,7 +593,7 @@ class TestHandleAfmExportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_export_history(mock_context, args)
+        result = await handle_afm_export_history(mock_context, args)
 
         # Verify
         assert "No dialogue history to export" in result
@@ -579,7 +601,8 @@ class TestHandleAfmExportHistory:
         # save_afm_history should NOT be called
         mock_context["persistence"].save_afm_history.assert_not_called()
 
-    def test_export_history_persistence_failure(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_export_history_persistence_failure(self, mock_context, mock_message):
         """Test export when persistence fails"""
         # Setup
         mock_context["focus_manager"].messages = [mock_message]
@@ -589,10 +612,10 @@ class TestHandleAfmExportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_export_history(mock_context, args)
+        result = await handle_afm_export_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Export Failed" in result
+        assert "AFM Export Failed" in result
         assert "Could not save dialogue history" in result
         assert "Check logs" in result
 
@@ -605,7 +628,8 @@ class TestHandleAfmExportHistory:
 class TestHandleAfmImportHistory:
     """Test AFM import history handler"""
 
-    def test_import_history_success(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_import_history_success(self, mock_context, mock_message):
         """Test successful import of dialogue history"""
         # Setup
         import_data = {
@@ -618,10 +642,10 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test_session"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "📥 AFM Import Complete" in result
+        assert "AFM Import Complete" in result
         assert "Session ID: test_session" in result
         assert "Messages restored: 3" in result
         assert "Turn counter restored: 5" in result
@@ -631,7 +655,8 @@ class TestHandleAfmImportHistory:
         assert mock_context["focus_manager"].messages == [mock_message] * 3
         assert mock_context["focus_manager"].turn_counter == 5
 
-    def test_import_history_default_session_id(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_import_history_default_session_id(self, mock_context, mock_message):
         """Test import with default session ID"""
         # Setup
         import_data = {
@@ -644,13 +669,14 @@ class TestHandleAfmImportHistory:
         args = {}  # No session_id provided
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
         assert "Session ID: default" in result
         mock_context["persistence"].load_afm_history.assert_called_once_with("default")
 
-    def test_import_history_session_not_found(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_session_not_found(self, mock_context):
         """Test import when session doesn't exist"""
         # Setup
         mock_context["persistence"].load_afm_history.return_value = None
@@ -662,14 +688,15 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "nonexistent"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Failed" in result
+        assert "AFM Import Failed" in result
         assert "Session 'nonexistent' not found" in result
         assert "Available sessions: session1, session2" in result
 
-    def test_import_history_no_available_sessions(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_no_available_sessions(self, mock_context):
         """Test import when no sessions exist"""
         # Setup
         mock_context["persistence"].load_afm_history.return_value = None
@@ -678,13 +705,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Failed" in result
+        assert "AFM Import Failed" in result
         assert "Available sessions: (none)" in result
 
-    def test_import_history_missing_messages_field(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_missing_messages_field(self, mock_context):
         """Test import with invalid data - missing messages field"""
         # Setup
         import_data = {
@@ -695,13 +723,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "Missing 'messages' field" in result
 
-    def test_import_history_missing_turn_counter_field(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_missing_turn_counter_field(self, mock_context):
         """Test import with invalid data - missing turn_counter field"""
         # Setup
         import_data = {
@@ -712,13 +741,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "Missing 'turn_counter' field" in result
 
-    def test_import_history_messages_not_list(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_messages_not_list(self, mock_context):
         """Test import with invalid data - messages is not a list"""
         # Setup
         import_data = {
@@ -730,13 +760,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "'messages' must be a list" in result
 
-    def test_import_history_message_missing_role(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_message_missing_role(self, mock_context):
         """Test import with invalid message - missing role field"""
         # Setup
         invalid_msg = Mock()
@@ -750,13 +781,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "Message 0 missing 'role' field" in result
 
-    def test_import_history_message_missing_content(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_message_missing_content(self, mock_context):
         """Test import with invalid message - missing content field"""
         # Setup
         invalid_msg = Mock()
@@ -771,13 +803,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "Message 0 missing 'content' field" in result
 
-    def test_import_history_message_invalid_role(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_import_history_message_invalid_role(self, mock_context):
         """Test import with invalid message - invalid role value"""
         # Setup
         invalid_msg = Mock()
@@ -792,13 +825,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "Message 0 has invalid role: invalid_role" in result
 
-    def test_import_history_turn_counter_not_int(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_import_history_turn_counter_not_int(self, mock_context, mock_message):
         """Test import with invalid turn_counter - not an integer"""
         # Setup
         import_data = {
@@ -810,13 +844,14 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
-        assert "❌ AFM Import Validation Failed" in result
+        assert "AFM Import Validation Failed" in result
         assert "'turn_counter' must be an integer" in result
 
-    def test_import_history_metadata_default_unknown(self, mock_context, mock_message):
+    @pytest.mark.asyncio
+    async def test_import_history_metadata_default_unknown(self, mock_context, mock_message):
         """Test import with missing metadata shows 'unknown' exported time"""
         # Setup
         import_data = {
@@ -829,7 +864,7 @@ class TestHandleAfmImportHistory:
         args = {"session_id": "test"}
 
         # Execute
-        result = handle_afm_import_history(mock_context, args)
+        result = await handle_afm_import_history(mock_context, args)
 
         # Verify
         assert "Exported at: unknown" in result

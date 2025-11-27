@@ -137,7 +137,11 @@ Claude Code has unique capabilities that set it apart from generic agent configu
     * lint.yml: Black, Ruff, Bandit security scanning, complexity analysis
     * build.yml: Docker builds with layer caching, Trivy CVE scanning, SBOM generation
     * deploy.yml: Kubernetes deployment, staging auto-deploy, production approval-gated
-  - **Test Coverage:** 32 new HTTP server tests (100% pass rate, 1,032 → 1,064 total tests)
+  - **Test Coverage:** 32 new HTTP server tests (100% pass rate, 1,032 → 1,075 total tests)
+  - **Test Suite Overhaul:** Fixed 87 test failures from API mismatches:
+    * AFM handlers: Added async/await to all 35 tests (handlers are async def)
+    * Chaos engineering: Fixed PersistenceManager, LRUEmbeddingCache, VersionManager API calls
+    * Integration workflows: Removed unused imports and variables
   - **Dependencies:** Added aiohttp>=3.9.0 for HTTP server
 
 **Previous Release (v0.6.1 - Security Hardening - COMPLETE):**
@@ -198,8 +202,8 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **1,064 comprehensive tests** (all passing, 100% pass rate - v0.7.0 Week 7-8)
-  - Was 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+- ✅ **1,075 comprehensive tests** (1,063 passed, 12 skipped, 100% pass rate - v0.7.0 Week 7-8)
+  - Was 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
   - 32 new tests added in v0.7.0 Week 7-8 DevOps infrastructure:
     * 32 HTTP server tests (endpoints, integration, configuration, lifecycle, edge cases - 100% pass rate)
   - 168 new tests added in v0.7.0 Week 5-6 observability infrastructure:

@@ -363,6 +363,20 @@ class FileSyncManager:
         """
         return hashlib.md5(content.encode("utf-8")).hexdigest()
 
+    def compute_checksum(self, content: str) -> str:
+        """
+        Public API: Calculate MD5 checksum of content.
+
+        This is a public alias for _calculate_checksum() for external use.
+
+        Args:
+            content: Text content
+
+        Returns:
+            MD5 hex digest
+        """
+        return self._calculate_checksum(content)
+
     def update_metadata(self, doc_id: str, file_path: str, content: str):
         """
         Update metadata after re-ingestion.

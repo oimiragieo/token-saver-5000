@@ -155,7 +155,16 @@ class TestHandleReadSkeleton:
         self.mock_compressor = Mock()
         self.mock_sync_manager = Mock()
 
-        self.mock_compressor.read_skeleton.return_value = "Mock skeleton text"
+        # Create proper mock for _generate_skeleton (which returns a skeleton object)
+        mock_skeleton = Mock()
+        mock_skeleton.file_id = "doc1"
+        mock_skeleton.total_nodes = 10
+        mock_skeleton.total_tokens = 1000
+        mock_skeleton.skeleton_tokens = 100
+        mock_skeleton.compression_ratio = 10.0
+        mock_skeleton.skeleton_text = "Mock skeleton text"
+        mock_skeleton.node_map = {}  # JSON serializable
+        self.mock_compressor._generate_skeleton.return_value = mock_skeleton
         self.mock_sync_manager.file_metadata = {}
 
         self.context = {
@@ -170,8 +179,12 @@ class TestHandleReadSkeleton:
 
         result = await ch.handle_read_skeleton(self.context, args)
 
-        self.mock_compressor.read_skeleton.assert_called_once_with("doc1")
-        assert result == "Mock skeleton text"
+        self.mock_compressor._generate_skeleton.assert_called_once_with("doc1")
+        # Handler returns JSON
+        data = json.loads(result)
+        assert data["file_id"] == "doc1"
+        assert data["skeleton_text"] == "Mock skeleton text"
+        assert data["compression_ratio"] == 10.0
 
     @pytest.mark.asyncio
     async def test_staleness_warning_shown(self, mock_validate_file):
@@ -188,8 +201,11 @@ class TestHandleReadSkeleton:
 
         result = await ch.handle_read_skeleton(self.context, args)
 
-        assert "⚠️  WARNING: Cache may be stale" in result
-        assert "Mock skeleton text" in result
+        # Handler returns JSON with staleness_warning
+        data = json.loads(result)
+        assert "staleness_warning" in data
+        assert data["staleness_warning"]["is_stale"] is True
+        assert "Mock skeleton text" in data["skeleton_text"]
 
 
 @patch("src.handlers.compression_handlers.validate_node_ids")
@@ -275,10 +291,11 @@ class TestHandleSearchSemantic:
         mock_node_0 = Mock()
         mock_node_0.text = "This is about quantum computing"
         mock_node_0.importance = 0.95
+        mock_node_0.metadata = {"tokens": 50}
 
         self.mock_compressor.chunks = {"doc1_n0": mock_node_0}
         self.mock_compressor.search_semantic.return_value = ["doc1_n0"]
-        self.mock_compressor._generate_summary.side_effect = lambda text, max_length: text[:100]
+        self.mock_compressor._generate_summary.side_effect = lambda text, max_length: text[:max_length]
 
         self.context = {"compressor": self.mock_compressor}
 
@@ -291,8 +308,12 @@ class TestHandleSearchSemantic:
 
         self.mock_compressor.search_semantic.assert_called_once_with("quantum computing", None, 5)
 
-        assert "🔍 Semantic Search Results" in result
-        assert "quantum computing" in result
+        # Handler returns JSON
+        data = json.loads(result)
+        assert data["query"] == "quantum computing"
+        assert data["total_results"] == 1
+        assert len(data["results"]) == 1
+        assert data["results"][0]["node_id"] == "doc1_n0"
 
     @pytest.mark.asyncio
     async def test_search_with_custom_top_k(self):

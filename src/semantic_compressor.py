@@ -632,6 +632,11 @@ class SemanticCompressor:
             # Global stats
             return {
                 "total_files": len(self.graphs),
+                "total_documents": len(self.graphs),  # Alias for compatibility
                 "total_nodes": len(self.chunks),
                 "files": list(self.graphs.keys()),
             }
+
+    def get_statistics(self, file_id: Optional[str] = None) -> Dict:
+        """Alias for get_stats() - provided for API compatibility."""
+        return self.get_stats(file_id)
