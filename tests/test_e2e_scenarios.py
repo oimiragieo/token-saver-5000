@@ -11,7 +11,6 @@ Test Coverage:
 Each test represents a complete user journey with validation at every step.
 """
 
-
 import pytest
 
 from src.handlers import compression_handlers, afm_handlers, ace_handlers, file_sync_handlers
@@ -103,9 +102,9 @@ optimization.
 """
 
         ingest_args = {
-            "content": paper_content,
-            "fidelity_level": FidelityLevel.BALANCED.value,
-            "doc_id": "quantum_paper_e2e",
+            "text": paper_content,
+            "fidelity_level": FidelityLevel.STRUCTURE.value,
+            "file_id": "quantum_paper_e2e",
         }
 
         result = await compression_handlers.handle_ingest(handler_context, ingest_args)
@@ -120,7 +119,7 @@ optimization.
         assert compression_ratio > 5.0, f"Expected >5× compression, got {compression_ratio}×"
 
         # Step 2: Read compressed skeleton
-        read_args = {"doc_id": "quantum_paper_e2e"}
+        read_args = {"file_id": "quantum_paper_e2e"}
         skeleton = await compression_handlers.handle_read_skeleton(handler_context, read_args)
 
         assert skeleton["status"] == "success"
@@ -143,7 +142,7 @@ optimization.
 
         # Step 4: Expand key section
         expand_args = {
-            "doc_id": "quantum_paper_e2e",
+            "file_id": "quantum_paper_e2e",
             "node_ids": [0, 1, 2],  # Expand first few nodes
         }
 
@@ -180,7 +179,7 @@ algorithm which can break RSA encryption.
         results = {}
         fidelity_levels = [
             FidelityLevel.ABSTRACT,
-            FidelityLevel.BALANCED,
+            FidelityLevel.STRUCTURE,
             FidelityLevel.DETAILED,
             FidelityLevel.COMPREHENSIVE,
             FidelityLevel.RAW,
@@ -190,9 +189,9 @@ algorithm which can break RSA encryption.
         for fidelity in fidelity_levels:
             doc_id = f"quantum_excerpt_{fidelity.value}"
             ingest_args = {
-                "content": paper_excerpt,
+                "text": paper_excerpt,
                 "fidelity_level": fidelity.value,
-                "doc_id": doc_id,
+                "file_id": doc_id,
             }
 
             result = await compression_handlers.handle_ingest(handler_context, ingest_args)
@@ -200,7 +199,7 @@ algorithm which can break RSA encryption.
 
             results[fidelity.value] = {
                 "compression_ratio": result.get("compression_ratio", 1.0),
-                "doc_id": doc_id,
+                "file_id": doc_id,
             }
 
         # Validate fidelity ladder: ABSTRACT < BALANCED < DETAILED < COMPREHENSIVE
@@ -220,7 +219,7 @@ algorithm which can break RSA encryption.
         for fidelity in fidelity_levels:
             doc_id = results[fidelity.value]["doc_id"]
             skeleton = await compression_handlers.handle_read_skeleton(
-                handler_context, {"doc_id": doc_id}
+                handler_context, {"file_id": doc_id}
             )
             assert skeleton["status"] == "success"
 
@@ -253,8 +252,8 @@ We use a 5-layer CNN with ReLU activations and max pooling.
         # Ingest v1
         ingest_args = {
             "file_path": str(paper_path),
-            "fidelity_level": FidelityLevel.BALANCED.value,
-            "doc_id": "paper_versions",
+            "fidelity_level": FidelityLevel.STRUCTURE.value,
+            "file_id": "paper_versions",
         }
 
         v1_result = await compression_handlers.handle_ingest(handler_context, ingest_args)
@@ -272,7 +271,7 @@ Training took 6 hours on a single GPU.
         paper_path.write_text(v2_content)
 
         # Refresh to create v2
-        refresh_args = {"doc_id": "paper_versions"}
+        refresh_args = {"file_id": "paper_versions"}
         v2_result = await file_sync_handlers.handle_refresh_document(handler_context, refresh_args)
         assert v2_result["status"] == "success"
 
@@ -298,7 +297,7 @@ Training took 6 hours on a single GPU.
         assert v3_result["status"] == "success"
 
         # View version history
-        history_args = {"doc_id": "paper_versions"}
+        history_args = {"file_id": "paper_versions"}
         history = await file_sync_handlers.handle_view_version_history(
             handler_context, history_args
         )
@@ -308,7 +307,7 @@ Training took 6 hours on a single GPU.
         assert len(history["versions"]) >= 3  # Should have at least 3 versions
 
         # View diff between v1 and v2
-        diff_args = {"doc_id": "paper_versions", "version_a": 1, "version_b": 2}
+        diff_args = {"file_id": "paper_versions", "version_a": 1, "version_b": 2}
 
         diff_result = await file_sync_handlers.handle_view_version_diff(handler_context, diff_args)
         assert diff_result["status"] == "success"
@@ -339,9 +338,9 @@ show SHAP provides consistent and locally accurate explanations across model typ
 
         # Step 1: Ingest paper
         ingest_args = {
-            "content": paper_content,
-            "fidelity_level": FidelityLevel.BALANCED.value,
-            "doc_id": "interpretability_paper",
+            "text": paper_content,
+            "fidelity_level": FidelityLevel.STRUCTURE.value,
+            "file_id": "interpretability_paper",
         }
 
         result = await compression_handlers.handle_ingest(handler_context, ingest_args)
@@ -392,7 +391,7 @@ show SHAP provides consistent and locally accurate explanations across model typ
         papers = []
         for i in range(10):
             paper = {
-                "content": f"""
+                "text": f"""
 Quantum Computing Paper {i+1}
 
 This paper explores quantum algorithm design for optimization problems.
@@ -401,8 +400,8 @@ and quantum approximate optimization algorithm (QAOA). Experiment {i+1} demonstr
 significant speedup over classical approaches on graph problems with {100+i*10} nodes.
 Results show {50+i*5}% improvement in solution quality compared to baseline.
 """,
-                "doc_id": f"quantum_paper_{i+1}",
-                "fidelity_level": FidelityLevel.BALANCED.value,
+                "file_id": f"quantum_paper_{i+1}",
+                "fidelity_level": FidelityLevel.STRUCTURE.value,
             }
             papers.append(paper)
 
@@ -559,8 +558,8 @@ api.register_user("alice", "alice@example.com")
             documents.append(
                 {
                     "file_path": file_path,
-                    "fidelity_level": FidelityLevel.BALANCED.value,
-                    "doc_id": f"codebase_file_{i}",
+                    "fidelity_level": FidelityLevel.STRUCTURE.value,
+                    "file_id": f"codebase_file_{i}",
                 }
             )
 
@@ -576,7 +575,7 @@ api.register_user("alice", "alice@example.com")
 
         # Read skeleton for main API file
         api_skeleton = await compression_handlers.handle_read_skeleton(
-            handler_context, {"doc_id": "codebase_file_2"}  # api.py
+            handler_context, {"file_id": "codebase_file_2"}  # api.py
         )
 
         assert api_skeleton["status"] == "success"
@@ -640,8 +639,8 @@ def calculate_fibonacci(n: int) -> int:
         # Ingest at BALANCED fidelity
         ingest_args = {
             "file_path": str(code_path),
-            "fidelity_level": FidelityLevel.BALANCED.value,
-            "doc_id": "fibonacci_code",
+            "fidelity_level": FidelityLevel.STRUCTURE.value,
+            "file_id": "fibonacci_code",
         }
 
         result = await compression_handlers.handle_ingest(handler_context, ingest_args)
@@ -649,7 +648,7 @@ def calculate_fibonacci(n: int) -> int:
 
         # Read skeleton
         skeleton = await compression_handlers.handle_read_skeleton(
-            handler_context, {"doc_id": "fibonacci_code"}
+            handler_context, {"file_id": "fibonacci_code"}
         )
 
         assert skeleton["status"] == "success"
@@ -660,7 +659,7 @@ def calculate_fibonacci(n: int) -> int:
         assert "dynamic programming" in skeleton_text or "o(n)" in skeleton_text
 
         # Expand to verify structure
-        expand_args = {"doc_id": "fibonacci_code", "node_ids": [0]}
+        expand_args = {"file_id": "fibonacci_code", "node_ids": [0]}
 
         expanded = await compression_handlers.handle_expand_section(handler_context, expand_args)
         assert expanded["status"] == "success"
@@ -688,8 +687,8 @@ def calculate_fibonacci(n: int) -> int:
                 handler_context,
                 {
                     "file_path": str(file_path),
-                    "fidelity_level": FidelityLevel.BALANCED.value,
-                    "doc_id": f"module{i}",
+                    "fidelity_level": FidelityLevel.STRUCTURE.value,
+                    "file_id": f"module{i}",
                 },
             )
             assert result["status"] == "success"
@@ -701,7 +700,7 @@ def calculate_fibonacci(n: int) -> int:
         file1.write_text("def function1(): return 42")
 
         # Check sync status
-        sync_args = {"doc_id": "module1"}
+        sync_args = {"file_id": "module1"}
         sync_status = await file_sync_handlers.handle_check_sync_status(handler_context, sync_args)
 
         # Should detect staleness
@@ -714,7 +713,7 @@ def calculate_fibonacci(n: int) -> int:
                 assert refresh_result["status"] == "success"
 
         # module2 should still be synced (not modified)
-        sync_args2 = {"doc_id": "module2"}
+        sync_args2 = {"file_id": "module2"}
         sync_status2 = await file_sync_handlers.handle_check_sync_status(
             handler_context, sync_args2
         )
@@ -741,8 +740,8 @@ def calculate_fibonacci(n: int) -> int:
             handler_context,
             {
                 "file_path": str(code_file),
-                "fidelity_level": FidelityLevel.BALANCED.value,
-                "doc_id": "calculator",
+                "fidelity_level": FidelityLevel.STRUCTURE.value,
+                "file_id": "calculator",
             },
         )
 
@@ -761,12 +760,12 @@ def calculate_fibonacci(n: int) -> int:
             code_file.write_text(content)
 
             await file_sync_handlers.handle_refresh_document(
-                handler_context, {"doc_id": "calculator"}
+                handler_context, {"file_id": "calculator"}
             )
 
         # View version history
         history = await file_sync_handlers.handle_view_version_history(
-            handler_context, {"doc_id": "calculator"}
+            handler_context, {"file_id": "calculator"}
         )
 
         assert history["status"] == "success"
@@ -826,8 +825,8 @@ Input → DataProcessor → Storage → Response
                 handler_context,
                 {
                     "file_path": str(file_path),
-                    "fidelity_level": FidelityLevel.BALANCED.value,
-                    "doc_id": f"multimodal_{i}",
+                    "fidelity_level": FidelityLevel.STRUCTURE.value,
+                    "file_id": f"multimodal_{i}",
                 },
             )
 
@@ -836,7 +835,7 @@ Input → DataProcessor → Storage → Response
         # Read skeletons for each
         for i in range(len(files)):
             skeleton = await compression_handlers.handle_read_skeleton(
-                handler_context, {"doc_id": f"multimodal_{i}"}
+                handler_context, {"file_id": f"multimodal_{i}"}
             )
             assert skeleton["status"] == "success"
 
@@ -899,7 +898,7 @@ class TestDialogueWorkflow:
             add_args = {
                 "dialogue_id": dialogue_id,
                 "role": role,
-                "content": content,
+                "text": content,
                 "metadata": metadata,
             }
 
@@ -954,7 +953,7 @@ class TestDialogueWorkflow:
             {
                 "dialogue_id": dialogue_id,
                 "role": "user",
-                "content": "CRITICAL: I am severely allergic to shellfish",
+                "text": "CRITICAL: I am severely allergic to shellfish",
                 "metadata": {"is_critical": True, "keywords": ["allergy", "shellfish"]},
             },
         )
@@ -966,7 +965,7 @@ class TestDialogueWorkflow:
                 {
                     "dialogue_id": dialogue_id,
                     "role": "user" if i % 2 == 0 else "assistant",
-                    "content": f"Generic message {i} about weather and sports",
+                    "text": f"Generic message {i} about weather and sports",
                     "metadata": {},
                 },
             )
@@ -1012,7 +1011,7 @@ class TestDialogueWorkflow:
                 {
                     "dialogue_id": dialogue_id,
                     "role": "user" if i % 2 == 0 else "assistant",
-                    "content": content,
+                    "text": content,
                     "metadata": {"is_critical": i % 10 == 0},  # Every 10th is critical
                 },
             )
@@ -1067,7 +1066,7 @@ class TestDialogueWorkflow:
         for role, content in messages:
             await afm_handlers.handle_add_message(
                 handler_context,
-                {"dialogue_id": dialogue_id, "role": role, "content": content, "metadata": {}},
+                {"dialogue_id": dialogue_id, "role": role, "text": content, "metadata": {}},
             )
 
         # Get stats from session 1
@@ -1133,7 +1132,7 @@ class TestDialogueWorkflow:
         for role, content in conversation:
             await afm_handlers.handle_add_message(
                 handler_context,
-                {"dialogue_id": dialogue_id, "role": role, "content": content, "metadata": {}},
+                {"dialogue_id": dialogue_id, "role": role, "text": content, "metadata": {}},
             )
 
         # Step 3: Create document to compress
@@ -1152,8 +1151,8 @@ qubits arranged on a 2D lattice.
             handler_context,
             {
                 "file_path": str(doc_file),
-                "fidelity_level": FidelityLevel.BALANCED.value,
-                "doc_id": "quantum_doc",
+                "fidelity_level": FidelityLevel.STRUCTURE.value,
+                "file_id": "quantum_doc",
             },
         )
 
@@ -1180,14 +1179,14 @@ qubits arranged on a 2D lattice.
 
         # Step 7: Refresh document (creates new version)
         refresh_result = await file_sync_handlers.handle_refresh_document(
-            handler_context, {"doc_id": "quantum_doc"}
+            handler_context, {"file_id": "quantum_doc"}
         )
 
         assert refresh_result["status"] == "success"
 
         # Step 8: View version history
         history = await file_sync_handlers.handle_view_version_history(
-            handler_context, {"doc_id": "quantum_doc"}
+            handler_context, {"file_id": "quantum_doc"}
         )
 
         assert history["status"] == "success"

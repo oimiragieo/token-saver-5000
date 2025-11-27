@@ -23,6 +23,7 @@ from src.file_sync_manager import FileSyncManager
 from src.version_manager import VersionManager
 from src.persistence import PersistenceManager
 from src.afm import FocusManager
+from src.ace_framework import ACEFramework
 from src.batch_manager import BatchDocument
 from src.path_validator import PathValidator
 
@@ -53,6 +54,12 @@ def compressor():
 def afm():
     """Create a fresh FocusManager instance for testing."""
     return FocusManager()
+
+
+@pytest.fixture
+def ace_framework():
+    """Create a fresh ACEFramework instance for ACE testing."""
+    return ACEFramework()
 
 
 @pytest.fixture
@@ -102,6 +109,7 @@ def path_validator():
 def handler_context(
     compressor,
     afm,
+    ace_framework,
     resource_manager,
     file_sync_manager,
     version_manager,
@@ -117,9 +125,10 @@ def handler_context(
         "compressor": compressor,
         "afm": afm,
         "focus_manager": afm,  # AFM is the FocusManager
+        "ace_framework": ace_framework,
+        "ace_contexts": {},
         "sync_manager": file_sync_manager,
         "version_manager": version_manager,
-        "ace_contexts": {},
         "resource_manager": resource_manager,
         "persistence": persistence_manager,
         "retrieval_history": {},

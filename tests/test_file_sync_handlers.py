@@ -43,7 +43,8 @@ class TestHandleCheckFileSync:
         }
         return context
 
-    def test_check_file_sync_in_sync(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_file_sync_in_sync(self, mock_context):
         """Test check_file_sync when file is in sync"""
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
@@ -52,14 +53,15 @@ class TestHandleCheckFileSync:
         }
 
         # Execute
-        result = handle_check_file_sync(mock_context, {"file_id": "test_doc"})
+        result = await handle_check_file_sync(mock_context, {"file_id": "test_doc"})
 
         # Verify
         assert "✅" in result
         assert "test_doc is in sync" in result
         assert "File unchanged" in result
 
-    def test_check_file_sync_out_of_sync(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_file_sync_out_of_sync(self, mock_context):
         """Test check_file_sync when file is out of sync"""
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
@@ -73,7 +75,7 @@ class TestHandleCheckFileSync:
         }
 
         # Execute
-        result = handle_check_file_sync(mock_context, {"file_id": "test_doc"})
+        result = await handle_check_file_sync(mock_context, {"file_id": "test_doc"})
 
         # Verify
         assert "⚠️" in result
@@ -85,7 +87,8 @@ class TestHandleCheckFileSync:
         assert "refresh_document" in result
         assert "diff_cached_file" in result
 
-    def test_check_file_sync_with_timestamps(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_file_sync_with_timestamps(self, mock_context):
         """Test that timestamps are formatted correctly"""
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
@@ -96,13 +99,14 @@ class TestHandleCheckFileSync:
         }
 
         # Execute
-        result = handle_check_file_sync(mock_context, {"file_id": "test_doc"})
+        result = await handle_check_file_sync(mock_context, {"file_id": "test_doc"})
 
         # Verify timestamps are formatted
         assert "2021-01-01" in result or "2021-01-02" in result
         assert ":" in result  # Time separator
 
-    def test_check_file_sync_invalid_file_id(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_file_sync_invalid_file_id(self, mock_context):
         """Test validation error handling"""
 
         # Setup validation to raise error
@@ -135,7 +139,8 @@ class TestHandleDiffCachedFile:
         }
         return context
 
-    def test_diff_cached_file_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_diff_cached_file_success(self, mock_context):
         """Test successful diff generation"""
         # Setup
         file_id = "test_doc"
@@ -160,7 +165,7 @@ class TestHandleDiffCachedFile:
 """
 
         # Execute
-        result = handle_diff_cached_file(mock_context, {"file_id": file_id})
+        result = await handle_diff_cached_file(mock_context, {"file_id": file_id})
 
         # Verify
         assert "---" in result
@@ -171,7 +176,8 @@ class TestHandleDiffCachedFile:
             file_id, context_lines=3
         )
 
-    def test_diff_cached_file_custom_context_lines(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_diff_cached_file_custom_context_lines(self, mock_context):
         """Test diff with custom context_lines parameter"""
         # Setup
         file_id = "test_doc"
@@ -193,13 +199,14 @@ class TestHandleDiffCachedFile:
             file_id, context_lines=5
         )
 
-    def test_diff_cached_file_no_source_file(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_diff_cached_file_no_source_file(self, mock_context):
         """Test diff when no source file is registered"""
         # Setup - file_id NOT in file_metadata
         file_id = "test_doc"
 
         # Execute
-        result = handle_diff_cached_file(mock_context, {"file_id": file_id})
+        result = await handle_diff_cached_file(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
@@ -207,7 +214,8 @@ class TestHandleDiffCachedFile:
         assert "no source file registered" in result
         assert "Re-ingest with file_path parameter" in result
 
-    def test_diff_cached_file_no_version_history(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_diff_cached_file_no_version_history(self, mock_context):
         """Test diff when version manager returns nothing"""
         # Setup
         file_id = "test_doc"
@@ -222,7 +230,7 @@ class TestHandleDiffCachedFile:
         mock_context["version_manager"].diff_with_current_file.return_value = None
 
         # Execute
-        result = handle_diff_cached_file(mock_context, {"file_id": file_id})
+        result = await handle_diff_cached_file(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
@@ -273,7 +281,8 @@ class TestHandleRefreshDocument:
             }
             yield context
 
-    def test_refresh_document_success(self, mock_context, temp_file):
+    @pytest.mark.asyncio
+    async def test_refresh_document_success(self, mock_context, temp_file):
         """Test successful document refresh"""
         # Setup
         file_id = "test_doc"
@@ -283,7 +292,7 @@ class TestHandleRefreshDocument:
         sync_manager.register_file(file_id, temp_file, content)
 
         # Execute
-        result = handle_refresh_document(mock_context, {"file_id": file_id})
+        result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
         assert "✅" in result
@@ -297,19 +306,21 @@ class TestHandleRefreshDocument:
         history = mock_context["version_manager"].get_version_history(file_id)
         assert len(history) == 1
 
-    def test_refresh_document_no_source_file(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refresh_document_no_source_file(self, mock_context):
         """Test refresh when no source file is registered"""
         # Setup - file_id NOT in file_metadata
         file_id = "test_doc"
 
         # Execute
-        result = handle_refresh_document(mock_context, {"file_id": file_id})
+        result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
         assert "File sync not enabled" in result
 
-    def test_refresh_document_text_only_ingestion(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refresh_document_text_only_ingestion(self, mock_context):
         """Test refresh when document was ingested as text-only (no file_path)"""
         # Setup - metadata exists but file_path is None
         file_id = "test_doc"
@@ -317,14 +328,15 @@ class TestHandleRefreshDocument:
         sync_manager.register_file(file_id, None, "text only content")
 
         # Execute
-        result = handle_refresh_document(mock_context, {"file_id": file_id})
+        result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
         assert "no source file" in result
         assert "text-only ingestion" in result
 
-    def test_refresh_document_file_read_error(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refresh_document_file_read_error(self, mock_context):
         """Test refresh when source file cannot be read"""
         # Setup with non-existent file path (absolute path for security validation)
         file_id = "test_doc"
@@ -337,7 +349,7 @@ class TestHandleRefreshDocument:
         sync_manager.register_file(file_id, nonexistent_path, "dummy content")
 
         # Execute
-        result = handle_refresh_document(mock_context, {"file_id": file_id})
+        result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
@@ -345,7 +357,8 @@ class TestHandleRefreshDocument:
         assert "nonexistent" in result.lower() or "path.txt" in result
         assert "may have been moved or deleted" in result
 
-    def test_refresh_document_ingestion_error(self, mock_context, temp_file):
+    @pytest.mark.asyncio
+    async def test_refresh_document_ingestion_error(self, mock_context, temp_file):
         """Test refresh when re-ingestion fails"""
         # Setup
         file_id = "test_doc"
@@ -358,7 +371,7 @@ class TestHandleRefreshDocument:
         mock_context["compressor"].ingest_file.side_effect = ValueError("Invalid content")
 
         # Execute
-        result = handle_refresh_document(mock_context, {"file_id": file_id})
+        result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
         assert "❌" in result
@@ -385,10 +398,11 @@ class TestHandleGetVersionHistory:
             }
             yield context
 
-    def test_get_version_history_no_history(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_version_history_no_history(self, mock_context):
         """Test get_version_history when no history exists"""
         # Execute
-        result = handle_get_version_history(mock_context, {"doc_id": "test_doc"})
+        result = await handle_get_version_history(mock_context, {"doc_id": "test_doc"})
 
         # Verify
         assert "📜" in result
@@ -396,7 +410,8 @@ class TestHandleGetVersionHistory:
         assert "Has not been ingested yet" in result
         assert "text-only mode" in result
 
-    def test_get_version_history_single_version(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_version_history_single_version(self, mock_context):
         """Test get_version_history with one version"""
         # Setup
         doc_id = "test_doc"
@@ -419,7 +434,7 @@ class TestHandleGetVersionHistory:
         )
 
         # Execute
-        result = handle_get_version_history(mock_context, {"doc_id": doc_id})
+        result = await handle_get_version_history(mock_context, {"doc_id": doc_id})
 
         # Verify
         assert "📜 Version History: test_doc" in result
@@ -431,7 +446,8 @@ class TestHandleGetVersionHistory:
         assert "5.0x" in result  # compression ratio
         assert "Total versions: 1" in result
 
-    def test_get_version_history_multiple_versions(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_version_history_multiple_versions(self, mock_context):
         """Test get_version_history with multiple versions"""
         # Setup
         doc_id = "test_doc"
@@ -454,7 +470,7 @@ class TestHandleGetVersionHistory:
             )
 
         # Execute
-        result = handle_get_version_history(mock_context, {"doc_id": doc_id})
+        result = await handle_get_version_history(mock_context, {"doc_id": doc_id})
 
         # Verify all versions are listed
         assert "Version 1" in result
@@ -465,7 +481,8 @@ class TestHandleGetVersionHistory:
         assert "v2.txt" in result
         assert "v3.txt" in result
 
-    def test_get_version_history_timestamp_formatting(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_version_history_timestamp_formatting(self, mock_context):
         """Test that timestamps are formatted without microseconds"""
         # Setup
         doc_id = "test_doc"
@@ -483,7 +500,7 @@ class TestHandleGetVersionHistory:
         )
 
         # Execute
-        result = handle_get_version_history(mock_context, {"doc_id": doc_id})
+        result = await handle_get_version_history(mock_context, {"doc_id": doc_id})
 
         # Verify timestamp is formatted (contains date/time separators)
         assert "-" in result  # Date separator
@@ -534,7 +551,8 @@ class TestFileSyncHandlersIntegration:
                 }
                 yield context
 
-    def test_full_refresh_workflow(self, integrated_context, temp_file):
+    @pytest.mark.asyncio
+    async def test_full_refresh_workflow(self, integrated_context, temp_file):
         """Test complete refresh workflow: check → refresh → check → diff → history"""
         file_id = "integration_test"
 
@@ -546,7 +564,7 @@ class TestFileSyncHandlersIntegration:
         integrated_context["sync_manager"].register_file(file_id, temp_file, content)
 
         # 2. Check sync (should be in sync)
-        result = handle_check_file_sync(integrated_context, {"file_id": file_id})
+        result = await handle_check_file_sync(integrated_context, {"file_id": file_id})
         assert "✅" in result
         assert "in sync" in result
 
@@ -555,16 +573,16 @@ class TestFileSyncHandlersIntegration:
             f.write("Modified content\n")
 
         # 4. Check sync again (should be out of sync)
-        result = handle_check_file_sync(integrated_context, {"file_id": file_id})
+        result = await handle_check_file_sync(integrated_context, {"file_id": file_id})
         assert "⚠️" in result
         assert "OUT OF SYNC" in result
 
         # 5. Refresh document
-        result = handle_refresh_document(integrated_context, {"file_id": file_id})
+        result = await handle_refresh_document(integrated_context, {"file_id": file_id})
         assert "✅" in result
         assert "Refreshed" in result
 
         # 6. Check version history
-        result = handle_get_version_history(integrated_context, {"doc_id": file_id})
+        result = await handle_get_version_history(integrated_context, {"doc_id": file_id})
         assert "Version 1" in result
         assert "Total versions: 1" in result

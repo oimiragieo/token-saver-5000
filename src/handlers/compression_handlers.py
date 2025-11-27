@@ -250,10 +250,6 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     # Initialize retrieval history
     context["retrieval_history"][file_id] = []
 
-    file_sync_note = ""
-    if file_path:
-        file_sync_note = f"\n🔄 File sync enabled: Tracking {file_path}\n   Version 1 stored. Use check_file_sync('{file_id}') to monitor changes."
-
     # Compare estimate vs actual (v0.4.1+)
     actual_ratio = skeleton.compression_ratio
     estimate_accuracy = (
@@ -262,29 +258,28 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         else "good" if abs(actual_ratio - estimate.compression_ratio) < 5 else "fair"
     )
 
-    result = f"""
-✅ Document ingested successfully!
+    # Build JSON response
+    response = {
+        "status": "success",
+        "file_id": file_id,
+        "total_nodes": skeleton.total_nodes,
+        "total_tokens": skeleton.total_tokens,
+        "skeleton_tokens": skeleton.skeleton_tokens,
+        "compression_ratio": skeleton.compression_ratio,
+        "token_savings": skeleton.total_tokens - skeleton.skeleton_tokens,
+        "token_savings_percent": round(
+            (1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1
+        ),
+        "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
+        "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
+    }
 
-File ID: {file_id} containing {skeleton.total_nodes} semantic nodes
-Original tokens: {skeleton.total_tokens:,}
-Skeleton tokens: {skeleton.skeleton_tokens:,}
-Compression ratio: {skeleton.compression_ratio:.1f}x (estimated: {estimate.compression_ratio:.1f}x - {estimate_accuracy} prediction)
+    if file_path:
+        response["file_sync_enabled"] = True
+        response["file_path"] = file_path
+        response["version"] = 1
 
-📊 Token savings: {skeleton.total_tokens - skeleton.skeleton_tokens:,} tokens ({(1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100:.1f}%){file_sync_note}
-
-💡 IMPORTANT: Use read_skeleton('{file_id}') to view the semantic map BEFORE requesting specific details.
-   This "map before territory" approach ensures you understand the document structure.
-
-Next steps:
-1. read_skeleton('{file_id}') - View the compressed structure (recommended first step)
-2. modulate_region() - Retrieve specific sections at chosen fidelity
-3. search_semantic() - Find relevant content via vector similarity
-4. check_blind_spots() - Verify response completeness after generating answers
-
-{skeleton.skeleton_text[:500]}...
-(Use read_skeleton to see full structure)
-"""
-    return result
+    return json.dumps(response, indent=2)
 
 
 async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -295,7 +290,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         args: Tool arguments containing file_id
 
     Returns:
-        Skeleton text with optional staleness warning
+        JSON string with skeleton data and optional staleness warning
 
     Raises:
         RuntimeError: If reading skeleton fails
@@ -306,38 +301,36 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
     logger.info(f"Reading skeleton: {file_id}")
 
     # NEW: Check file sync status before reading
-    warning = ""
+    staleness_warning = None
     if file_id in context["sync_manager"].file_metadata:
         status = context["sync_manager"].check_file_sync(file_id)
         if not status["in_sync"]:
-            time_info = ""
-            if "current_mtime" in status and "cached_mtime" in status:
-                from datetime import datetime
-
-                cached_time = datetime.fromtimestamp(status["cached_mtime"]).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-                current_time = datetime.fromtimestamp(status["current_mtime"]).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-                time_info = f"\nCached: {cached_time}\nCurrent: {current_time}"
-
-            warning = f"""
-⚠️  WARNING: Cache may be stale!
-
-{status['reason']}{time_info}
-
-💡 Use refresh_document('{file_id}') to update
-💡 Use diff_cached_file('{file_id}') to see changes
-
-Proceeding with cached version...
----
-
-"""
+            staleness_warning = {
+                "is_stale": True,
+                "reason": status["reason"],
+                "cached_time": status.get("cached_mtime"),
+                "current_time": status.get("current_mtime"),
+                "recommendation": f"Use refresh_document('{file_id}') to update or diff_cached_file('{file_id}') to see changes",
+            }
 
     try:
-        skeleton_text = context["compressor"].read_skeleton(file_id)
-        return warning + skeleton_text
+        skeleton_response = context["compressor"]._generate_skeleton(file_id)
+
+        # Build JSON response
+        response = {
+            "file_id": skeleton_response.file_id,
+            "total_nodes": skeleton_response.total_nodes,
+            "total_tokens": skeleton_response.total_tokens,
+            "skeleton_tokens": skeleton_response.skeleton_tokens,
+            "compression_ratio": skeleton_response.compression_ratio,
+            "skeleton_text": skeleton_response.skeleton_text,
+            "node_map": skeleton_response.node_map,
+        }
+
+        if staleness_warning:
+            response["staleness_warning"] = staleness_warning
+
+        return json.dumps(response, indent=2)
     except Exception as e:
         raise RuntimeError(
             f"Failed to read skeleton for '{file_id}': {str(e)}\n"
@@ -428,7 +421,7 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
         args: Tool arguments containing query, optional file_id and top_k
 
     Returns:
-        Formatted search results
+        JSON string with search results
     """
     query = args["query"]
     file_id = args.get("file_id")
@@ -438,19 +431,30 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
 
     node_ids = context["compressor"].search_semantic(query, file_id, top_k)
 
-    result_lines = [f"🔍 Semantic Search Results for: '{query}'"]
-    result_lines.append(f"Found {len(node_ids)} relevant nodes:\n")
-
-    for i, node_id in enumerate(node_ids, 1):
+    # Build structured results
+    results = []
+    for node_id in node_ids:
         node = context["compressor"].chunks[node_id]
         summary = context["compressor"]._generate_summary(node.text, max_length=100)
-        result_lines.append(f"{i}. [{node_id}]")
-        result_lines.append(f"   Importance: {node.importance:.3f}")
-        result_lines.append(f"   Summary: {summary}\n")
+        results.append(
+            {
+                "node_id": node_id,
+                "importance": round(node.importance, 3),
+                "summary": summary,
+                "tokens": node.metadata.get("tokens", 0),
+            }
+        )
 
-    result_lines.append(f"💡 Tip: Use modulate_region({node_ids[:3]}) to retrieve full content")
+    # Build JSON response
+    response = {
+        "query": query,
+        "file_id": file_id,
+        "total_results": len(results),
+        "results": results,
+        "tip": "Use modulate_region() with node_ids to retrieve full content",
+    }
 
-    return "\n".join(result_lines)
+    return json.dumps(response, indent=2)
 
 
 async def handle_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str:

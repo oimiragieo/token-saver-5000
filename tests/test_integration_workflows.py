@@ -265,7 +265,7 @@ class TestBasicWorkflows:
         original_tokens = result.total_tokens
 
         # Get compressed skeleton
-        skeleton = compressor.get_skeleton("semantic_test")
+        skeleton = compressor._generate_skeleton("semantic_test")
         compressed_tokens = skeleton.skeleton_tokens
 
         # Verify compression happened
@@ -303,12 +303,12 @@ class TestBasicWorkflows:
             await compressor.ingest_file_async(text, file_id, {})
 
         # Search across all documents for quantum + ML
-        matches = compressor.semantic_search("quantum machine learning", top_k=10)
+        matches = compressor.search_semantic("quantum machine learning", top_k=10)
 
-        # Should find nodes from both_doc with high relevance
-        {match.get("file_id", match.get("node_id", "").split("_")[0]) for match in matches}
-        # both_doc should be most relevant
+        # Should find nodes from multiple documents
         assert len(matches) > 0
+        # Verify matches are returned (format may vary)
+        assert isinstance(matches, list)
 
     @pytest.mark.asyncio
     async def test_incremental_compression_workflow(self, compressor):
@@ -375,7 +375,7 @@ class TestFileSyncWorkflows:
     async def test_file_sync_auto_refresh_on_change(self, handler_context, temp_file):
         """Test automatic refresh workflow when file changes detected."""
         # Initial ingest
-        content = "Initial content v1"
+        content = "Initial content v1 with sufficient text for compression"
         temp_file.write_text(content)
         ingest_args = {
             "text": content,
@@ -386,7 +386,7 @@ class TestFileSyncWorkflows:
 
         # Modify file
         await asyncio.sleep(0.1)
-        new_content = "Updated content v2"
+        new_content = "Updated content v2 with sufficient text for compression"
         temp_file.write_text(new_content)
 
         # Refresh
@@ -396,7 +396,7 @@ class TestFileSyncWorkflows:
 
         # Verify new content is indexed
         compressor = handler_context["compressor"]
-        search_results = compressor.semantic_search(
+        search_results = compressor.search_semantic(
             "Updated content", file_id="auto_refresh", top_k=5
         )
         assert len(search_results) > 0
@@ -431,7 +431,7 @@ class TestFileSyncWorkflows:
     async def test_file_sync_with_version_history(self, handler_context, temp_file):
         """Test file sync integrates with version history."""
         # Version 1
-        v1_content = "Version 1 content"
+        v1_content = "Version 1 content with enough text for semantic processing"
         temp_file.write_text(v1_content)
         await compression_handlers.handle_ingest(
             handler_context,
@@ -444,7 +444,7 @@ class TestFileSyncWorkflows:
 
         # Version 2
         await asyncio.sleep(0.1)
-        v2_content = "Version 2 content - updated"
+        v2_content = "Version 2 content updated with sufficient semantic detail"
         temp_file.write_text(v2_content)
         await file_sync_handlers.handle_refresh_document(
             handler_context, {"file_id": "versioned_doc"}
@@ -533,7 +533,7 @@ class TestFileSyncWorkflows:
         """Test file sync with symlinks (if supported on platform)."""
         # Create original file
         original = temp_dir / "original.txt"
-        original.write_text("Original file content")
+        original.write_text("Original file content with sufficient text for compression")
 
         # Create symlink (skip on Windows if not supported)
         symlink = temp_dir / "symlink.txt"
@@ -554,7 +554,7 @@ class TestFileSyncWorkflows:
 
         # Modify original
         await asyncio.sleep(0.1)
-        original.write_text("Modified original content")
+        original.write_text("Modified original content with sufficient text for compression")
 
         # Check sync via symlink
         result = await file_sync_handlers.handle_check_file_sync(
@@ -1469,7 +1469,7 @@ class TestCrossFeatureIntegration:
         """Test complete end-to-end pipeline: ingest → compress → sync → version → ACE → AFM."""
         # 1. Create and ingest file
         test_file = temp_dir / "pipeline_test.txt"
-        v1_content = "Pipeline test version 1 content"
+        v1_content = "Pipeline test version 1 content with sufficient text for compression"
         test_file.write_text(v1_content)
 
         await compression_handlers.handle_ingest(
@@ -1493,7 +1493,7 @@ class TestCrossFeatureIntegration:
 
         # 4. Modify file and refresh
         await asyncio.sleep(0.1)
-        v2_content = "Pipeline test version 2 updated"
+        v2_content = "Pipeline test version 2 updated with sufficient text for compression"
         test_file.write_text(v2_content)
         await file_sync_handlers.handle_refresh_document(
             handler_context, {"file_id": "pipeline_doc"}

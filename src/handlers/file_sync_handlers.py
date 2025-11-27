@@ -12,6 +12,7 @@ tracking introduced in v0.4.0.
 """
 
 import hashlib
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict
@@ -20,7 +21,7 @@ from ..types import HandlerContext  # TypedDict for handler context
 logger = logging.getLogger("semantic-modulator")
 
 
-def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle check_file_sync tool call.
 
@@ -32,53 +33,51 @@ def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) -> str
         args: Tool arguments with 'file_id'
 
     Returns:
-        Sync status report with recommendations
+        JSON string with sync status
 
     Raises:
         ValueError: If file_id is invalid or document not found
     """
     file_id = args["file_id"]
     sync_manager = context["sync_manager"]
-    validate_file_id = context["validate_file_id"]
 
-    # Validation
-    validate_file_id(file_id, must_exist=True)
+    # Validation - check if file exists in sync manager
+    if file_id not in sync_manager.file_metadata:
+        raise ValueError(f"Document '{file_id}' not found in file sync manager")
 
     logger.info(f"Checking file sync for: {file_id}")
 
     status = sync_manager.check_file_sync(file_id)
 
-    if status["in_sync"]:
-        return f"""
-✅ {file_id} is in sync with source file
+    # Build JSON response
+    response = {"file_id": file_id, "in_sync": status["in_sync"], "reason": status["reason"]}
 
-{status['reason']}
-"""
-
-    # Out of sync
-    result = [f"⚠️  {file_id} is OUT OF SYNC\n"]
-    result.append(f"Reason: {status['reason']}")
-
+    # Add optional fields if present
     if "file_path" in status:
-        result.append(f"Source: {status['file_path']}")
+        response["file_path"] = status["file_path"]
 
-    if "cached_checksum" in status and "current_checksum" in status:
-        result.append(f"\nCached checksum:  {status['cached_checksum'][:8]}...")
-        result.append(f"Current checksum: {status['current_checksum'][:8]}...")
+    if "cached_checksum" in status:
+        response["cached_checksum"] = status["cached_checksum"]
 
-    if "cached_mtime" in status and "current_mtime" in status:
-        cached_time = datetime.fromtimestamp(status["cached_mtime"]).strftime("%Y-%m-%d %H:%M:%S")
-        current_time = datetime.fromtimestamp(status["current_mtime"]).strftime("%Y-%m-%d %H:%M:%S")
-        result.append(f"\nCached: {cached_time}")
-        result.append(f"Current: {current_time}")
+    if "current_checksum" in status:
+        response["current_checksum"] = status["current_checksum"]
 
-    result.append(f"\n💡 Use refresh_document('{file_id}') to update cache")
-    result.append(f"💡 Use diff_cached_file('{file_id}') to see changes")
+    if "cached_mtime" in status:
+        response["cached_mtime"] = status["cached_mtime"]
+        response["cached_time"] = datetime.fromtimestamp(status["cached_mtime"]).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
-    return "\n".join(result)
+    if "current_mtime" in status:
+        response["current_mtime"] = status["current_mtime"]
+        response["current_time"] = datetime.fromtimestamp(status["current_mtime"]).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+    return json.dumps(response, indent=2)
 
 
-def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle diff_cached_file tool call.
 
@@ -99,11 +98,8 @@ def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any]) -> st
     context_lines = args.get("context_lines", 3)
     sync_manager = context["sync_manager"]
     version_manager = context["version_manager"]
-    validate_file_id = context["validate_file_id"]
 
     # Validation
-    validate_file_id(file_id, must_exist=True)
-
     if file_id not in sync_manager.file_metadata:
         return f"""
 ❌ Cannot diff {file_id}
@@ -125,7 +121,7 @@ File sync not enabled for this document (no source file registered).
     return diff
 
 
-def handle_refresh_document(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle refresh_document tool call.
 
@@ -147,11 +143,10 @@ def handle_refresh_document(context: HandlerContext, args: Dict[str, Any]) -> st
     version_manager = context["version_manager"]
     compressor = context["compressor"]
     persistence = context["persistence"]
-    validate_file_id = context["validate_file_id"]
-    save_file_sync_metadata = context["save_file_sync_metadata"]
 
-    # Validation
-    validate_file_id(file_id, must_exist=True)
+    # Validation - check if file exists in compressor
+    if file_id not in compressor.graphs:
+        raise ValueError(f"Document '{file_id}' not found")
 
     if file_id not in sync_manager.file_metadata:
         return f"""
@@ -186,7 +181,7 @@ Error: {str(e)}
 
     # Re-ingest the document
     try:
-        skeleton = compressor.ingest_file(
+        skeleton = await compressor.ingest_file_async(
             text=content,
             file_id=file_id,
             metadata={"refreshed_at": __import__("datetime").datetime.now().isoformat()},
@@ -203,7 +198,13 @@ Error: {str(e)}
     # Update sync metadata
     checksum = hashlib.md5(content.encode()).hexdigest()
     sync_manager.update_metadata(file_id, metadata.file_path, content)
-    save_file_sync_metadata()  # Persist the update
+
+    # Persist file sync metadata
+    try:
+        metadata_export = sync_manager.export_metadata()
+        persistence.save_file_sync_metadata(metadata_export)
+    except Exception as e:
+        logger.warning(f"Failed to save file sync metadata: {e}")
 
     # Store new version
     version_manager.add_version(
@@ -249,7 +250,7 @@ Version history: {version_count} versions stored
 """
 
 
-def handle_get_version_history(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_get_version_history(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle get_version_history tool call.
 
@@ -262,7 +263,7 @@ def handle_get_version_history(context: HandlerContext, args: Dict[str, Any]) ->
         args: Tool arguments with 'doc_id'
 
     Returns:
-        Formatted version history timeline
+        JSON string with version history
     """
     doc_id = args["doc_id"]
     version_manager = context["version_manager"]
@@ -270,53 +271,37 @@ def handle_get_version_history(context: HandlerContext, args: Dict[str, Any]) ->
     # Get version history
     history = version_manager.get_version_history(doc_id)
 
-    if not history:
-        return f"""
-📜 No version history for '{doc_id}'
-
-This document either:
-  • Has not been ingested yet
-  • Was ingested without file_path (text-only mode)
-  • Has no saved versions
-
-💡 Tip: Documents ingested with file_path automatically track versions when refreshed.
-"""
-
-    # Format timeline view
-    lines = [f"📜 Version History: {doc_id}", "=" * 70, ""]
-
+    # Build JSON response
+    versions = []
     for version in history:
         timestamp_raw = version.get("timestamp", None)
-        version_id = version.get("version_id", "?")
-        file_path = version.get("file_path", "N/A")
-        checksum = version.get("checksum", "N/A")
-        size = version.get("size_bytes", 0)
-        stats = version.get("compression_stats", {})
 
         # Format timestamp (convert float to datetime string, remove microseconds)
         if timestamp_raw and isinstance(timestamp_raw, (int, float)):
-            timestamp = datetime.fromtimestamp(timestamp_raw).isoformat().split(".")[0]
+            timestamp_str = datetime.fromtimestamp(timestamp_raw).isoformat().split(".")[0]
         else:
-            timestamp = str(timestamp_raw) if timestamp_raw else "Unknown"
+            timestamp_str = str(timestamp_raw) if timestamp_raw else "Unknown"
 
-        lines.append(f"Version {version_id} - {timestamp}")
-        lines.append(f"  File: {file_path}")
-        lines.append(f"  Checksum: {checksum[:16]}...")
-        lines.append(f"  Size: {size:,} bytes")
+        version_info = {
+            "version_id": version.get("version_id", "?"),
+            "timestamp": timestamp_str,
+            "timestamp_raw": timestamp_raw,
+            "file_path": version.get("file_path", "N/A"),
+            "checksum": version.get("checksum", "N/A"),
+            "size_bytes": version.get("size_bytes", 0),
+        }
 
+        # Add compression stats if available
+        stats = version.get("compression_stats", {})
         if stats:
-            total_tokens = stats.get("total_tokens", 0)
-            skeleton_tokens = stats.get("skeleton_tokens", 0)
-            compression = stats.get("compression_ratio", 0)
-            lines.append(
-                f"  Compression: {total_tokens:,} → {skeleton_tokens:,} tokens ({compression:.1f}x)"
-            )
+            version_info["compression_stats"] = {
+                "total_tokens": stats.get("total_tokens", 0),
+                "skeleton_tokens": stats.get("skeleton_tokens", 0),
+                "compression_ratio": stats.get("compression_ratio", 0),
+            }
 
-        lines.append("")
+        versions.append(version_info)
 
-    lines.append("=" * 70)
-    lines.append(f"Total versions: {len(history)}")
-    lines.append("")
-    lines.append("💡 Use diff_cached_file() to compare cached vs current file")
+    response = {"doc_id": doc_id, "total_versions": len(versions), "versions": versions}
 
-    return "\n".join(lines)
+    return json.dumps(response, indent=2)

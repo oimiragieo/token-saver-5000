@@ -93,9 +93,13 @@ class TestHandleIngest:
         # Verify compressor.ingest_file_async was called
         self.mock_compressor.ingest_file_async.assert_called_once()
 
-        # Verify result contains success indicators
-        assert "✅ Document ingested successfully" in result
-        assert "test_doc" in result
+        # Parse JSON result and verify success
+        import json
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["file_id"] == "test_doc"
+        assert "compression_ratio" in data
 
     @pytest.mark.asyncio
     async def test_empty_text_raises_error(

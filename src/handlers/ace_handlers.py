@@ -207,7 +207,7 @@ def _filter_and_serialize_bullets(
     return bullets
 
 
-def handle_ace_generate(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_generate(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Generate reasoning trajectory for a task using ACE playbook.
 
@@ -265,7 +265,7 @@ def handle_ace_generate(context: HandlerContext, args: Dict[str, Any]) -> str:
         return _build_error_response(str(e), "ACE trajectory generation")
 
 
-def handle_ace_reflect(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_reflect(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Reflect on a trajectory to extract insights.
 
@@ -315,7 +315,7 @@ def handle_ace_reflect(context: HandlerContext, args: Dict[str, Any]) -> str:
         return _build_error_response(str(e), "ACE trajectory reflection")
 
 
-def handle_ace_curate(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_curate(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Curate insights into playbook via delta updates.
 
@@ -369,7 +369,7 @@ def handle_ace_curate(context: HandlerContext, args: Dict[str, Any]) -> str:
         return _build_error_response(str(e), "ACE insight curation")
 
 
-def handle_ace_grow_context(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_grow_context(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Manually add bullets to playbook (grow operation).
 
@@ -416,7 +416,7 @@ def handle_ace_grow_context(context: HandlerContext, args: Dict[str, Any]) -> st
         return _build_error_response(str(e), "ACE context growth")
 
 
-def handle_ace_refine_context(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_refine_context(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Update bullet performance based on feedback (refine operation).
 
@@ -471,7 +471,7 @@ def handle_ace_refine_context(context: HandlerContext, args: Dict[str, Any]) -> 
         return _build_error_response(str(e), "ACE context refinement")
 
 
-def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Retrieve current ACE playbook state.
 
@@ -527,7 +527,7 @@ def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any]) -> st
 # ============================================================================
 
 
-def handle_ace_execute_cycle(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_ace_execute_cycle(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Execute complete ACE cycle: Generate → Reflect → Curate.
 

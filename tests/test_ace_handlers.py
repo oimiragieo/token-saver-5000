@@ -339,7 +339,9 @@ class TestHelperFunctions:
 class TestHandleAceGenerate:
     """Test ACE trajectory generation handler"""
 
-    def test_generate_success(self, mock_context):
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_generate_success(self, mock_context):
         """Test successful trajectory generation"""
         args = {
             "task": "Explain quantum entanglement",
@@ -348,7 +350,7 @@ class TestHandleAceGenerate:
             "top_k_bullets": 5,
         }
 
-        result = handle_ace_generate(mock_context, args)
+        result = await handle_ace_generate(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -357,24 +359,27 @@ class TestHandleAceGenerate:
         assert parsed["stats"]["total_steps"] == 2
         assert "avg_confidence" in parsed["stats"]
 
-    def test_generate_with_defaults(self, mock_context):
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_generate_with_defaults(self, mock_context):
         """Test generation with default parameters"""
         args = {"task": "Test task"}
 
-        result = handle_ace_generate(mock_context, args)
+        result = await handle_ace_generate(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["context_id"] == "default"
 
-    def test_generate_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_generate_error_handling(self, mock_context):
         """Test error handling in generation"""
         mock_context["ace_framework"].generator.generate_trajectory.side_effect = Exception(
             "Generation failed"
         )
 
         args = {"task": "Test task"}
-        result = handle_ace_generate(mock_context, args)
+        result = await handle_ace_generate(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -389,7 +394,8 @@ class TestHandleAceGenerate:
 class TestHandleAceReflect:
     """Test ACE trajectory reflection handler"""
 
-    def test_reflect_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_reflect_success(self, mock_context):
         """Test successful reflection"""
         args = {
             "trajectory": [{"step": 1, "thought": "Test"}],
@@ -398,7 +404,7 @@ class TestHandleAceReflect:
             "context_id": "test_domain",
         }
 
-        result = handle_ace_reflect(mock_context, args)
+        result = await handle_ace_reflect(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -406,7 +412,8 @@ class TestHandleAceReflect:
         assert parsed["context_id"] == "test_domain"
         assert parsed["stats"]["total_insights"] == 2
 
-    def test_reflect_failure_outcome(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_reflect_failure_outcome(self, mock_context):
         """Test reflection on failed trajectory"""
         args = {
             "trajectory": [{"step": 1, "thought": "Test"}],
@@ -414,7 +421,7 @@ class TestHandleAceReflect:
             "success": False,
         }
 
-        result = handle_ace_reflect(mock_context, args)
+        result = await handle_ace_reflect(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -423,14 +430,15 @@ class TestHandleAceReflect:
         call_args = mock_context["ace_framework"].reflector.reflect_on_trajectory.call_args[1]
         assert call_args["success"] is False
 
-    def test_reflect_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_reflect_error_handling(self, mock_context):
         """Test error handling in reflection"""
         mock_context["ace_framework"].reflector.reflect_on_trajectory.side_effect = Exception(
             "Reflection failed"
         )
 
         args = {"trajectory": [], "outcome": "Test", "success": True}
-        result = handle_ace_reflect(mock_context, args)
+        result = await handle_ace_reflect(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -445,11 +453,12 @@ class TestHandleAceReflect:
 class TestHandleAceCurate:
     """Test ACE insight curation handler"""
 
-    def test_curate_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_curate_success(self, mock_context):
         """Test successful curation"""
         args = {"insights": [{"insight": "Test insight", "confidence": 0.7}], "context_id": "test"}
 
-        result = handle_ace_curate(mock_context, args)
+        result = await handle_ace_curate(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -458,11 +467,12 @@ class TestHandleAceCurate:
         assert parsed["total_bullets"] == 2
         assert parsed["deltas_applied"] > 0
 
-    def test_curate_with_max_bullets(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_curate_with_max_bullets(self, mock_context):
         """Test curation with max bullets limit"""
         args = {"insights": [{"insight": "Test"}], "max_bullets": 10}
 
-        result = handle_ace_curate(mock_context, args)
+        result = await handle_ace_curate(mock_context, args)
 
         # Verify result is success and max_bullets was passed to curator
         parsed = json.loads(result)
@@ -471,14 +481,15 @@ class TestHandleAceCurate:
         call_args = mock_context["ace_framework"].curator.curate_insights.call_args[1]
         assert call_args["max_bullets"] == 10
 
-    def test_curate_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_curate_error_handling(self, mock_context):
         """Test error handling in curation"""
         mock_context["ace_framework"].curator.curate_insights.side_effect = Exception(
             "Curation failed"
         )
 
         args = {"insights": []}
-        result = handle_ace_curate(mock_context, args)
+        result = await handle_ace_curate(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -493,21 +504,23 @@ class TestHandleAceCurate:
 class TestHandleAceGrowContext:
     """Test ACE context growth handler"""
 
-    def test_grow_context_single_bullet(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_grow_context_single_bullet(self, mock_context):
         """Test adding single bullet to context"""
         args = {
             "bullets": [{"text": "Test principle", "bullet_type": "principle", "confidence": 0.8}],
             "context_id": "test",
         }
 
-        result = handle_ace_grow_context(mock_context, args)
+        result = await handle_ace_grow_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["bullets_added"] == 1
         assert parsed["context_id"] == "test"
 
-    def test_grow_context_multiple_bullets(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_grow_context_multiple_bullets(self, mock_context):
         """Test adding multiple bullets"""
         args = {
             "bullets": [
@@ -517,19 +530,20 @@ class TestHandleAceGrowContext:
             ]
         }
 
-        result = handle_ace_grow_context(mock_context, args)
+        result = await handle_ace_grow_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["bullets_added"] == 3
 
-    def test_grow_context_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_grow_context_error_handling(self, mock_context):
         """Test error handling in context growth"""
         # Force error by making text_model.encode fail
         mock_context["ace_framework"].text_model.encode.side_effect = Exception("Encoding failed")
 
         args = {"bullets": [{"text": "Test", "bullet_type": "strategy"}]}
-        result = handle_ace_grow_context(mock_context, args)
+        result = await handle_ace_grow_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -544,7 +558,8 @@ class TestHandleAceGrowContext:
 class TestHandleAceRefineContext:
     """Test ACE context refinement handler"""
 
-    def test_refine_context_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refine_context_success(self, mock_context):
         """Test successful context refinement"""
         # Setup mock bullet
         bullet = Mock()
@@ -559,7 +574,7 @@ class TestHandleAceRefineContext:
             "context_id": "existing_context",
         }
 
-        result = handle_ace_refine_context(mock_context, args)
+        result = await handle_ace_refine_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -567,7 +582,8 @@ class TestHandleAceRefineContext:
         assert "avg_confidence_after" in parsed
         bullet.update_performance.assert_called_once_with(success=True, confidence_boost=0.1)
 
-    def test_refine_context_failure(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refine_context_failure(self, mock_context):
         """Test refinement with failure feedback"""
         bullet = Mock()
         bullet.confidence = 0.5
@@ -576,7 +592,7 @@ class TestHandleAceRefineContext:
 
         args = {"bullet_ids": ["b1"], "success": False, "context_id": "existing_context"}
 
-        result = handle_ace_refine_context(mock_context, args)
+        result = await handle_ace_refine_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -584,23 +600,25 @@ class TestHandleAceRefineContext:
         call_args = bullet.update_performance.call_args[1]
         assert call_args["success"] is False
 
-    def test_refine_context_not_found(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refine_context_not_found(self, mock_context):
         """Test refinement with non-existent context"""
         args = {"bullet_ids": ["b1"], "success": True, "context_id": "nonexistent"}
 
-        result = handle_ace_refine_context(mock_context, args)
+        result = await handle_ace_refine_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
         assert "not found" in parsed["message"]
 
-    def test_refine_context_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_refine_context_error_handling(self, mock_context):
         """Test error handling in refinement"""
         # Force error by making bullets dict not iterable
         mock_context["ace_contexts"]["existing_context"].bullets = None
 
         args = {"bullet_ids": ["b1"], "success": True, "context_id": "existing_context"}
-        result = handle_ace_refine_context(mock_context, args)
+        result = await handle_ace_refine_context(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -614,7 +632,8 @@ class TestHandleAceRefineContext:
 class TestHandleAceGetPlaybook:
     """Test ACE playbook retrieval handler"""
 
-    def test_get_playbook_basic(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_playbook_basic(self, mock_context):
         """Test basic playbook retrieval"""
         # Setup mock bullets
         bullet1 = Mock()
@@ -631,7 +650,7 @@ class TestHandleAceGetPlaybook:
 
         args = {"context_id": "existing_context"}
 
-        result = handle_ace_get_playbook(mock_context, args)
+        result = await handle_ace_get_playbook(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -639,16 +658,18 @@ class TestHandleAceGetPlaybook:
         assert parsed["total_bullets"] == 1
         assert parsed["filtered_bullets"] == 1
 
-    def test_get_playbook_with_filters(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_playbook_with_filters(self, mock_context):
         """Test playbook retrieval with filters"""
         args = {"context_id": "existing_context", "min_confidence": 0.7, "bullet_type": "strategy"}
 
-        result = handle_ace_get_playbook(mock_context, args)
+        result = await handle_ace_get_playbook(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
 
-    def test_get_playbook_include_embeddings(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_playbook_include_embeddings(self, mock_context):
         """Test playbook retrieval with embeddings"""
         bullet1 = Mock()
         bullet1.confidence = 0.8
@@ -659,19 +680,20 @@ class TestHandleAceGetPlaybook:
 
         args = {"context_id": "existing_context", "include_embeddings": True}
 
-        result = handle_ace_get_playbook(mock_context, args)
+        result = await handle_ace_get_playbook(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         # Verify embedding is included in bullets
         assert len(parsed["bullets"]) > 0
 
-    def test_get_playbook_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_get_playbook_error_handling(self, mock_context):
         """Test error handling in playbook retrieval"""
         mock_context["ace_contexts"]["existing_context"].bullets = None  # Force error
 
         args = {}
-        result = handle_ace_get_playbook(mock_context, args)
+        result = await handle_ace_get_playbook(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"
@@ -685,7 +707,8 @@ class TestHandleAceGetPlaybook:
 class TestHandleAceExecuteCycle:
     """Test full ACE cycle execution handler"""
 
-    def test_execute_cycle_success(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_execute_cycle_success(self, mock_context):
         """Test successful ACE cycle execution"""
         args = {
             "task": "Solve problem X",
@@ -694,7 +717,7 @@ class TestHandleAceExecuteCycle:
             "context_id": "test",
         }
 
-        result = handle_ace_execute_cycle(mock_context, args)
+        result = await handle_ace_execute_cycle(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -703,7 +726,8 @@ class TestHandleAceExecuteCycle:
         assert parsed["version_after"] == 3
         assert parsed["deltas_applied"] == 2
 
-    def test_execute_cycle_with_max_steps(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_execute_cycle_with_max_steps(self, mock_context):
         """Test cycle execution with custom max steps"""
         args = {
             "task": "Test task",
@@ -712,7 +736,7 @@ class TestHandleAceExecuteCycle:
             "max_trajectory_steps": 10,
         }
 
-        result = handle_ace_execute_cycle(mock_context, args)
+        result = await handle_ace_execute_cycle(mock_context, args)
 
         # Verify result is success and max_trajectory_steps was passed
         parsed = json.loads(result)
@@ -721,11 +745,12 @@ class TestHandleAceExecuteCycle:
         call_args = mock_context["ace_framework"].execute_ace_cycle.call_args[1]
         assert call_args["max_trajectory_steps"] == 10
 
-    def test_execute_cycle_failure_scenario(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_execute_cycle_failure_scenario(self, mock_context):
         """Test cycle execution with failure"""
         args = {"task": "Test task", "outcome": "Failed", "success": False}
 
-        result = handle_ace_execute_cycle(mock_context, args)
+        result = await handle_ace_execute_cycle(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -733,12 +758,13 @@ class TestHandleAceExecuteCycle:
         call_args = mock_context["ace_framework"].execute_ace_cycle.call_args[1]
         assert call_args["success"] is False
 
-    def test_execute_cycle_error_handling(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_execute_cycle_error_handling(self, mock_context):
         """Test error handling in cycle execution"""
         mock_context["ace_framework"].execute_ace_cycle.side_effect = Exception("Cycle failed")
 
         args = {"task": "Test", "outcome": "Test", "success": True}
-        result = handle_ace_execute_cycle(mock_context, args)
+        result = await handle_ace_execute_cycle(mock_context, args)
 
         parsed = json.loads(result)
         assert parsed["status"] == "error"

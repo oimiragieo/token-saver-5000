@@ -22,7 +22,7 @@ from ..types import HandlerContext  # TypedDict for handler context
 logger = logging.getLogger("semantic-modulator")
 
 
-def handle_afm_add_message(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_add_message(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_add_message tool call.
 
@@ -69,7 +69,7 @@ Dialogue Stats:
 """
 
 
-def handle_afm_build_context(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_build_context(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_build_context tool call.
 
@@ -141,7 +141,7 @@ Paper: Adaptive Focus Memory (arXiv:2511.12712v1)
     return result
 
 
-def handle_afm_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_get_stats tool call.
 
@@ -173,7 +173,7 @@ Importance Breakdown:
 """
 
 
-def handle_afm_clear_history(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_clear_history(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_clear_history tool call.
 
@@ -209,7 +209,7 @@ Current state:
 """
 
 
-def handle_afm_export_history(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_export_history(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_export_history tool call.
 
@@ -277,7 +277,7 @@ Could not save dialogue history to persistent storage.
 """
 
 
-def handle_afm_import_history(context: HandlerContext, args: Dict[str, Any]) -> str:
+async def handle_afm_import_history(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle afm_import_history tool call.
 
