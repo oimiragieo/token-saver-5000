@@ -12,7 +12,6 @@ Architecture:
 """
 
 import asyncio
-import logging
 import os
 from collections import OrderedDict
 from typing import Any, Dict, List
@@ -39,11 +38,12 @@ from .version_manager import VersionManager
 from .ace_framework import ACEFramework
 from .handlers import mcp_core
 from .constants import MAX_ACE_CONTEXTS
+from .structured_logging import get_logger, configure_structlog
 
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("semantic-modulator")
+# Configure structured logging
+configure_structlog(log_level="INFO")
+logger = get_logger("semantic-modulator")
 
 
 class ACEContextManager(OrderedDict):
@@ -62,8 +62,8 @@ class ACEContextManager(OrderedDict):
         super().__init__()
         self.max_contexts = max_contexts
         logger.info(
-            f"ACEContextManager initialized "
-            f"(max_contexts={max_contexts if max_contexts > 0 else 'unlimited'})"
+            "ace_context_manager_initialized",
+            max_contexts=max_contexts if max_contexts > 0 else "unlimited",
         )
 
     def __setitem__(self, key, value):
@@ -88,8 +88,7 @@ class ACEContextManager(OrderedDict):
             oldest_key = next(iter(self))
             del self[oldest_key]
             logger.info(
-                f"Auto-evicted oldest ACE context: {oldest_key} "
-                f"(keeping last {self.max_contexts} contexts)"
+                "ace_context_evicted", evicted_context=oldest_key, max_contexts=self.max_contexts
             )
 
     def __getitem__(self, key):
@@ -163,7 +162,7 @@ class SemanticModulatorServer:
         # File sync and version management (NEW in v0.4.0!)
         self.sync_manager = FileSyncManager()
         self.version_manager = VersionManager()
-        logger.info("File sync and version management enabled")
+        logger.info("file_sync_initialized", status="enabled")
 
         # Path validation for security (NEW in v0.6.1 - fixes CWE-22)
         from .path_validator import PathValidator
@@ -174,8 +173,11 @@ class SemanticModulatorServer:
             os.path.expanduser("~"),  # User's home directory
         ]
         self.path_validator = PathValidator(allowed_base_dirs=allowed_dirs)
-        logger.info(f"PathValidator initialized with {len(allowed_dirs)} allowed directories")
-        logger.info("  Security: File paths restricted to prevent path traversal attacks (CWE-22)")
+        logger.info(
+            "path_validator_initialized",
+            allowed_directories_count=len(allowed_dirs),
+            security_feature="CWE-22 path traversal prevention",
+        )
 
         # ACE Framework for evolving contexts (NEW in v0.4.1!)
         self.ace_framework = ACEFramework(
@@ -184,7 +186,12 @@ class SemanticModulatorServer:
         )
         # ACE contexts with LRU eviction (v0.4.2)
         self.ace_contexts = ACEContextManager(max_contexts=MAX_ACE_CONTEXTS)
-        logger.info("ACE (Agentic Context Engineering) framework initialized")
+        logger.info(
+            "ace_framework_initialized",
+            deduplication_threshold=0.85,
+            max_bullets=100,
+            max_contexts=MAX_ACE_CONTEXTS,
+        )
 
         # Context window monitoring (like SNR in JSCCM)
         self.context_window_monitor = {
@@ -206,10 +213,12 @@ class SemanticModulatorServer:
         try:
             file_ids = self.persistence.list_documents()
             if not file_ids:
-                logger.info("No persisted documents found")
+                logger.info(
+                    "persistence_load", status="empty", message="No persisted documents found"
+                )
                 return
 
-            logger.info(f"Loading {len(file_ids)} persisted documents...")
+            logger.info("persistence_load_started", document_count=len(file_ids))
             loaded_count = 0
 
             for file_id in file_ids:
@@ -227,28 +236,39 @@ class SemanticModulatorServer:
                         self.resource_manager.register_document(file_id, total_size)
 
                         loaded_count += 1
-                        logger.info(f"  ✅ Loaded: {file_id} ({len(data['chunks'])} nodes)")
+                        logger.info(
+                            "document_loaded", file_id=file_id, node_count=len(data["chunks"])
+                        )
                 except Exception as e:
-                    logger.error(f"  ❌ Failed to load {file_id}: {e}")
+                    logger.error("document_load_failed", file_id=file_id, error=str(e))
 
-            logger.info(f"✅ Successfully loaded {loaded_count}/{len(file_ids)} documents")
+            logger.info(
+                "persistence_load_complete",
+                loaded=loaded_count,
+                total=len(file_ids),
+                success_rate=f"{loaded_count}/{len(file_ids)}",
+            )
 
         except Exception as e:
-            logger.error(f"Failed to load persisted documents: {e}", exc_info=True)
+            logger.error("persistence_load_error", error=str(e), exc_info=True)
 
     def _load_file_sync_metadata(self):
         """Load file sync metadata on server start"""
         try:
             metadata = self.persistence.load_file_sync_metadata()
             if not metadata:
-                logger.info("No file sync metadata found (first run or no tracked files)")
+                logger.info(
+                    "file_sync_load",
+                    status="empty",
+                    message="No file sync metadata found (first run or no tracked files)",
+                )
                 return
 
             self.sync_manager.import_metadata(metadata)
-            logger.info(f"✅ Loaded file sync metadata for {len(metadata)} documents")
+            logger.info("file_sync_load_complete", document_count=len(metadata))
 
         except Exception as e:
-            logger.error(f"Failed to load file sync metadata: {e}", exc_info=True)
+            logger.error("file_sync_load_error", error=str(e), exc_info=True)
 
     def _save_file_sync_metadata(self):
         """Save file sync metadata to persistent storage"""
@@ -256,11 +276,11 @@ class SemanticModulatorServer:
             metadata = self.sync_manager.export_metadata()
             success = self.persistence.save_file_sync_metadata(metadata)
             if success:
-                logger.info(f"✅ Saved file sync metadata for {len(metadata)} documents")
+                logger.info("file_sync_save_complete", document_count=len(metadata))
             else:
-                logger.warning("⚠️  Failed to save file sync metadata")
+                logger.warning("file_sync_save_warning", message="No file sync metadata to save")
         except Exception as e:
-            logger.error(f"Failed to save file sync metadata: {e}")
+            logger.error("file_sync_save_error", error=str(e))
 
     def _build_context(self) -> HandlerContext:
         """
@@ -305,7 +325,7 @@ class SemanticModulatorServer:
                 result = await mcp_core.route_tool_call(name, arguments, context)
                 return [TextContent(type="text", text=str(result))]
             except Exception as e:
-                logger.error(f"Error in {name}: {e}", exc_info=True)
+                logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
     def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
@@ -380,13 +400,13 @@ class SemanticModulatorServer:
         This implements MCP best practice for lifespan management, ensuring
         proper resource initialization before the server starts handling requests.
         """
-        logger.info("Server starting - initializing resources")
+        logger.info("server_startup", phase="initializing")
 
         # Auto-load persisted state
         self._load_persisted_documents()
         self._load_file_sync_metadata()
 
-        logger.info("Resources initialized successfully")
+        logger.info("server_startup", phase="complete")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -399,24 +419,27 @@ class SemanticModulatorServer:
         Returns:
             False to not suppress exceptions
         """
-        logger.info("Server shutting down gracefully")
+        logger.info("server_shutdown", phase="started")
 
         try:
             # Persist file sync metadata
             self._save_file_sync_metadata()
-            logger.info("State persisted successfully")
+            logger.info("server_shutdown", phase="state_persisted")
         except Exception as e:
-            logger.error(f"Error during shutdown: {e}", exc_info=True)
+            logger.error("server_shutdown_error", error=str(e), exc_info=True)
 
-        logger.info("Server shutdown complete")
+        logger.info("server_shutdown", phase="complete")
         return False  # Don't suppress exceptions
 
     async def run(self):
         """Run the MCP server"""
-        logger.info("🚀 Starting Semantic Modulator MCP Server")
-        logger.info("   Combining Semantic Communication + Fidelity-Preserving Encoding")
-        logger.info("   Model: all-MiniLM-L6-v2 (local)")
-        logger.info("   Mode: Adaptive Semantic Fidelity\n")
+        logger.info(
+            "mcp_server_starting",
+            server_name="Semantic Modulator",
+            features=["Semantic Communication", "Fidelity-Preserving Encoding"],
+            model="all-MiniLM-L6-v2",
+            mode="Adaptive Semantic Fidelity",
+        )
 
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(

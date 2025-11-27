@@ -21,6 +21,10 @@ optimum[exporters]>=1.15.0  # ONNX model export and optimization
 msgpack>=1.0.7  # LRU cache serialization
 transformers>=4.35.0  # Tokenization for ONNX models
 
+# Structured Logging and Performance (v0.6.2)
+structlog>=24.1.0  # Structured logging with context binding
+orjson>=3.9.0  # Fast JSON serialization for logs (returns bytes)
+
 # Utilities
 tqdm>=4.65.0
 psutil>=5.9.0

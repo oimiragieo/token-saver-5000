@@ -15,7 +15,6 @@ Architecture:
 - Handlers receive context dict with all necessary server components
 """
 
-import logging
 from typing import Any, Dict, List
 
 from mcp.types import Tool
@@ -29,7 +28,10 @@ from . import detection_handlers as dh
 from . import ace_handlers as ace
 from . import visualization_handlers as vh
 
-logger = logging.getLogger("semantic-modulator")
+# Import structured logging for performance tracking
+from ..structured_logging import get_logger, track_performance
+
+logger = get_logger("semantic-modulator")
 
 
 def setup_mcp_tools() -> List[Tool]:
@@ -1001,9 +1003,18 @@ def setup_mcp_tools() -> List[Tool]:
     ]
 
 
+@track_performance
 async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) -> str:
     """
-    Route MCP tool calls to appropriate handler functions.
+    Route MCP tool calls to appropriate handler functions with automatic performance tracking.
+
+    This function automatically logs:
+    - Request ID (correlation)
+    - Tool name
+    - Execution duration (milliseconds)
+    - Memory delta (MB)
+    - Success/failure status
+    - Error details (if failed)
 
     Args:
         name: Tool name (e.g., "ingest_context", "afm_add_message")
@@ -1091,6 +1102,8 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
     handler = router[name]
     handler_module = getattr(handler, "__module__", "unknown")
     handler_name = getattr(handler, "__name__", "unknown")
-    logger.info(f"Routing '{name}' to {handler_module}.{handler_name}")
+    logger.info(
+        "tool_routing", tool_name=name, handler_module=handler_module, handler_function=handler_name
+    )
 
     return await handler(context, args)
