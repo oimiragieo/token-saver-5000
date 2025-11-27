@@ -420,7 +420,11 @@ class StructuredLogger:
             ctx["error_message"] = str(error)
 
         # Log with exception info if available
-        exc_info = (type(error), error, error.__traceback__) if error else None
+        exc_info = (
+            (type(error), error, error.__traceback__)
+            if (error and isinstance(error, BaseException))
+            else None
+        )
         self.logger.error(message, extra={"_context": ctx}, exc_info=exc_info)
 
     def critical(self, message: str, error: Optional[Exception] = None, **context):
@@ -440,7 +444,11 @@ class StructuredLogger:
             ctx["error_message"] = str(error)
 
         # Log with exception info if available
-        exc_info = (type(error), error, error.__traceback__) if error else None
+        exc_info = (
+            (type(error), error, error.__traceback__)
+            if (error and isinstance(error, BaseException))
+            else None
+        )
         self.logger.critical(message, extra={"_context": ctx}, exc_info=exc_info)
 
     @contextmanager

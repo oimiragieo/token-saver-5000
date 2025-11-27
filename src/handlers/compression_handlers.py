@@ -50,11 +50,9 @@ def validate_file_id(file_id: str, context: HandlerContext, must_exist: bool = T
         raise SmartError.missing_required_field("file_id", "function call")
 
     if must_exist:
-        if file_id not in context["compressor"].chunks:
-            # Extract unique file IDs from all node IDs
-            available = list(
-                set([nid.split("_n")[0] for nid in context["compressor"].chunks.keys()])
-            )
+        if file_id not in context["compressor"].graphs:
+            # Get list of available file IDs from graphs
+            available = list(context["compressor"].graphs.keys())
             if not available:
                 raise ValueError(
                     f"Document '{file_id}' not found. No documents ingested yet.\n"
