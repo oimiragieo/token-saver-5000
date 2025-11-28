@@ -129,7 +129,7 @@ class CodeSemanticCompressor:
         try:
             tree = ast.parse(code)
         except SyntaxError:
-            print(f"Warning: Syntax error in {file_id}, falling back to line-based chunking")
+            logger.warning(f"Syntax error in {file_id}, falling back to line-based chunking")
             return self._chunk_by_lines(code, file_id)
 
         # Extract imports
