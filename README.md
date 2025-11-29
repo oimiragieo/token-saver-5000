@@ -2,7 +2,7 @@
 
 **Semantic compression for AI interactions. Reduce tokens by 80-95% while preserving meaning.**
 
-[![Tests](https://img.shields.io/badge/tests-1063%20passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-75%25-green)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1077%20passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-73%25-green)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
 Token Saver 5000 is an MCP server implementing research-backed semantic compression for AI interactions. It achieves proven 80-95% token reduction through graph-based semantic analysis.
 
@@ -23,7 +23,7 @@ python scripts/check_setup.py
 python examples/example_usage.py
 ```
 
-See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed installation.
+See [Getting Started](docs/getting-started/GETTING_STARTED.md) for detailed installation.
 
 ## Features
 
@@ -112,7 +112,7 @@ docker-compose up -d
 }
 ```
 
-See [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) for all 35 tools.
+See [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) for all 35 tools.
 
 ## Research
 
@@ -140,7 +140,7 @@ pytest tests/test_code_compressor.py -v         # Code compression (47 tests)
 pytest tests/ --cov=src --cov-report=term
 ```
 
-**1063 comprehensive tests** with 75% overall coverage (99% for core modules).
+**1077 comprehensive tests** with 73% overall coverage (99% for core modules).
 
 ## Architecture
 
@@ -166,18 +166,36 @@ Three-layer design:
 - Resource management
 - File sync & versioning
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
+See [Architecture](docs/reference/ARCHITECTURE.md) for details.
 
 ## Documentation
 
-- [GETTING_STARTED.md](GETTING_STARTED.md) - Installation guide
-- [HOW_IT_WORKS.md](HOW_IT_WORKS.md) - Technical explanation
-- [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) - Complete tool reference (35 tools)
-- [API_REFERENCE.md](API_REFERENCE.md) - Module API docs
-- [DOCKER.md](DOCKER.md) - Docker deployment
-- [FILE_SYNC.md](FILE_SYNC.md) - File sync & versioning
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+### Getting Started
+- [Installation Guide](docs/getting-started/GETTING_STARTED.md) - Setup and first steps
+- [Contributing](docs/getting-started/CONTRIBUTING.md) - How to contribute
+
+### Guides
+- [How It Works](docs/guides/HOW_IT_WORKS.md) - Technical explanation
+- [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) - Complete tool reference (35 tools)
+- [File Sync](docs/guides/FILE_SYNC.md) - File sync & versioning
+- [Troubleshooting](docs/guides/TROUBLESHOOTING.md) - Common issues
+
+### Reference
+- [API Reference](docs/reference/API_REFERENCE.md) - Module API docs
+- [Architecture](docs/reference/ARCHITECTURE.md) - System design
+
+### Deployment
+- [Deployment Guide](docs/deployment/DEPLOYMENT.md) - Production deployment
+- [Docker](docs/deployment/DOCKER.md) - Container setup
+- [Security](docs/deployment/SECURITY.md) - Security hardening
+
+### Research
+- [Research Synthesis](docs/research/RESEARCH_SYNTHESIS.md) - Paper analysis overview
+- [SCAR Paper](docs/research/SCAR_PAPER_SUMMARY.md) - Learnable compression
+- [JSCCM Paper](docs/research/JSCCM_PAPER_ANALYSIS.md) - Joint semantic-channel coding
+- [FPQE Paper](docs/research/FPQE_PAPER_ANALYSIS.md) - Fidelity-preserving quantization
+
+### Changelog
 - [CHANGELOG.md](CHANGELOG.md) - Version history
 
 ## Requirements
@@ -194,7 +212,7 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions welcome! See [Contributing Guide](docs/getting-started/CONTRIBUTING.md).
 
 1. Fork the repository
 2. Create feature branch
@@ -203,6 +221,6 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
-**Current:** v0.8.0
+**Current:** v0.9.0
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
