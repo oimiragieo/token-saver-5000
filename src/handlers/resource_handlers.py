@@ -4,12 +4,14 @@ Resource Management Handler Functions
 This module contains handler functions for resource monitoring and health checks:
 - check_resource_health: Check resource usage and system health
 - check_environment: Check environment health (models, cache, stale docs)
+- should_compress: Estimate token count and recommend compression strategy
 - create_progress_bar: Helper function for text-based progress bars
 
 These handlers provide proactive monitoring of storage, memory, and document
 count metrics with warnings and recommendations.
 
 v0.9.0: Added check_environment handler for comprehensive environment status.
+v0.9.1: Added should_compress handler for pre-read token estimation.
 """
 
 import json
@@ -19,6 +21,17 @@ from typing import Any, Dict
 from ..types import HandlerContext  # TypedDict for handler context
 
 logger = logging.getLogger("semantic-modulator")
+
+# Token estimation constants
+# Average characters per token varies by content type
+CHARS_PER_TOKEN_PROSE = 4.0  # English prose averages ~4 chars/token
+CHARS_PER_TOKEN_CODE = 3.5   # Code tends to be slightly more token-dense
+CHARS_PER_TOKEN_DEFAULT = 3.8  # Conservative default
+
+# Thresholds for compression recommendations
+COMPRESS_THRESHOLD_TOKENS = 500   # Recommend compression above this
+STRONG_COMPRESS_THRESHOLD = 2000  # Strongly recommend compression
+MUST_COMPRESS_THRESHOLD = 10000   # Must compress to fit context
 
 
 async def handle_check_resource_health(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -317,3 +330,114 @@ async def handle_check_environment(context: HandlerContext, args: Dict[str, Any]
         response["message"] = "All systems operating normally"
 
     return json.dumps(response, indent=2)
+
+
+async def handle_should_compress(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """
+    Handle should_compress MCP tool (v0.9.1).
+
+    Estimates token count for a file WITHOUT reading it into context.
+    Uses file size heuristics to recommend whether compression is needed.
+
+    This tool is critical for token efficiency - it allows AI to decide
+    whether to use compression BEFORE wasting tokens reading the full file.
+
+    Args:
+        context: Server context (unused for this tool)
+        args: Tool arguments:
+            - file_path (str): Path to file to estimate
+            - content_type (str, optional): "prose", "code", or "auto" (default)
+
+    Returns:
+        JSON with token estimate and compression recommendation
+    """
+    file_path = args.get("file_path")
+    content_type = args.get("content_type", "auto")
+
+    if not file_path:
+        return json.dumps({
+            "error": "file_path is required",
+            "recommendation": "UNKNOWN"
+        })
+
+    # Check if file exists and get size
+    if not os.path.exists(file_path):
+        return json.dumps({
+            "error": f"File not found: {file_path}",
+            "recommendation": "UNKNOWN"
+        })
+
+    try:
+        file_size_bytes = os.path.getsize(file_path)
+    except OSError as e:
+        return json.dumps({
+            "error": f"Cannot read file size: {e}",
+            "recommendation": "UNKNOWN"
+        })
+
+    # Estimate character count (roughly 1 byte per char for UTF-8 text)
+    # This is approximate but good enough for estimation
+    estimated_chars = file_size_bytes
+
+    # Determine chars-per-token ratio based on content type
+    if content_type == "code":
+        chars_per_token = CHARS_PER_TOKEN_CODE
+    elif content_type == "prose":
+        chars_per_token = CHARS_PER_TOKEN_PROSE
+    elif content_type == "auto":
+        # Auto-detect based on file extension
+        ext = os.path.splitext(file_path)[1].lower()
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp',
+                          '.h', '.hpp', '.cs', '.go', '.rs', '.rb', '.php', '.swift',
+                          '.kt', '.scala', '.sh', '.bash', '.zsh', '.ps1', '.sql',
+                          '.html', '.css', '.scss', '.sass', '.less', '.json', '.xml',
+                          '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'}
+        if ext in code_extensions:
+            chars_per_token = CHARS_PER_TOKEN_CODE
+        else:
+            chars_per_token = CHARS_PER_TOKEN_DEFAULT
+    else:
+        chars_per_token = CHARS_PER_TOKEN_DEFAULT
+
+    # Estimate token count
+    estimated_tokens = int(estimated_chars / chars_per_token)
+
+    # Determine recommendation
+    if estimated_tokens < COMPRESS_THRESHOLD_TOKENS:
+        recommendation = "NO_COMPRESS"
+        reason = f"File is small (~{estimated_tokens} tokens). Read directly without compression."
+    elif estimated_tokens < STRONG_COMPRESS_THRESHOLD:
+        recommendation = "RECOMMEND_COMPRESS"
+        reason = f"File is medium (~{estimated_tokens} tokens). Compression recommended for token savings."
+    elif estimated_tokens < MUST_COMPRESS_THRESHOLD:
+        recommendation = "STRONGLY_RECOMMEND"
+        reason = f"File is large (~{estimated_tokens} tokens). Compression strongly recommended."
+    else:
+        recommendation = "MUST_COMPRESS"
+        reason = f"File is very large (~{estimated_tokens} tokens). Must compress to fit in context."
+
+    # Calculate potential savings
+    # Typical compression ratios: small docs 2-4x, medium 5-10x, large 15-20x
+    if estimated_tokens < 500:
+        compression_ratio = 2.0
+    elif estimated_tokens < 2000:
+        compression_ratio = 5.0
+    elif estimated_tokens < 10000:
+        compression_ratio = 10.0
+    else:
+        compression_ratio = 15.0
+
+    potential_savings = int(estimated_tokens * (1 - 1/compression_ratio))
+
+    return json.dumps({
+        "file_path": file_path,
+        "file_size_bytes": file_size_bytes,
+        "estimated_tokens": estimated_tokens,
+        "content_type_detected": content_type if content_type != "auto" else (
+            "code" if chars_per_token == CHARS_PER_TOKEN_CODE else "prose/mixed"
+        ),
+        "recommendation": recommendation,
+        "reason": reason,
+        "potential_token_savings": potential_savings,
+        "estimated_compression_ratio": f"{compression_ratio}x"
+    }, indent=2)

@@ -8,7 +8,7 @@ This guide shows you how to set up Token Saver 5000 as an MCP server for Claude 
 3. [Slash Commands](#slash-commands)
 4. [Hooks for Automation](#hooks-for-automation)
 5. [Prompt Examples](#prompt-examples)
-6. [Available Tools](#available-tools-35-total)
+6. [Available Tools](#available-tools-39-total)
 7. [Troubleshooting](#troubleshooting)
 
 ---
@@ -63,7 +63,13 @@ Add this to your project's `CLAUDE.md` or `~/.claude/CLAUDE.md` to teach Claude 
 ## Token Saver 5000 - Semantic Compression
 
 ### When to Use Token Saver
+- **ALWAYS** use `mcp__token-saver__should_compress` FIRST when:
+  - User mentions a file path (estimates tokens WITHOUT reading)
+  - Before reading ANY file to check if compression is needed
+  - Returns recommendation: NO_COMPRESS, RECOMMEND_COMPRESS, STRONGLY_RECOMMEND, or MUST_COMPRESS
+
 - **ALWAYS** use `mcp__token-saver__ingest_context` when:
+  - `should_compress` returns RECOMMEND_COMPRESS or higher
   - User shares a document longer than 500 tokens
   - User asks to analyze, summarize, or work with a large file
   - User pastes code files, documentation, or research papers
@@ -80,6 +86,7 @@ Add this to your project's `CLAUDE.md` or `~/.claude/CLAUDE.md` to teach Claude 
   - User asks for comprehensive analysis
 
 ### Compression Workflow
+0. **Pre-check**: Use `should_compress` with file_path to estimate tokens (doesn't read file!)
 1. **Ingest**: Use `ingest_context` with the document text and a unique file_id
 2. **Review**: Use `read_skeleton` to see the compressed structure
 3. **Search**: Use `search_semantic` to find relevant sections
@@ -113,7 +120,8 @@ For a simpler setup, add this minimal section:
 
 ```markdown
 ## Token Compression Rules
-- Use `mcp__token-saver__ingest_context` for any document >500 tokens
+- Use `mcp__token-saver__should_compress` BEFORE reading any file (checks size without reading!)
+- Use `mcp__token-saver__ingest_context` when should_compress returns RECOMMEND_COMPRESS or higher
 - Use `mcp__token-saver__search_semantic` to find relevant sections
 - Use `mcp__token-saver__check_blind_spots` after answering document questions
 - Start with ABSTRACT fidelity, expand only as needed
@@ -393,7 +401,7 @@ All suggestions verified against your stored preferences.
 
 ---
 
-## Available Tools (35 total)
+## Available Tools (39 total)
 
 ### Document Compression (9 tools)
 | Tool | Description |
@@ -450,9 +458,10 @@ All suggestions verified against your stored preferences.
 | `export_graph_graphml` | Export for Gephi/Cytoscape |
 | `explain_compression_decision` | Explain node compression |
 
-### Resource Management (4 tools)
+### Resource Management (5 tools)
 | Tool | Description |
 |------|-------------|
+| `should_compress` | **Estimate tokens WITHOUT reading file** (call FIRST!) |
 | `list_documents` | List all ingested documents |
 | `delete_document` | Remove a document |
 | `get_resource_usage` | View memory/storage usage |
@@ -542,6 +551,7 @@ claude mcp list
 
 | Action | Command/Tool |
 |--------|--------------|
+| **Check file size first** | `mcp__token-saver__should_compress` ⚡ |
 | Compress document | `mcp__token-saver__ingest_context` |
 | View structure | `mcp__token-saver__read_skeleton` |
 | Search content | `mcp__token-saver__search_semantic` |

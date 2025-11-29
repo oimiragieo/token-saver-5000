@@ -3,13 +3,24 @@ Comprehensive tests for resource_handlers.py
 
 Coverage target: 80%+ (currently 16%)
 Tests both helper functions and main handler with various health states.
+v0.9.1: Added tests for should_compress token estimation tool.
 """
 
+import json
+import os
 import pytest
+import tempfile
 from unittest.mock import Mock, AsyncMock
 from src.handlers.resource_handlers import (
     handle_check_resource_health,
+    handle_should_compress,
     create_progress_bar,
+    CHARS_PER_TOKEN_PROSE,
+    CHARS_PER_TOKEN_CODE,
+    CHARS_PER_TOKEN_DEFAULT,
+    COMPRESS_THRESHOLD_TOKENS,
+    STRONG_COMPRESS_THRESHOLD,
+    MUST_COMPRESS_THRESHOLD,
 )
 
 
@@ -388,3 +399,223 @@ class TestHandleCheckResourceHealth:
         # Verify
         assert "Resource Health" in result
         assert "Healthy" in result
+
+
+# ============================================================================
+# Test handle_should_compress Handler (v0.9.1)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestHandleShouldCompress:
+    """Test should_compress token estimation handler"""
+
+    async def test_should_compress_missing_file_path(self):
+        """Test with missing file_path argument"""
+        result = await handle_should_compress({}, {})
+        data = json.loads(result)
+
+        assert data["error"] == "file_path is required"
+        assert data["recommendation"] == "UNKNOWN"
+
+    async def test_should_compress_file_not_found(self):
+        """Test with non-existent file"""
+        result = await handle_should_compress({}, {"file_path": "/nonexistent/file.txt"})
+        data = json.loads(result)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+        assert data["recommendation"] == "UNKNOWN"
+
+    async def test_should_compress_small_file_no_compress(self):
+        """Test small file returns NO_COMPRESS recommendation"""
+        # Create a small temp file (~500 bytes = ~130 tokens)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 500)  # 500 bytes
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            assert data["recommendation"] == "NO_COMPRESS"
+            assert data["estimated_tokens"] < COMPRESS_THRESHOLD_TOKENS
+            assert "small" in data["reason"].lower()
+            assert data["file_size_bytes"] == 500
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_medium_file_recommend(self):
+        """Test medium file returns RECOMMEND_COMPRESS"""
+        # Create medium file (~3000 bytes = ~790 tokens at 3.8 chars/token)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 3000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            assert data["recommendation"] == "RECOMMEND_COMPRESS"
+            assert COMPRESS_THRESHOLD_TOKENS <= data["estimated_tokens"] < STRONG_COMPRESS_THRESHOLD
+            assert "medium" in data["reason"].lower()
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_large_file_strongly_recommend(self):
+        """Test large file returns STRONGLY_RECOMMEND"""
+        # Create large file (~10000 bytes = ~2632 tokens)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 10000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            assert data["recommendation"] == "STRONGLY_RECOMMEND"
+            assert STRONG_COMPRESS_THRESHOLD <= data["estimated_tokens"] < MUST_COMPRESS_THRESHOLD
+            assert "large" in data["reason"].lower()
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_huge_file_must_compress(self):
+        """Test very large file returns MUST_COMPRESS"""
+        # Create huge file (~50000 bytes = ~13158 tokens)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 50000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            assert data["recommendation"] == "MUST_COMPRESS"
+            assert data["estimated_tokens"] >= MUST_COMPRESS_THRESHOLD
+            assert "very large" in data["reason"].lower()
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_code_file_auto_detect(self):
+        """Test auto-detection of code file types"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write("x" * 1000)  # 1000 bytes
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            # Should detect as code and use CHARS_PER_TOKEN_CODE (3.5)
+            assert data["content_type_detected"] == "code"
+            # 1000 bytes / 3.5 = ~286 tokens
+            expected_tokens = int(1000 / CHARS_PER_TOKEN_CODE)
+            assert abs(data["estimated_tokens"] - expected_tokens) < 5
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_prose_file_auto_detect(self):
+        """Test auto-detection of prose file types"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write("x" * 1000)  # 1000 bytes
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            # Should detect as prose/mixed
+            assert data["content_type_detected"] == "prose/mixed"
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_explicit_code_type(self):
+        """Test explicit code content type"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 1000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                {}, {"file_path": temp_path, "content_type": "code"}
+            )
+            data = json.loads(result)
+
+            # Should use code ratio regardless of extension
+            expected_tokens = int(1000 / CHARS_PER_TOKEN_CODE)
+            assert abs(data["estimated_tokens"] - expected_tokens) < 5
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_explicit_prose_type(self):
+        """Test explicit prose content type"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write("x" * 1000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                {}, {"file_path": temp_path, "content_type": "prose"}
+            )
+            data = json.loads(result)
+
+            # Should use prose ratio despite .py extension
+            expected_tokens = int(1000 / CHARS_PER_TOKEN_PROSE)
+            assert abs(data["estimated_tokens"] - expected_tokens) < 5
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_potential_savings(self):
+        """Test potential token savings calculation"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 20000)  # ~5263 tokens
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            # Should have calculated potential savings
+            assert "potential_token_savings" in data
+            assert data["potential_token_savings"] > 0
+            assert data["estimated_compression_ratio"] in ["5.0x", "10.0x", "15.0x", "2.0x"]
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_json_format(self):
+        """Test output is valid JSON with all expected fields"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 5000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress({}, {"file_path": temp_path})
+            data = json.loads(result)
+
+            # Verify all expected fields
+            assert "file_path" in data
+            assert "file_size_bytes" in data
+            assert "estimated_tokens" in data
+            assert "content_type_detected" in data
+            assert "recommendation" in data
+            assert "reason" in data
+            assert "potential_token_savings" in data
+            assert "estimated_compression_ratio" in data
+        finally:
+            os.unlink(temp_path)
+
+    async def test_should_compress_various_code_extensions(self):
+        """Test auto-detection for various code extensions"""
+        code_extensions = [".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".go", ".rs"]
+
+        for ext in code_extensions:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=ext, delete=False) as f:
+                f.write("x" * 1000)
+                temp_path = f.name
+
+            try:
+                result = await handle_should_compress({}, {"file_path": temp_path})
+                data = json.loads(result)
+                assert data["content_type_detected"] == "code", f"Failed for extension {ext}"
+            finally:
+                os.unlink(temp_path)

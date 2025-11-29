@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 38 MCP tool schemas
+- setup_mcp_tools: Returns list of all 39 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -37,7 +37,7 @@ logger = get_logger("semantic-modulator")
 
 def setup_mcp_tools() -> List[Tool]:
     """
-    Define all 35 MCP tools available in the Semantic Modulator server.
+    Define all 39 MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
@@ -51,7 +51,7 @@ def setup_mcp_tools() -> List[Tool]:
     - Detection (2): check_blind_spots, detect_hallucination
     - AFM Dialogue (6): add_message, build_context, get_stats, clear, export, import
     - File Sync (4): check_sync, diff, refresh, version_history
-    - Resource Management (2): check_health, check_environment
+    - Resource Management (3): check_health, check_environment, should_compress
     - Help & Documentation (1): tool_help
     - ACE Framework (7): ace_generate, ace_reflect, ace_curate, ace_grow, ace_refine, ace_get_playbook, ace_execute_cycle
     """
@@ -548,7 +548,7 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["doc_id"],
             },
         ),
-        # === RESOURCE MANAGEMENT TOOLS (2) ===
+        # === RESOURCE MANAGEMENT TOOLS (3) ===
         Tool(
             name="check_resource_health",
             description=(
@@ -575,6 +575,33 @@ def setup_mcp_tools() -> List[Tool]:
                 "type": "object",
                 "properties": {},
                 "required": [],
+            },
+        ),
+        Tool(
+            name="should_compress",
+            description=(
+                "⚡ TOKEN-EFFICIENT PRE-CHECK: Estimate token count for a file WITHOUT reading it. "
+                "Uses file size heuristics to recommend whether compression is needed. "
+                "CRITICAL for token efficiency - call this BEFORE reading large files to avoid wasting tokens. "
+                "Returns: estimated tokens, compression recommendation (NO_COMPRESS, RECOMMEND_COMPRESS, "
+                "STRONGLY_RECOMMEND, or MUST_COMPRESS), and potential token savings. "
+                "This enables intelligent context management without burning tokens to check file size."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to estimate (does NOT read content, only checks size)",
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "enum": ["auto", "prose", "code"],
+                        "description": "Content type hint for better estimation (default: auto-detect from extension)",
+                        "default": "auto",
+                    },
+                },
+                "required": ["file_path"],
             },
         ),
         # === HELP & DOCUMENTATION TOOLS (1) ===
@@ -1162,9 +1189,10 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "diff_cached_file": fs.handle_diff_cached_file,
         "refresh_document": fs.handle_refresh_document,
         "get_version_history": fs.handle_get_version_history,
-        # Resource Management (2 tools)
+        # Resource Management (3 tools)
         "check_resource_health": rh.handle_check_resource_health,
         "check_environment": rh.handle_check_environment,
+        "should_compress": rh.handle_should_compress,
         # Help & Documentation (1 tool)
         "tool_help": hh.handle_tool_help,
         # Graph Visualization (4 tools)

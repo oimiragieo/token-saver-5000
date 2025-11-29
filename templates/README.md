@@ -22,6 +22,7 @@ cp /path/to/token-saver-5000/templates/claude-commands/compress.md .claude/comma
 
 | Command | Description |
 |---------|-------------|
+| `/check-size` | **Check if file needs compression WITHOUT reading** |
 | `/compress` | Compress a document and show stats |
 | `/search-docs` | Search compressed documents semantically |
 | `/expand` | Expand a specific section to full detail |
@@ -32,6 +33,8 @@ cp /path/to/token-saver-5000/templates/claude-commands/compress.md .claude/comma
 ## Usage Examples
 
 ```
+/check-size /path/to/large-file.md
+
 /compress [paste your document here]
 
 /search-docs authentication best practices
