@@ -40,7 +40,7 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed installation.
 - Temporal recency with exponential decay
 - Importance classification
 
-**Agentic Context Engineering** (NEW v0.4.0)
+**Agentic Context Engineering**
 - Self-evolving playbooks via Generate→Reflect→Curate
 - 32% quality improvement with 4× shorter contexts
 - Semantic deduplication (0.85 threshold)
@@ -140,7 +140,7 @@ pytest tests/test_code_compressor.py -v         # Code compression (47 tests)
 pytest tests/ --cov=src --cov-report=term
 ```
 
-**1062 comprehensive tests** with 76% overall coverage (99% for core modules).
+**1063 comprehensive tests** with 75% overall coverage (99% for core modules).
 
 ## Architecture
 
@@ -160,7 +160,7 @@ Three-layer design:
 - Auto-suggests retrieval
 
 **Layer 3: MCP Interface** (`server.py` + `handlers/`)
-- 30 MCP tools via stdio
+- 35 MCP tools via stdio
 - Modular handler architecture
 - Document persistence (ChromaDB/JSON)
 - Resource management
@@ -172,7 +172,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 - [GETTING_STARTED.md](GETTING_STARTED.md) - Installation guide
 - [HOW_IT_WORKS.md](HOW_IT_WORKS.md) - Technical explanation
-- [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) - Complete tool reference (30 tools)
+- [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) - Complete tool reference (35 tools)
 - [API_REFERENCE.md](API_REFERENCE.md) - Module API docs
 - [DOCKER.md](DOCKER.md) - Docker deployment
 - [FILE_SYNC.md](FILE_SYNC.md) - File sync & versioning
