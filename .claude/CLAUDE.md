@@ -105,14 +105,55 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - Always run linting before committing (`ruff check src/`)
 - Use `black` for consistent code formatting
 
-## Token Saver 5000 Project Specifics (v0.8.0 - COMPLETE)
+## Token Saver 5000 Project Specifics (v0.9.0 - Programmer UX Improvement Plan - IN PROGRESS)
 
 ### Project Overview
 **Token Saver 5000** is an MCP server implementing research-backed semantic compression for AI interactions. It achieves **85-90% token reduction (proven: 87.4%)** through graph-based semantic analysis.
 
 > **Proven Performance:** 7.9× compression (485 → 61 tokens) on real quantum computing document. See `demo_proof.py`.
 
-**Current Release (v0.8.0 - Async Safety & Concurrency Audit - COMPLETE):**
+**Current Release (v0.9.0 - Programmer UX Improvement Plan - IN PROGRESS):**
+- ✅ **P0 CRITICAL: CodeSemanticCompressor Integration:**
+  - **Issue:** Code files were using text chunking instead of AST-aware chunking
+  - **Fix:** Created `CodeCompressionAdapter` (src/code_compression_adapter.py, 650+ lines)
+  - **Features:**
+    * Routes files to appropriate compressor based on file type
+    * Lazy CodeBERT loading (~400MB saved on startup)
+    * Environment variable opt-in: `PRELOAD_CODE_MODEL=true` for immediate loading
+    * Unified API surface: `ingest_document()`, `generate_skeleton()`, `modulate_region()`, `search_semantic_with_scores()`
+  - **Testing:** All 1063 tests passing with 72% coverage
+
+- ✅ **P1 HIGH: Programmer UX Tools (3 new MCP tools):**
+  - **`ingest_directory`** (src/handlers/compression_handlers.py):
+    * Bulk ingest code files from directory using glob patterns
+    * Default patterns: `*.py`, `*.js`, `*.ts`
+    * Security: PathValidator prevents path traversal
+    * Parallel processing via BatchCompressionManager (4× throughput)
+    * Max 100 files per call
+  - **`tool_help`** (src/handlers/help_handlers.py, NEW):
+    * Detailed help, examples, and tips for all MCP tools
+    * Structured JSON output with parameters, examples, tips, related tools
+    * Tool discovery: call without tool_name to see all tools by category
+  - **`check_environment`** (src/handlers/resource_handlers.py):
+    * Comprehensive environment health check
+    * Shows: models loaded, memory usage, cache hit ratio, stale documents, disk space
+    * Returns recommendations for optimization
+
+- ✅ **P1 HIGH: Search Semantic with Scores:**
+  - **Method:** `search_semantic_with_scores()` in SemanticCompressor
+  - **Returns:** `List[Tuple[node_id, similarity_score]]` instead of just node IDs
+  - **Backward Compatible:** Original `search_semantic()` method preserved
+
+- ✅ **P2 MEDIUM: Semantic Node IDs for Code Files:**
+  - **Old pattern:** `{file_id}_func_{name}`, `{file_id}_class_{name}`
+  - **New pattern:** `{file_id}::{name}` (e.g., `main.py::process_data`, `main.py::MyClass`)
+  - **Benefits:** Cleaner, more semantic, easier to parse
+  - **Server Support:** Updated `_extract_file_id_from_node()` to handle both patterns
+
+- ✅ **Test Suite:** 1063 passed, 12 skipped, 72% coverage
+- ✅ **Tool Count:** 38 MCP tools (was 35)
+
+**Previous Release (v0.8.0 - Async Safety & Concurrency Audit - COMPLETE):**
 - ✅ **Blocking Lock Audit Fix (Issue 3):**
   - **Issue:** ResourceManager and VersionManager used `threading.Lock` in handler-facing methods, blocking event loop under concurrent clients
   - **Solution:** ThreadPoolExecutor + `run_in_executor()` pattern for all handler-facing methods

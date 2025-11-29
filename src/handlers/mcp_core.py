@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 35 MCP tool schemas
+- setup_mcp_tools: Returns list of all 38 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -27,6 +27,7 @@ from . import resource_handlers as rh
 from . import detection_handlers as dh
 from . import ace_handlers as ace
 from . import visualization_handlers as vh
+from . import help_handlers as hh
 
 # Import structured logging for operation tracking
 from ..structured_logging import get_logger
@@ -44,12 +45,14 @@ def setup_mcp_tools() -> List[Tool]:
     Tool Categories:
     - Document Compression (9): ingest, read_skeleton, modulate_region, search, stats, list, delete, adapt, multilevel
     - Batch Processing (1): batch_ingest_documents
+    - Directory Ingestion (1): ingest_directory
     - Graph Visualization (4): export_graph_json, visualize_graph_html, export_graph_graphml, explain_compression_decision
     - Fidelity Advisor (1): recommend_fidelity
     - Detection (2): check_blind_spots, detect_hallucination
     - AFM Dialogue (6): add_message, build_context, get_stats, clear, export, import
     - File Sync (4): check_sync, diff, refresh, version_history
-    - Resource Management (1): check_health
+    - Resource Management (2): check_health, check_environment
+    - Help & Documentation (1): tool_help
     - ACE Framework (7): ace_generate, ace_reflect, ace_curate, ace_grow, ace_refine, ace_get_playbook, ace_execute_cycle
     """
     return [
@@ -545,7 +548,7 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["doc_id"],
             },
         ),
-        # === RESOURCE MANAGEMENT TOOLS (1) ===
+        # === RESOURCE MANAGEMENT TOOLS (2) ===
         Tool(
             name="check_resource_health",
             description=(
@@ -557,6 +560,45 @@ def setup_mcp_tools() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="check_environment",
+            description=(
+                "🔍 Check comprehensive environment health: models loaded, memory usage, "
+                "cache hit ratio, stale documents, and disk space. "
+                "Returns recommendations for optimization. "
+                "Use this to understand system state before heavy operations."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        # === HELP & DOCUMENTATION TOOLS (1) ===
+        Tool(
+            name="tool_help",
+            description=(
+                "📚 Get detailed help, examples, and tips for any Semantic Modulator tool. "
+                "Returns structured help with parameter descriptions, usage examples, and related tools. "
+                "Use without tool_name to see all available tools organized by category. "
+                "Set verbose=true for comprehensive examples."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Name of the tool to get help for (omit to see all tools)",
+                    },
+                    "verbose": {
+                        "type": "boolean",
+                        "description": "Include full examples (default: false)",
+                        "default": False,
+                    },
+                },
                 "required": [],
             },
         ),
@@ -850,6 +892,53 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["documents"],
             },
         ),
+        # === DIRECTORY INGESTION TOOL (1) ===
+        Tool(
+            name="ingest_directory",
+            description=(
+                "📂 Bulk ingest code files from a directory using glob patterns. "
+                "Scans a directory for matching files and ingests them in parallel. "
+                "Uses PathValidator for security (prevents path traversal). "
+                "Ideal for quickly ingesting an entire codebase or project directory. "
+                "Default patterns: *.py, *.js, *.ts. Default exclusions: node_modules, __pycache__, venv."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory path to scan for files",
+                    },
+                    "patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Glob patterns for files to include (default: ['*.py', '*.js', '*.ts'])",
+                        "default": ["*.py", "*.js", "*.ts"],
+                    },
+                    "exclude_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Patterns to exclude (default: ['**/node_modules/**', '**/__pycache__/**', '**/venv/**'])",
+                        "default": ["**/node_modules/**", "**/__pycache__/**", "**/venv/**"],
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "description": "Maximum files to ingest (default: 50, range: 1-100)",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 50,
+                    },
+                    "max_concurrent": {
+                        "type": "integer",
+                        "description": "Maximum concurrent ingestions (default: 4, range: 1-8)",
+                        "minimum": 1,
+                        "maximum": 8,
+                        "default": 4,
+                    },
+                },
+                "required": ["directory"],
+            },
+        ),
         # === FIDELITY ADVISOR TOOL (1) ===
         Tool(
             name="recommend_fidelity",
@@ -1054,6 +1143,8 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "multilevel_encode": ch.handle_multilevel_encode,
         # Batch Processing (1 tool)
         "batch_ingest_documents": ch.handle_batch_ingest,
+        # Directory Ingestion (1 tool)
+        "ingest_directory": ch.handle_ingest_directory,
         # Fidelity Advisor (1 tool)
         "recommend_fidelity": ch.handle_recommend_fidelity,
         # Detection (2 tools)
@@ -1071,8 +1162,11 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "diff_cached_file": fs.handle_diff_cached_file,
         "refresh_document": fs.handle_refresh_document,
         "get_version_history": fs.handle_get_version_history,
-        # Resource Management (1 tool)
+        # Resource Management (2 tools)
         "check_resource_health": rh.handle_check_resource_health,
+        "check_environment": rh.handle_check_environment,
+        # Help & Documentation (1 tool)
+        "tool_help": hh.handle_tool_help,
         # Graph Visualization (4 tools)
         "export_graph_json": vh.handle_export_graph_json,
         "visualize_graph_html": vh.handle_visualize_graph_html,

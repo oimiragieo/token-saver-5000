@@ -2,6 +2,66 @@
 
 All notable changes to Token Saver 5000.
 
+## [0.9.0] - 2025-11-29
+
+**Code Compression Adapter with Semantic Fidelity Encoding**
+
+### Added
+
+**CodeCompressionAdapter** (src/code_compression_adapter.py, 702 lines):
+- Unified API for text and code compression
+- AST-based code skeleton generation with semantic node mapping
+- Dual embedding model support:
+  * Text: `all-MiniLM-L6-v2` (384-dim)
+  * Code: `microsoft/codebert-base` (768-dim)
+- Domain-aware search routing based on file type
+- Delimiter-aware prefix checks for data isolation
+
+**New MCP Tools** (2 tools, 37 total):
+- `ingest_directory`: Bulk code file ingestion with glob patterns
+  * Path validation (CWE-22 prevention)
+  * Configurable patterns, exclusions, max_files
+  * Concurrent processing via BatchCompressionManager
+- `get_help`: Interactive documentation system
+  * Context-aware help for all 37 MCP tools
+  * Usage examples and tips
+
+**Help Handlers** (src/handlers/help_handlers.py, 415 lines):
+- Comprehensive tool documentation
+- Category-based help organization
+- Usage examples for each tool
+
+### Fixed
+
+**Critical Bug Fixes (6 P0-P2 issues):**
+- **P0-1**: SkeletonResponse constructor signature mismatch (code ingestion failed)
+- **P0-2**: FidelityLevel.BALANCED → DETAILED for code nodes (invalid fidelity)
+- **P1-1**: node_map population for code skeletons (empty node maps)
+- **P1-2**: Search uses appropriate embedding model per domain (mismatched dimensions)
+- **P2-1**: Exclude pattern matching using PurePath.match() (fnmatch failed on **)
+- **P2-2**: Search/deletion filtering with delimiter-aware checks (data leakage)
+
+**Code Quality:**
+- Fix asyncio deprecation warnings (`get_event_loop` → `get_running_loop`)
+- Remove unused `event_loop_policy` fixture from conftest.py
+- Update `handle_ingest` docstring to specify JSON return type
+- Add delimiter-aware prefix checks in `get_stats()` for consistency
+
+### Changed
+- Test count: 1064 → 1077 tests (14 new CodeCompressionAdapter tests)
+- Coverage: 73% maintained
+- Python 3.16+ compatible (asyncio deprecation fixes)
+
+### Tests Added
+- **test_code_compression_adapter.py** (489 lines, 14 tests):
+  * Text and code ingestion tests
+  * Search with correct embedding model tests
+  * Skeleton generation with node_map tests
+  * Deletion isolation tests (TestDeletionDoesNotOverreach)
+  * Statistics aggregation tests
+
+---
+
 ## [0.7.0] - 2025-11-27 🚧 IN PROGRESS
 
 **Enterprise Production Readiness - Week 1-2: Reliability Infrastructure**

@@ -29,17 +29,6 @@ from src.path_validator import PathValidator
 
 
 # ===========================
-# Event Loop Configuration
-# ===========================
-
-
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Configure event loop policy for async tests."""
-    return asyncio.get_event_loop_policy()
-
-
-# ===========================
 # Core Component Fixtures
 # ===========================
 
@@ -377,7 +366,6 @@ def mock_disk_full(monkeypatch):
 @pytest.fixture
 def mock_network_partition(monkeypatch):
     """Mock network partition for chaos testing."""
-    import asyncio
 
     async def failing_sleep(*args, **kwargs):
         raise asyncio.TimeoutError("Network partition simulated")

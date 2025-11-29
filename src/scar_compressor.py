@@ -322,6 +322,7 @@ class SCAREnhancedCompressor:
             # Without training, the compression is essentially a random projection,
             # which may not preserve semantic information optimally.
             import warnings
+
             warnings.warn(
                 "[SCAR] Using UNTRAINED random weights for learnable compression. "
                 "For optimal semantic preservation, train the compressor first. "

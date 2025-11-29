@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from os import cpu_count
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
 import numpy as np
@@ -166,8 +166,7 @@ class SemanticCompressor:
         """
         # Include edge weights in hash for content-aware invalidation
         edge_data = sorted(
-            (u, v, round(graph[u][v].get('weight', 1.0), 4))
-            for u, v in graph.edges()
+            (u, v, round(graph[u][v].get("weight", 1.0), 4)) for u, v in graph.edges()
         )
         content = f"{doc_id}:{edge_data}:{sorted(graph.nodes)}"
         return hashlib.sha1(content.encode()).hexdigest()[:16]
@@ -338,7 +337,7 @@ class SemanticCompressor:
             self._executor = ThreadPoolExecutor(max_workers=min(4, cpu_count() or 4))
 
         # Offload blocking encode() to thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         embeddings = await loop.run_in_executor(
             self._executor, lambda: self.model.encode(texts, show_progress_bar=False)
         )
@@ -384,11 +383,12 @@ class SemanticCompressor:
         # This is necessary because asyncio.run() creates a NEW event loop each time,
         # making asyncio.Lock useless for cross-call protection
         with self._sync_lock:
-            return asyncio.run(self._ingest_file_impl(text, file_id, metadata, use_async_lock=False))
+            return asyncio.run(
+                self._ingest_file_impl(text, file_id, metadata, use_async_lock=False)
+            )
 
     async def _ingest_file_impl(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None,
-        use_async_lock: bool = True
+        self, text: str, file_id: str, metadata: Optional[Dict] = None, use_async_lock: bool = True
     ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
@@ -506,7 +506,9 @@ class SemanticCompressor:
             # 5. Generate skeleton
             skeleton_response = self._generate_skeleton(file_id)
 
-            logger.info(f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
+            logger.info(
+                f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens"
+            )
             logger.info(f"  Ratio: {skeleton_response.compression_ratio:.1f}x")
 
             return skeleton_response
@@ -684,11 +686,14 @@ class SemanticCompressor:
 
         return "\n".join(output_lines)
 
-    def search_semantic(
+    def search_semantic_with_scores(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5
-    ) -> List[str]:
+    ) -> List[Tuple[str, float]]:
         """
-        Semantic search using vector similarity.
+        Semantic search using vector similarity with similarity scores.
+
+        New in v0.9.0: Returns similarity scores alongside node IDs for better
+        AI decision-making about which content to retrieve.
 
         Args:
             query: Search query
@@ -696,7 +701,8 @@ class SemanticCompressor:
             top_k: Number of results to return
 
         Returns:
-            List of node IDs ranked by relevance
+            List of (node_id, similarity_score) tuples ranked by relevance.
+            Similarity scores range from -1.0 to 1.0 (cosine similarity).
         """
         # Embed the query
         query_embedding = self.model.encode([query])[0]
@@ -708,13 +714,32 @@ class SemanticCompressor:
                 continue
 
             similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
+            candidates.append((node_id, float(similarity)))
 
-            candidates.append((node_id, similarity))
-
-        # Sort by similarity
+        # Sort by similarity (highest first)
         candidates.sort(key=lambda x: x[1], reverse=True)
 
-        return [node_id for node_id, _ in candidates[:top_k]]
+        return candidates[:top_k]
+
+    def search_semantic(
+        self, query: str, file_id: Optional[str] = None, top_k: int = 5
+    ) -> List[str]:
+        """
+        Semantic search using vector similarity.
+
+        Note: Use search_semantic_with_scores() to also get similarity scores.
+
+        Args:
+            query: Search query
+            file_id: Optional file to search within
+            top_k: Number of results to return
+
+        Returns:
+            List of node IDs ranked by relevance
+        """
+        # Delegate to search_semantic_with_scores and extract just the node IDs
+        results = self.search_semantic_with_scores(query, file_id, top_k)
+        return [node_id for node_id, _ in results]
 
     def get_stats(self, file_id: Optional[str] = None) -> Dict:
         """Get statistics about stored documents"""

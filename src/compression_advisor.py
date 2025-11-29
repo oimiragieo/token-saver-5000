@@ -306,7 +306,9 @@ class CompressionAdvisor:
 
         # Add recommendation
         if estimate.original_tokens < 100:
-            lines.append("[WARN] Recommendation: Document may be too small for effective compression.")
+            lines.append(
+                "[WARN] Recommendation: Document may be too small for effective compression."
+            )
             lines.append("   Consider ingesting larger documents or combining multiple small ones.")
         elif estimate.token_savings_pct > 80:
             lines.append("[OK] Recommendation: Excellent candidate for compression!")

@@ -40,9 +40,7 @@ class TestHandleIngest:
 
         # Configure resource manager to allow ingestion by default
         # v0.8.0: Handler now calls async wrappers
-        self.mock_resource_manager.check_document_size_async = AsyncMock(
-            return_value=(True, "")
-        )
+        self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
         self.mock_resource_manager.register_document_async = AsyncMock()
 
         # Configure version manager async wrappers (v0.8.0 audit fix)
@@ -303,8 +301,11 @@ class TestHandleSearchSemantic:
         mock_node_0.metadata = {"tokens": 50}
 
         self.mock_compressor.chunks = {"doc1_n0": mock_node_0}
-        self.mock_compressor.search_semantic.return_value = ["doc1_n0"]
-        self.mock_compressor._generate_summary.side_effect = lambda text, max_length: text[:max_length]
+        # v0.9.0: search_semantic_with_scores returns (node_id, similarity_score) tuples
+        self.mock_compressor.search_semantic_with_scores.return_value = [("doc1_n0", 0.87)]
+        self.mock_compressor._generate_summary.side_effect = lambda text, max_length: text[
+            :max_length
+        ]
 
         self.context = {"compressor": self.mock_compressor}
 
@@ -315,7 +316,9 @@ class TestHandleSearchSemantic:
 
         result = await ch.handle_search_semantic(self.context, args)
 
-        self.mock_compressor.search_semantic.assert_called_once_with("quantum computing", None, 5)
+        self.mock_compressor.search_semantic_with_scores.assert_called_once_with(
+            "quantum computing", None, 5
+        )
 
         # Handler returns JSON
         data = json.loads(result)
@@ -323,6 +326,8 @@ class TestHandleSearchSemantic:
         assert data["total_results"] == 1
         assert len(data["results"]) == 1
         assert data["results"][0]["node_id"] == "doc1_n0"
+        # v0.9.0: Now includes similarity score
+        assert data["results"][0]["similarity"] == 0.87
 
     @pytest.mark.asyncio
     async def test_search_with_custom_top_k(self):
@@ -331,7 +336,9 @@ class TestHandleSearchSemantic:
 
         await ch.handle_search_semantic(self.context, args)
 
-        self.mock_compressor.search_semantic.assert_called_once_with("test query", None, 10)
+        self.mock_compressor.search_semantic_with_scores.assert_called_once_with(
+            "test query", None, 10
+        )
 
 
 class TestHandleGetStats:

@@ -263,7 +263,7 @@ class ResourceManager:
         Returns:
             Dictionary with health status (same as check_health)
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, self.check_health)
 
     async def check_document_size_async(
@@ -282,7 +282,7 @@ class ResourceManager:
         Returns:
             (allowed, error_message)
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor, lambda: self.check_document_size(file_id, size_bytes)
         )
@@ -298,7 +298,7 @@ class ResourceManager:
             file_id: Document identifier
             size_bytes: Document size in bytes
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             self._executor, lambda: self.register_document(file_id, size_bytes)
         )
@@ -313,7 +313,7 @@ class ResourceManager:
         Args:
             file_id: Document identifier
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(self._executor, lambda: self.unregister_document(file_id))
 
     def get_usage_summary(self) -> str:

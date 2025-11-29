@@ -184,7 +184,7 @@ class TestACEContextManager:
 class TestSemanticModulatorServerInitialization:
     """Tests for SemanticModulatorServer.__init__"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.BlindSpotDetector")
     @patch("src.server.HaloEffectDetector")
     @patch("src.server.PersistenceManager")
@@ -231,7 +231,7 @@ class TestSemanticModulatorServerInitialization:
                     mock_load_sync.assert_not_called()
                     mock_setup.assert_called_once()
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.BlindSpotDetector")
     @patch("src.server.HaloEffectDetector")
     @patch("src.server.PersistenceManager")
@@ -270,7 +270,7 @@ class TestSemanticModulatorServerInitialization:
                 assert afm_config.use_llm_importance is False
                 assert afm_config.use_llm_compression is False
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.BlindSpotDetector")
     @patch("src.server.HaloEffectDetector")
     @patch("src.server.PersistenceManager")
@@ -311,7 +311,7 @@ class TestLoadPersistedDocuments:
     """Tests for _load_persisted_documents method (v0.4.4 - called in __aenter__)"""
 
     @pytest.mark.asyncio
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     async def test_load_documents_empty(self, mock_persistence_cls, mock_compressor_cls):
         """Test loading when no persisted documents exist (v0.4.4 - async context manager)"""
@@ -331,7 +331,7 @@ class TestLoadPersistedDocuments:
             assert mock_persistence.load_document.call_count == 0
 
     @pytest.mark.asyncio
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.ResourceManager")
     async def test_load_documents_success(
@@ -402,7 +402,7 @@ class TestLoadPersistedDocuments:
             assert mock_resource.register_document.call_count == 2
 
     @pytest.mark.asyncio
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     async def test_load_documents_partial_failure(self, mock_persistence_cls, mock_compressor_cls):
         """Test loading when some documents fail to load (v0.4.4 - async context manager)"""
@@ -464,7 +464,7 @@ class TestLoadPersistedDocuments:
             assert "doc2_n0" not in server.compressor.chunks
 
     @pytest.mark.asyncio
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     async def test_load_documents_exception_handling(
         self, mock_persistence_cls, mock_compressor_cls
@@ -488,7 +488,7 @@ class TestLoadPersistedDocuments:
 class TestLoadFileSyncMetadata:
     """Tests for _load_file_sync_metadata method"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     def test_load_sync_metadata_empty(
@@ -515,7 +515,7 @@ class TestLoadFileSyncMetadata:
             )
 
     @pytest.mark.asyncio
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     async def test_load_sync_metadata_success(
@@ -551,7 +551,7 @@ class TestLoadFileSyncMetadata:
             # Verify import_metadata called with correct data
             mock_sync.import_metadata.assert_called_once_with(metadata)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     def test_load_sync_metadata_exception_handling(
@@ -576,7 +576,7 @@ class TestLoadFileSyncMetadata:
 class TestSaveFileSyncMetadata:
     """Tests for _save_file_sync_metadata method"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     def test_save_sync_metadata_success(
@@ -610,7 +610,7 @@ class TestSaveFileSyncMetadata:
             mock_sync.export_metadata.assert_called_once()
             mock_persistence.save_file_sync_metadata.assert_called_once_with(metadata)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     def test_save_sync_metadata_failure(
@@ -636,7 +636,7 @@ class TestSaveFileSyncMetadata:
             # Should log warning but not raise
             mock_persistence.save_file_sync_metadata.assert_called_once()
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     @patch("src.server.FileSyncManager")
     def test_save_sync_metadata_exception_handling(
@@ -661,7 +661,7 @@ class TestSaveFileSyncMetadata:
 class TestBuildContext:
     """Tests for _build_context method"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_build_context_includes_all_components(self, mock_persistence_cls, mock_compressor_cls):
         """Test that _build_context includes all required components"""
@@ -696,7 +696,7 @@ class TestBuildContext:
             for key in required_keys:
                 assert key in context, f"Missing key: {key}"
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_build_context_validators_are_callable(self, mock_persistence_cls, mock_compressor_cls):
         """Test that validation helpers in context are callable"""
@@ -718,7 +718,7 @@ class TestBuildContext:
 class TestValidateFileId:
     """Tests for _validate_file_id validation helper"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_file_id_empty_string_raises(self, mock_persistence_cls, mock_compressor_cls):
         """Test that empty file_id raises ValueError"""
@@ -734,7 +734,7 @@ class TestValidateFileId:
 
             assert "cannot be empty" in str(exc_info.value)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_file_id_exists_no_error(self, mock_persistence_cls, mock_compressor_cls):
         """Test that must_exist=False allows any file_id"""
@@ -752,7 +752,7 @@ class TestValidateFileId:
             # Should not raise when must_exist=False
             server._validate_file_id("any_doc", must_exist=False)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_file_id_not_exists_raises(self, mock_persistence_cls, mock_compressor_cls):
         """Test that non-existent file_id raises helpful error"""
@@ -775,7 +775,7 @@ class TestValidateFileId:
             assert "Available documents" in error_msg
             assert "ingest_context()" in error_msg  # Helpful tip
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_file_id_must_exist_false_allows_new(
         self, mock_persistence_cls, mock_compressor_cls
@@ -799,7 +799,7 @@ class TestValidateFileId:
 class TestValidateNodeIds:
     """Tests for _validate_node_ids validation helper"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_node_ids_empty_list_raises(self, mock_persistence_cls, mock_compressor_cls):
         """Test that empty node_ids list raises ValueError"""
@@ -815,7 +815,7 @@ class TestValidateNodeIds:
 
             assert "cannot be empty" in str(exc_info.value)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_node_ids_all_valid_no_error(self, mock_persistence_cls, mock_compressor_cls):
         """Test that all valid node IDs do not raise"""
@@ -837,7 +837,7 @@ class TestValidateNodeIds:
             # Should not raise
             server._validate_node_ids(["doc1_n0", "doc1_n1"])
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_node_ids_invalid_raises_helpful_error(
         self, mock_persistence_cls, mock_compressor_cls
@@ -866,7 +866,7 @@ class TestValidateNodeIds:
             assert "read_skeleton" in error_msg  # Helpful tip
             assert "Valid nodes for 'doc1'" in error_msg
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_node_ids_mixed_valid_invalid_raises(
         self, mock_persistence_cls, mock_compressor_cls
@@ -894,7 +894,7 @@ class TestValidateNodeIds:
 class TestValidateTokenCount:
     """Tests for _validate_token_count validation helper"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_token_count_negative_raises(self, mock_persistence_cls, mock_compressor_cls):
         """Test that negative token count raises ValueError"""
@@ -910,7 +910,7 @@ class TestValidateTokenCount:
 
             assert "must be non-negative" in str(exc_info.value)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_token_count_zero_raises(self, mock_persistence_cls, mock_compressor_cls):
         """Test that zero token count raises helpful error"""
@@ -928,7 +928,7 @@ class TestValidateTokenCount:
             assert "no space for content" in error_msg
             assert "Provide a positive number" in error_msg  # Helpful tip
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_token_count_positive_no_error(
         self, mock_persistence_cls, mock_compressor_cls
@@ -945,7 +945,7 @@ class TestValidateTokenCount:
             server._validate_token_count(1000)
             server._validate_token_count(100000)
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_token_count_exceeds_max_raises(
         self, mock_persistence_cls, mock_compressor_cls
@@ -965,7 +965,7 @@ class TestValidateTokenCount:
             assert "exceeds max_tokens" in error_msg
             assert "should be ≤ max_tokens" in error_msg  # Helpful tip
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_validate_token_count_within_max_no_error(
         self, mock_persistence_cls, mock_compressor_cls
@@ -986,7 +986,7 @@ class TestValidateTokenCount:
 class TestCreateProgressBar:
     """Tests for _create_progress_bar helper"""
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_progress_bar_empty(self, mock_persistence_cls, mock_compressor_cls):
         """Test progress bar for 0% usage"""
@@ -1001,7 +1001,7 @@ class TestCreateProgressBar:
             assert "░" in bar  # Empty bar
             assert "[OK]" in bar  # Green status
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_progress_bar_half(self, mock_persistence_cls, mock_compressor_cls):
         """Test progress bar for 50% usage"""
@@ -1018,7 +1018,7 @@ class TestCreateProgressBar:
             assert "[OK]" in bar  # Green status
             assert "50%" in bar
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_progress_bar_warning_threshold(self, mock_persistence_cls, mock_compressor_cls):
         """Test progress bar for 80%+ usage (warning)"""
@@ -1034,7 +1034,7 @@ class TestCreateProgressBar:
             assert "[WARN]" in bar  # Warning emoji
             assert "85%" in bar
 
-    @patch("src.server.SemanticCompressor")
+    @patch("src.server.CodeCompressionAdapter")
     @patch("src.server.PersistenceManager")
     def test_progress_bar_full(self, mock_persistence_cls, mock_compressor_cls):
         """Test progress bar for 100% usage (full)"""

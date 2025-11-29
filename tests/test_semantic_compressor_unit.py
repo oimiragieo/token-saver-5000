@@ -484,7 +484,9 @@ Related paragraph two."""
         result = self.compressor.ingest_file(text, "skeleton_anchor_test")
 
         # Should have at least one ANCHOR node
-        assert "[ANCHOR]" in result.skeleton_text or "[HIDDEN] Detail hidden" in result.skeleton_text
+        assert (
+            "[ANCHOR]" in result.skeleton_text or "[HIDDEN] Detail hidden" in result.skeleton_text
+        )
 
     def test_skeleton_hidden_nodes_marked(self):
         """Test that low-importance nodes are marked as hidden"""

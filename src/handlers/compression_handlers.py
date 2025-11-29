@@ -81,9 +81,18 @@ def validate_node_ids(node_ids: List[str], context: HandlerContext) -> None:
     invalid_nodes = [nid for nid in node_ids if nid not in context["compressor"].chunks]
     if invalid_nodes:
         # Extract file_id from first node to give better error message
-        file_id = node_ids[0].rsplit("_n", 1)[0] if "_n" in node_ids[0] else "unknown"
+        # Handle both text node format (file_id_n0) and code node format (file_id::name)
+        first_node = node_ids[0]
+        if "::" in first_node:
+            file_id = first_node.split("::")[0]
+        elif "_n" in first_node:
+            file_id = first_node.rsplit("_n", 1)[0]
+        else:
+            file_id = first_node
         valid_nodes = [
-            nid for nid in context["compressor"].chunks.keys() if nid.startswith(file_id)
+            nid
+            for nid in context["compressor"].chunks.keys()
+            if nid.startswith(f"{file_id}_") or nid.startswith(f"{file_id}::")
         ]
 
         if not valid_nodes:
@@ -136,7 +145,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         args: Tool arguments containing text, file_id, optional file_path and metadata
 
     Returns:
-        Success message with compression stats
+        JSON string with ingestion results including compression stats
 
     Raises:
         ValueError: If validation fails
@@ -442,12 +451,16 @@ Proceeding with cached version...
 async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle search_semantic tool call.
 
+    v0.9.0: Now returns similarity scores alongside importance (PageRank) scores.
+    - similarity: How well the node matches the search query (cosine similarity)
+    - importance: How central the node is in the document graph (PageRank)
+
     Args:
         context: Server context dict
         args: Tool arguments containing query, optional file_id and top_k
 
     Returns:
-        JSON string with search results
+        JSON string with search results including similarity scores
     """
     query = args["query"]
     file_id = args.get("file_id")
@@ -455,17 +468,19 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
 
     logger.info(f"Semantic search: '{query}' in {file_id or 'all files'}")
 
-    node_ids = context["compressor"].search_semantic(query, file_id, top_k)
+    # Use search_semantic_with_scores to get both node IDs and similarity scores
+    search_results = context["compressor"].search_semantic_with_scores(query, file_id, top_k)
 
-    # Build structured results
+    # Build structured results with both similarity and importance
     results = []
-    for node_id in node_ids:
+    for node_id, similarity_score in search_results:
         node = context["compressor"].chunks[node_id]
         summary = context["compressor"]._generate_summary(node.text, max_length=100)
         results.append(
             {
                 "node_id": node_id,
-                "importance": round(node.importance, 3),
+                "similarity": round(similarity_score, 3),  # Query match score
+                "importance": round(node.importance, 3),  # PageRank centrality
                 "summary": summary,
                 "tokens": node.metadata.get("tokens", 0),
             }
@@ -478,6 +493,10 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
         "total_results": len(results),
         "results": results,
         "tip": "Use modulate_region() with node_ids to retrieve full content",
+        "score_explanation": {
+            "similarity": "Semantic match to query (higher = better match)",
+            "importance": "PageRank centrality in document graph (higher = more central)",
+        },
     }
 
     return json.dumps(response, indent=2)
@@ -1049,6 +1068,268 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
         response["tip"] = (
             f"[WARN] {failed} documents failed. Check error messages for each failed document."
         )
+
+    logger.info(response["summary"])
+
+    return json.dumps(response, indent=2)
+
+
+async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """
+    Handle ingest_directory MCP tool (v0.9.0).
+
+    Bulk ingest code files from a directory using glob patterns.
+    Uses PathValidator for security (prevents path traversal attacks).
+    Leverages BatchCompressionManager for concurrent processing.
+
+    Args:
+        context: Server context dict with path_validator and compressor
+        args: Tool arguments:
+            - directory: Directory path to scan
+            - patterns: Glob patterns for files to include (default: ['*.py', '*.js', '*.ts'])
+            - exclude_patterns: Patterns to exclude (default: node_modules, __pycache__, venv)
+            - max_files: Maximum files to ingest (default: 50, max: 100)
+            - max_concurrent: Maximum concurrent ingestions (default: 4, max: 8)
+
+    Returns:
+        JSON string with directory ingestion results
+
+    Raises:
+        ValueError: If directory is invalid or path traversal detected
+    """
+    import os
+    import time
+    from pathlib import Path
+    from ..batch_manager import BatchCompressionManager, BatchDocument
+
+    # Extract arguments with defaults
+    directory = args.get("directory", "")
+    patterns = args.get("patterns", ["*.py", "*.js", "*.ts"])
+    exclude_patterns = args.get(
+        "exclude_patterns",
+        [
+            "**/node_modules/**",
+            "**/__pycache__/**",
+            "**/venv/**",
+            "**/.venv/**",
+            "**/.git/**",
+        ],
+    )
+    max_files = args.get("max_files", 50)
+    max_concurrent = args.get("max_concurrent", 4)
+
+    # Validate directory is provided
+    if not directory:
+        raise SmartError.missing_required_field("directory", "ingest_directory")
+
+    # Validate and normalize directory path using PathValidator (CWE-22 protection)
+    path_validator = context["path_validator"]
+    try:
+        validated_dir = path_validator.validate(directory)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid directory path: {e}\n"
+            "Tip: Directory must be within the current working directory or user home directory."
+        )
+
+    # Check directory exists
+    if not os.path.isdir(validated_dir):
+        raise ValueError(
+            f"Directory not found: {validated_dir}\n" "Tip: Provide an existing directory path."
+        )
+
+    # Validate parameters
+    if not (1 <= max_files <= 100):
+        raise ValueError(
+            f"max_files must be between 1 and 100, got {max_files}\n"
+            "Tip: Use smaller values for faster ingestion."
+        )
+
+    if not (1 <= max_concurrent <= 8):
+        raise ValueError(
+            f"max_concurrent must be between 1 and 8, got {max_concurrent}\n"
+            "Tip: Use 4 for balanced performance."
+        )
+
+    # Scan directory for matching files
+    logger.info(f"Scanning directory: {validated_dir}")
+    logger.info(f"Patterns: {patterns}, Excludes: {exclude_patterns}")
+
+    matched_files = []
+    dir_path = Path(validated_dir)
+
+    for pattern in patterns:
+        # Use recursive glob for patterns with ** and non-recursive otherwise
+        if "**" in pattern:
+            for file_path in dir_path.rglob(pattern.replace("**/", "")):
+                if file_path.is_file():
+                    matched_files.append(file_path)
+        else:
+            # Check in immediate directory and subdirectories
+            for file_path in dir_path.rglob(pattern):
+                if file_path.is_file():
+                    matched_files.append(file_path)
+
+    # Remove duplicates
+    matched_files = list(set(matched_files))
+
+    # Apply exclusions
+    # P2-1 fix: Use PurePath.match() for proper glob pattern support
+    from pathlib import PurePath
+
+    def is_excluded(path: Path) -> bool:
+        """Check if path matches any exclusion pattern using proper glob matching.
+
+        PurePath.match() handles both simple patterns (*.pyc) and ** patterns natively.
+        Simple patterns like '*.pyc' match from the right, so 'src/file.pyc' matches '*.pyc'.
+        """
+        path_obj = PurePath(str(path))
+
+        for exclude in exclude_patterns:
+            try:
+                # PurePath.match() supports ** patterns and simple patterns natively
+                # e.g., '*.pyc' matches 'src/file.pyc', '**/node_modules/**' matches nested dirs
+                if path_obj.match(exclude):
+                    return True
+            except ValueError:
+                # Invalid pattern - log and skip
+                logger.warning(f"Invalid exclude pattern: {exclude}")
+                continue
+        return False
+
+    filtered_files = [f for f in matched_files if not is_excluded(f)]
+
+    # Validate each file path
+    validated_files = []
+    for file_path in filtered_files:
+        try:
+            validated_path = path_validator.validate(str(file_path))
+            validated_files.append(Path(validated_path))
+        except ValueError:
+            logger.warning(f"Skipping file outside allowed directories: {file_path}")
+            continue
+
+    # Limit files
+    if len(validated_files) > max_files:
+        logger.info(f"Limiting from {len(validated_files)} to {max_files} files")
+        validated_files = validated_files[:max_files]
+
+    if not validated_files:
+        return json.dumps(
+            {
+                "status": "no_files",
+                "directory": validated_dir,
+                "patterns": patterns,
+                "message": "No matching files found in directory.",
+                "tip": "Try different patterns or check the directory path.",
+            },
+            indent=2,
+        )
+
+    # Read files and prepare batch documents
+    batch_documents = []
+    skipped_files = []
+
+    for file_path in validated_files:
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+
+            # Generate file_id from relative path
+            try:
+                rel_path = file_path.relative_to(dir_path)
+                file_id = str(rel_path).replace(os.sep, "/")
+            except ValueError:
+                file_id = file_path.name
+
+            batch_documents.append(
+                BatchDocument(
+                    file_id=file_id,
+                    text=text,
+                    metadata={
+                        "source_path": str(file_path),
+                        "file_size": len(text),
+                    },
+                    file_path=str(file_path),  # Enable file sync tracking
+                )
+            )
+        except Exception as e:
+            logger.warning(f"Failed to read {file_path}: {e}")
+            skipped_files.append({"path": str(file_path), "error": str(e)})
+
+    if not batch_documents:
+        return json.dumps(
+            {
+                "status": "read_failed",
+                "directory": validated_dir,
+                "skipped_files": skipped_files,
+                "message": "Could not read any files.",
+            },
+            indent=2,
+        )
+
+    # Log operation
+    logger.info(
+        f"Starting directory ingestion: {len(batch_documents)} files, "
+        f"max_concurrent={max_concurrent}"
+    )
+
+    # Create batch manager and execute
+    manager = BatchCompressionManager(
+        compressor=context["compressor"], max_concurrent=max_concurrent
+    )
+
+    start_time = time.time()
+    results = await manager.compress_batch(batch_documents)
+    total_time = time.time() - start_time
+
+    # Format results
+    successful = sum(1 for r in results if r.success)
+    failed = len(results) - successful
+
+    result_list = []
+    for result in results:
+        entry = {
+            "file_id": result.file_id,
+            "success": result.success,
+            "processing_time": round(result.processing_time, 2),
+        }
+
+        if result.success:
+            if result.result:
+                entry["compression_ratio"] = result.result.compression_ratio
+                entry["node_count"] = result.result.total_nodes
+        else:
+            entry["error"] = result.error
+
+        result_list.append(entry)
+
+    # Create response
+    response = {
+        "status": "complete",
+        "directory": validated_dir,
+        "patterns": patterns,
+        "total_files_found": len(matched_files),
+        "files_after_exclusion": len(filtered_files),
+        "files_ingested": len(batch_documents),
+        "successful": successful,
+        "failed": failed,
+        "skipped_read_errors": len(skipped_files),
+        "total_time": round(total_time, 2),
+        "avg_time_per_file": round(total_time / len(results), 2) if results else 0.0,
+        "results": result_list,
+        "summary": (
+            f"Directory ingestion complete: {successful}/{len(batch_documents)} files "
+            f"succeeded in {total_time:.1f}s"
+        ),
+    }
+
+    if skipped_files:
+        response["skipped_files"] = skipped_files
+
+    if failed > 0:
+        failed_ids = [r.file_id for r in results if not r.success]
+        response["failed_file_ids"] = failed_ids
 
     logger.info(response["summary"])
 

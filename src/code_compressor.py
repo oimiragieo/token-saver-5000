@@ -147,7 +147,7 @@ class CodeSemanticCompressor:
             import_code = "\n".join([line for line in code.split("\n") if "import" in line])
             chunks.append(
                 CodeChunk(
-                    chunk_id=f"{file_id}_imports",
+                    chunk_id=f"{file_id}::imports",
                     chunk_type="import",
                     code=import_code,
                     name="imports",
@@ -176,7 +176,7 @@ class CodeSemanticCompressor:
 
                 chunks.append(
                     CodeChunk(
-                        chunk_id=f"{file_id}_func_{node.name}",
+                        chunk_id=f"{file_id}::{node.name}",
                         chunk_type="function",
                         code=func_code or "",
                         name=node.name,
@@ -197,7 +197,7 @@ class CodeSemanticCompressor:
 
                 chunks.append(
                     CodeChunk(
-                        chunk_id=f"{file_id}_class_{node.name}",
+                        chunk_id=f"{file_id}::{node.name}",
                         chunk_type="class",
                         code=class_code or "",
                         name=node.name,
@@ -229,7 +229,7 @@ class CodeSemanticCompressor:
             ]
             chunks.append(
                 CodeChunk(
-                    chunk_id=f"{file_id}_imports",
+                    chunk_id=f"{file_id}::imports",
                     chunk_type="import",
                     code="\n".join(import_lines),
                     name="imports",
@@ -254,7 +254,7 @@ class CodeSemanticCompressor:
 
             chunks.append(
                 CodeChunk(
-                    chunk_id=f"{file_id}_func_{func_name}",
+                    chunk_id=f"{file_id}::{func_name}",
                     chunk_type="function",
                     code=match.group(0),
                     name=func_name,
@@ -282,7 +282,7 @@ class CodeSemanticCompressor:
 
             chunks.append(
                 CodeChunk(
-                    chunk_id=f"{file_id}_block_{i // lines_per_chunk}",
+                    chunk_id=f"{file_id}::block_{i // lines_per_chunk}",
                     chunk_type="block",
                     code=chunk_code,
                     name=f"block_{i}",

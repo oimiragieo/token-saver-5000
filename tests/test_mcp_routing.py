@@ -34,14 +34,16 @@ class TestSetupMCPTools:
         # Expected count: 35 tools total (v0.6.0)
         # - Document Compression: 9
         # - Batch Processing: 1 (NEW in v0.6.0)
+        # - Directory Ingestion: 1 (NEW in v0.9.0)
         # - Fidelity Advisor: 1
         # - Detection: 2
         # - AFM Dialogue: 6
         # - File Sync: 4
-        # - Resource Management: 1
+        # - Resource Management: 2 (added check_environment in v0.9.0)
+        # - Help & Documentation: 1 (NEW in v0.9.0)
         # - ACE Framework: 7
         # - Visualization: 4 (NEW in v0.6.0)
-        assert len(tools) == 35, f"Expected 35 tools, got {len(tools)}"
+        assert len(tools) == 38, f"Expected 38 tools, got {len(tools)}"
 
     def test_all_tools_have_required_fields(self):
         """Test that all tools have name, description, and inputSchema"""
@@ -217,8 +219,8 @@ class TestRouteToolCall:
             pytest.fail("Expected ValueError to be raised")
         except ValueError as e:
             error_msg = str(e)
-            # Should mention count of available tools (v0.6.0: 35 tools)
-            assert "35" in error_msg or "(35)" in error_msg or "35)" in error_msg
+            # Should mention count of available tools (v0.9.0: 38 tools)
+            assert "38" in error_msg or "(38)" in error_msg or "38)" in error_msg
             # Should list some tool names
             assert "ingest_context" in error_msg or "afm_add_message" in error_msg
 

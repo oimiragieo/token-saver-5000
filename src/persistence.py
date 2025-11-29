@@ -555,7 +555,9 @@ class PersistenceManager:
                 if "chunks" in data:
                     data["chunks"] = self._deserialize_chunks_safe(data["chunks"])
 
-                logger.info(f"[OK] Loaded document {file_id} from JSON ({len(data.get('chunks', {}))} nodes)")
+                logger.info(
+                    f"[OK] Loaded document {file_id} from JSON ({len(data.get('chunks', {}))} nodes)"
+                )
                 return data
 
             # v0.8.0 SECURITY FIX: Fail hard on legacy pickle files (CWE-502)
@@ -619,9 +621,11 @@ class PersistenceManager:
             for f in self.documents_dir.glob("*.json"):
                 # Exclude graph, chunk, and ID files (v0.8.0 audit fix - Issue 2)
                 # ID files have format: {doc_id}_chunks.ids.json (stem = {doc_id}_chunks.ids)
-                if (not f.stem.endswith("_graph") and
-                    not f.stem.endswith("_chunks") and
-                    not f.stem.endswith("_chunks.ids")):
+                if (
+                    not f.stem.endswith("_graph")
+                    and not f.stem.endswith("_chunks")
+                    and not f.stem.endswith("_chunks.ids")
+                ):
                     file_ids.add(f.stem)
 
             # Find legacy pickle files (for backward compatibility)
@@ -877,9 +881,7 @@ class PersistenceManager:
                             data["messages"][idx]["embedding"] = emb.tolist()
 
                 # Deserialize messages to Message objects
-                data["messages"] = [
-                    self._deserialize_message_safe(msg) for msg in data["messages"]
-                ]
+                data["messages"] = [self._deserialize_message_safe(msg) for msg in data["messages"]]
 
                 logger.info(
                     f"[OK] Loaded AFM history {session_id} ({len(data['messages'])} messages)"

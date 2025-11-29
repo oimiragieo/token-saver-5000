@@ -24,7 +24,7 @@ from mcp.types import (
 )
 
 from .types import HandlerContext  # TypedDict for handler context
-from .semantic_compressor import SemanticCompressor
+from .code_compression_adapter import CodeCompressionAdapter
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
 from .adaptive_rate_allocator import (
     ContextWindowAdapter,
@@ -124,10 +124,16 @@ class SemanticModulatorServer:
 
     def __init__(self):
         self.server = Server("semantic-modulator")
-        self.compressor = SemanticCompressor(
-            model_name="all-MiniLM-L6-v2",
+        # CodeCompressionAdapter routes text files to SemanticCompressor
+        # and code files (Python, JS, TS, etc.) to CodeSemanticCompressor
+        # CodeBERT model (~400MB) loaded lazily on first code file
+        # Set PRELOAD_CODE_MODEL=true to prewarm for heavy code workflows
+        self.compressor = CodeCompressionAdapter(
+            text_model="all-MiniLM-L6-v2",
+            code_model="microsoft/codebert-base",
             similarity_threshold=0.75,
             skeleton_ratio=0.2,
+            preload_code_model=os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true",
         )
         self.blind_spot_detector = BlindSpotDetector(self.compressor)
         self.halo_detector = HaloEffectDetector(self.compressor)
@@ -328,6 +334,22 @@ class SemanticModulatorServer:
                 logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
+    def _extract_file_id_from_node(self, node_id: str) -> str:
+        """
+        Extract file_id from a node_id, handling both patterns:
+        - Text pattern: 'doc_n0', 'doc_n1' -> 'doc'
+        - Code pattern: 'file.py::ClassName', 'file.py::func_name' -> 'file.py'
+        """
+        if "::" in node_id:
+            # Code-style semantic node ID (e.g., "file.py::ClassName")
+            return node_id.split("::")[0]
+        elif "_n" in node_id:
+            # Text-style numeric node ID (e.g., "doc_n0")
+            return node_id.rsplit("_n", 1)[0]
+        else:
+            # Fallback: assume entire node_id is file_id
+            return node_id
+
     def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
         """Validate file_id and provide helpful error messages"""
         if not file_id:
@@ -335,7 +357,15 @@ class SemanticModulatorServer:
 
         if must_exist:
             if file_id not in self.compressor.chunks:
-                available = list(set([nid.split("_n")[0] for nid in self.compressor.chunks.keys()]))
+                # Extract file IDs from all node IDs (handle both _n and :: patterns)
+                available = list(
+                    set(
+                        [
+                            self._extract_file_id_from_node(nid)
+                            for nid in self.compressor.chunks.keys()
+                        ]
+                    )
+                )
                 raise ValueError(
                     f"Document '{file_id}' not found. "
                     f"Available documents: {available if available else '(none)'}\n"
@@ -350,8 +380,13 @@ class SemanticModulatorServer:
         invalid_nodes = [nid for nid in node_ids if nid not in self.compressor.chunks]
         if invalid_nodes:
             # Extract file_id from first node to give better error message
-            file_id = node_ids[0].rsplit("_n", 1)[0] if "_n" in node_ids[0] else "unknown"
-            valid_nodes = [nid for nid in self.compressor.chunks.keys() if nid.startswith(file_id)]
+            # Handle both _n and :: patterns
+            file_id = self._extract_file_id_from_node(node_ids[0])
+            valid_nodes = [
+                nid
+                for nid in self.compressor.chunks.keys()
+                if self._extract_file_id_from_node(nid) == file_id
+            ]
 
             raise ValueError(
                 f"Invalid node IDs: {invalid_nodes[:3]}\n"

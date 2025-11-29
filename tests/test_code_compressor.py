@@ -202,21 +202,21 @@ class TestPythonCodeChunking:
         assert all(c.chunk_type == "block" for c in chunks)
 
     def test_chunk_python_code_preserves_chunk_ids(self):
-        """Test that chunk IDs are properly formatted"""
+        """Test that chunk IDs are properly formatted with :: separator"""
         chunks = self.compressor.chunk_python_code(SAMPLE_PYTHON_CODE, "test_file")
 
         for chunk in chunks:
-            # All chunk IDs should start with file_id
-            assert chunk.chunk_id.startswith("test_file_")
+            # All chunk IDs should start with file_id and use :: separator
+            assert chunk.chunk_id.startswith("test_file::")
             # Import chunks should have specific format
             if chunk.chunk_type == "import":
-                assert chunk.chunk_id == "test_file_imports"
-            # Function chunks should include function name
+                assert chunk.chunk_id == "test_file::imports"
+            # Function chunks should include function name after ::
             elif chunk.chunk_type == "function":
-                assert f"func_{chunk.name}" in chunk.chunk_id
-            # Class chunks should include class name
+                assert chunk.chunk_id == f"test_file::{chunk.name}"
+            # Class chunks should include class name after ::
             elif chunk.chunk_type == "class":
-                assert f"class_{chunk.name}" in chunk.chunk_id
+                assert chunk.chunk_id == f"test_file::{chunk.name}"
 
 
 class TestJavaScriptCodeChunking:
@@ -604,9 +604,9 @@ class TestCodeSearch:
         # Search only in file1
         results = compressor.search_code("data preprocessing", file_id="file1", top_k=5)
 
-        # All results should be from file1
+        # All results should be from file1 (v0.9.0: uses :: separator)
         for chunk_id, score in results:
-            assert chunk_id.startswith("file1_")
+            assert chunk_id.startswith("file1::")
 
     def test_search_code_returns_sorted_results(self, mock_embedding_manager_class):
         """Test that results are sorted by similarity score"""

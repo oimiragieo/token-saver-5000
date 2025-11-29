@@ -285,9 +285,7 @@ class FileSyncManager:
             # v0.8.0: Use VersionManager to get cached content (Issue 6 fix)
             if version_manager is not None:
                 # Delegate to version_manager which has full content stored
-                diff = version_manager.diff_with_current_file(
-                    doc_id, context_lines=context_lines
-                )
+                diff = version_manager.diff_with_current_file(doc_id, context_lines=context_lines)
                 return diff
 
             # Legacy path: No version_manager provided

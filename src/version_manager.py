@@ -235,7 +235,7 @@ class VersionManager:
         Returns:
             DocumentVersion object (the newly added version)
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor,
             lambda: self.add_version(
@@ -337,7 +337,7 @@ class VersionManager:
         Returns:
             List of version summaries
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, lambda: self.get_version_history(doc_id))
 
     def diff_versions(
@@ -512,7 +512,7 @@ class VersionManager:
         Returns:
             Unified diff string or None
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor,
             lambda: self.diff_with_current_file(doc_id, cached_version_id, context_lines),
@@ -564,7 +564,7 @@ class VersionManager:
         Args:
             doc_id: Document identifier
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(self._executor, lambda: self.delete_versions(doc_id))
 
     def prune_old_versions(self, doc_id: Optional[str] = None) -> Dict[str, int]:
