@@ -671,7 +671,7 @@ results = search_cross_modal(query, "my_project")
 
 ## TOON Integration: Token-Optimized Output Notation
 
-**Module:** `src/toon_serializer.py` (NEW in v0.3.0)
+**Module:** `src/toon_serializer.py`
 
 TOON (Token-Oriented Object Notation) provides an additional ~40% token savings on structured outputs, complementing semantic compression for maximum efficiency.
 
@@ -809,7 +809,7 @@ async def main():
         await app.run(read_stream, write_stream)
 ```
 
-### Available Tools (21 total - v0.4.0)
+### Available Tools (35 total)
 
 #### Document Compression Tools (9)
 
@@ -882,7 +882,7 @@ async def main():
     - Input: `doc_id` (string)
     - Output: deletion confirmation, freed storage
 
-#### File Sync & Version Management Tools (4) - NEW in v0.4.0
+#### File Sync & Version Management Tools (4)
 
 18. **check_file_sync** - Check if cached document is in sync with source file
     - Input: `doc_id` (string)
@@ -1000,7 +1000,7 @@ class ResourceManager:
 
 ## File Sync & Version Management (v0.4.0)
 
-**NEW in v0.4.0:** Real-time staleness detection and full version history for ingested documents.
+Real-time staleness detection and full version history for ingested documents.
 
 ### The Problem
 
