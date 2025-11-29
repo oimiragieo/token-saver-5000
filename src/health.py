@@ -52,7 +52,7 @@ import os
 import shutil
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -135,7 +135,7 @@ class HealthChecker:
         """
         return {
             "status": HealthStatus.HEALTHY.value,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         }
 
     def check_readiness(self) -> Dict[str, Any]:
@@ -154,7 +154,7 @@ class HealthChecker:
             Dict with overall status and component details
         """
         # Check cache
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if self._last_readiness_check and (now - self._last_readiness_check) < self.cache_duration:
             logger.debug("Returning cached readiness check")
             return self._cached_readiness
@@ -212,7 +212,7 @@ class HealthChecker:
             Dict with readiness info + performance + resources
         """
         # Check cache
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if (
             self._last_diagnostics_check
             and (now - self._last_diagnostics_check) < self.cache_duration
@@ -320,7 +320,7 @@ class HealthChecker:
                     name="embedding_manager",
                     status=HealthStatus.HEALTHY,
                     message="Embedding model loaded and functional",
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     details={"embedding_dim": len(test_embedding)},
                 )
             else:
@@ -328,7 +328,7 @@ class HealthChecker:
                     name="embedding_manager",
                     status=HealthStatus.UNHEALTHY,
                     message="Embedding model returned invalid result",
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     details={},
                 )
         except Exception as e:
@@ -337,7 +337,7 @@ class HealthChecker:
                 name="embedding_manager",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Embedding model unavailable: {str(e)[:100]}",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={"error": str(e)[:200]},
             )
 
@@ -365,7 +365,7 @@ class HealthChecker:
                     name="persistence",
                     status=HealthStatus.HEALTHY,
                     message="Persistence layer operational",
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     details={},
                 )
             else:
@@ -373,7 +373,7 @@ class HealthChecker:
                     name="persistence",
                     status=HealthStatus.DEGRADED,
                     message="Persistence layer returned unexpected data",
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     details={},
                 )
         except Exception as e:
@@ -382,7 +382,7 @@ class HealthChecker:
                 name="persistence",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Persistence layer unavailable: {str(e)[:100]}",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={"error": str(e)[:200]},
             )
 
@@ -413,7 +413,7 @@ class HealthChecker:
                 name="cache",
                 status=status,
                 message=message,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={
                     "entries": stats.entries,
                     "capacity": stats.capacity,
@@ -427,7 +427,7 @@ class HealthChecker:
                 name="cache",
                 status=HealthStatus.DEGRADED,
                 message=f"Cache unavailable: {str(e)[:100]}",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={"error": str(e)[:200]},
             )
 
@@ -454,7 +454,7 @@ class HealthChecker:
                 name="disk_space",
                 status=status,
                 message=message,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={
                     "free_gb": round(free_gb, 2),
                     "used_gb": round(used_gb, 2),
@@ -467,7 +467,7 @@ class HealthChecker:
                 name="disk_space",
                 status=HealthStatus.DEGRADED,
                 message=f"Disk check failed: {str(e)[:100]}",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={"error": str(e)[:200]},
             )
 

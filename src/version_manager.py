@@ -14,12 +14,20 @@ to prevent unbounded memory growth (v0.4.2 - Week 3 Day 13).
 - Memory-efficient: 880KB freed when pruning 50 → 10 versions (proven via profiling)
 - LRU-style retention: Most recent versions always kept
 - Configurable limits via DEFAULT_VERSION_RETENTION constant
+
+**Async Support (v0.8.0):**
+- `add_version_async()`: Non-blocking version of add_version() for async handlers
+- `diff_with_current_file_async()`: Non-blocking diff generation
+- Uses run_in_executor() to avoid blocking the event loop during disk I/O
 """
 
+import asyncio
 import difflib
 import json
 import logging
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -88,6 +96,16 @@ class VersionManager:
         # This ensures version_id always increments even after pruning
         self._version_counters: Dict[str, int] = {}
 
+        # Concurrency protection (v0.8.0 audit fix - Issue 3)
+        # Uses threading.Lock for synchronous methods.
+        # For async handlers, use the async wrapper methods (add_version_async, etc.)
+        # which run the blocking operation in a thread pool to avoid event loop blocking.
+        self._lock = threading.Lock()
+
+        # Thread pool for async wrappers (v0.8.0 audit fix - Issue 3)
+        # Limited to 2 workers since disk I/O is the bottleneck, not CPU
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="version_mgr")
+
         self._load_index()
         logger.info(
             f"VersionManager initialized: {storage_dir} "
@@ -140,53 +158,90 @@ class VersionManager:
                 "by PathValidator before being passed to VersionManager."
             )
 
-        # Get next version number (v0.4.2: use counter, not list length)
-        # This ensures version_id increments correctly even after pruning
-        if doc_id in self._version_counters:
-            self._version_counters[doc_id] += 1
-            version_id = self._version_counters[doc_id]
-        else:
-            version_id = 1
-            self._version_counters[doc_id] = 1
-            self.versions[doc_id] = []
+        # Thread-safe: protect all mutations to shared state (v0.8.0 audit fix - Issue 3)
+        with self._lock:
+            # Get next version number (v0.4.2: use counter, not list length)
+            # This ensures version_id increments correctly even after pruning
+            if doc_id in self._version_counters:
+                self._version_counters[doc_id] += 1
+                version_id = self._version_counters[doc_id]
+            else:
+                version_id = 1
+                self._version_counters[doc_id] = 1
+                self.versions[doc_id] = []
 
-        version = DocumentVersion(
-            version_id=version_id,
-            doc_id=doc_id,
-            content=content,
-            timestamp=datetime.now().timestamp(),
-            checksum=checksum,
-            file_path=file_path,
-            metadata=metadata or {},
-            compression_stats=compression_stats or {},
-        )
-
-        # Add to in-memory index
-        self.versions[doc_id].append(version)
-
-        # Automatic pruning (v0.4.2): Keep only last N versions
-        pruned_count = 0
-        if self.max_versions > 0 and len(self.versions[doc_id]) > self.max_versions:
-            # Keep only the most recent max_versions
-            versions_to_keep = self.versions[doc_id][-self.max_versions :]
-            pruned_count = len(self.versions[doc_id]) - len(versions_to_keep)
-            self.versions[doc_id] = versions_to_keep
-
-            logger.info(
-                f"Auto-pruned {pruned_count} old versions for {doc_id} "
-                f"(keeping last {self.max_versions} versions)"
+            version = DocumentVersion(
+                version_id=version_id,
+                doc_id=doc_id,
+                content=content,
+                timestamp=datetime.now().timestamp(),
+                checksum=checksum,
+                file_path=file_path,
+                metadata=metadata or {},
+                compression_stats=compression_stats or {},
             )
 
-        # Persist to disk (will save only kept versions if pruning occurred)
-        self._save_all_versions(doc_id)
+            # Add to in-memory index
+            self.versions[doc_id].append(version)
 
-        logger.info(
-            f"Added version {version_id} for {doc_id} "
-            f"({len(content)} chars, checksum={checksum[:8]}...)"
-            + (f", pruned {pruned_count} old versions" if pruned_count > 0 else "")
-        )
+            # Automatic pruning (v0.4.2): Keep only last N versions
+            pruned_count = 0
+            if self.max_versions > 0 and len(self.versions[doc_id]) > self.max_versions:
+                # Keep only the most recent max_versions
+                versions_to_keep = self.versions[doc_id][-self.max_versions :]
+                pruned_count = len(self.versions[doc_id]) - len(versions_to_keep)
+                self.versions[doc_id] = versions_to_keep
+
+                logger.info(
+                    f"Auto-pruned {pruned_count} old versions for {doc_id} "
+                    f"(keeping last {self.max_versions} versions)"
+                )
+
+            # Persist to disk (will save only kept versions if pruning occurred)
+            self._save_all_versions(doc_id)
+
+            logger.info(
+                f"Added version {version_id} for {doc_id} "
+                f"({len(content)} chars, checksum={checksum[:8]}...)"
+                + (f", pruned {pruned_count} old versions" if pruned_count > 0 else "")
+            )
 
         return version
+
+    async def add_version_async(
+        self,
+        doc_id: str,
+        content: str,
+        checksum: str,
+        file_path: Optional[str] = None,
+        metadata: Optional[Dict] = None,
+        compression_stats: Optional[Dict] = None,
+    ) -> DocumentVersion:
+        """
+        Async wrapper for add_version (v0.8.0 audit fix - Issue 3).
+
+        Runs add_version() in a thread pool to avoid blocking the event loop
+        during disk I/O operations. Use this from async handlers instead of
+        the synchronous add_version().
+
+        Args:
+            doc_id: Document identifier
+            content: Full document content
+            checksum: MD5 checksum
+            file_path: Source file path (MUST be absolute if provided)
+            metadata: Additional metadata
+            compression_stats: Compression statistics
+
+        Returns:
+            DocumentVersion object (the newly added version)
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            lambda: self.add_version(
+                doc_id, content, checksum, file_path, metadata, compression_stats
+            ),
+        )
 
     def get_version(self, doc_id: str, version_id: int) -> Optional[DocumentVersion]:
         """
@@ -222,9 +277,28 @@ class VersionManager:
 
         return self.versions[doc_id][-1]
 
+    def get_latest_content(self, doc_id: str) -> Optional[str]:
+        """
+        Get content from latest version for diff generation (v0.8.0 audit fix Issue 6).
+
+        This is a convenience method for FileSyncManager integration that provides
+        a clean API for retrieving cached content without exposing DocumentVersion internals.
+
+        Args:
+            doc_id: Document identifier
+
+        Returns:
+            Content string from latest version, or None if no versions exist
+        """
+        latest = self.get_latest_version(doc_id)
+        return latest.content if latest else None
+
     def get_version_history(self, doc_id: str) -> List[Dict]:
         """
         Get version history for a document (without full content).
+
+        Thread-safe: Uses internal lock to protect shared state access
+        (v0.8.0 audit fix - Issue 3).
 
         Args:
             doc_id: Document identifier
@@ -232,20 +306,39 @@ class VersionManager:
         Returns:
             List of version summaries
         """
-        if doc_id not in self.versions:
-            return []
+        # Thread-safe: protect reads from concurrent modifications
+        with self._lock:
+            if doc_id not in self.versions:
+                return []
 
-        return [
-            {
-                "version_id": v.version_id,
-                "timestamp": v.timestamp,
-                "checksum": v.checksum,
-                "file_path": v.file_path,
-                "content_length": len(v.content),
-                "compression_stats": v.compression_stats,
-            }
-            for v in self.versions[doc_id]
-        ]
+            return [
+                {
+                    "version_id": v.version_id,
+                    "timestamp": v.timestamp,
+                    "checksum": v.checksum,
+                    "file_path": v.file_path,
+                    "content_length": len(v.content),
+                    "compression_stats": v.compression_stats,
+                }
+                for v in self.versions[doc_id]
+            ]
+
+    async def get_version_history_async(self, doc_id: str) -> List[Dict]:
+        """
+        Async wrapper for get_version_history (v0.8.0 audit fix - Issue 3).
+
+        Runs get_version_history() in a thread pool to avoid blocking the
+        event loop. Use this from async handlers instead of the synchronous
+        get_version_history().
+
+        Args:
+            doc_id: Document identifier
+
+        Returns:
+            List of version summaries
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self._executor, lambda: self.get_version_history(doc_id))
 
     def diff_versions(
         self, doc_id: str, from_version: int, to_version: int, context_lines: int = 3
@@ -284,30 +377,105 @@ class VersionManager:
         """
         Diff cached version against current file on disk.
 
+        v0.8.0 audit fix (Issue 6): Improved UX with detailed error messages
+        instead of returning None for various failure cases.
+
         Args:
             doc_id: Document identifier
             cached_version_id: Version to compare (default: latest)
             context_lines: Lines of context
 
         Returns:
-            Unified diff string or None
+            Unified diff string, informative error message, or None only for
+            truly unexpected cases (should be rare after v0.8.0 fixes)
         """
         # Get cached version
         if cached_version_id:
             cached = self.get_version(doc_id, cached_version_id)
+            if not cached:
+                return (
+                    f"[DIFF ERROR] Version {cached_version_id} not found for '{doc_id}'\n"
+                    f"\n"
+                    f"Available versions: {len(self.versions.get(doc_id, []))}\n"
+                    f"Tip: Use get_version_history('{doc_id}') to see available versions"
+                )
         else:
             cached = self.get_latest_version(doc_id)
+            if not cached:
+                return (
+                    f"[DIFF ERROR] No cached versions found for '{doc_id}'\n"
+                    f"\n"
+                    f"The document has no version history. This can happen if:\n"
+                    f"  - The document was never ingested\n"
+                    f"  - Version history was deleted or corrupted\n"
+                    f"\n"
+                    f"Tip: Re-ingest the document with ingest_context()"
+                )
 
-        if not cached or not cached.file_path:
-            return None
+        # Check for file path
+        if not cached.file_path:
+            return (
+                f"[DIFF ERROR] No source file path for '{doc_id}'\n"
+                f"\n"
+                f"The cached version (v{cached.version_id}) has no file_path.\n"
+                f"This happens when documents are ingested with text-only mode.\n"
+                f"\n"
+                f"Tip: Re-ingest with file_path parameter:\n"
+                f'  ingest_context(text=..., file_id="{doc_id}", file_path="/path/to/file")'
+            )
+
+        # Check if cached content exists
+        if not cached.content:
+            return (
+                f"[DIFF ERROR] Cached content is empty for '{doc_id}' v{cached.version_id}\n"
+                f"\n"
+                f"The cached version has no content stored. This may indicate:\n"
+                f"  - Corrupted version history\n"
+                f"  - Storage issue during ingestion\n"
+                f"\n"
+                f"Tip: Delete and re-ingest the document"
+            )
+
+        # Check if file exists on disk
+        if not os.path.exists(cached.file_path):
+            return (
+                f"[DIFF ERROR] Source file not found: {cached.file_path}\n"
+                f"\n"
+                f"The file may have been moved, renamed, or deleted.\n"
+                f"Cached version: v{cached.version_id} (checksum: {cached.checksum[:8]}...)\n"
+                f"\n"
+                f"Options:\n"
+                f"  - Move the file back to the original path\n"
+                f"  - Re-ingest from the new location"
+            )
 
         # Read current file
         try:
             with open(cached.file_path, "r", encoding="utf-8") as f:
                 current_content = f.read()
+        except PermissionError:
+            return (
+                f"[DIFF ERROR] Permission denied: {cached.file_path}\n"
+                f"\n"
+                f"Cannot read the source file due to permission restrictions.\n"
+                f"Check file permissions and try again."
+            )
+        except UnicodeDecodeError as e:
+            return (
+                f"[DIFF ERROR] Encoding error reading: {cached.file_path}\n"
+                f"\n"
+                f"The file contains non-UTF-8 characters: {e}\n"
+                f"The file may be binary or use a different encoding."
+            )
         except Exception as e:
             logger.error(f"Error reading file {cached.file_path}: {e}")
-            return None
+            return (
+                f"[DIFF ERROR] Failed to read: {cached.file_path}\n"
+                f"\n"
+                f"Error: {type(e).__name__}: {e}\n"
+                f"\n"
+                f"Check that the file is accessible and not locked by another process."
+            )
 
         # Generate diff
         diff = difflib.unified_diff(
@@ -322,9 +490,33 @@ class VersionManager:
 
         # Add summary
         if not diff_text:
-            return "✅ No differences - cached version matches current file"
+            return "[OK] No differences - cached version matches current file"
 
         return diff_text
+
+    async def diff_with_current_file_async(
+        self, doc_id: str, cached_version_id: Optional[int] = None, context_lines: int = 3
+    ) -> Optional[str]:
+        """
+        Async wrapper for diff_with_current_file (v0.8.0 audit fix - Issue 3).
+
+        Runs diff_with_current_file() in a thread pool to avoid blocking the event
+        loop during disk I/O operations. Use this from async handlers instead of
+        the synchronous diff_with_current_file().
+
+        Args:
+            doc_id: Document identifier
+            cached_version_id: Version to compare (default: latest)
+            context_lines: Lines of context
+
+        Returns:
+            Unified diff string or None
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            lambda: self.diff_with_current_file(doc_id, cached_version_id, context_lines),
+        )
 
     def get_all_documents(self) -> List[str]:
         """
@@ -339,23 +531,41 @@ class VersionManager:
         """
         Delete all versions of a document (v0.4.2: also clears version counter).
 
+        Thread-safe: Uses internal lock to protect shared state mutations
+        (v0.8.0 audit fix - Issue 3).
+
         Args:
             doc_id: Document identifier
         """
-        if doc_id in self.versions:
-            # Delete from disk
-            version_file = self.storage_dir / f"{doc_id}.json"
-            if version_file.exists():
-                version_file.unlink()
+        # Thread-safe: protect mutations (v0.8.0 audit fix - Issue 3)
+        with self._lock:
+            if doc_id in self.versions:
+                # Delete from disk
+                version_file = self.storage_dir / f"{doc_id}.json"
+                if version_file.exists():
+                    version_file.unlink()
 
-            # Delete from memory
-            del self.versions[doc_id]
+                # Delete from memory
+                del self.versions[doc_id]
 
-            # Clear version counter (v0.4.2)
-            if doc_id in self._version_counters:
-                del self._version_counters[doc_id]
+                # Clear version counter (v0.4.2)
+                if doc_id in self._version_counters:
+                    del self._version_counters[doc_id]
 
-            logger.info(f"Deleted all versions for {doc_id}")
+                logger.info(f"Deleted all versions for {doc_id}")
+
+    async def delete_versions_async(self, doc_id: str) -> None:
+        """
+        Async wrapper for delete_versions (v0.8.0 audit fix - Issue 3).
+
+        Runs delete_versions() in a thread pool to avoid blocking the event
+        loop during disk I/O operations. Use this from async handlers.
+
+        Args:
+            doc_id: Document identifier
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(self._executor, lambda: self.delete_versions(doc_id))
 
     def prune_old_versions(self, doc_id: Optional[str] = None) -> Dict[str, int]:
         """

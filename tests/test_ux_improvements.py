@@ -293,8 +293,8 @@ Many potential uses exist.
 
         assert "COMPRESSION ESTIMATE" in formatted
         assert "Original tokens" in formatted
-        assert "Best Case" in formatted
-        assert "Worst Case" in formatted
+        assert "BEST CASE" in formatted
+        assert "WORST CASE" in formatted
 
     def test_functional_interface(self):
         """Convenience function should work"""

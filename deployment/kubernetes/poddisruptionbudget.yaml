@@ -1,0 +1,71 @@
+# PodDisruptionBudget for Token Saver 5000
+# Ensures high availability during voluntary disruptions
+#
+# What this protects against:
+# - Cluster upgrades
+# - Node drains for maintenance
+# - kubectl delete pod (voluntary)
+# - Autoscaler scale-down operations
+#
+# What this does NOT protect against:
+# - Node failures (involuntary)
+# - OOMKilled pods
+# - Application crashes
+#
+# Configuration (v0.7.0):
+# - minAvailable: 1 ensures at least one pod is always running
+# - With HPA min=2, this allows one pod to be unavailable during updates
+#
+# Deploy with: kubectl apply -f poddisruptionbudget.yaml
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: token-saver-5000-pdb
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: availability
+    version: v0.7.0
+  annotations:
+    description: "High availability policy for Token Saver 5000"
+    purpose: "Ensure continuous service during cluster operations"
+spec:
+  # Minimum number of pods that must be available
+  # Set to 1 to allow rolling updates while maintaining service
+  # For production with higher traffic, consider minAvailable: 2
+  minAvailable: 1
+
+  # Alternative: maxUnavailable (use one or the other, not both)
+  # maxUnavailable: 1  # Allow at most 1 pod to be unavailable
+
+  # Selector must match the pods managed by the Deployment
+  selector:
+    matchLabels:
+      app: token-saver-5000
+
+  # UnhealthyPodEvictionPolicy (Kubernetes 1.26+)
+  # Controls eviction of unhealthy pods
+  # Options:
+  # - IfHealthyBudget: Only evict unhealthy pods if healthy budget satisfied (default)
+  # - AlwaysAllow: Always allow eviction of unhealthy pods
+  # unhealthyPodEvictionPolicy: IfHealthyBudget
+
+---
+# Alternative: Percentage-based PDB for dynamic scaling
+# Use when replica count varies significantly with HPA
+
+# apiVersion: policy/v1
+# kind: PodDisruptionBudget
+# metadata:
+#   name: token-saver-5000-pdb-percentage
+#   namespace: token-saver-5000
+#   labels:
+#     app: token-saver-5000
+# spec:
+#   # Allow up to 50% of pods to be unavailable
+#   # Good for larger deployments (5+ replicas)
+#   maxUnavailable: 50%
+#   selector:
+#     matchLabels:
+#       app: token-saver-5000

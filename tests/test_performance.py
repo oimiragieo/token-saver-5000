@@ -67,7 +67,6 @@ class TestThroughputPerformance:
         compressor.file_metadata.clear()
 
         # Batch processing
-        from src.batch_manager import BatchDocument
 
         batch_start = time.perf_counter()
         manager = BatchCompressionManager(compressor)

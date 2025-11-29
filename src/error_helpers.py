@@ -34,7 +34,7 @@ class SmartError:
         >>> valid_ids = ["quantum_paper", "neural_nets", "blockchain_intro"]
         >>> SmartError.file_id_not_found("quantum_papper", valid_ids)
         ValueError: file_id 'quantum_papper' not found
-        💡 Did you mean 'quantum_paper'?
+        Tip: Did you mean 'quantum_paper'?
            Available: quantum_paper, neural_nets, blockchain_intro
     """
 
@@ -60,7 +60,7 @@ class SmartError:
         Example:
             >>> raise SmartError.file_id_not_found("quntum_paper", ["quantum_paper"])
             ValueError: file_id 'quntum_paper' not found
-            💡 Did you mean 'quantum_paper'?
+            Tip: Did you mean 'quantum_paper'?
         """
         # Get fuzzy matches
         matches = difflib.get_close_matches(
@@ -72,10 +72,10 @@ class SmartError:
 
         if matches:
             if len(matches) == 1:
-                msg += f"\n💡 Did you mean '{matches[0]}'?"
+                msg += f"\nTip: Did you mean '{matches[0]}'?"
             else:
                 suggestions = "', '".join(matches)
-                msg += f"\n💡 Did you mean one of: '{suggestions}'?"
+                msg += f"\nTip: Did you mean one of: '{suggestions}'?"
 
         # Always show available options (limit to 5 for brevity)
         if len(available_ids) <= 5:
@@ -115,7 +115,7 @@ class SmartError:
             ...     "quantum_paper"
             ... )
             ValueError: node_id 'quantum_paper_n99' not found in file 'quantum_paper'
-            💡 Did you mean 'quantum_paper_n1'?
+            Tip: Did you mean 'quantum_paper_n1'?
         """
         matches = difflib.get_close_matches(
             invalid_id, available_ids, n=n_suggestions, cutoff=cutoff
@@ -125,10 +125,10 @@ class SmartError:
 
         if matches:
             if len(matches) == 1:
-                msg += f"\n💡 Did you mean '{matches[0]}'?"
+                msg += f"\nTip: Did you mean '{matches[0]}'?"
             else:
                 suggestions = "', '".join(matches)
-                msg += f"\n💡 Did you mean one of: '{suggestions}'?"
+                msg += f"\nTip: Did you mean one of: '{suggestions}'?"
 
         # Show node count and format example
         msg += f"\n   File '{file_id}' has {len(available_ids)} nodes"
@@ -165,7 +165,7 @@ class SmartError:
             ...     "fidelity_level"
             ... )
             ValueError: Invalid fidelity_level: 'DETALED'
-            💡 Did you mean 'DETAILED'?
+            Tip: Did you mean 'DETAILED'?
         """
         matches = difflib.get_close_matches(
             invalid_value, valid_values, n=n_suggestions, cutoff=cutoff
@@ -175,10 +175,10 @@ class SmartError:
 
         if matches:
             if len(matches) == 1:
-                msg += f"\n💡 Did you mean '{matches[0]}'?"
+                msg += f"\nTip: Did you mean '{matches[0]}'?"
             else:
                 suggestions = "', '".join(matches)
-                msg += f"\n💡 Did you mean one of: '{suggestions}'?"
+                msg += f"\nTip: Did you mean one of: '{suggestions}'?"
 
         # Show valid options
         valid_str = ", ".join(valid_values)
@@ -213,10 +213,10 @@ class SmartError:
             ...     "between 1-1000"
             ... )
             ValueError: Invalid num_nodes: -5
-            💡 Expected: positive integer (between 1-1000)
+            Tip: Expected: positive integer (between 1-1000)
         """
         msg = f"Invalid {param_name}: {param_value}"
-        msg += f"\n💡 Expected: {expected_type}"
+        msg += f"\nTip: Expected: {expected_type}"
 
         if constraints:
             msg += f" ({constraints})"
@@ -238,10 +238,10 @@ class SmartError:
         Example:
             >>> raise SmartError.missing_required_field("file_id", "ingest_context")
             ValueError: Missing required field 'file_id' in ingest_context
-            💡 Tip: This field is required and cannot be omitted
+            Tip: Tip: This field is required and cannot be omitted
         """
         msg = f"Missing required field '{field_name}' in {parent_object}"
-        msg += "\n💡 Tip: This field is required and cannot be omitted"
+        msg += "\nTip: Tip: This field is required and cannot be omitted"
         return ValueError(msg)
 
 

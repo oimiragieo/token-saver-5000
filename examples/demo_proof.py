@@ -215,12 +215,14 @@ print_section("TEST 5: VERSION HISTORY (Git-like Tracking)")
 
 version_mgr = VersionManager()
 
-# Add multiple versions
-version_mgr.add_version("doc_v1", "Version 1 content", "checksum1", "/test.txt")
+# Add multiple versions - use absolute temp path (v0.7.0 security requirement)
+import tempfile
+test_path = os.path.abspath(os.path.join(tempfile.gettempdir(), "test_versions.txt"))
+version_mgr.add_version("doc_v1", "Version 1 content", "checksum1", test_path)
 time.sleep(0.1)
-version_mgr.add_version("doc_v1", "Version 2 content", "checksum2", "/test.txt")
+version_mgr.add_version("doc_v1", "Version 2 content", "checksum2", test_path)
 time.sleep(0.1)
-version_mgr.add_version("doc_v1", "Version 3 content", "checksum3", "/test.txt")
+version_mgr.add_version("doc_v1", "Version 3 content", "checksum3", test_path)
 
 history = version_mgr.get_version_history("doc_v1")
 

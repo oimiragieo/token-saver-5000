@@ -249,7 +249,7 @@ class ContextWindowAdapter:
 
         # Add diagnostics to skeleton
         header = f"""
-🔧 CONTEXT WINDOW ADAPTATION
+[CONTEXT WINDOW ADAPTATION]
 Available tokens: {available_tokens:,} / {max_tokens:,} ({diagnostics['context_availability']:.1%})
 Document complexity: {diagnostics['complexity']:.3f}
 Selected skeleton ratio: {skeleton_ratio:.1%} (level {diagnostics['selected_level']})
@@ -352,13 +352,13 @@ class MultiLevelSemanticEncoder:
             # Mark level
             if node_id in levels["main"]:
                 level = "MAIN"
-                marker = "⭐⭐"
+                marker = "[MAIN]"
             elif node_id in levels["auxiliary"]:
                 level = "AUX"
-                marker = "⭐"
+                marker = "[AUX]"
             else:
                 level = "DETAIL"
-                marker = "📦"
+                marker = "[DETAIL]"
 
             summary = self.compressor._generate_summary(node.text, max_length=100)
             skeleton_lines.append(

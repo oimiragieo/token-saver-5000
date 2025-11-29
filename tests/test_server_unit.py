@@ -999,7 +999,7 @@ class TestCreateProgressBar:
             bar = server._create_progress_bar(0.0)
 
             assert "░" in bar  # Empty bar
-            assert "✅" in bar  # Green status
+            assert "[OK]" in bar  # Green status
 
     @patch("src.server.SemanticCompressor")
     @patch("src.server.PersistenceManager")
@@ -1015,7 +1015,7 @@ class TestCreateProgressBar:
 
             assert "█" in bar  # Filled portion
             assert "░" in bar  # Empty portion
-            assert "✅" in bar  # Green status
+            assert "[OK]" in bar  # Green status
             assert "50%" in bar
 
     @patch("src.server.SemanticCompressor")
@@ -1031,7 +1031,7 @@ class TestCreateProgressBar:
             bar = server._create_progress_bar(85.0)
 
             assert "█" in bar
-            assert "⚠️" in bar  # Warning emoji
+            assert "[WARN]" in bar  # Warning emoji
             assert "85%" in bar
 
     @patch("src.server.SemanticCompressor")
@@ -1047,7 +1047,7 @@ class TestCreateProgressBar:
             bar = server._create_progress_bar(100.0)
 
             assert "█" in bar
-            assert "🔴 FULL" in bar  # Full indicator
+            assert "[CRIT] FULL" in bar  # Full indicator
 
 
 # Run tests if called directly

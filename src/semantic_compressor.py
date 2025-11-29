@@ -7,9 +7,12 @@ Implements the core encoding/decoding logic inspired by:
 """
 
 import asyncio
+import hashlib
 import logging
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from os import cpu_count
 from typing import Dict, List, Optional
@@ -108,6 +111,23 @@ class SemanticCompressor:
         # Cache key: (doc_id, graph_hash) -> pagerank scores
         self._pagerank_cache: Dict[str, Dict[str, float]] = {}
 
+        # Concurrency protection (v0.8.0 audit fix - CORRECTED)
+        #
+        # TWO SEPARATE LOCK MECHANISMS:
+        #
+        # 1. SYNC PATH (ingest_file): Uses threading.Lock
+        #    - asyncio.run() creates a NEW event loop each time
+        #    - asyncio.Lock cannot protect across different event loops
+        #    - threading.Lock provides correct protection for sync callers
+        #
+        # 2. ASYNC PATH (ingest_file_async): Uses asyncio.Lock
+        #    - All async calls share the MCP server's event loop
+        #    - asyncio.Lock works correctly within a single event loop
+        #
+        self._sync_lock = threading.Lock()  # For sync ingest_file() calls
+        self._async_lock = asyncio.Lock()  # For async ingest_file_async() calls
+        self._doc_locks: Dict[str, asyncio.Lock] = {}  # Per-doc locks (async path only)
+
         # Token counter with graceful fallback
         try:
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -129,16 +149,67 @@ class SemanticCompressor:
         # Fallback: approximate as 1.3 tokens per word
         return int(len(text.split()) * 1.3)
 
+    def _compute_graph_hash(self, graph: nx.Graph, doc_id: str) -> str:
+        """
+        Compute deterministic hash of graph structure including edge weights (v0.8.0 audit fix).
+
+        Uses hashlib.sha1 instead of Python's hash() because:
+        - Python's hash() is randomized per process (non-deterministic)
+        - hash() doesn't include edge weights, causing stale cache on re-ingest
+
+        Args:
+            graph: NetworkX graph
+            doc_id: Document identifier
+
+        Returns:
+            16-character hex hash string
+        """
+        # Include edge weights in hash for content-aware invalidation
+        edge_data = sorted(
+            (u, v, round(graph[u][v].get('weight', 1.0), 4))
+            for u, v in graph.edges()
+        )
+        content = f"{doc_id}:{edge_data}:{sorted(graph.nodes)}"
+        return hashlib.sha1(content.encode()).hexdigest()[:16]
+
+    def _clear_cache_for_doc(self, file_id: str) -> int:
+        """
+        Clear all cached PageRank entries for a document (v0.8.0 audit fix backstop).
+
+        Called on ingest/refresh/delete as a backstop to ensure cache invalidation.
+
+        Args:
+            file_id: Document identifier
+
+        Returns:
+            Number of cache entries removed
+
+        Note (v0.8.0 audit fix):
+            Uses exact prefix matching (pagerank_{file_id}_) not substring matching.
+            This prevents "doc" from clearing caches for "doc2", "product_doc", etc.
+        """
+        # v0.8.0 audit fix: Use exact prefix matching, not substring
+        # Cache keys are formatted as: pagerank_{doc_id}_{graph_hash}
+        # Old bug: "doc" in k would match "pagerank_doc2_hash" (substring of doc2)
+        # Fix: k.startswith("pagerank_doc_") only matches exact doc_id prefix
+        cache_prefix = f"pagerank_{file_id}_"
+        keys_to_remove = [k for k in self._pagerank_cache if k.startswith(cache_prefix)]
+        for k in keys_to_remove:
+            del self._pagerank_cache[k]
+        if keys_to_remove:
+            logger.debug(f"Cleared {len(keys_to_remove)} PageRank cache entries for {file_id}")
+        return len(keys_to_remove)
+
     def _get_cached_pagerank(self, graph: nx.Graph, doc_id: str) -> Dict[str, float]:
         """
-        Get PageRank scores with caching to avoid recomputation (v0.4.4).
+        Get PageRank scores with caching to avoid recomputation (v0.4.4, v0.8.0 audit fix).
 
         PageRank is an O(K×(N+M)) operation where K=max_iter (default 100),
         N=nodes, M=edges. For documents with stable graphs, we cache results
         to achieve O(1) lookup on subsequent calls.
 
         Cache key: (doc_id, graph_hash)
-        Invalidation: Automatic via graph structure hash
+        Invalidation: Automatic via graph structure hash including edge weights
 
         Args:
             graph: NetworkX graph to compute PageRank on
@@ -152,10 +223,8 @@ class SemanticCompressor:
             - Cached calls: O(1) lookup (~500× faster)
             - Memory: ~8 bytes per node per document
         """
-        # Generate cache key from graph structure
-        # Hash based on: doc_id, node count, edge count, node IDs (sorted)
-        graph_hash = hash((doc_id, len(graph.nodes), len(graph.edges), tuple(sorted(graph.nodes))))
-
+        # Generate deterministic cache key including edge weights (v0.8.0 audit fix)
+        graph_hash = self._compute_graph_hash(graph, doc_id)
         cache_key = f"pagerank_{doc_id}_{graph_hash}"
 
         # Check cache
@@ -291,6 +360,12 @@ class SemanticCompressor:
         """
         Synchronous wrapper for backward compatibility with existing tests.
         For async MCP server use, call ingest_file_async() instead.
+
+        CONCURRENCY NOTE (v0.8.0 audit fix - CORRECTED):
+        - Uses threading.Lock to protect the entire operation
+        - asyncio.run() creates a NEW event loop each call
+        - asyncio.Lock CANNOT protect across different event loops
+        - threading.Lock provides correct protection for sync callers
         """
         loop = None
         try:
@@ -305,11 +380,15 @@ class SemanticCompressor:
                 "Use await ingest_file_async() instead."
             )
 
-        # Run async version in new event loop
-        return asyncio.run(self._ingest_file_impl(text, file_id, metadata))
+        # Use threading.Lock to protect the entire sync operation
+        # This is necessary because asyncio.run() creates a NEW event loop each time,
+        # making asyncio.Lock useless for cross-call protection
+        with self._sync_lock:
+            return asyncio.run(self._ingest_file_impl(text, file_id, metadata, use_async_lock=False))
 
     async def _ingest_file_impl(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None
+        self, text: str, file_id: str, metadata: Optional[Dict] = None,
+        use_async_lock: bool = True
     ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
@@ -323,6 +402,10 @@ class SemanticCompressor:
             text: Raw document text
             file_id: Unique identifier for this document
             metadata: Optional metadata (author, date, etc.)
+            use_async_lock: Whether to use asyncio.Lock for concurrency protection.
+                           Set to False when called from sync path (already protected
+                           by threading.Lock in ingest_file()). Set to True for async
+                           path (ingest_file_async()) where asyncio.Lock is appropriate.
 
         Returns:
             SkeletonResponse with compressed view
@@ -333,73 +416,100 @@ class SemanticCompressor:
         if not file_id or not file_id.strip():
             raise ValueError("file_id cannot be empty or whitespace-only")
 
-        logger.info(f"Ingesting file: {file_id}")
+        # Concurrency protection (v0.8.0 audit fix - CORRECTED)
+        #
+        # use_async_lock=True (async path): Uses asyncio.Lock
+        #   - All async calls share the MCP server's event loop
+        #   - asyncio.Lock works correctly within a single event loop
+        #   - Per-document locks reduce contention during concurrent ingests
+        #
+        # use_async_lock=False (sync path): No async lock needed
+        #   - Caller (ingest_file) already holds threading.Lock
+        #   - asyncio.run() creates new event loop, so asyncio.Lock would be useless anyway
+        #
+        # AsyncExitStack allows conditional context manager entry without code duplication
+        #
+        async with AsyncExitStack() as stack:
+            if use_async_lock:
+                # Get or create per-document lock for async path
+                async with self._async_lock:  # Brief global lock to get/create doc lock
+                    if file_id not in self._doc_locks:
+                        self._doc_locks[file_id] = asyncio.Lock()
+                    doc_lock = self._doc_locks[file_id]
+                # Enter per-document lock (will be exited automatically when stack closes)
+                await stack.enter_async_context(doc_lock)
 
-        # Count original tokens
-        total_tokens = self._count_tokens(text)
-        logger.info(f"  Original tokens: {total_tokens}")
+            logger.info(f"Ingesting file: {file_id}")
 
-        # 1. Chunk the text semantically
-        raw_chunks = self._chunk_text(text)
-        logger.info(f"  Created {len(raw_chunks)} semantic chunks")
+            # Clear stale PageRank cache entries for this document (v0.8.0 audit fix)
+            # This is a backstop to ensure cache consistency when re-ingesting
+            self._clear_cache_for_doc(file_id)
 
-        # 2. Generate embeddings (async to prevent MCP timeout)
-        logger.info("  Generating embeddings...")
-        embeddings = await self._encode_async(raw_chunks)
+            # Count original tokens
+            total_tokens = self._count_tokens(text)
+            logger.info(f"  Original tokens: {total_tokens}")
 
-        # 3. Build similarity graph (preserves global structure)
-        logger.info("  Building semantic graph...")
-        graph = nx.Graph()
-        similarity_matrix = cosine_similarity(embeddings)
+            # 1. Chunk the text semantically
+            raw_chunks = self._chunk_text(text)
+            logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 
-        for i, chunk in enumerate(raw_chunks):
-            # Create unique node ID
-            node_id = f"{file_id}_n{i}"
+            # 2. Generate embeddings (async to prevent MCP timeout)
+            logger.info("  Generating embeddings...")
+            embeddings = await self._encode_async(raw_chunks)
 
-            # Create semantic node
-            node = SemanticNode(
-                node_id=node_id,
-                text=chunk,
-                embedding=embeddings[i],
-                metadata={
-                    "position": i,
-                    "tokens": self._count_tokens(chunk),
-                    "entities": self._extract_key_entities(chunk),
-                },
-            )
+            # 3. Build similarity graph (preserves global structure)
+            logger.info("  Building semantic graph...")
+            graph = nx.Graph()
+            similarity_matrix = cosine_similarity(embeddings)
 
-            self.chunks[node_id] = node
-            graph.add_node(node_id, **node.metadata)
+            for i, chunk in enumerate(raw_chunks):
+                # Create unique node ID
+                node_id = f"{file_id}_n{i}"
 
-            # Create edges based on semantic similarity
-            for j in range(i + 1, len(raw_chunks)):
-                similarity = similarity_matrix[i][j]
-                if similarity > self.similarity_threshold:
-                    edge_id = f"{file_id}_n{j}"
-                    graph.add_edge(node_id, edge_id, weight=float(similarity))
+                # Create semantic node
+                node = SemanticNode(
+                    node_id=node_id,
+                    text=chunk,
+                    embedding=embeddings[i],
+                    metadata={
+                        "position": i,
+                        "tokens": self._count_tokens(chunk),
+                        "entities": self._extract_key_entities(chunk),
+                    },
+                )
 
-        # 4. Calculate importance via PageRank (rate allocation)
-        logger.info("  Calculating importance scores (PageRank)...")
-        if len(graph.nodes) > 0:
-            # Use cached PageRank for 500× speedup on repeated reads (v0.4.4)
-            pagerank = self._get_cached_pagerank(graph, file_id)
+                self.chunks[node_id] = node
+                graph.add_node(node_id, **node.metadata)
 
-            # Update importance scores
-            for node_id, score in pagerank.items():
-                if node_id in self.chunks:
-                    self.chunks[node_id].importance = score
+                # Create edges based on semantic similarity
+                for j in range(i + 1, len(raw_chunks)):
+                    similarity = similarity_matrix[i][j]
+                    if similarity > self.similarity_threshold:
+                        edge_id = f"{file_id}_n{j}"
+                        graph.add_edge(node_id, edge_id, weight=float(similarity))
 
-        # Store graph
-        self.graphs[file_id] = graph
-        self.file_metadata[file_id] = metadata or {}
+            # 4. Calculate importance via PageRank (rate allocation)
+            logger.info("  Calculating importance scores (PageRank)...")
+            if len(graph.nodes) > 0:
+                # Use cached PageRank for 500× speedup on repeated reads (v0.4.4)
+                pagerank = self._get_cached_pagerank(graph, file_id)
 
-        # 5. Generate skeleton
-        skeleton_response = self._generate_skeleton(file_id)
+                # Update importance scores
+                for node_id, score in pagerank.items():
+                    if node_id in self.chunks:
+                        self.chunks[node_id].importance = score
 
-        logger.info(f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
-        logger.info(f"  Ratio: {skeleton_response.compression_ratio:.1f}x")
+            # Store graph
+            self.graphs[file_id] = graph
+            self.file_metadata[file_id] = metadata or {}
 
-        return skeleton_response
+            # 5. Generate skeleton
+            skeleton_response = self._generate_skeleton(file_id)
+
+            logger.info(f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens")
+            logger.info(f"  Ratio: {skeleton_response.compression_ratio:.1f}x")
+
+            return skeleton_response
 
     def _generate_skeleton(self, file_id: str) -> SkeletonResponse:
         """
@@ -442,7 +552,7 @@ class SemanticCompressor:
                 summary = self._generate_summary(node.text, max_length=150)
                 entities = ", ".join(node.metadata["entities"][:3])
 
-                line = f"[{node_id}] ⭐ ANCHOR (importance: {node.importance:.3f})\n"
+                line = f"[{node_id}] [ANCHOR] (importance: {node.importance:.3f})\n"
                 line += f"  Summary: {summary}\n"
                 if entities:
                     line += f"  Key entities: {entities}\n"
@@ -453,7 +563,7 @@ class SemanticCompressor:
             else:
                 # Low-importance: Just reference
                 summary = self._generate_summary(node.text, max_length=50)
-                line = f"[{node_id}] 📦 Detail hidden (use modulate_region to expand)\n"
+                line = f"[{node_id}] [HIDDEN] Detail hidden (use modulate_region to expand)\n"
 
                 skeleton_lines.append(line)
                 node_map[node_id] = f"Hidden: {summary[:30]}..."
@@ -509,7 +619,7 @@ class SemanticCompressor:
 
         for node_id in node_ids:
             if node_id not in self.chunks:
-                output_lines.append(f"[{node_id}] ⚠️  Node not found\n")
+                output_lines.append(f"[{node_id}] [WARN] Node not found\n")
                 continue
 
             node = self.chunks[node_id]

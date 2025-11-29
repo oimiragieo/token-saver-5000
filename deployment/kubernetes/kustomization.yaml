@@ -26,9 +26,15 @@ resources:
   - configmap.yaml
   - secret.yaml
 
+  # Network security (v0.7.0 - apply before pods start)
+  - networkpolicy.yaml
+
   # Core resources (depend on ConfigMap/Secret)
   - deployment.yaml
   - service.yaml
+
+  # High availability (v0.7.0 - depends on Deployment)
+  - poddisruptionbudget.yaml
 
   # Autoscaling (depends on Deployment)
   - hpa.yaml

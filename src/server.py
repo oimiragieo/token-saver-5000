@@ -339,7 +339,7 @@ class SemanticModulatorServer:
                 raise ValueError(
                     f"Document '{file_id}' not found. "
                     f"Available documents: {available if available else '(none)'}\n"
-                    f"💡 Tip: Use ingest_context() to add documents first."
+                    f"Tip: Use ingest_context() to add documents first."
                 )
 
     def _validate_node_ids(self, node_ids: List[str]) -> None:
@@ -355,7 +355,7 @@ class SemanticModulatorServer:
 
             raise ValueError(
                 f"Invalid node IDs: {invalid_nodes[:3]}\n"
-                f"💡 Tip: Use read_skeleton('{file_id}') to see valid node IDs.\n"
+                f"Tip: Use read_skeleton('{file_id}') to see valid node IDs.\n"
                 f"   Valid nodes for '{file_id}': {valid_nodes[:5]}..."
                 if valid_nodes
                 else f"   No nodes found for '{file_id}'. Document may not be ingested."
@@ -369,13 +369,13 @@ class SemanticModulatorServer:
         if available_tokens == 0:
             raise ValueError(
                 "available_tokens is 0 - no space for content!\n"
-                "💡 Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
+                "Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
             )
 
         if max_tokens is not None and available_tokens > max_tokens:
             raise ValueError(
                 f"available_tokens ({available_tokens}) exceeds max_tokens ({max_tokens})\n"
-                "💡 Tip: available_tokens should be ≤ max_tokens"
+                "Tip: available_tokens should be ≤ max_tokens"
             )
 
     def _create_progress_bar(self, percentage: float, width: int = 40) -> str:
@@ -385,13 +385,13 @@ class SemanticModulatorServer:
 
         if percentage >= 100:
             bar = "█" * width
-            return f"[{bar}] 🔴 FULL"
+            return f"[{bar}] [CRIT] FULL"
         elif percentage >= 80:
             bar = "█" * filled + "░" * empty
-            return f"[{bar}] ⚠️  {percentage:.0f}%"
+            return f"[{bar}] [WARN] {percentage:.0f}%"
         else:
             bar = "█" * filled + "░" * empty
-            return f"[{bar}] ✅ {percentage:.0f}%"
+            return f"[{bar}] [OK] {percentage:.0f}%"
 
     async def __aenter__(self):
         """

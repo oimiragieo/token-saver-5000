@@ -247,16 +247,27 @@ class FileSyncManager:
             "checksum": cached_checksum,
         }
 
-    def get_file_diff(self, doc_id: str, context_lines: int = 3) -> Optional[str]:
+    def get_file_diff(
+        self, doc_id: str, context_lines: int = 3, version_manager=None
+    ) -> Optional[str]:
         """
         Generate a diff between cached content and current file.
+
+        **v0.8.0 Update (Issue 6 fix):**
+        - Now properly integrates with VersionManager for cached content retrieval
+        - Pass version_manager parameter to enable full diff functionality
+        - Without version_manager, returns deprecation notice
 
         Args:
             doc_id: Document ID
             context_lines: Number of context lines in diff
+            version_manager: Optional VersionManager instance for retrieving cached content
 
         Returns:
             Unified diff string, or None if no diff/error
+
+        Example:
+            >>> diff = sync_manager.get_file_diff("my_doc", version_manager=version_manager)
         """
         # Thread-safe: lock to read metadata
         with self._lock:
@@ -271,16 +282,25 @@ class FileSyncManager:
             return None
 
         try:
-            # We don't have the original content stored!
-            # This is a limitation - we'd need to store it or retrieve from compressor
-            # For now, return a message indicating we need the cached content
+            # v0.8.0: Use VersionManager to get cached content (Issue 6 fix)
+            if version_manager is not None:
+                # Delegate to version_manager which has full content stored
+                diff = version_manager.diff_with_current_file(
+                    doc_id, context_lines=context_lines
+                )
+                return diff
+
+            # Legacy path: No version_manager provided
+            # Return deprecation notice with instructions
             return (
-                "⚠️  Diff requires original cached content.\n"
-                "To implement full diff:\n"
-                "1. Store original content in metadata, OR\n"
-                "2. Decompress from semantic graph (RAW fidelity), OR\n"
-                "3. Add version history feature\n\n"
-                "Current workaround: Re-ingest file to update cache."
+                "[WARN]  Diff requires VersionManager integration.\n\n"
+                "To generate diffs, use one of these approaches:\n\n"
+                "1. Pass version_manager parameter:\n"
+                f"   sync_manager.get_file_diff('{doc_id}', version_manager=vm)\n\n"
+                "2. Use version_manager directly:\n"
+                f"   version_manager.diff_with_current_file('{doc_id}')\n\n"
+                "3. Use the MCP tool:\n"
+                f"   diff_cached_file(file_id='{doc_id}')\n"
             )
 
         except Exception as e:

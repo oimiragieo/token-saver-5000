@@ -2,7 +2,7 @@
 
 **Semantic compression for AI interactions. Reduce tokens by 80-95% while preserving meaning.**
 
-[![Tests](https://img.shields.io/badge/tests-427%20passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-59%25-yellow)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1063%20passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-75%25-green)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
 Token Saver 5000 is an MCP server implementing research-backed semantic compression for AI interactions. It achieves proven 80-95% token reduction through graph-based semantic analysis.
 
@@ -46,11 +46,18 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed installation.
 - Semantic deduplication (0.85 threshold)
 
 **Infrastructure**
-- 30 MCP tools via stdio transport
+- 35 MCP tools via stdio transport
 - File sync with staleness detection
 - Version management with diffs
 - Resource limits (100MB/doc, 1GB total)
-- Local processing (no external APIs)
+- Kubernetes-ready with health endpoints
+
+**Privacy & Security**
+- All processing runs locally - no external API calls
+- Your documents never leave your machine
+- Embedding models run on-device (sentence-transformers)
+- No telemetry, tracking, or data collection
+- Path traversal protection (CWE-22 hardened)
 
 ## Usage
 
@@ -105,7 +112,7 @@ docker-compose up -d
 }
 ```
 
-See [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) for all 30 tools.
+See [MCP_TOOLS_GUIDE.md](MCP_TOOLS_GUIDE.md) for all 35 tools.
 
 ## Research
 
@@ -133,7 +140,7 @@ pytest tests/test_code_compressor.py -v         # Code compression (47 tests)
 pytest tests/ --cov=src --cov-report=term
 ```
 
-**427 comprehensive tests** with 59% overall coverage (99% for core modules).
+**1062 comprehensive tests** with 76% overall coverage (99% for core modules).
 
 ## Architecture
 
@@ -196,6 +203,6 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
-**Current:** v0.4.3
+**Current:** v0.8.0
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.

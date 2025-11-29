@@ -319,6 +319,12 @@ class ACEGenerator:
     def __init__(self, embedding_manager: Optional[EmbeddingManager] = None):
         self.embedding_manager = embedding_manager or EmbeddingManager()
         self.text_model = self.embedding_manager.get_text_embedder()
+        # v0.8.0 audit: Log simulation mode notice
+        logger.info(
+            "ACEGenerator initialized in SIMULATION MODE - "
+            "reasoning is templated, not LLM-generated. "
+            "See _generate_step_reasoning() for production integration."
+        )
 
     def generate_trajectory(
         self,
@@ -425,7 +431,12 @@ class ACEGenerator:
                 f"(confidence: {bullet.confidence:.2f})"
             )
 
-        # Note: In production, this would be replaced with LLM call
+        # SIMULATION MODE: In production, this would be replaced with LLM call
+        # Log warning to clarify this is not real LLM reasoning (v0.8.0 audit fix)
+        logger.debug(
+            "[ACE SIMULATION MODE] Generating templated reasoning - "
+            "not invoking LLM. For production use, implement LLM integration."
+        )
         reasoning_parts.append(
             f"\nBased on these guidelines, approaching the task: {task[:100]}..."
         )

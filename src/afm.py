@@ -26,6 +26,7 @@ from typing import List, Tuple, Dict, Optional, Any
 from difflib import SequenceMatcher
 import time
 import math
+import threading
 
 import numpy as np
 import tiktoken
@@ -631,6 +632,9 @@ class FocusManager:
         self.messages: List[Message] = []
         self.turn_counter = 0
 
+        # Thread safety lock for concurrent access to state
+        self._lock = threading.Lock()
+
         logger.info(f"FocusManager initialized with config: {self.config}")
 
     def add_message(self, role: str, content: str, metadata: Optional[Dict] = None) -> Message:
@@ -644,29 +648,32 @@ class FocusManager:
 
         Returns:
             Created Message object
+
+        Thread-safe: Uses internal lock to protect state mutations.
         """
-        # Validate inputs
+        # Validate inputs (outside lock - no state access)
         if not content or not content.strip():
             raise ValueError("Message content cannot be empty or whitespace-only")
         if role not in ["user", "assistant", "system"]:
             raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
 
-        msg = Message(
-            role=role,
-            content=content,
-            turn_index=self.turn_counter,
-            message_id=f"{role}_{self.turn_counter}",
-        )
+        with self._lock:
+            msg = Message(
+                role=role,
+                content=content,
+                turn_index=self.turn_counter,
+                message_id=f"{role}_{self.turn_counter}",
+            )
 
-        # Classify importance (done eagerly)
-        msg.importance = self.importance_classifier.classify(msg)
+            # Classify importance (done eagerly)
+            msg.importance = self.importance_classifier.classify(msg)
 
-        self.messages.append(msg)
-        self.turn_counter += 1
+            self.messages.append(msg)
+            self.turn_counter += 1
 
-        logger.debug(f"Added message {msg.message_id}: {msg.importance.value}")
+            logger.debug(f"Added message {msg.message_id}: {msg.importance.value}")
 
-        return msg
+            return msg
 
     def _embed_message(self, message: Message) -> np.ndarray:
         """
@@ -1019,38 +1026,43 @@ class FocusManager:
             (context_messages, stats)
             context_messages: List of (role, content) tuples ready for LLM
             stats: PackingStats with compression metrics
+
+        Thread-safe: Uses internal lock to protect state access.
         """
-        # Validate budget
+        # Validate budget (outside lock - no state access)
         if budget_tokens <= 0:
             raise ValueError("Token budget must be positive")
 
         logger.info(f"Building context for query (budget: {budget_tokens} tokens)")
 
-        # Embed current query
+        # Embed current query (outside lock - no state mutation)
         query_embedding = self.embedder.encode([current_query])[0]
 
-        # Score all messages
-        current_turn = self.turn_counter
-        messages_with_scores = []
+        with self._lock:
+            # Score all messages
+            current_turn = self.turn_counter
+            messages_with_scores = []
 
-        for message in self.messages:
-            score = self._calculate_relevance_score(message, query_embedding, current_turn)
-            message.relevance_score = score
+            for message in self.messages:
+                score = self._calculate_relevance_score(message, query_embedding, current_turn)
+                message.relevance_score = score
 
-            # Assign intended fidelity
-            message.intended_fidelity = self._assign_intended_fidelity(message)
+                # Assign intended fidelity
+                message.intended_fidelity = self._assign_intended_fidelity(message)
 
-            messages_with_scores.append((message, score))
+                messages_with_scores.append((message, score))
 
-            logger.debug(
-                f"Message {message.message_id}: "
-                f"score={score:.3f}, "
-                f"importance={message.importance.value}, "
-                f"fidelity={message.intended_fidelity.value}"
+                logger.debug(
+                    f"Message {message.message_id}: "
+                    f"score={score:.3f}, "
+                    f"importance={message.importance.value}, "
+                    f"fidelity={message.intended_fidelity.value}"
+                )
+
+            # Pack messages under budget
+            context, stats = self._pack_messages(
+                messages_with_scores, budget_tokens, system_preamble
             )
-
-        # Pack messages under budget
-        context, stats = self._pack_messages(messages_with_scores, budget_tokens, system_preamble)
 
         logger.info(
             f"Context built: {stats.total_messages} messages → "
@@ -1063,23 +1075,33 @@ class FocusManager:
         return context, stats
 
     def clear_history(self):
-        """Clear all dialogue history"""
-        self.messages.clear()
-        self.turn_counter = 0
+        """Clear all dialogue history
+
+        Thread-safe: Uses internal lock to protect state mutations.
+        """
+        with self._lock:
+            self.messages.clear()
+            self.turn_counter = 0
         logger.info("Dialogue history cleared")
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get current dialogue statistics"""
-        return {
-            "total_messages": len(self.messages),
-            "current_turn": self.turn_counter,
-            "importance_breakdown": {
-                "critical": sum(
-                    1 for m in self.messages if m.importance == ImportanceLevel.CRITICAL
-                ),
-                "relevant": sum(
-                    1 for m in self.messages if m.importance == ImportanceLevel.RELEVANT
-                ),
-                "trivial": sum(1 for m in self.messages if m.importance == ImportanceLevel.TRIVIAL),
-            },
-        }
+        """Get current dialogue statistics
+
+        Thread-safe: Uses internal lock to protect state access.
+        """
+        with self._lock:
+            return {
+                "total_messages": len(self.messages),
+                "current_turn": self.turn_counter,
+                "importance_breakdown": {
+                    "critical": sum(
+                        1 for m in self.messages if m.importance == ImportanceLevel.CRITICAL
+                    ),
+                    "relevant": sum(
+                        1 for m in self.messages if m.importance == ImportanceLevel.RELEVANT
+                    ),
+                    "trivial": sum(
+                        1 for m in self.messages if m.importance == ImportanceLevel.TRIVIAL
+                    ),
+                },
+            }

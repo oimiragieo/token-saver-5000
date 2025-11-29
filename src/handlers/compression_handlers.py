@@ -12,7 +12,7 @@ This module contains all handlers for document compression operations:
 - JSCCM-inspired adaptive operations (adapt_to_context_window, multilevel_encode)
 - Fidelity recommendation (recommend_fidelity) - NEW in v0.4.1
 
-Version: 0.4.1
+Version: 0.7.0 - Added rate limiting, text length validation
 """
 
 import json
@@ -25,6 +25,9 @@ from ..semantic_compressor import FidelityLevel
 from ..fidelity_advisor import FidelityAdvisor, UseCase
 from ..error_helpers import SmartError
 from ..compression_advisor import CompressionAdvisor
+from ..rate_limiter import RATE_LIMITERS
+from ..error_types import RateLimitExceededError
+from ..constants import MAX_TEXT_LENGTH_BYTES
 
 
 logger = logging.getLogger("semantic-modulator")
@@ -56,7 +59,7 @@ def validate_file_id(file_id: str, context: HandlerContext, must_exist: bool = T
             if not available:
                 raise ValueError(
                     f"Document '{file_id}' not found. No documents ingested yet.\n"
-                    "💡 Tip: Use ingest_context() to add documents first."
+                    "Tip: Use ingest_context() to add documents first."
                 )
             # Use SmartError for fuzzy matching
             raise SmartError.file_id_not_found(file_id, available)
@@ -87,7 +90,7 @@ def validate_node_ids(node_ids: List[str], context: HandlerContext) -> None:
             raise ValueError(
                 f"Invalid node IDs: {invalid_nodes[:3]}\n"
                 f"   No nodes found for '{file_id}'. Document may not be ingested.\n"
-                f"💡 Tip: Use ingest_context() to add the document first."
+                f"Tip: Use ingest_context() to add the document first."
             )
 
         # Use SmartError for fuzzy matching on first invalid node
@@ -110,13 +113,13 @@ def validate_token_count(available_tokens: int, max_tokens: int = None) -> None:
     if available_tokens == 0:
         raise ValueError(
             "available_tokens is 0 - no space for content!\n"
-            "💡 Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
+            "Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
         )
 
     if max_tokens is not None and available_tokens > max_tokens:
         raise ValueError(
             f"available_tokens ({available_tokens}) exceeds max_tokens ({max_tokens})\n"
-            "💡 Tip: available_tokens should be ≤ max_tokens"
+            "Tip: available_tokens should be ≤ max_tokens"
         )
 
 
@@ -138,11 +141,29 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     Raises:
         ValueError: If validation fails
         RuntimeError: If ingestion fails
+        RateLimitExceededError: If rate limit exceeded (v0.7.0)
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["ingest"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for document ingestion. Please retry in a moment.\n"
+            "Tip: The server allows ~10 ingestions/second to prevent resource exhaustion."
+        )
+
     text = args["text"]
     file_id = args["file_id"]
     file_path = args.get("file_path")  # Optional file path for sync tracking
     metadata = args.get("metadata")
+
+    # Text content length validation (v0.7.0 security hardening)
+    text_bytes = len(text.encode("utf-8"))
+    if text_bytes > MAX_TEXT_LENGTH_BYTES:
+        raise ValueError(
+            f"Text content too large: {text_bytes:,} bytes (max: {MAX_TEXT_LENGTH_BYTES:,})\n"
+            "Tip: Split large documents into smaller chunks before ingestion."
+        )
 
     # SECURITY: Validate file_path to prevent path traversal (CWE-22)
     if file_path:
@@ -153,27 +174,30 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         except ValueError as e:
             raise ValueError(
                 f"Invalid file_path: {str(e)}\n"
-                "💡 Security: File paths must be within allowed directories to prevent path traversal attacks"
+                "[TIP] Security: File paths must be within allowed directories to prevent path traversal attacks"
             ) from e
 
     # Validation
     if not text or len(text.strip()) == 0:
         raise ValueError(
             "text cannot be empty\n"
-            "💡 Tip: Provide document content to ingest (minimum ~20 characters recommended)"
+            "Tip: Provide document content to ingest (minimum ~20 characters recommended)"
         )
 
     if len(text) < 20:
         raise ValueError(
             f"text is too short ({len(text)} chars)\n"
-            "💡 Tip: Provide at least 20 characters for meaningful semantic analysis"
+            "Tip: Provide at least 20 characters for meaningful semantic analysis"
         )
 
     validate_file_id(file_id, context, must_exist=False)
 
     # Check resource limits BEFORE ingestion
+    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
     text_size = len(text.encode("utf-8"))
-    allowed, error_msg = context["resource_manager"].check_document_size(file_id, text_size)
+    allowed, error_msg = await context["resource_manager"].check_document_size_async(
+        file_id, text_size
+    )
     if not allowed:
         raise ValueError(error_msg)
 
@@ -192,11 +216,12 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     except Exception as e:
         raise RuntimeError(
             f"Failed to ingest document: {str(e)}\n"
-            "💡 Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
+            "Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
         ) from e
 
     # Register with resource manager
-    context["resource_manager"].register_document(file_id, text_size)
+    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
+    await context["resource_manager"].register_document_async(file_id, text_size)
 
     # Persist to storage
     try:
@@ -210,9 +235,9 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             metadata=context["compressor"].file_metadata.get(file_id, {}),
         )
         if success:
-            logger.info(f"✅ Persisted document {file_id}")
+            logger.info(f"[OK] Persisted document {file_id}")
         else:
-            logger.warning(f"⚠️  Failed to persist {file_id}, will be lost on restart")
+            logger.warning(f"[WARN]  Failed to persist {file_id}, will be lost on restart")
     except Exception as e:
         logger.error(f"Failed to persist {file_id}: {e}")
 
@@ -220,7 +245,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     checksum = hashlib.md5(text.encode()).hexdigest()
     context["sync_manager"].register_file(file_id, file_path, text)
     try:
-        context["version_manager"].add_version(
+        # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
+        await context["version_manager"].add_version_async(
             doc_id=file_id,
             content=text,
             checksum=checksum,
@@ -232,18 +258,18 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
                 "compression_ratio": skeleton.compression_ratio,
             },
         )
-        logger.info(f"✅ Registered version history for {file_id}")
+        logger.info(f"[OK] Registered version history for {file_id}")
     except Exception as e:
-        logger.warning(f"⚠️  Failed to save version history for {file_id}: {e}")
+        logger.warning(f"[WARN]  Failed to save version history for {file_id}: {e}")
 
     # Save file sync metadata to persistence
     try:
         metadata_export = context["sync_manager"].export_metadata()
         success = context["persistence"].save_file_sync_metadata(metadata_export)
         if success:
-            logger.info(f"✅ Saved file sync metadata for {len(metadata_export)} documents")
+            logger.info(f"[OK] Saved file sync metadata for {len(metadata_export)} documents")
         else:
-            logger.warning("⚠️  Failed to save file sync metadata")
+            logger.warning("[WARN]  Failed to save file sync metadata")
     except Exception as e:
         logger.error(f"Failed to save file sync metadata: {e}")
 
@@ -334,7 +360,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
     except Exception as e:
         raise RuntimeError(
             f"Failed to read skeleton for '{file_id}': {str(e)}\n"
-            f"💡 Tip: Verify the document was ingested successfully with get_stats()"
+            f"Tip: Verify the document was ingested successfully with get_stats()"
         ) from e
 
 
@@ -366,11 +392,11 @@ async def handle_modulate_region(context: HandlerContext, args: Dict[str, Any]) 
         status = context["sync_manager"].check_file_sync(file_id)
         if not status["in_sync"]:
             warning = f"""
-⚠️  WARNING: Cache may be stale for '{file_id}'!
+[WARN]  WARNING: Cache may be stale for '{file_id}'!
 
 {status['reason']}
 
-💡 Use refresh_document('{file_id}') to update
+[TIP] Use refresh_document('{file_id}') to update
 
 Proceeding with cached version...
 ---
@@ -384,7 +410,7 @@ Proceeding with cached version...
         valid_levels = [level.name for level in FidelityLevel]
         raise ValueError(
             f"Invalid fidelity_level: '{fidelity_str}'\n"
-            f"💡 Valid levels: {valid_levels}\n"
+            f"[TIP] Valid levels: {valid_levels}\n"
             f"   ABSTRACT: ~10 tokens (summary only)\n"
             f"   OUTLINE: ~30 tokens (summary + section markers)\n"
             f"   STRUCTURE: ~50 tokens (headers + entities)\n"
@@ -409,7 +435,7 @@ Proceeding with cached version...
     except Exception as e:
         raise RuntimeError(
             f"Failed to modulate region: {str(e)}\n"
-            f"💡 Tip: Verify node IDs are valid with read_skeleton()"
+            f"Tip: Verify node IDs are valid with read_skeleton()"
         ) from e
 
 
@@ -473,7 +499,7 @@ async def handle_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str
 
     if file_id:
         result = f"""
-📊 Document Statistics: {file_id}
+[STATS] Document Statistics: {file_id}
 
 Total nodes: {stats['total_nodes']}
 Total edges: {stats['total_edges']}
@@ -487,7 +513,7 @@ Metadata: {json.dumps(stats['metadata'], indent=2)}
 """
     else:
         result = f"""
-📊 Global Statistics
+[STATS] Global Statistics
 
 Total files ingested: {stats['total_files']}
 Total nodes: {stats['total_nodes']}
@@ -515,11 +541,11 @@ async def handle_list_documents(context: HandlerContext, args: Dict[str, Any]) -
 
     if not file_ids:
         return """
-📚 Document Inventory
+[DOC] Document Inventory
 
 No documents ingested yet.
 
-💡 Use ingest_context(text, file_id) to add documents.
+[TIP] Use ingest_context(text, file_id) to add documents.
 """
 
     # Build structured inventory
@@ -540,7 +566,7 @@ No documents ingested yet.
         documents.append(doc_info)
 
     # Format output
-    result_lines = ["📚 Document Inventory\n"]
+    result_lines = ["[DOC] Document Inventory\n"]
     result_lines.append(f"Total documents: {len(documents)}\n")
 
     for i, doc in enumerate(documents, 1):
@@ -563,7 +589,7 @@ No documents ingested yet.
 
         result_lines.append("")  # Blank line between documents
 
-    result_lines.append("💡 Next steps:")
+    result_lines.append("[TIP] Next steps:")
     result_lines.append("  - read_skeleton(file_id) - View compressed structure")
     result_lines.append("  - search_semantic(query) - Find relevant content")
     result_lines.append("  - get_stats(file_id) - Detailed statistics")
@@ -592,19 +618,19 @@ async def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) 
 
     if not confirm:
         return f"""
-⚠️  DELETE CONFIRMATION REQUIRED
+[WARN]  DELETE CONFIRMATION REQUIRED
 
 You are about to delete document: {file_id}
 
 This will:
-  • Remove all {len([k for k in context['compressor'].chunks.keys() if k.startswith(file_id)])} semantic nodes from memory
-  • Delete persistent storage (cannot be undone)
-  • Clear retrieval history for this document
+  -Remove all {len([k for k in context['compressor'].chunks.keys() if k.startswith(file_id)])} semantic nodes from memory
+  -Delete persistent storage (cannot be undone)
+  -Clear retrieval history for this document
 
 To proceed, call again with confirm=true:
   delete_document(file_id="{file_id}", confirm=true)
 
-💡 Tip: Use list_documents() to see all available documents first
+Tip: Use list_documents() to see all available documents first
 """
 
     logger.info(f"Deleting document: {file_id}")
@@ -632,7 +658,7 @@ To proceed, call again with confirm=true:
         if file_id in context["retrieval_history"]:
             del context["retrieval_history"][file_id]
 
-        logger.info(f"✅ Removed {file_id} from memory ({node_count} nodes)")
+        logger.info(f"[OK] Removed {file_id} from memory ({node_count} nodes)")
 
     except Exception as e:
         logger.error(f"Failed to delete {file_id} from memory: {e}")
@@ -642,42 +668,44 @@ To proceed, call again with confirm=true:
     try:
         success = context["persistence"].delete_document(file_id)
         if success:
-            logger.info(f"✅ Deleted {file_id} from persistent storage")
+            logger.info(f"[OK] Deleted {file_id} from persistent storage")
         else:
-            logger.warning(f"⚠️  Failed to delete {file_id} from persistent storage")
+            logger.warning(f"[WARN]  Failed to delete {file_id} from persistent storage")
     except Exception as e:
         logger.error(f"Failed to delete {file_id} from storage: {e}")
 
     # Unregister from resource manager
+    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
     try:
-        context["resource_manager"].unregister_document(file_id)
+        await context["resource_manager"].unregister_document_async(file_id)
     except Exception as e:
         logger.warning(f"Failed to unregister {file_id} from resource manager: {e}")
 
     # NEW: Clean up file sync metadata and version history
     try:
         context["sync_manager"].remove_metadata(file_id)
-        context["version_manager"].delete_versions(file_id)
+        # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
+        await context["version_manager"].delete_versions_async(file_id)
         # Save metadata after removal
         metadata_export = context["sync_manager"].export_metadata()
         context["persistence"].save_file_sync_metadata(metadata_export)
-        logger.info(f"✅ Cleaned up file sync metadata and version history for {file_id}")
+        logger.info(f"[OK] Cleaned up file sync metadata and version history for {file_id}")
     except Exception as e:
         logger.warning(f"Failed to clean up file sync data for {file_id}: {e}")
 
     return f"""
-🗑️ Document Deleted Successfully
+[DELETE] Document Deleted Successfully
 
 File ID: {file_id}
 Nodes removed: {node_count}
 Memory freed: ~{node_count * 2}KB (estimated)
 
-✅ Document has been permanently deleted from:
-   • Memory (semantic graph, chunks, metadata)
-   • Persistent storage (ChromaDB/JSON)
-   • Resource tracking
+[OK] Document has been permanently deleted from:
+   -Memory (semantic graph, chunks, metadata)
+   -Persistent storage (ChromaDB/JSON)
+   -Resource tracking
 
-💡 Remaining documents: {len(set([nid.split('_n')[0] for nid in context['compressor'].chunks.keys()]))}
+[TIP] Remaining documents: {len(set([nid.split('_n')[0] for nid in context['compressor'].chunks.keys()]))}
    Use list_documents() to see what's left.
 """
 
@@ -708,7 +736,7 @@ async def handle_adapt_to_context_window(context: HandlerContext, args: Dict[str
     if not 0.0 <= query_priority <= 1.0:
         raise ValueError(
             f"query_priority must be between 0.0 and 1.0, got {query_priority}\n"
-            "💡 Tip: 0.0 = low priority, 0.5 = medium, 1.0 = high priority"
+            "Tip: 0.0 = low priority, 0.5 = medium, 1.0 = high priority"
         )
 
     logger.info(
@@ -726,7 +754,7 @@ async def handle_adapt_to_context_window(context: HandlerContext, args: Dict[str
     except Exception as e:
         raise RuntimeError(
             f"Failed to adapt to context window: {str(e)}\n"
-            "💡 Tip: This is a JSCCM-inspired feature. Check that the document exists and token counts are valid."
+            "Tip: This is a JSCCM-inspired feature. Check that the document exists and token counts are valid."
         ) from e
 
 
@@ -761,7 +789,7 @@ async def handle_multilevel_encode(context: HandlerContext, args: Dict[str, Any]
     except Exception as e:
         raise RuntimeError(
             f"Failed to generate multi-level encoding: {str(e)}\n"
-            "💡 Tip: This JSCCM-inspired feature requires Main + Auxiliary + Detail branches.\n"
+            "Tip: This JSCCM-inspired feature requires Main + Auxiliary + Detail branches.\n"
             "   Try with at least 1000 tokens available for meaningful output."
         ) from e
 
@@ -795,13 +823,13 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
     if num_nodes < 1:
         raise ValueError(
             f"num_nodes must be at least 1, got {num_nodes}\n"
-            "💡 Tip: Specify how many nodes you plan to retrieve"
+            "Tip: Specify how many nodes you plan to retrieve"
         )
 
     if num_nodes > 1000:
         raise ValueError(
             f"num_nodes is very high ({num_nodes})\n"
-            "💡 Tip: Consider retrieving fewer nodes for better token efficiency.\n"
+            "Tip: Consider retrieving fewer nodes for better token efficiency.\n"
             "   Most queries work well with 3-10 nodes."
         )
 
@@ -809,20 +837,20 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
         if token_budget < 10:
             raise ValueError(
                 f"token_budget is too low ({token_budget})\n"
-                "💡 Tip: Even ABSTRACT fidelity needs ~10 tokens per node.\n"
+                "Tip: Even ABSTRACT fidelity needs ~10 tokens per node.\n"
                 f"   For {num_nodes} nodes, minimum budget: {num_nodes * 10} tokens"
             )
 
         if token_budget > 1_000_000:
             raise ValueError(
                 f"token_budget is very high ({token_budget:,})\n"
-                "💡 Tip: Most use cases work well with 100-10,000 token budgets."
+                "Tip: Most use cases work well with 100-10,000 token budgets."
             )
 
     if query_complexity not in ["simple", "medium", "complex"]:
         raise ValueError(
             f"query_complexity must be 'simple', 'medium', or 'complex', got '{query_complexity}'\n"
-            "💡 Tip: Use 'medium' if unsure"
+            "Tip: Use 'medium' if unsure"
         )
 
     # Convert string to enum
@@ -831,7 +859,7 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
     except ValueError:
         valid_cases = [case.value for case in UseCase]
         raise ValueError(
-            f"Unknown use_case: '{use_case_str}'\n" f"💡 Valid options: {', '.join(valid_cases)}"
+            f"Unknown use_case: '{use_case_str}'\n" f"[TIP] Valid options: {', '.join(valid_cases)}"
         )
 
     # Get recommendation
@@ -866,7 +894,7 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
 
 async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
-    Handle batch_ingest_documents MCP tool (v0.6.0).
+    Handle batch_ingest_documents MCP tool (v0.6.0, rate limiting v0.7.0).
 
     Ingests multiple documents concurrently with bounded parallelism,
     progress tracking, and error isolation.
@@ -892,7 +920,17 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
 
     Raises:
         ValueError: If validation fails
+        RateLimitExceededError: If rate limit exceeded (v0.7.0)
     """
+    # Rate limiting for batch operations (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["batch_ingest"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for batch ingestion. Please retry in a moment.\n"
+            "Tip: The server allows ~2 batch operations/second to prevent resource exhaustion."
+        )
+
     from ..batch_manager import BatchCompressionManager, BatchDocument
 
     # Extract arguments
@@ -906,13 +944,13 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
     if not isinstance(documents_list, list):
         raise ValueError(
             f"documents must be a list, got {type(documents_list).__name__}\n"
-            "💡 Tip: Provide a list of objects with 'file_id' and 'text' fields"
+            "Tip: Provide a list of objects with 'file_id' and 'text' fields"
         )
 
     if not (1 <= max_concurrent <= 8):
         raise ValueError(
             f"max_concurrent must be between 1 and 8, got {max_concurrent}\n"
-            "💡 Tip: Use 4 for balanced performance, 1 for sequential, 8 for maximum throughput"
+            "Tip: Use 4 for balanced performance, 1 for sequential, 8 for maximum throughput"
         )
 
     # Validate each document
@@ -921,7 +959,7 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
         if not isinstance(doc, dict):
             raise ValueError(
                 f"Document {i} must be an object, got {type(doc).__name__}\n"
-                "💡 Tip: Each document should have 'file_id' and 'text' fields"
+                "Tip: Each document should have 'file_id' and 'text' fields"
             )
 
         file_id = doc.get("file_id")
@@ -1009,7 +1047,7 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
         failed_ids = [r.file_id for r in results if not r.success]
         response["failed_file_ids"] = failed_ids
         response["tip"] = (
-            f"⚠️ {failed} documents failed. Check error messages for each failed document."
+            f"[WARN] {failed} documents failed. Check error messages for each failed document."
         )
 
     logger.info(response["summary"])

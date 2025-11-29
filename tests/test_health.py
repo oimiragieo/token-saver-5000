@@ -3,7 +3,7 @@
 import os
 import pytest
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from src.health import (
@@ -288,7 +288,7 @@ class TestHealthStatus:
                     name="test",
                     status=HealthStatus.HEALTHY,
                     message="OK",
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     details={},
                 )
 
@@ -312,28 +312,28 @@ class TestHealthStatus:
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_pers.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.DEGRADED,
                 message="Warning",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_cache.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_disk.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
 
@@ -357,28 +357,28 @@ class TestHealthStatus:
                 name="test",
                 status=HealthStatus.UNHEALTHY,
                 message="Error",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_pers.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_cache.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_disk.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
 
@@ -402,28 +402,28 @@ class TestHealthStatus:
                 name="test",
                 status=HealthStatus.DEGRADED,
                 message="Warning",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_pers.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.DEGRADED,
                 message="Warning",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_cache.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
             mock_disk.return_value = ComponentHealth(
                 name="test",
                 status=HealthStatus.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details={},
             )
 
@@ -748,7 +748,7 @@ class TestComponentHealthDataclass:
             name="test_component",
             status=HealthStatus.HEALTHY,
             message="All good",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             details={"key": "value"},
         )
 
@@ -764,7 +764,7 @@ class TestComponentHealthDataclass:
             name="test",
             status=HealthStatus.DEGRADED,
             message="Warning",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
         )
 
         assert component.details == {}

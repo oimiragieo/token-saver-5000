@@ -1,0 +1,135 @@
+# NetworkPolicy for Token Saver 5000
+# Implements zero-trust networking with explicit allow rules
+#
+# Security Principles (v0.7.0):
+# - Default deny all ingress/egress traffic
+# - Explicit allow for Prometheus scraping (metrics)
+# - Explicit allow for Kubernetes DNS resolution
+# - Explicit allow for internal cluster communication
+#
+# Prerequisites:
+# - Network plugin supporting NetworkPolicy (Calico, Cilium, Weave, etc.)
+# - Prometheus namespace must exist if enabling metrics scraping
+#
+# Deploy with: kubectl apply -f networkpolicy.yaml
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: token-saver-5000-network-policy
+  namespace: token-saver-5000
+  labels:
+    app: token-saver-5000
+    component: network-security
+    version: v0.7.0
+  annotations:
+    description: "Network isolation for Token Saver 5000 pods"
+    security.kubernetes.io/purpose: "Zero-trust network policy"
+spec:
+  # Apply to all Token Saver pods
+  podSelector:
+    matchLabels:
+      app: token-saver-5000
+
+  # Policy applies to both ingress and egress
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Ingress rules - who can talk TO our pods
+  ingress:
+    # Rule 1: Allow Prometheus to scrape metrics
+    # Required for ServiceMonitor to function
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # Standard label for Prometheus namespace
+              # Adjust to match your Prometheus installation
+              name: prometheus
+        - namespaceSelector:
+            matchLabels:
+              # Also allow monitoring namespace (common alternative)
+              name: monitoring
+        - namespaceSelector:
+            matchLabels:
+              # OpenShift monitoring namespace
+              openshift.io/cluster-monitoring: "true"
+      ports:
+        - protocol: TCP
+          port: 8080  # HTTP server port for metrics/health
+
+    # Rule 2: Allow intra-namespace communication
+    # Required for pod-to-pod communication within same namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app: token-saver-5000
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Rule 3: Allow health checks from kubelet
+    # Required for liveness/readiness probes to work
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  # Egress rules - who our pods can talk TO
+  egress:
+    # Rule 1: Allow DNS resolution
+    # CRITICAL: Without this, pods cannot resolve hostnames
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Rule 2: Allow CoreDNS (alternative DNS label)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Rule 3: Allow HTTPS to external endpoints
+    # Required for: model downloads, OTLP export, external API calls
+    # Restrict further if specific endpoints are known
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Rule 4: Allow intra-namespace communication (egress)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: token-saver-5000
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Deny-all fallback policy
+# Ensures any pod without explicit allow is isolated
+# Only enable if you want strict isolation for unlabeled pods
+
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: default-deny-all
+#   namespace: token-saver-5000
+# spec:
+#   podSelector: {}
+#   policyTypes:
+#     - Ingress
+#     - Egress

@@ -13,7 +13,7 @@ Target coverage: 80%+ for src/handlers/file_sync_handlers.py (currently 13%)
 import os
 import pytest
 import tempfile
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, AsyncMock, patch
 from src.handlers.file_sync_handlers import (
     handle_check_file_sync,
     handle_diff_cached_file,
@@ -34,14 +34,16 @@ class TestHandleCheckFileSync:
         """Create mock handler context for testing"""
         sync_manager = Mock()
         # Set file_metadata as a real dict so 'in' operator works
-        sync_manager.file_metadata = {"test_doc": FileMetadata(
-            doc_id="test_doc",
-            file_path="/path/to/file.txt",
-            checksum="abc123",
-            mtime=1234567890.0,
-            ingestion_time=1234567890.0,
-            size_bytes=1000,
-        )}
+        sync_manager.file_metadata = {
+            "test_doc": FileMetadata(
+                doc_id="test_doc",
+                file_path="/path/to/file.txt",
+                checksum="abc123",
+                mtime=1234567890.0,
+                ingestion_time=1234567890.0,
+                size_bytes=1000,
+            )
+        }
         context: HandlerContext = {
             "sync_manager": sync_manager,
             "validate_file_id": lambda file_id, must_exist=False: None,
@@ -56,6 +58,7 @@ class TestHandleCheckFileSync:
     async def test_check_file_sync_in_sync(self, mock_context):
         """Test check_file_sync when file is in sync"""
         import json
+
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
             "in_sync": True,
@@ -75,6 +78,7 @@ class TestHandleCheckFileSync:
     async def test_check_file_sync_out_of_sync(self, mock_context):
         """Test check_file_sync when file is out of sync"""
         import json
+
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
             "in_sync": False,
@@ -102,6 +106,7 @@ class TestHandleCheckFileSync:
     async def test_check_file_sync_with_timestamps(self, mock_context):
         """Test that timestamps are formatted correctly"""
         import json
+
         # Setup
         mock_context["sync_manager"].check_file_sync.return_value = {
             "in_sync": False,
@@ -139,6 +144,8 @@ class TestHandleDiffCachedFile:
         sync_manager = Mock()
         sync_manager.file_metadata = {}
         version_manager = Mock()
+        # Use AsyncMock for async methods
+        version_manager.diff_with_current_file_async = AsyncMock()
         context: HandlerContext = {
             "sync_manager": sync_manager,
             "version_manager": version_manager,
@@ -164,7 +171,7 @@ class TestHandleDiffCachedFile:
         )
         mock_context[
             "version_manager"
-        ].diff_with_current_file.return_value = """
+        ].diff_with_current_file_async.return_value = """
 --- a/file.txt
 +++ b/file.txt
 @@ -1,3 +1,3 @@
@@ -182,7 +189,7 @@ class TestHandleDiffCachedFile:
         assert "+++" in result
         assert "Line 2 (old)" in result
         assert "Line 2 (new)" in result
-        mock_context["version_manager"].diff_with_current_file.assert_called_once_with(
+        mock_context["version_manager"].diff_with_current_file_async.assert_called_once_with(
             file_id, context_lines=3
         )
 
@@ -199,13 +206,13 @@ class TestHandleDiffCachedFile:
             ingestion_time=1234567890.0,
             size_bytes=1000,
         )
-        mock_context["version_manager"].diff_with_current_file.return_value = "diff output"
+        mock_context["version_manager"].diff_with_current_file_async.return_value = "diff output"
 
         # Execute - must await async function
         await handle_diff_cached_file(mock_context, {"file_id": file_id, "context_lines": 5})
 
         # Verify custom context_lines is passed
-        mock_context["version_manager"].diff_with_current_file.assert_called_once_with(
+        mock_context["version_manager"].diff_with_current_file_async.assert_called_once_with(
             file_id, context_lines=5
         )
 
@@ -219,7 +226,7 @@ class TestHandleDiffCachedFile:
         result = await handle_diff_cached_file(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
+        assert "[ERROR]" in result
         assert "File sync not enabled" in result
         assert "no source file registered" in result
         assert "Re-ingest with file_path parameter" in result
@@ -237,14 +244,14 @@ class TestHandleDiffCachedFile:
             ingestion_time=1234567890.0,
             size_bytes=1000,
         )
-        mock_context["version_manager"].diff_with_current_file.return_value = None
+        mock_context["version_manager"].diff_with_current_file_async.return_value = None
 
         # Execute
         result = await handle_diff_cached_file(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
-        assert "Cannot generate diff" in result
+        assert "[ERROR]" in result
+        assert "Unexpected error generating diff" in result
 
 
 class TestHandleRefreshDocument:
@@ -295,6 +302,7 @@ class TestHandleRefreshDocument:
     async def test_refresh_document_success(self, mock_context, temp_file):
         """Test successful document refresh"""
         from unittest.mock import AsyncMock
+
         # Setup
         file_id = "test_doc"
         sync_manager = mock_context["sync_manager"]
@@ -313,7 +321,7 @@ class TestHandleRefreshDocument:
         result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify - handler returns formatted string, not JSON
-        assert "✅" in result or "Refreshed" in result
+        assert "[OK]" in result or "Refreshed" in result
         assert file_id in result
         assert "100" in result  # total_tokens
         assert "20" in result  # skeleton_tokens
@@ -332,7 +340,7 @@ class TestHandleRefreshDocument:
         result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
+        assert "[ERROR]" in result
         assert "File sync not enabled" in result
 
     @pytest.mark.asyncio
@@ -347,7 +355,7 @@ class TestHandleRefreshDocument:
         result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
+        assert "[ERROR]" in result
         assert "no source file" in result
         assert "text-only ingestion" in result
 
@@ -368,7 +376,7 @@ class TestHandleRefreshDocument:
         result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
+        assert "[ERROR]" in result
         assert "Error reading source file" in result
         assert "nonexistent" in result.lower() or "path.txt" in result
         assert "may have been moved or deleted" in result
@@ -377,6 +385,7 @@ class TestHandleRefreshDocument:
     async def test_refresh_document_ingestion_error(self, mock_context, temp_file):
         """Test refresh when re-ingestion fails"""
         from unittest.mock import AsyncMock
+
         # Setup
         file_id = "test_doc"
         sync_manager = mock_context["sync_manager"]
@@ -393,7 +402,7 @@ class TestHandleRefreshDocument:
         result = await handle_refresh_document(mock_context, {"file_id": file_id})
 
         # Verify
-        assert "❌" in result
+        assert "[ERROR]" in result
         assert "Error re-ingesting document" in result
         assert "Invalid content" in result
 
@@ -421,6 +430,7 @@ class TestHandleGetVersionHistory:
     async def test_get_version_history_no_history(self, mock_context):
         """Test get_version_history when no history exists"""
         import json
+
         # Execute
         result = await handle_get_version_history(mock_context, {"doc_id": "test_doc"})
 
@@ -434,6 +444,7 @@ class TestHandleGetVersionHistory:
     async def test_get_version_history_single_version(self, mock_context):
         """Test get_version_history with one version"""
         import json
+
         # Setup
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
@@ -474,6 +485,7 @@ class TestHandleGetVersionHistory:
     async def test_get_version_history_multiple_versions(self, mock_context):
         """Test get_version_history with multiple versions"""
         import json
+
         # Setup
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
@@ -512,6 +524,7 @@ class TestHandleGetVersionHistory:
     async def test_get_version_history_timestamp_formatting(self, mock_context):
         """Test that timestamps are formatted without microseconds"""
         import json
+
         # Setup
         doc_id = "test_doc"
         version_manager = mock_context["version_manager"]
@@ -588,6 +601,7 @@ class TestFileSyncHandlersIntegration:
         """Test complete refresh workflow: check → refresh → check → diff → history"""
         import json
         from unittest.mock import AsyncMock
+
         file_id = "integration_test"
 
         # 1. Ingest document initially
@@ -620,7 +634,7 @@ class TestFileSyncHandlersIntegration:
         integrated_context["compressor"].ingest_file_async = AsyncMock(return_value=skeleton_mock)
 
         result = await handle_refresh_document(integrated_context, {"file_id": file_id})
-        assert "✅" in result or "Refreshed" in result
+        assert "[OK]" in result or "Refreshed" in result
 
         # 6. Check version history - returns JSON
         result = await handle_get_version_history(integrated_context, {"doc_id": file_id})

@@ -172,31 +172,31 @@ class BlindSpotDetector:
 
         if critical_spots:
             recommendations.append(
-                f"⚠️  CRITICAL: Found {len(critical_spots)} highly relevant nodes that were NOT retrieved!"
+                f"[CRITICAL] Found {len(critical_spots)} highly relevant nodes that were NOT retrieved!"
             )
             for spot in critical_spots:
                 node = self.compressor.chunks[spot.node_id]
                 summary = self.compressor._generate_summary(node.text, max_length=60)
                 recommendations.append(
-                    f"  • [{spot.node_id}] similarity={spot.similarity_to_response:.2f}, "
+                    f"  -[{spot.node_id}] similarity={spot.similarity_to_response:.2f}, "
                     f"importance={node.importance:.2f}: {summary}"
                 )
                 auto_inject.append(spot.node_id)
 
         if high_spots:
             recommendations.append(
-                f"⚡ HIGH: Found {len(high_spots)} relevant nodes that might improve the answer"
+                f"[HIGH] Found {len(high_spots)} relevant nodes that might improve the answer"
             )
             for spot in high_spots[:3]:  # Show top 3
                 node = self.compressor.chunks[spot.node_id]
                 summary = self.compressor._generate_summary(node.text, max_length=60)
                 recommendations.append(
-                    f"  • [{spot.node_id}] similarity={spot.similarity_to_response:.2f}: {summary}"
+                    f"  -[{spot.node_id}] similarity={spot.similarity_to_response:.2f}: {summary}"
                 )
 
         if not blind_spots:
             recommendations.append(
-                "✅ No significant blind spots detected. Response appears well-grounded."
+                "[OK] No significant blind spots detected. Response appears well-grounded."
             )
 
         return BlindSpotReport(
@@ -267,26 +267,26 @@ class BlindSpotDetector:
         """Format a blind spot report for display"""
         lines = []
         lines.append("=" * 60)
-        lines.append("🔍 BLIND SPOT ANALYSIS REPORT")
+        lines.append("BLIND SPOT ANALYSIS REPORT")
         lines.append("=" * 60)
         lines.append(f"\nAnalyzed Response: {report.response_analyzed}\n")
 
-        lines.append("📊 Summary:")
-        lines.append(f"  • Total blind spots detected: {report.total_blind_spots}")
-        lines.append(f"  • Critical blind spots: {report.critical_blind_spots}")
+        lines.append("[SUMMARY]")
+        lines.append(f"  -Total blind spots detected: {report.total_blind_spots}")
+        lines.append(f"  -Critical blind spots: {report.critical_blind_spots}")
 
         if report.auto_inject:
-            lines.append(f"  • Auto-injecting {len(report.auto_inject)} critical nodes\n")
+            lines.append(f"  -Auto-injecting {len(report.auto_inject)} critical nodes\n")
 
-        lines.append("\n💡 Recommendations:")
+        lines.append("\n[RECOMMENDATIONS]")
         for rec in report.recommendations:
             lines.append(rec)
 
         if report.auto_inject:
-            lines.append("\n🔧 Auto-Injection:")
+            lines.append("\n[AUTO-INJECTION]")
             lines.append("The following nodes should be retrieved immediately:")
             for node_id in report.auto_inject:
-                lines.append(f"  • {node_id}")
+                lines.append(f"  -{node_id}")
             lines.append(f"\nUse: modulate_region({report.auto_inject}, fidelity_level='RAW')")
 
         lines.append("\n" + "=" * 60)
@@ -308,7 +308,7 @@ class BlindSpotDetector:
         report = self.analyze_response(ai_response, file_id, retrieved_node_ids)
 
         if report.critical_blind_spots > 0:
-            correction = "⚠️  WARNING: Response may be incomplete or inaccurate!\n"
+            correction = "[WARN] Response may be incomplete or inaccurate!\n"
             correction += f"Found {report.critical_blind_spots} critical blind spots.\n"
             correction += f"Recommend retrieving: {report.auto_inject}\n"
             return False, correction

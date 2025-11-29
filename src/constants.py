@@ -5,8 +5,13 @@ This module centralizes all magic numbers and configuration defaults
 used throughout the system. Each constant is documented with its purpose
 and rationale.
 
-Version: 0.4.0
+Many constants support environment variable overrides for production
+configuration without code changes.
+
+Version: 0.7.0
 """
+
+import os
 
 # ============================================================================
 # Embedding Models
@@ -101,13 +106,27 @@ WHY: Balances recent context with historical information preservation.
 # Resource Limits
 # ============================================================================
 
-MAX_DOCUMENT_SIZE_MB = 100.0
+MAX_DOCUMENT_SIZE_MB = float(os.getenv("MAX_DOCUMENT_SIZE_MB", "100.0"))
 """
 Maximum size for a single document (MB).
 - Prevents memory exhaustion from excessively large documents
 - 100MB ≈ 25M tokens (word-based estimate)
+- Environment variable: MAX_DOCUMENT_SIZE_MB
 WHY: System tested up to 100MB documents without performance degradation.
 """
+
+MAX_TEXT_LENGTH_BYTES = int(os.getenv("MAX_TEXT_LENGTH_BYTES", str(1_000_000)))
+"""
+Maximum text content length in bytes (default: 1MB).
+- Prevents memory exhaustion from excessively large text inputs
+- Applied during document ingestion
+- Environment variable: MAX_TEXT_LENGTH_BYTES
+WHY: 1MB is sufficient for most documents while preventing DoS attacks.
+"""
+
+# Validation for MAX_TEXT_LENGTH_BYTES
+if MAX_TEXT_LENGTH_BYTES < 1000:
+    raise ValueError("MAX_TEXT_LENGTH_BYTES must be >= 1000")
 
 MAX_TOTAL_STORAGE_MB = 1024.0
 """
@@ -239,17 +258,22 @@ WHY: Prevents unbounded memory growth in long-running servers while supporting
      typical project sizes (most projects have < 1000 tracked documents).
 """
 
-MAX_ACE_CONTEXTS = 100
+MAX_ACE_CONTEXTS = int(os.getenv("MAX_ACE_CONTEXTS", "100"))
 """
 Maximum number of ACE (Agentic Context Engineering) contexts to retain (v0.4.2).
 - Oldest contexts auto-evicted (LRU) when limit exceeded
 - Set to 0 for unlimited retention (not recommended)
 - Memory impact: ~70KB per context (10 bullets with embeddings)
 - Example: 100 contexts = ~7MB total
+- Environment variable: MAX_ACE_CONTEXTS
 WHY: Prevents unbounded memory growth in long-running servers while supporting
      extensive dialogue history. Profiling confirmed context deletion works correctly,
      this limit just prevents accumulation.
 """
+
+# Validation for MAX_ACE_CONTEXTS
+if MAX_ACE_CONTEXTS < 1:
+    raise ValueError("MAX_ACE_CONTEXTS must be >= 1")
 
 # ============================================================================
 # Progress Indicators
@@ -293,11 +317,48 @@ WHY: INFO provides useful feedback without being too verbose.
 """
 
 # ============================================================================
+# Rate Limiting Configuration
+# ============================================================================
+
+RATE_LIMIT_INGEST = float(os.getenv("RATE_LIMIT_INGEST", "10.0"))
+"""
+Tokens per second for document ingestion.
+- Environment variable: RATE_LIMIT_INGEST
+WHY: 10 ingests/sec handles typical load; increase for high-throughput deployments.
+"""
+
+RATE_LIMIT_BATCH = float(os.getenv("RATE_LIMIT_BATCH", "2.0"))
+"""
+Tokens per second for batch operations.
+- Environment variable: RATE_LIMIT_BATCH
+WHY: 2 batches/sec prevents resource exhaustion from concurrent batch processing.
+"""
+
+RATE_LIMIT_COMPRESSION = float(os.getenv("RATE_LIMIT_COMPRESSION", "5.0"))
+"""
+Tokens per second for compression operations.
+- Environment variable: RATE_LIMIT_COMPRESSION
+WHY: 5 compressions/sec balances throughput with CPU utilization.
+"""
+
+# ============================================================================
+# Health Check Configuration
+# ============================================================================
+
+HEALTH_CHECK_CACHE_SECONDS = int(os.getenv("HEALTH_CHECK_CACHE_SECONDS", "10"))
+"""
+Cache duration for health check results in seconds.
+- Prevents expensive checks on every request
+- Environment variable: HEALTH_CHECK_CACHE_SECONDS
+WHY: 10 seconds balances responsiveness with performance overhead.
+"""
+
+# ============================================================================
 # Version Information
 # ============================================================================
 
-VERSION = "0.4.3"
-"""Current version of Token Saver 5000"""
+VERSION = "0.7.0"
+"""Current version of Token Saver 5000 (Single source of truth)"""
 
 VERSION_STRING = f"Token Saver 5000 v{VERSION}"
 """Full version string for logging and display"""

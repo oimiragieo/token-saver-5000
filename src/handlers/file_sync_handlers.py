@@ -84,12 +84,14 @@ async def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any])
     Generates unified diff between cached version and current file on disk.
     Shows exactly what changed since ingestion (additions, deletions, modifications).
 
+    v0.8.0 audit fix: Improved UX with detailed error messages from version_manager.
+
     Args:
         context: Server context containing sync_manager, version_manager, and validation
         args: Tool arguments with 'file_id' and optional 'context_lines'
 
     Returns:
-        Unified diff in git-style format or error message
+        Unified diff in git-style format or detailed error message
 
     Raises:
         ValueError: If file_id is invalid or document not found
@@ -99,24 +101,28 @@ async def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any])
     sync_manager = context["sync_manager"]
     version_manager = context["version_manager"]
 
-    # Validation
+    # Validation - check sync manager registration
+    # v0.8.0: Use ASCII-only output for enterprise compatibility
     if file_id not in sync_manager.file_metadata:
-        return f"""
-❌ Cannot diff {file_id}
-
-File sync not enabled for this document (no source file registered).
-
-💡 Tip: Re-ingest with file_path parameter:
-   ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")
-"""
+        return (
+            f"[ERROR] Cannot diff '{file_id}'\n"
+            f"\n"
+            f"File sync not enabled for this document (no source file registered).\n"
+            f"\n"
+            f"Tip: Re-ingest with file_path parameter:\n"
+            f'  ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")'
+        )
 
     logger.info(f"Generating diff for: {file_id}")
 
-    # Use version manager to generate diff
-    diff = version_manager.diff_with_current_file(file_id, context_lines=context_lines)
+    # Use version manager to generate diff (v0.8.0: use async version to avoid blocking event loop)
+    # Version manager now returns detailed error messages instead of None
+    diff = await version_manager.diff_with_current_file_async(file_id, context_lines=context_lines)
 
+    # v0.8.0: version_manager now always returns a string (error message or diff)
+    # None only returned for truly unexpected cases
     if not diff:
-        return f"❌ Cannot generate diff for {file_id} (no source file or version history)"
+        return f"[ERROR] Unexpected error generating diff for '{file_id}'"
 
     return diff
 
@@ -148,20 +154,21 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
     if file_id not in compressor.graphs:
         raise ValueError(f"Document '{file_id}' not found")
 
+    # v0.8.0: Use ASCII-only output for enterprise compatibility
     if file_id not in sync_manager.file_metadata:
-        return f"""
-❌ Cannot refresh {file_id}
-
-File sync not enabled for this document (no source file registered).
-
-💡 Tip: Documents must be ingested with file_path to enable refresh:
-   ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")
-"""
+        return (
+            f"[ERROR] Cannot refresh '{file_id}'\n"
+            f"\n"
+            f"File sync not enabled for this document (no source file registered).\n"
+            f"\n"
+            f"Tip: Documents must be ingested with file_path to enable refresh:\n"
+            f'  ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")'
+        )
 
     metadata = sync_manager.file_metadata[file_id]
 
     if not metadata.file_path:
-        return f"❌ Document {file_id} has no source file (text-only ingestion)"
+        return f"[ERROR] Document '{file_id}' has no source file (text-only ingestion)"
 
     logger.info(f"Refreshing document from disk: {file_id} <- {metadata.file_path}")
 
@@ -170,14 +177,14 @@ File sync not enabled for this document (no source file registered).
         with open(metadata.file_path, "r", encoding="utf-8") as f:
             content = f.read()
     except Exception as e:
-        return f"""
-❌ Error reading source file
-
-Path: {metadata.file_path}
-Error: {str(e)}
-
-💡 File may have been moved or deleted. Check the path and try again.
-"""
+        return (
+            f"[ERROR] Error reading source file\n"
+            f"\n"
+            f"Path: {metadata.file_path}\n"
+            f"Error: {str(e)}\n"
+            f"\n"
+            f"Tip: File may have been moved or deleted. Check the path and try again."
+        )
 
     # Re-ingest the document
     try:
@@ -187,13 +194,13 @@ Error: {str(e)}
             metadata={"refreshed_at": __import__("datetime").datetime.now().isoformat()},
         )
     except Exception as e:
-        return f"""
-❌ Error re-ingesting document
-
-Error: {str(e)}
-
-💡 Check that the file contains valid content.
-"""
+        return (
+            f"[ERROR] Error re-ingesting document\n"
+            f"\n"
+            f"Error: {str(e)}\n"
+            f"\n"
+            f"Tip: Check that the file contains valid content."
+        )
 
     # Update sync metadata
     checksum = hashlib.md5(content.encode()).hexdigest()
@@ -206,8 +213,8 @@ Error: {str(e)}
     except Exception as e:
         logger.warning(f"Failed to save file sync metadata: {e}")
 
-    # Store new version
-    version_manager.add_version(
+    # Store new version (v0.8.0: use async version to avoid blocking event loop)
+    await version_manager.add_version_async(
         doc_id=file_id,
         content=content,
         checksum=checksum,
@@ -233,21 +240,24 @@ Error: {str(e)}
     except Exception as e:
         logger.error(f"Failed to persist refreshed {file_id}: {e}")
 
-    version_count = len(version_manager.get_version_history(file_id))
+    # v0.8.0 audit fix: Use async wrapper to avoid blocking event loop
+    history = await version_manager.get_version_history_async(file_id)
+    version_count = len(history)
 
-    return f"""
-✅ Refreshed {file_id} from {metadata.file_path}
-
-New stats:
-  • Total tokens: {skeleton.total_tokens:,}
-  • Skeleton tokens: {skeleton.skeleton_tokens:,}
-  • Compression: {skeleton.compression_ratio:.1f}x
-  • Checksum: {checksum[:8]}...
-
-Version history: {version_count} versions stored
-
-💡 Use diff_cached_file('{file_id}') to see what changed from previous version
-"""
+    # v0.8.0: Use ASCII-only output for enterprise compatibility
+    return (
+        f"[OK] Refreshed '{file_id}' from {metadata.file_path}\n"
+        f"\n"
+        f"New stats:\n"
+        f"  - Total tokens: {skeleton.total_tokens:,}\n"
+        f"  - Skeleton tokens: {skeleton.skeleton_tokens:,}\n"
+        f"  - Compression: {skeleton.compression_ratio:.1f}x\n"
+        f"  - Checksum: {checksum[:8]}...\n"
+        f"\n"
+        f"Version history: {version_count} versions stored\n"
+        f"\n"
+        f"Tip: Use diff_cached_file('{file_id}') to see what changed from previous version"
+    )
 
 
 async def handle_get_version_history(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -268,8 +278,8 @@ async def handle_get_version_history(context: HandlerContext, args: Dict[str, An
     doc_id = args["doc_id"]
     version_manager = context["version_manager"]
 
-    # Get version history
-    history = version_manager.get_version_history(doc_id)
+    # Get version history (v0.8.0 audit fix: use async wrapper)
+    history = await version_manager.get_version_history_async(doc_id)
 
     # Build JSON response
     versions = []

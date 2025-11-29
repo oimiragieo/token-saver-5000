@@ -311,12 +311,28 @@ class SCAREnhancedCompressor:
                 compressed_dim=compressed_dim,
             )
             print(
-                f"📦 SCAR Learnable Compression: {embedding_dim}D → {compressed_dim}D ({compression_ratio}× compression)"
+                f"[SCAR] Learnable Compression: {embedding_dim}D -> {compressed_dim}D ({compression_ratio}x compression)"
+            )
+            # v0.8.0 AUDIT WARNING: Random weights used - not trained!
+            # The LearnableSemanticCompressor uses PyTorch's default random weight initialization.
+            # For production use, you would need to:
+            # 1. Train the compressor on domain-specific data using training_utils.py
+            # 2. Save trained weights with torch.save(self.learnable_compressor.state_dict(), 'scar_weights.pt')
+            # 3. Load trained weights with self.learnable_compressor.load_state_dict(torch.load('scar_weights.pt'))
+            # Without training, the compression is essentially a random projection,
+            # which may not preserve semantic information optimally.
+            import warnings
+            warnings.warn(
+                "[SCAR] Using UNTRAINED random weights for learnable compression. "
+                "For optimal semantic preservation, train the compressor first. "
+                "See training_utils.py for training infrastructure.",
+                UserWarning,
+                stacklevel=2,
             )
 
         if use_alignment_guidance:
             self.alignment_module = SemanticAlignmentModule(embedding_dim=embedding_dim)
-            print("🎯 SCAR Semantic Alignment: Enabled")
+            print("[SCAR] Semantic Alignment: Enabled")
 
     def compress_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
         """
@@ -435,13 +451,13 @@ class SCAREnhancedCompressor:
             # Determine fidelity based on alignment score
             if score >= alignment_threshold:
                 fidelity = FidelityLevel.RAW
-                marker = "🔥"
+                marker = "[TOP]"
             elif score >= 0.5:
                 fidelity = FidelityLevel.STRUCTURE
-                marker = "⭐"
+                marker = "[HIGH]"
             else:
                 fidelity = FidelityLevel.ABSTRACT
-                marker = "📄"
+                marker = "[DOC]"
 
             # Retrieve at determined fidelity
             content = self.base_compressor.modulate_region(

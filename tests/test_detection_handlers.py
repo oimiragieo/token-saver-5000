@@ -3,10 +3,12 @@ Comprehensive tests for detection_handlers.py
 
 Coverage target: 80%+ (currently 25%)
 Tests blind spot detection and hallucination detection handlers.
+
+Version: 0.7.0 - Updated for async handlers with rate limiting
 """
 
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, AsyncMock, patch
 from dataclasses import dataclass
 from typing import List
 from src.handlers.detection_handlers import (
@@ -60,7 +62,30 @@ def mock_context():
     mock_halo_detector = Mock()
     context["halo_detector"] = mock_halo_detector
 
+    # Mock compressor with graphs dict (v0.7.0 - required for file_id validation)
+    # Note: SemanticCompressor uses 'graphs' not 'documents' as the dict name
+    mock_compressor = Mock()
+    mock_compressor.graphs = {
+        "quantum_paper": Mock(),
+        "test_doc": Mock(),
+        "research_paper": Mock(),
+        "math_paper": Mock(),
+        "doc": Mock(),
+        "x": Mock(),
+    }
+    context["compressor"] = mock_compressor
+
     return context
+
+
+@pytest.fixture
+def mock_rate_limiter():
+    """Mock rate limiter for async handler tests"""
+    with patch("src.handlers.detection_handlers.RATE_LIMITERS") as mock_limiters:
+        mock_limiter = AsyncMock()
+        mock_limiter.acquire = AsyncMock()
+        mock_limiters.__getitem__ = Mock(return_value=mock_limiter)
+        yield mock_limiters
 
 
 # ============================================================================
@@ -71,7 +96,8 @@ def mock_context():
 class TestHandleCheckBlindSpots:
     """Test blind spot detection handler"""
 
-    def test_check_blind_spots_no_blind_spots_found(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_blind_spots_no_blind_spots_found(self, mock_context, mock_rate_limiter):
         """Test blind spot check when no issues found"""
         # Setup
         report = MockBlindSpotReport(
@@ -79,13 +105,13 @@ class TestHandleCheckBlindSpots:
             total_blind_spots=0,
             critical_blind_spots=0,
             blind_spots=[],
-            recommendations=["✅ Response appears complete"],
+            recommendations=["[OK] Response appears complete"],
             auto_inject=[],
         )
 
         mock_context["blind_spot_detector"].analyze_response.return_value = report
         mock_context["blind_spot_detector"].format_report.return_value = (
-            "✅ No blind spots detected\nResponse appears complete"
+            "[OK] No blind spots detected\nResponse appears complete"
         )
 
         args = {
@@ -95,10 +121,10 @@ class TestHandleCheckBlindSpots:
         }
 
         # Execute
-        result = handle_check_blind_spots(mock_context, args)
+        result = await handle_check_blind_spots(mock_context, args)
 
         # Verify
-        assert "✅" in result
+        assert "[OK]" in result
         assert "No blind spots detected" in result or "complete" in result.lower()
         mock_context["blind_spot_detector"].analyze_response.assert_called_once_with(
             "Test response about quantum computing",
@@ -109,7 +135,8 @@ class TestHandleCheckBlindSpots:
         # Should NOT have auto-correction since auto_inject is empty
         assert "AUTO-CORRECTION" not in result
 
-    def test_check_blind_spots_with_critical_issues(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_blind_spots_with_critical_issues(self, mock_context, mock_rate_limiter):
         """Test blind spot check with critical issues requiring auto-injection"""
         # Setup
         report = MockBlindSpotReport(
@@ -131,15 +158,15 @@ class TestHandleCheckBlindSpots:
                 ),
             ],
             recommendations=[
-                "⚡ CRITICAL: Missing error handling context",
-                "⚠️ HIGH: Additional context recommended",
+                "[CRITICAL]: Missing error handling context",
+                "[HIGH]: Additional context recommended",
             ],
             auto_inject=["quantum_paper_n12"],  # Critical node for auto-injection
         )
 
         mock_context["blind_spot_detector"].analyze_response.return_value = report
         mock_context["blind_spot_detector"].format_report.return_value = (
-            "⚠️ 2 blind spots detected\n⚡ CRITICAL: Missing error handling context"
+            "[WARN] 2 blind spots detected\n[CRITICAL]: Missing error handling context"
         )
 
         args = {
@@ -149,17 +176,20 @@ class TestHandleCheckBlindSpots:
         }
 
         # Execute
-        result = handle_check_blind_spots(mock_context, args)
+        result = await handle_check_blind_spots(mock_context, args)
 
         # Verify
-        assert "⚠️" in result or "blind spots" in result.lower()
+        assert "[WARN]" in result or "blind spots" in result.lower()
         assert "AUTO-CORRECTION SUGGESTED" in result
         assert "quantum_paper_n12" in result
         assert "modulate_region" in result
         mock_context["blind_spot_detector"].analyze_response.assert_called_once()
         mock_context["blind_spot_detector"].format_report.assert_called_once()
 
-    def test_check_blind_spots_with_multiple_auto_inject(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_blind_spots_with_multiple_auto_inject(
+        self, mock_context, mock_rate_limiter
+    ):
         """Test blind spot check with multiple nodes for auto-injection"""
         # Setup
         report = MockBlindSpotReport(
@@ -172,7 +202,9 @@ class TestHandleCheckBlindSpots:
         )
 
         mock_context["blind_spot_detector"].analyze_response.return_value = report
-        mock_context["blind_spot_detector"].format_report.return_value = "⚠️ 3 blind spots detected"
+        mock_context["blind_spot_detector"].format_report.return_value = (
+            "[WARN] 3 blind spots detected"
+        )
 
         args = {
             "ai_response": "Brief response",
@@ -181,14 +213,15 @@ class TestHandleCheckBlindSpots:
         }
 
         # Execute
-        result = handle_check_blind_spots(mock_context, args)
+        result = await handle_check_blind_spots(mock_context, args)
 
         # Verify
         assert "AUTO-CORRECTION SUGGESTED" in result
         assert "doc_n5" in result or "['doc_n5', 'doc_n12', 'doc_n18']" in result
         assert "Retrieve these nodes" in result
 
-    def test_check_blind_spots_empty_retrieved_nodes(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_check_blind_spots_empty_retrieved_nodes(self, mock_context, mock_rate_limiter):
         """Test blind spot check with no nodes initially retrieved"""
         # Setup
         report = MockBlindSpotReport(
@@ -202,7 +235,7 @@ class TestHandleCheckBlindSpots:
 
         mock_context["blind_spot_detector"].analyze_response.return_value = report
         mock_context["blind_spot_detector"].format_report.return_value = (
-            "⚠️ Response may be entirely fabricated - no context retrieved"
+            "[WARN] Response may be entirely fabricated - no context retrieved"
         )
 
         args = {
@@ -212,7 +245,7 @@ class TestHandleCheckBlindSpots:
         }
 
         # Execute
-        result = handle_check_blind_spots(mock_context, args)
+        result = await handle_check_blind_spots(mock_context, args)
 
         # Verify
         assert "AUTO-CORRECTION SUGGESTED" in result
@@ -229,7 +262,8 @@ class TestHandleCheckBlindSpots:
 class TestHandleDetectHallucination:
     """Test hallucination detection handler"""
 
-    def test_detect_hallucination_not_hallucinating(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_not_hallucinating(self, mock_context, mock_rate_limiter):
         """Test hallucination detection when response is grounded"""
         # Setup
         mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
@@ -240,18 +274,21 @@ class TestHandleDetectHallucination:
         }
 
         # Execute
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify
-        assert "✅" in result
+        assert "[OK]" in result
         assert "grounded" in result.lower()
         assert "No hallucination detected" in result
-        assert "🚨" not in result  # Should NOT have alert emoji
+        assert "[ALERT]" not in result  # Should NOT have alert emoji
         mock_context["halo_detector"].detect_hallucination.assert_called_once_with(
             "The quantum gate fidelity was measured at 99.2%", "quantum_paper"
         )
 
-    def test_detect_hallucination_is_hallucinating_single_warning(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_is_hallucinating_single_warning(
+        self, mock_context, mock_rate_limiter
+    ):
         """Test hallucination detection with single warning"""
         # Setup
         mock_context["halo_detector"].detect_hallucination.return_value = (
@@ -265,10 +302,10 @@ class TestHandleDetectHallucination:
         }
 
         # Execute
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify
-        assert "🚨" in result
+        assert "[ALERT]" in result
         assert "HALLUCINATION ALERT" in result
         assert "fabricated information" in result
         assert "low similarity" in result
@@ -276,7 +313,10 @@ class TestHandleDetectHallucination:
         assert "Re-examine source material" in result
         mock_context["halo_detector"].detect_hallucination.assert_called_once()
 
-    def test_detect_hallucination_is_hallucinating_multiple_warnings(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_is_hallucinating_multiple_warnings(
+        self, mock_context, mock_rate_limiter
+    ):
         """Test hallucination detection with multiple warnings"""
         # Setup
         mock_context["halo_detector"].detect_hallucination.return_value = (
@@ -294,20 +334,21 @@ class TestHandleDetectHallucination:
         }
 
         # Execute
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify
-        assert "🚨" in result
+        assert "[ALERT]" in result
         assert "HALLUCINATION ALERT" in result
         assert "fabricated information" in result
         # All warnings should be in output
         assert "low similarity" in result
         assert "not present in the source document" in result
         assert "Overconfident claims" in result
-        # Verify bullet formatting
-        assert "•" in result
+        # Verify bullet formatting (uses dashes for enterprise-grade ASCII output)
+        assert "  -" in result
 
-    def test_detect_hallucination_empty_warnings(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_empty_warnings(self, mock_context, mock_rate_limiter):
         """Test hallucination detection with hallucination but empty warnings list"""
         # Setup - edge case where is_hallucinating=True but warnings=[]
         mock_context["halo_detector"].detect_hallucination.return_value = (True, [])
@@ -318,14 +359,17 @@ class TestHandleDetectHallucination:
         }
 
         # Execute
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify
-        assert "🚨" in result
+        assert "[ALERT]" in result
         assert "HALLUCINATION ALERT" in result
         # Should still show alert even with no specific warnings
 
-    def test_detect_hallucination_handles_special_characters(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_handles_special_characters(
+        self, mock_context, mock_rate_limiter
+    ):
         """Test hallucination detection with special characters in response"""
         # Setup
         mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
@@ -336,13 +380,14 @@ class TestHandleDetectHallucination:
         }
 
         # Execute - should not crash with special characters
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify
-        assert "✅" in result
+        assert "[OK]" in result
         assert "grounded" in result.lower()
 
-    def test_detect_hallucination_handler_logging(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_handler_logging(self, mock_context, mock_rate_limiter):
         """Test that handler logs appropriately"""
         # Setup
         mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
@@ -353,7 +398,7 @@ class TestHandleDetectHallucination:
         }
 
         # Execute
-        result = handle_detect_hallucination(mock_context, args)
+        result = await handle_detect_hallucination(mock_context, args)
 
         # Verify handler completed successfully
         assert result is not None
@@ -369,7 +414,8 @@ class TestHandleDetectHallucination:
 class TestDetectionHandlersIntegration:
     """Integration tests for both detection handlers"""
 
-    def test_both_handlers_use_correct_context_keys(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_both_handlers_use_correct_context_keys(self, mock_context, mock_rate_limiter):
         """Test that both handlers access correct context manager keys"""
         # Setup blind spots
         blind_report = MockBlindSpotReport(
@@ -381,17 +427,17 @@ class TestDetectionHandlersIntegration:
             auto_inject=[],
         )
         mock_context["blind_spot_detector"].analyze_response.return_value = blind_report
-        mock_context["blind_spot_detector"].format_report.return_value = "✅ Clean"
+        mock_context["blind_spot_detector"].format_report.return_value = "[OK] Clean"
 
         # Setup hallucination
         mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
 
         # Execute both handlers
-        blind_result = handle_check_blind_spots(
+        blind_result = await handle_check_blind_spots(
             mock_context,
             {"ai_response": "Test", "file_id": "doc", "retrieved_nodes": []},
         )
-        halo_result = handle_detect_hallucination(
+        halo_result = await handle_detect_hallucination(
             mock_context, {"ai_response": "Test", "file_id": "doc"}
         )
 
@@ -409,7 +455,8 @@ class TestDetectionHandlersIntegration:
             or True
         )
 
-    def test_handlers_with_minimal_args(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_handlers_with_minimal_args(self, mock_context, mock_rate_limiter):
         """Test handlers work with minimal required arguments"""
         # Setup
         blind_report = MockBlindSpotReport(
@@ -425,10 +472,12 @@ class TestDetectionHandlersIntegration:
         mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
 
         # Execute with minimal args
-        blind_result = handle_check_blind_spots(
+        blind_result = await handle_check_blind_spots(
             mock_context, {"ai_response": "", "file_id": "x", "retrieved_nodes": []}
         )
-        halo_result = handle_detect_hallucination(mock_context, {"ai_response": "", "file_id": "x"})
+        halo_result = await handle_detect_hallucination(
+            mock_context, {"ai_response": "", "file_id": "x"}
+        )
 
         # Verify
         assert blind_result is not None

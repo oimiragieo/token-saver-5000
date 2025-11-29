@@ -105,14 +105,25 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - Always run linting before committing (`ruff check src/`)
 - Use `black` for consistent code formatting
 
-## Token Saver 5000 Project Specifics (v0.7.0 - IN PROGRESS)
+## Token Saver 5000 Project Specifics (v0.8.0 - COMPLETE)
 
 ### Project Overview
 **Token Saver 5000** is an MCP server implementing research-backed semantic compression for AI interactions. It achieves **85-90% token reduction (proven: 87.4%)** through graph-based semantic analysis.
 
 > **Proven Performance:** 7.9× compression (485 → 61 tokens) on real quantum computing document. See `demo_proof.py`.
 
-**Current Release (v0.7.0 - Enterprise Production Readiness - COMPLETE):**
+**Current Release (v0.8.0 - Async Safety & Concurrency Audit - COMPLETE):**
+- ✅ **Blocking Lock Audit Fix (Issue 3):**
+  - **Issue:** ResourceManager and VersionManager used `threading.Lock` in handler-facing methods, blocking event loop under concurrent clients
+  - **Solution:** ThreadPoolExecutor + `run_in_executor()` pattern for all handler-facing methods
+  - **Changes:**
+    * `version_manager.py`: Added `delete_versions_async()` wrapper (lines 557-568)
+    * `version_manager.py`: Added lock protection to `delete_versions()` (line 541)
+    * `compression_handlers.py`: Updated to use `add_version_async()` and `delete_versions_async()`
+  - **Testing:** All 1063 tests passing with 75% coverage
+  - **Pattern:** Sync method with lock → async wrapper using `run_in_executor` → handler awaits wrapper
+
+**Previous Release (v0.7.0 - Enterprise Production Readiness - COMPLETE):**
 - ✅ **Week 1-2 Complete:** Reliability Infrastructure (TimeoutManager, CircuitBreaker, RetryPolicy, RateLimiter, GracefulDegradation)
 - ✅ **Week 3-4 Complete:** Comprehensive Testing Suite (100 new tests: integration, performance, chaos, E2E)
 - ✅ **Week 5-6 Complete:** Observability & Monitoring (StructuredLogger, Prometheus metrics, OpenTelemetry tracing, HealthChecker)
@@ -202,8 +213,8 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **1,075 comprehensive tests** (1,063 passed, 12 skipped, 100% pass rate - v0.7.0 Week 7-8)
-  - Was 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+- ✅ **1,075 comprehensive tests** (1,063 passed, 12 skipped, 75% coverage - v0.8.0 Async Safety Audit)
+  - Was 1,075 in v0.8.0 initial, 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
   - 32 new tests added in v0.7.0 Week 7-8 DevOps infrastructure:
     * 32 HTTP server tests (endpoints, integration, configuration, lifecycle, edge cases - 100% pass rate)
   - 168 new tests added in v0.7.0 Week 5-6 observability infrastructure:

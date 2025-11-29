@@ -12,12 +12,16 @@ This module contains handler functions for AFM-related MCP tools:
 These handlers implement the AFM system (arXiv:2511.12712v1) which manages
 multi-turn conversations with adaptive fidelity based on recency, semantic
 relevance, and importance classification.
+
+Version: 0.7.0 - Added rate limiting
 """
 
 import logging
 from typing import Any, Dict
 
 from ..types import HandlerContext  # TypedDict for handler context
+from ..rate_limiter import RATE_LIMITERS
+from ..error_types import RateLimitExceededError
 
 logger = logging.getLogger("semantic-modulator")
 
@@ -39,6 +43,15 @@ async def handle_afm_add_message(context: HandlerContext, args: Dict[str, Any]) 
     Raises:
         ValueError: If role is invalid
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     role = args["role"]
     content = args["content"]
     focus_manager = context["focus_manager"]
@@ -54,7 +67,7 @@ async def handle_afm_add_message(context: HandlerContext, args: Dict[str, Any]) 
 
     # Return confirmation with importance classification
     return f"""
-💬 Message Added to Dialogue History
+[MSG] Message Added to Dialogue History
 
 Turn: {msg.turn_index}
 Role: {msg.role}
@@ -65,7 +78,7 @@ Dialogue Stats:
   Total messages: {len(focus_manager.messages)}
   Current turn: {focus_manager.turn_counter}
 
-💡 Use afm_build_context(query, budget_tokens) to build optimized context
+[TIP] Use afm_build_context(query, budget_tokens) to build optimized context
 """
 
 
@@ -87,6 +100,15 @@ async def handle_afm_build_context(context: HandlerContext, args: Dict[str, Any]
     Raises:
         ValueError: If budget_tokens is invalid
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     current_query = args["current_query"]
     budget_tokens = args["budget_tokens"]
     system_preamble = args.get("system_preamble")
@@ -114,25 +136,25 @@ async def handle_afm_build_context(context: HandlerContext, args: Dict[str, Any]
     context_display_text = "\n".join(context_display)
 
     result = f"""
-🧠 AFM Context Built Successfully
+[AFM] AFM Context Built Successfully
 
 Query: {current_query[:100]}{'...' if len(current_query) > 100 else ''}
 
-📊 Packing Statistics:
+[STATS] Packing Statistics:
   Total messages processed: {stats.total_messages}
-  ├─ FULL fidelity:         {stats.full_count}
-  ├─ COMPRESSED:            {stats.compressed_count}
-  ├─ PLACEHOLDER:           {stats.placeholder_count}
-  └─ DROPPED:               {stats.dropped_count}
+  |- FULL fidelity:         {stats.full_count}
+  |- COMPRESSED:            {stats.compressed_count}
+  |- PLACEHOLDER:           {stats.placeholder_count}
+  +- DROPPED:               {stats.dropped_count}
 
   Tokens used:              {stats.total_tokens} / {stats.budget_tokens}
   Budget utilization:       {stats.compression_ratio:.1%}
 
-📝 Context Messages ({len(ctx)} total):
+[TEXT] Context Messages ({len(ctx)} total):
 {context_display_text}
 
-✅ Ready to send to LLM
-💡 AFM achieved ~{100 * (1 - stats.compression_ratio):.0f}% token savings vs naive replay
+[OK] Ready to send to LLM
+[TIP] AFM achieved ~{100 * (1 - stats.compression_ratio):.0f}% token savings vs naive replay
 
 ---
 Paper: Adaptive Focus Memory (arXiv:2511.12712v1)
@@ -155,21 +177,30 @@ async def handle_afm_get_stats(context: HandlerContext, args: Dict[str, Any]) ->
     Returns:
         Formatted statistics report
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     focus_manager = context["focus_manager"]
     stats = focus_manager.get_stats()
 
     return f"""
-📊 AFM Dialogue Statistics
+[STATS] AFM Dialogue Statistics
 
 Total messages: {stats['total_messages']}
 Current turn:   {stats['current_turn']}
 
 Importance Breakdown:
-  ⚠️  CRITICAL:  {stats['importance_breakdown']['critical']} messages
-  📌 RELEVANT:  {stats['importance_breakdown']['relevant']} messages
-  📝 TRIVIAL:   {stats['importance_breakdown']['trivial']} messages
+  [WARN]  CRITICAL:  {stats['importance_breakdown']['critical']} messages
+  [PIN] RELEVANT:  {stats['importance_breakdown']['relevant']} messages
+  [TEXT] TRIVIAL:   {stats['importance_breakdown']['trivial']} messages
 
-💡 CRITICAL messages (e.g., allergies) are always preserved at full fidelity
+[TIP] CRITICAL messages (e.g., allergies) are always preserved at full fidelity
 """
 
 
@@ -186,6 +217,15 @@ async def handle_afm_clear_history(context: HandlerContext, args: Dict[str, Any]
     Returns:
         Confirmation message with previous state
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     focus_manager = context["focus_manager"]
     prev_count = len(focus_manager.messages)
     prev_turn = focus_manager.turn_counter
@@ -195,7 +235,7 @@ async def handle_afm_clear_history(context: HandlerContext, args: Dict[str, Any]
     logger.info(f"AFM: Cleared dialogue history ({prev_count} messages)")
 
     return f"""
-🗑️ AFM Dialogue History Cleared
+[DELETED] AFM Dialogue History Cleared
 
 Previous state:
   Messages: {prev_count}
@@ -205,7 +245,7 @@ Current state:
   Messages: 0
   Turns:    0
 
-✅ Ready for new conversation
+[OK] Ready for new conversation
 """
 
 
@@ -224,6 +264,15 @@ async def handle_afm_export_history(context: HandlerContext, args: Dict[str, Any
     Returns:
         Export confirmation or error message
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     session_id = args.get("session_id", "default")
     focus_manager = context["focus_manager"]
     persistence = context["persistence"]
@@ -236,11 +285,11 @@ async def handle_afm_export_history(context: HandlerContext, args: Dict[str, Any
 
     if not messages:
         return """
-💾 AFM Export
+[SAVE] AFM Export
 
 No dialogue history to export.
 
-💡 Tip: Add messages with afm_add_message() first.
+Tip: Add messages with afm_add_message() first.
 """
 
     # Save to persistence
@@ -256,24 +305,24 @@ No dialogue history to export.
 
     if success:
         return f"""
-💾 AFM Export Complete
+[SAVE] AFM Export Complete
 
 Session ID: {session_id}
 Messages exported: {len(messages)}
 Current turn: {turn_counter}
 
-💡 This conversation can be restored later with:
+[TIP] This conversation can be restored later with:
    afm_import_history(session_id="{session_id}")
 
 Available sessions: {', '.join(persistence.list_afm_sessions())}
 """
     else:
         return """
-❌ AFM Export Failed
+[ERROR] AFM Export Failed
 
 Could not save dialogue history to persistent storage.
 
-💡 Check logs for details.
+[TIP] Check logs for details.
 """
 
 
@@ -291,6 +340,15 @@ async def handle_afm_import_history(context: HandlerContext, args: Dict[str, Any
     Returns:
         Import confirmation or error message
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for AFM operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 AFM operations/second to prevent resource exhaustion."
+        )
+
     session_id = args.get("session_id", "default")
     focus_manager = context["focus_manager"]
     persistence = context["persistence"]
@@ -303,13 +361,13 @@ async def handle_afm_import_history(context: HandlerContext, args: Dict[str, Any
     if not data:
         available_sessions = persistence.list_afm_sessions()
         return f"""
-❌ AFM Import Failed
+[ERROR] AFM Import Failed
 
 Session '{session_id}' not found.
 
 Available sessions: {', '.join(available_sessions) if available_sessions else '(none)'}
 
-💡 Tip: Use afm_export_history() to save conversations first.
+Tip: Use afm_export_history() to save conversations first.
 """
 
     # Validate data structure before importing
@@ -340,16 +398,16 @@ Available sessions: {', '.join(available_sessions) if available_sessions else '(
     except Exception as e:
         logger.error(f"AFM import validation failed: {e}")
         return f"""
-❌ AFM Import Validation Failed
+[ERROR] AFM Import Validation Failed
 
 Session '{session_id}' contains invalid data: {str(e)}
 
 This may be due to:
-  • Corrupted export file
-  • Incompatible version
-  • Manual editing of export file
+  -Corrupted export file
+  -Incompatible version
+  -Manual editing of export file
 
-💡 Try re-exporting from the source session.
+[TIP] Try re-exporting from the source session.
 """
 
     # Restore to focus manager
@@ -358,17 +416,17 @@ This may be due to:
 
     metadata = data.get("metadata", {})
 
-    logger.info(f"✅ Imported {len(data['messages'])} messages from {session_id}")
+    logger.info(f"[OK] Imported {len(data['messages'])} messages from {session_id}")
 
     return f"""
-📥 AFM Import Complete
+[LOAD] AFM Import Complete
 
 Session ID: {session_id}
 Messages restored: {len(data['messages'])}
 Turn counter restored: {data['turn_counter']}
 Exported at: {metadata.get('exported_at', 'unknown')}
 
-✅ Conversation state has been restored.
+[OK] Conversation state has been restored.
 
-💡 Use afm_get_stats() to see current state.
+[TIP] Use afm_get_stats() to see current state.
 """

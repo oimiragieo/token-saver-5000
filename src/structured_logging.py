@@ -46,7 +46,7 @@ Output Format (JSON):
         "level": "INFO",
         "message": "Document ingested",
         "service": "token-saver-5000",
-        "version": "0.6.1",
+        "version": "0.7.0",
         "environment": "production",
         "trace_id": "a9938fd7a6313e0f27f3fc87f574bff6",
         "span_id": "ed58f84d8971bf60",
@@ -68,6 +68,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, Optional
 
+from .constants import VERSION
+
 # Context variables for async propagation
 _trace_context: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar(
     "trace_context", default={}
@@ -75,6 +77,58 @@ _trace_context: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar(
 _operation_stack: contextvars.ContextVar[list] = contextvars.ContextVar(
     "operation_stack", default=[]
 )
+
+# PII fields to redact from logs (v0.7.0 security hardening)
+REDACTED_FIELDS = {
+    "password",
+    "api_key",
+    "secret",
+    "token",
+    "credential",
+    "email",
+    "ssn",
+    "credit_card",
+    "phone",
+    "ip_address",
+    "auth",
+    "bearer",
+    "private_key",
+    "access_key",
+}
+
+
+def _redact_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Redact PII fields from context before logging.
+
+    Recursively processes nested dictionaries and redacts any keys
+    that contain PII-related substrings.
+
+    Args:
+        context: Context dictionary to redact
+
+    Returns:
+        Redacted context dictionary
+    """
+    if not context:
+        return context
+
+    redacted = {}
+    for key, value in context.items():
+        key_lower = key.lower()
+        # Check if key contains any PII field name
+        if any(field in key_lower for field in REDACTED_FIELDS):
+            redacted[key] = "[REDACTED]"
+        elif isinstance(value, dict):
+            redacted[key] = _redact_context(value)
+        elif isinstance(value, list):
+            # Redact lists of dicts
+            redacted[key] = [
+                _redact_context(item) if isinstance(item, dict) else item for item in value
+            ]
+        else:
+            redacted[key] = value
+    return redacted
 
 
 class JSONFormatter(logging.Formatter):
@@ -187,7 +241,7 @@ class StructuredLogger:
         self,
         name: str = "token-saver-5000",
         service: str = "token-saver-5000",
-        version: str = "0.6.1",
+        version: str = VERSION,
         environment: str = "development",
         log_level: str = "INFO",
         format: str = "json",
@@ -323,11 +377,13 @@ class StructuredLogger:
         3. Trace context from contextvars
         4. OpenTelemetry trace context
 
+        PII redaction is applied before returning (v0.7.0 security).
+
         Args:
             **context: Custom context fields
 
         Returns:
-            Merged context dict
+            Merged and redacted context dict
         """
         merged = {}
 
@@ -340,7 +396,8 @@ class StructuredLogger:
         # Add custom context (highest priority)
         merged.update(context)
 
-        return merged
+        # Apply PII redaction (v0.7.0 security hardening)
+        return _redact_context(merged)
 
     def _should_sample_debug(self) -> bool:
         """
@@ -500,7 +557,7 @@ def configure_structlog(
     log_level: str = "INFO",
     format: str = "json",
     service: str = "token-saver-5000",
-    version: str = "0.6.1",
+    version: str = VERSION,
     environment: Optional[str] = None,
     debug_sample_rate: float = 0.01,
 ):

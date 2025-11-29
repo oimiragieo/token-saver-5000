@@ -281,40 +281,40 @@ class CompressionAdvisor:
             Formatted multi-line string with all estimate details
         """
         lines = [
-            "📊 COMPRESSION ESTIMATE",
-            "─" * 60,
+            "[COMPRESSION ESTIMATE]",
+            "-" * 60,
             f"Original tokens:        {estimate.original_tokens:,}",
             f"Estimated compressed:   {estimate.estimated_compressed:,} tokens",
             f"Compression ratio:      {estimate.compression_ratio:.1f}×",
             f"Token savings:          {estimate.token_savings_pct:.1f}%",
             f"Confidence:             {estimate.confidence.upper()}",
             "",
-            "💡 Reasoning:",
+            "[REASONING]",
             f"   {estimate.reasoning}",
             "",
-            "📈 Best Case Scenario:",
+            "[BEST CASE]",
             f"   Compressed: {estimate.best_case['compressed_tokens']:,} tokens "
             f"({estimate.best_case['ratio']:.1f}×, {estimate.best_case['savings_pct']:.1f}% savings)",
             f"   {estimate.best_case['scenario']}",
             "",
-            "📉 Worst Case Scenario:",
+            "[WORST CASE]",
             f"   Compressed: {estimate.worst_case['compressed_tokens']:,} tokens "
             f"({estimate.worst_case['ratio']:.1f}×, {estimate.worst_case['savings_pct']:.1f}% savings)",
             f"   {estimate.worst_case['scenario']}",
-            "─" * 60,
+            "-" * 60,
         ]
 
         # Add recommendation
         if estimate.original_tokens < 100:
-            lines.append("⚠️  Recommendation: Document may be too small for effective compression.")
+            lines.append("[WARN] Recommendation: Document may be too small for effective compression.")
             lines.append("   Consider ingesting larger documents or combining multiple small ones.")
         elif estimate.token_savings_pct > 80:
-            lines.append("✅ Recommendation: Excellent candidate for compression!")
+            lines.append("[OK] Recommendation: Excellent candidate for compression!")
             lines.append(
                 f"   Expected to save ~{int(estimate.original_tokens - estimate.estimated_compressed):,} tokens."
             )
         else:
-            lines.append("✓  Recommendation: Good candidate for compression.")
+            lines.append("[OK] Recommendation: Good candidate for compression.")
             lines.append(
                 f"   Expected to save ~{int(estimate.original_tokens - estimate.estimated_compressed):,} tokens."
             )

@@ -39,7 +39,15 @@ class TestHandleIngest:
         self.mock_version_manager = Mock()
 
         # Configure resource manager to allow ingestion by default
-        self.mock_resource_manager.check_document_size.return_value = (True, "")
+        # v0.8.0: Handler now calls async wrappers
+        self.mock_resource_manager.check_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
+        self.mock_resource_manager.register_document_async = AsyncMock()
+
+        # Configure version manager async wrappers (v0.8.0 audit fix)
+        self.mock_version_manager.add_version_async = AsyncMock()
+        self.mock_version_manager.delete_versions_async = AsyncMock()
 
         # Configure compressor to return mock skeleton (async method)
         self.mock_skeleton = Mock()
@@ -130,7 +138,8 @@ class TestHandleIngest:
         self, mock_validate_token, mock_validate_nodes, mock_validate_file
     ):
         """Test that exceeding resource limits raises error"""
-        self.mock_resource_manager.check_document_size.return_value = (
+        # v0.8.0: Handler now calls async wrapper
+        self.mock_resource_manager.check_document_size_async.return_value = (
             False,
             "Document exceeds limit",
         )
@@ -350,7 +359,7 @@ class TestHandleGetStats:
         result = await ch.handle_get_stats(self.context, args)
 
         self.mock_compressor.get_stats.assert_called_once_with("doc1")
-        assert "📊 Document Statistics: doc1" in result
+        assert "[STATS] Document Statistics: doc1" in result
 
     @pytest.mark.asyncio
     async def test_get_global_stats(self):
@@ -365,7 +374,7 @@ class TestHandleGetStats:
 
         result = await ch.handle_get_stats(self.context, args)
 
-        assert "📊 Global Statistics" in result
+        assert "[STATS] Global Statistics" in result
         assert "Total files ingested: 3" in result
 
 
@@ -400,7 +409,7 @@ class TestHandleListDocuments:
 
         result = await ch.handle_list_documents(self.context, {})
 
-        assert "📚 Document Inventory" in result
+        assert "[DOC] Document Inventory" in result
         assert "Total documents: 2" in result
 
 
@@ -422,12 +431,19 @@ class TestHandleDeleteDocument:
         self.mock_sync_manager = Mock()
         self.mock_sync_manager.export_metadata.return_value = []
 
+        # v0.8.0 audit fix: add async mocks for resource and version managers
+        self.mock_resource_manager = Mock()
+        self.mock_resource_manager.unregister_document_async = AsyncMock()
+
+        self.mock_version_manager = Mock()
+        self.mock_version_manager.delete_versions_async = AsyncMock()
+
         self.context = {
             "compressor": self.mock_compressor,
             "persistence": self.mock_persistence,
-            "resource_manager": Mock(),
+            "resource_manager": self.mock_resource_manager,
             "sync_manager": self.mock_sync_manager,
-            "version_manager": Mock(),
+            "version_manager": self.mock_version_manager,
             "retrieval_history": {},
         }
 
@@ -438,7 +454,7 @@ class TestHandleDeleteDocument:
 
         result = await ch.handle_delete_document(self.context, args)
 
-        assert "⚠️  DELETE CONFIRMATION REQUIRED" in result
+        assert "[WARN]  DELETE CONFIRMATION REQUIRED" in result
         assert "confirm=true" in result
 
     @pytest.mark.asyncio
@@ -448,7 +464,7 @@ class TestHandleDeleteDocument:
 
         result = await ch.handle_delete_document(self.context, args)
 
-        assert "🗑️ Document Deleted Successfully" in result
+        assert "[DELETE] Document Deleted Successfully" in result
         assert "doc1" in result
 
 

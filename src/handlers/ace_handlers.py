@@ -26,6 +26,8 @@ import logging
 from typing import Dict, Any, List
 
 from ..types import HandlerContext
+from ..rate_limiter import RATE_LIMITERS
+from ..error_types import RateLimitExceededError
 from ..ace_framework import (
     ACEFramework,
     ACEContext,
@@ -231,6 +233,15 @@ async def handle_ace_generate(context: HandlerContext, args: Dict[str, Any]) -> 
             "stats": {"total_steps": 3, "avg_confidence": 0.85}
         }
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         task = args["task"]
         context_id = args.get("context_id", "default")
@@ -288,6 +299,15 @@ async def handle_ace_reflect(context: HandlerContext, args: Dict[str, Any]) -> s
             "stats": {"total_insights": 2, "avg_confidence": 0.7}
         }
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         trajectory = args["trajectory"]
         outcome = args["outcome"]
@@ -338,6 +358,15 @@ async def handle_ace_curate(context: HandlerContext, args: Dict[str, Any]) -> st
             "deltas_applied": 2
         }
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         insights = args["insights"]
         context_id = args.get("context_id", "default")
@@ -389,6 +418,15 @@ async def handle_ace_grow_context(context: HandlerContext, args: Dict[str, Any])
         Input: {"bullets": [{"text": "...", "bullet_type": "strategy"}], "context_id": "quantum"}
         Output: {"status": "success", "bullets_added": 1, "total_bullets": 13}
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         bullets_data = args["bullets"]
         context_id = args.get("context_id", "default")
@@ -435,6 +473,15 @@ async def handle_ace_refine_context(context: HandlerContext, args: Dict[str, Any
         Input: {"bullet_ids": ["abc-123"], "success": true, "confidence_boost": 0.1}
         Output: {"status": "success", "bullets_updated": 1, "avg_confidence_after": 0.85}
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         bullet_ids = args["bullet_ids"]
         success = args["success"]
@@ -490,6 +537,15 @@ async def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any])
         Input: {"context_id": "quantum_domain", "min_confidence": 0.7}
         Output: {"status": "success", "version": 5, "bullets": [...], "stats": {...}}
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         context_id = args.get("context_id", "default")
         include_embeddings = args.get("include_embeddings", False)
@@ -556,6 +612,15 @@ async def handle_ace_execute_cycle(context: HandlerContext, args: Dict[str, Any]
             "deltas_applied": 2
         }
     """
+    # Rate limiting (v0.7.0 security hardening)
+    try:
+        await RATE_LIMITERS["compression"].acquire(blocking=True)
+    except RateLimitExceededError:
+        raise ValueError(
+            "Rate limit exceeded for ACE operations. Please retry in a moment.\n"
+            "Tip: The server allows ~5 ACE operations/second to prevent resource exhaustion."
+        )
+
     try:
         task = args["task"]
         outcome = args["outcome"]

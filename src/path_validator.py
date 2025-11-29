@@ -114,7 +114,7 @@ class PathValidator:
             abs_path = os.path.normpath(os.path.realpath(file_path))
         except (OSError, ValueError) as e:
             raise ValueError(
-                f"Invalid file path: {e}\n" f"💡 Tip: Ensure the path is valid and accessible"
+                f"Invalid file path: {e}\n" f"Tip: Ensure the path is valid and accessible"
             ) from e
 
         # Check 3: Path must be within allowed directories
@@ -132,7 +132,7 @@ class PathValidator:
                 f"Access denied: file_path must be within allowed directories\n"
                 f"   Allowed directories:\n   {allowed_str}\n"
                 f"   Attempted path: {abs_path}\n"
-                f"💡 Tip: Use relative paths or paths within the current directory"
+                f"Tip: Use relative paths or paths within the current directory"
             )
 
         logger.debug(f"Path validated: {file_path} → {abs_path}")

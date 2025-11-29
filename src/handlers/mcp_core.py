@@ -212,7 +212,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="delete_document",
             description=(
-                "🗑️ DELETE DOCUMENT: Permanently delete an ingested document. "
+                "DELETE DOCUMENT: Permanently delete an ingested document. "
                 "Removes the document from memory and persistent storage. "
                 "This operation cannot be undone. Use with caution. "
                 "Useful for managing storage limits or removing outdated documents."
@@ -236,7 +236,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="adapt_to_context_window",
             description=(
-                "🔧 ADAPTIVE CONTEXT ALLOCATION (JSCCM-inspired): "
+                "ADAPTIVE CONTEXT ALLOCATION (JSCCM-inspired): "
                 "Dynamically adjust compression based on available context window. "
                 "Low availability (like low SNR in wireless) → More compression. "
                 "High availability → Less compression, more detail. "
@@ -271,11 +271,11 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="multilevel_encode",
             description=(
-                "📊 MULTI-LEVEL ENCODING (JSCCM-inspired): "
+                "MULTI-LEVEL ENCODING (JSCCM-inspired): "
                 "Generate skeleton with 3 priority levels: "
-                "• Main branch (top 15%, always included) - critical concepts "
-                "• Auxiliary branch (next 25%, include if space allows) - important details "
-                "• Detail branch (remaining, only if plenty of space) - supplementary content. "
+                "- Main branch (top 15%, always included) - critical concepts "
+                "- Auxiliary branch (next 25%, include if space allows) - important details "
+                "- Detail branch (remaining, only if plenty of space) - supplementary content. "
                 "Progressively adds levels based on available context window. "
                 "Inspired by JSCCM's parallel encoder architecture."
             ),
@@ -298,7 +298,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="check_blind_spots",
             description=(
-                "🔍 BLIND SPOT DETECTOR: Analyze if your response missed critical context. "
+                "BLIND SPOT DETECTOR: Analyze if your response missed critical context. "
                 "This tool embeds your response and compares it to ALL nodes in the document. "
                 "If relevant content was not retrieved, it alerts you and suggests auto-injection. "
                 "Use AFTER generating a response to ensure fidelity. "
@@ -327,7 +327,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="detect_hallucination",
             description=(
-                "🛡️ HALLUCINATION DETECTOR: Check if a response is grounded in source material. "
+                "HALLUCINATION DETECTOR: Check if a response is grounded in source material. "
                 "Compares response embedding to document graph. "
                 "Flags responses with low similarity to all nodes (possible fabrication). "
                 "Use when uncertain about answer accuracy."
@@ -351,7 +351,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_add_message",
             description=(
-                "💬 ADAPTIVE FOCUS MEMORY: Add message to dialogue history. "
+                "ADAPTIVE FOCUS MEMORY: Add message to dialogue history. "
                 "AFM (Adaptive Focus Memory, arXiv:2511.12712v1) manages multi-turn conversations "
                 "by assigning adaptive fidelity to each message based on recency, semantic relevance, "
                 "and importance. Messages are automatically classified as CRITICAL (safety-sensitive), "
@@ -376,7 +376,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_build_context",
             description=(
-                "🧠 ADAPTIVE FOCUS MEMORY: Build optimized context for current query. "
+                "[AFM] ADAPTIVE FOCUS MEMORY: Build optimized context for current query. "
                 "Uses semantic similarity + recency weighting + importance classification "
                 "to pack dialogue history under strict token budget. Achieves ~66% token reduction "
                 "while preserving safety-critical information (e.g., allergies, constraints). "
@@ -405,7 +405,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_get_stats",
             description=(
-                "📊 ADAPTIVE FOCUS MEMORY: Get dialogue statistics. "
+                "[STATS] ADAPTIVE FOCUS MEMORY: Get dialogue statistics. "
                 "Returns total messages, current turn index, and importance breakdown "
                 "(critical/relevant/trivial counts). Useful for monitoring dialogue state."
             ),
@@ -417,7 +417,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_clear_history",
             description=(
-                "🗑️ ADAPTIVE FOCUS MEMORY: Clear dialogue history. "
+                "[DELETE] ADAPTIVE FOCUS MEMORY: Clear dialogue history. "
                 "Removes all messages and resets turn counter. Use when starting a new conversation "
                 "or when dialogue context is no longer relevant."
             ),
@@ -429,7 +429,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_export_history",
             description=(
-                "💾 ADAPTIVE FOCUS MEMORY: Export dialogue history to JSON. "
+                "[SAVE] ADAPTIVE FOCUS MEMORY: Export dialogue history to JSON. "
                 "Saves current conversation state including all messages, turn counter, "
                 "and metadata. Use this to preserve conversations for later resume. "
                 "Returns JSON string that can be saved and imported later."
@@ -448,7 +448,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="afm_import_history",
             description=(
-                "📥 ADAPTIVE FOCUS MEMORY: Import dialogue history from JSON. "
+                "[LOAD] ADAPTIVE FOCUS MEMORY: Import dialogue history from JSON. "
                 "Restores a previously exported conversation state. This replaces "
                 "the current dialogue history. Use this to resume saved conversations."
             ),
@@ -467,7 +467,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="check_file_sync",
             description=(
-                "🔄 FILE SYNC CHECK: Check if cached document is in sync with source file on disk. "
+                "[SYNC] FILE SYNC CHECK: Check if cached document is in sync with source file on disk. "
                 "Detects if file was modified after ingestion by comparing modification time and checksums. "
                 "Use this before long operations to ensure you're working with current data. "
                 "Only works for documents ingested with file_path parameter."
@@ -486,7 +486,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="diff_cached_file",
             description=(
-                "📝 FILE DIFF: Generate unified diff between cached version and current file on disk. "
+                "[DIFF] FILE DIFF: Generate unified diff between cached version and current file on disk. "
                 "Shows exactly what changed since ingestion (additions, deletions, modifications). "
                 "Useful for reviewing changes before refreshing cache or to see what was edited. "
                 "Returns unified diff format similar to 'git diff'."
@@ -510,7 +510,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="refresh_document",
             description=(
-                "🔃 REFRESH DOCUMENT: Re-ingest document from source file to update cache with latest changes. "
+                "[REFRESH] REFRESH DOCUMENT: Re-ingest document from source file to update cache with latest changes. "
                 "Stores old version in history (default: keeps last 10 versions). "
                 "Use this when check_file_sync detects staleness or after external edits. "
                 "Returns new compression stats and confirms version was saved."
@@ -529,7 +529,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="get_version_history",
             description=(
-                "📜 VERSION HISTORY: Get version timeline for a document. "
+                "[HISTORY] VERSION HISTORY: Get version timeline for a document. "
                 "Shows all cached versions with timestamps, checksums, file paths, and compression stats. "
                 "Similar to 'git log' for cached documents. Use this to browse version history "
                 "before using diff_cached_file to compare specific versions."
@@ -549,7 +549,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="check_resource_health",
             description=(
-                "💾 RESOURCE HEALTH: Check resource usage and system health. "
+                "[SAVE] RESOURCE HEALTH: Check resource usage and system health. "
                 "Returns storage, memory, and document count metrics with proactive warnings and recommendations. "
                 "Use this to monitor resource usage before ingesting large documents or when experiencing slowdowns. "
                 "Prevents hitting storage limits unexpectedly."
@@ -564,7 +564,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_generate",
             description=(
-                "🧠 ACE GENERATE: Generate reasoning trajectory for a task using ACE playbook. "
+                "[AFM] ACE GENERATE: Generate reasoning trajectory for a task using ACE playbook. "
                 "Produces step-by-step reasoning that applies relevant bullets from the playbook. "
                 "Each step includes relevant guidelines, reasoning, and confidence scores. "
                 "Use this to guide semantic node selection and compression decisions."
@@ -595,7 +595,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_reflect",
             description=(
-                "🔍 ACE REFLECT: Extract insights from a reasoning trajectory. "
+                "[ANALYZE] ACE REFLECT: Extract insights from a reasoning trajectory. "
                 "Analyzes what worked (successes) and what didn't (failures) to formulate new bullets. "
                 "Returns insights with confidence scores and reasoning. "
                 "Use after completing a task to learn and improve the playbook."
@@ -627,7 +627,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_curate",
             description=(
-                "✨ ACE CURATE: Integrate insights into playbook via delta updates. "
+                "[CURATE] ACE CURATE: Integrate insights into playbook via delta updates. "
                 "Applies incremental changes (add/update/remove bullets) with semantic deduplication. "
                 "Prevents context collapse through grow-and-refine strategy. "
                 "Use after reflecting to evolve the playbook."
@@ -655,7 +655,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_grow_context",
             description=(
-                "➕ ACE GROW: Manually add bullets to playbook (grow operation). "
+                "[ADD] ACE GROW: Manually add bullets to playbook (grow operation). "
                 "Directly insert principles, strategies, tactics, constraints, or preferences. "
                 "Use to seed domain-specific knowledge or codify team standards. "
                 "Each bullet gets an embedding for semantic operations."
@@ -772,7 +772,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_execute_cycle",
             description=(
-                "🔄 ACE EXECUTE CYCLE: Execute complete ACE cycle (Generate → Reflect → Curate). "
+                "[SYNC] ACE EXECUTE CYCLE: Execute complete ACE cycle (Generate → Reflect → Curate). "
                 "Convenience tool that combines the three-step ACE process into one call. "
                 "Generates trajectory, reflects on outcome, and curates insights automatically. "
                 "Use for rapid iteration and continuous playbook improvement."
@@ -854,7 +854,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="recommend_fidelity",
             description=(
-                "💡 Get intelligent recommendation for optimal fidelity level. "
+                "[TIP] Get intelligent recommendation for optimal fidelity level. "
                 "Analyzes your use case, number of nodes, token budget, and query complexity "
                 "to suggest the best fidelity level (ABSTRACT, OUTLINE, STRUCTURE, DETAILED, or RAW). "
                 "Returns recommendation with reasoning, token estimate, and alternatives. "
@@ -900,7 +900,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="export_graph_json",
             description=(
-                "📊 Export semantic graph as JSON for programmatic access. "
+                "[STATS] Export semantic graph as JSON for programmatic access. "
                 "Returns a structured JSON representation of the semantic graph with nodes, edges, "
                 "importance scores, and statistics. Perfect for custom analysis or integration with "
                 "other tools."
@@ -980,7 +980,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="explain_compression_decision",
             description=(
-                "🔍 Explain why a specific node was kept or dropped during compression. "
+                "[ANALYZE] Explain why a specific node was kept or dropped during compression. "
                 "Provides detailed analysis including importance score ranking, connectivity, "
                 "key entities, and relationships with other nodes. Perfect for understanding "
                 "and debugging compression decisions."
@@ -1094,7 +1094,7 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         raise ValueError(
             f"Unknown tool: '{name}'\n\n"
             f"Available tools ({len(router)}):\n{available_tools}\n\n"
-            f"💡 Tip: Use list_tools() to see all available tools with descriptions"
+            f"[TIP] Tip: Use list_tools() to see all available tools with descriptions"
         )
 
     # Route to handler (async)

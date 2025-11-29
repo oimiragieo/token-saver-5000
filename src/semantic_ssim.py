@@ -315,13 +315,13 @@ def interpret_ssim_score(ssim: float) -> str:
         Interpretation string
     """
     if ssim >= 0.9:
-        return "✅ Excellent - Structure fully preserved"
+        return "[OK] Excellent - Structure fully preserved"
     elif ssim >= 0.7:
-        return "✅ Good - Minor structural degradation"
+        return "[OK] Good - Minor structural degradation"
     elif ssim >= 0.5:
-        return "⚠️  Acceptable - Noticeable structure loss"
+        return "[WARN] Acceptable - Noticeable structure loss"
     else:
-        return "❌ Poor - Significant structure loss, reduce compression"
+        return "[FAIL] Poor - Significant structure loss, reduce compression"
 
 
 # Example usage
@@ -390,5 +390,5 @@ if __name__ == "__main__":
     print(f"SSIM:      {ssim_30:.3f}")
     print(f"Quality:   {interpret_ssim_score(ssim_30)}")
 
-    print("\n💡 Insight: Higher compression → Lower SSIM (as expected)")
+    print("\n[TIP] Insight: Higher compression -> Lower SSIM (as expected)")
     print("   FPQE paper shows SSIM predicts downstream task performance!")

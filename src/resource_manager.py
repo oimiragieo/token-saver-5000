@@ -9,7 +9,10 @@ Limits:
 - Max concurrent documents: 1000 (configurable)
 """
 
+import asyncio
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 
@@ -55,11 +58,29 @@ class ResourceManager:
         """
         self.limits = limits or ResourceLimits()
         self.document_sizes: Dict[str, float] = {}  # file_id -> size in MB
+
+        # Concurrency protection (v0.8.0 audit fix - Issue 3)
+        # Uses threading.Lock since operations are fast in-memory dict updates (<1ms).
+        #
+        # NOTE: ResourceManager uses threading.Lock + ThreadPoolExecutor pattern:
+        # - All operations are pure in-memory dict read/writes (no disk I/O)
+        # - Lock hold time is <1ms, acceptable for single-client MCP server
+        # - psutil calls (in check_health) take ~10ms max
+        # - check_health_async() uses run_in_executor to avoid blocking event loop
+        self._lock = threading.Lock()
+
+        # Thread pool for async wrappers (v0.8.0 audit fix)
+        # Allows sync methods with locks to be called from async handlers
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="resource_mgr")
+
         logger.info(f"Resource manager initialized: {self.limits}")
 
     def check_document_size(self, file_id: str, size_bytes: int) -> tuple[bool, Optional[str]]:
         """
         Check if document size is within limits.
+
+        Handles re-ingest correctly by computing candidate total that accounts
+        for replacing existing document (v0.8.0 audit fix for Issue 5).
 
         Args:
             file_id: Document identifier
@@ -70,40 +91,52 @@ class ResourceManager:
         """
         size_mb = size_bytes / (1024 * 1024)
 
+        # Thread-safe: read shared state under lock to prevent TOCTOU races
+        # (v0.8.0 audit fix - Issue 3)
+        with self._lock:
+            # Get old size if this is a re-ingest (0 if new document)
+            # This prevents double-counting: candidate = total - old + new
+            old_size_mb = self.document_sizes.get(file_id, 0)
+            current_total_mb = sum(self.document_sizes.values())
+            doc_count = len(self.document_sizes)
+            is_reingest = file_id in self.document_sizes
+
+        candidate_total_mb = current_total_mb - old_size_mb + size_mb
+
         # Check total storage first (system-wide limit)
-        total_size_mb = sum(self.document_sizes.values()) + size_mb
-        if total_size_mb > self.limits.max_total_storage_mb:
+        if candidate_total_mb > self.limits.max_total_storage_mb:
             return False, (
-                f"Total storage limit exceeded: {total_size_mb:.1f}MB > {self.limits.max_total_storage_mb:.1f}MB\n"
-                f"💡 Tip: Delete old documents or increase max_total_storage_mb\n"
-                f"   Current documents: {len(self.document_sizes)}, Total size: {sum(self.document_sizes.values()):.1f}MB"
+                f"Total storage limit exceeded: {candidate_total_mb:.1f}MB > {self.limits.max_total_storage_mb:.1f}MB\n"
+                f"Tip: Delete old documents or increase max_total_storage_mb\n"
+                f"   Current documents: {doc_count}, Total size: {current_total_mb:.1f}MB"
             )
 
-        # Check document count
-        if len(self.document_sizes) >= self.limits.max_documents:
+        # Check document count (skip for re-ingest - not adding a new document)
+        # Note: is_reingest and doc_count captured under lock above
+        if not is_reingest and doc_count >= self.limits.max_documents:
             return False, (
-                f"Too many documents: {len(self.document_sizes)} >= {self.limits.max_documents}\n"
-                f"💡 Tip: Delete old documents or increase max_documents"
+                f"Too many documents: {doc_count} >= {self.limits.max_documents}\n"
+                f"Tip: Delete old documents or increase max_documents"
             )
 
         # Check individual document size
         if size_mb > self.limits.max_document_size_mb:
             return False, (
                 f"Document too large: {size_mb:.1f}MB exceeds limit of {self.limits.max_document_size_mb:.1f}MB\n"
-                f"💡 Tip: Split document into smaller sections or increase max_document_size_mb"
+                f"Tip: Split document into smaller sections or increase max_document_size_mb"
             )
 
         # Warn if approaching limits
         if size_mb > self.limits.max_document_size_mb * self.limits.warn_threshold:
             logger.warning(
-                f"⚠️  Document {file_id} is large: {size_mb:.1f}MB "
+                f"[WARN] Document {file_id} is large: {size_mb:.1f}MB "
                 f"({size_mb/self.limits.max_document_size_mb*100:.0f}% of limit)"
             )
 
-        if total_size_mb > self.limits.max_total_storage_mb * self.limits.warn_threshold:
+        if candidate_total_mb > self.limits.max_total_storage_mb * self.limits.warn_threshold:
             logger.warning(
-                f"⚠️  Total storage approaching limit: {total_size_mb:.1f}MB "
-                f"({total_size_mb/self.limits.max_total_storage_mb*100:.0f}% of limit)"
+                f"[WARN] Total storage approaching limit: {candidate_total_mb:.1f}MB "
+                f"({candidate_total_mb/self.limits.max_total_storage_mb*100:.0f}% of limit)"
             )
 
         return True, None
@@ -117,7 +150,9 @@ class ResourceManager:
             size_bytes: Document size in bytes
         """
         size_mb = size_bytes / (1024 * 1024)
-        self.document_sizes[file_id] = size_mb
+        # Thread-safe: protect mutations (v0.8.0 audit fix - Issue 3)
+        with self._lock:
+            self.document_sizes[file_id] = size_mb
         logger.info(f"Registered document {file_id}: {size_mb:.2f}MB")
 
     def unregister_document(self, file_id: str):
@@ -127,9 +162,11 @@ class ResourceManager:
         Args:
             file_id: Document identifier
         """
-        if file_id in self.document_sizes:
-            size_mb = self.document_sizes.pop(file_id)
-            logger.info(f"Unregistered document {file_id}: {size_mb:.2f}MB")
+        # Thread-safe: protect mutations (v0.8.0 audit fix - Issue 3)
+        with self._lock:
+            if file_id in self.document_sizes:
+                size_mb = self.document_sizes.pop(file_id)
+                logger.info(f"Unregistered document {file_id}: {size_mb:.2f}MB")
 
     def check_health(self) -> Dict[str, Any]:
         """
@@ -137,6 +174,9 @@ class ResourceManager:
 
         Returns comprehensive health status including warnings
         when approaching limits.
+
+        Thread-safe: Uses internal lock to protect shared state access
+        (v0.8.0 audit fix - Issue 3).
 
         Returns:
             Dictionary with health status:
@@ -148,9 +188,10 @@ class ResourceManager:
         warnings = []
         recommendations = []
 
-        # Calculate current usage
-        total_size_mb = sum(self.document_sizes.values())
-        total_docs = len(self.document_sizes)
+        # Thread-safe: protect reads from concurrent modifications
+        with self._lock:
+            total_size_mb = sum(self.document_sizes.values())
+            total_docs = len(self.document_sizes)
 
         # Storage usage
         storage_pct = total_size_mb / self.limits.max_total_storage_mb
@@ -210,6 +251,71 @@ class ResourceManager:
             },
         }
 
+    async def check_health_async(self) -> Dict[str, Any]:
+        """
+        Async wrapper for check_health (v0.8.0 audit fix - Issue 3).
+
+        Runs check_health in thread pool to avoid blocking event loop
+        when called from async handlers. This is necessary because:
+        - check_health uses threading.Lock (blocks event loop if awaited directly)
+        - psutil calls may take ~10ms
+
+        Returns:
+            Dictionary with health status (same as check_health)
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self._executor, self.check_health)
+
+    async def check_document_size_async(
+        self, file_id: str, size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Async wrapper for check_document_size (v0.8.0 audit fix - Issue 3).
+
+        Runs check_document_size in thread pool to avoid blocking event loop
+        when called from async handlers.
+
+        Args:
+            file_id: Document identifier
+            size_bytes: Document size in bytes
+
+        Returns:
+            (allowed, error_message)
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor, lambda: self.check_document_size(file_id, size_bytes)
+        )
+
+    async def register_document_async(self, file_id: str, size_bytes: int) -> None:
+        """
+        Async wrapper for register_document (v0.8.0 audit fix - Issue 3).
+
+        Runs register_document in thread pool to avoid blocking event loop
+        when called from async handlers.
+
+        Args:
+            file_id: Document identifier
+            size_bytes: Document size in bytes
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            self._executor, lambda: self.register_document(file_id, size_bytes)
+        )
+
+    async def unregister_document_async(self, file_id: str) -> None:
+        """
+        Async wrapper for unregister_document (v0.8.0 audit fix - Issue 3).
+
+        Runs unregister_document in thread pool to avoid blocking event loop
+        when called from async handlers.
+
+        Args:
+            file_id: Document identifier
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(self._executor, lambda: self.unregister_document(file_id))
+
     def get_usage_summary(self) -> str:
         """
         Get human-readable usage summary.
@@ -221,8 +327,8 @@ class ResourceManager:
         metrics = health["metrics"]
 
         lines = []
-        lines.append("📊 Resource Usage Summary")
-        lines.append("─" * 50)
+        lines.append("Resource Usage Summary")
+        lines.append("-" * 50)
 
         # Storage
         lines.append(
@@ -242,23 +348,23 @@ class ResourceManager:
             )
 
         # Status
-        lines.append("─" * 50)
+        lines.append("-" * 50)
         if health["healthy"]:
-            lines.append("Status: ✅ Healthy")
+            lines.append("Status: [OK] Healthy")
         else:
-            lines.append("Status: ⚠️  Warnings detected")
+            lines.append("Status: [WARN] Warnings detected")
 
         # Warnings
         if health["warnings"]:
-            lines.append("\n⚠️  Warnings:")
+            lines.append("\n[WARN] Warnings:")
             for warning in health["warnings"]:
-                lines.append(f"  • {warning}")
+                lines.append(f"  - {warning}")
 
         # Recommendations
         if health["recommendations"]:
-            lines.append("\n💡 Recommendations:")
+            lines.append("\nRecommendations:")
             for rec in health["recommendations"]:
-                lines.append(f"  • {rec}")
+                lines.append(f"  - {rec}")
 
         return "\n".join(lines)
 
@@ -309,13 +415,13 @@ class ResourceManager:
         # Check document storage
         if stats["utilization_pct"] > 100:
             return False, (
-                f"⚠️  Storage limit exceeded: {stats['total_documents_mb']:.1f}MB / {stats['limit_documents_mb']:.1f}MB\n"
+                f"[ERROR] Storage limit exceeded: {stats['total_documents_mb']:.1f}MB / {stats['limit_documents_mb']:.1f}MB\n"
                 f"   Delete documents to free space"
             )
 
         if stats["utilization_pct"] > self.limits.warn_threshold * 100:
             return True, (
-                f"⚠️  Storage approaching limit: {stats['utilization_pct']:.0f}% used\n"
+                f"[WARN] Storage approaching limit: {stats['utilization_pct']:.0f}% used\n"
                 f"   Consider deleting old documents"
             )
 
@@ -323,13 +429,13 @@ class ResourceManager:
         if PSUTIL_AVAILABLE and "process_memory_mb" in stats:
             if stats["process_memory_mb"] > self.limits.max_memory_mb:
                 return False, (
-                    f"⚠️  Memory limit exceeded: {stats['process_memory_mb']:.1f}MB > {self.limits.max_memory_mb:.1f}MB\n"
+                    f"[ERROR] Memory limit exceeded: {stats['process_memory_mb']:.1f}MB > {self.limits.max_memory_mb:.1f}MB\n"
                     f"   Restart server or delete documents"
                 )
 
             if stats["process_memory_mb"] > self.limits.max_memory_mb * self.limits.warn_threshold:
                 return True, (
-                    f"⚠️  Memory usage high: {stats['process_memory_mb']:.1f}MB "
+                    f"[WARN] Memory usage high: {stats['process_memory_mb']:.1f}MB "
                     f"({stats['process_memory_mb']/self.limits.max_memory_mb*100:.0f}% of limit)"
                 )
 
@@ -389,7 +495,7 @@ class ResourceManager:
         largest = stats["largest_documents"]
 
         suggestion = [
-            "💡 Cleanup Suggestions:",
+            "Cleanup Suggestions:",
             f"   Current storage: {stats['total_documents_mb']:.1f}MB / {stats['limit_documents_mb']:.1f}MB ({stats['utilization_pct']:.0f}%)",
             "",
             "   Consider deleting large documents:",

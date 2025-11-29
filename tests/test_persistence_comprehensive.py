@@ -22,8 +22,8 @@ Test Categories:
 Total: 55 comprehensive tests
 """
 
+import json
 import os
-import pickle
 import shutil
 import tempfile
 import threading
@@ -112,8 +112,8 @@ class TestDocumentPersistence:
 
         assert success is True
 
-        # Verify file exists
-        doc_file = persistence_manager.documents_dir / "test_doc.pkl"
+        # Verify file exists (v0.8.0: now uses .json instead of .pkl)
+        doc_file = persistence_manager.documents_dir / "test_doc.json"
         assert doc_file.exists()
 
     def test_load_document_json_fallback(self, persistence_manager, sample_document_data):
@@ -163,7 +163,7 @@ class TestDocumentPersistence:
         assert "doc3" in doc_list
 
     def test_list_documents_excludes_graph_files(self, persistence_manager, sample_document_data):
-        """Test that list_documents excludes _graph.pkl files."""
+        """Test that list_documents excludes _graph.json files (v0.8.0 format)."""
         persistence_manager.use_chromadb = False
 
         # Save document
@@ -174,10 +174,10 @@ class TestDocumentPersistence:
             sample_document_data["metadata"],
         )
 
-        # Manually create a graph file to test exclusion
-        graph_file = persistence_manager.documents_dir / "test_doc_graph.pkl"
-        with open(graph_file, "wb") as f:
-            pickle.dump({"test": "data"}, f)
+        # Manually create a graph file to test exclusion (v0.8.0: uses json format)
+        graph_file = persistence_manager.documents_dir / "test_doc_graph.json"
+        with open(graph_file, "w") as f:
+            json.dump({"test": "data"}, f)
 
         doc_list = persistence_manager.list_documents()
 
@@ -201,8 +201,8 @@ class TestDocumentPersistence:
 
         assert success is True
 
-        # Verify file deleted
-        doc_file = persistence_manager.documents_dir / "test_doc.pkl"
+        # Verify file deleted (v0.8.0: now uses .json instead of .pkl)
+        doc_file = persistence_manager.documents_dir / "test_doc.json"
         assert not doc_file.exists()
 
     def test_delete_nonexistent_document(self, persistence_manager):
@@ -230,7 +230,7 @@ class TestDocumentPersistence:
         assert success is False
 
     def test_load_document_with_corrupted_file(self, persistence_manager, sample_document_data):
-        """Test loading document with corrupted pickle file."""
+        """Test loading document with corrupted JSON file (v0.8.0 format)."""
         persistence_manager.use_chromadb = False
 
         # Save document first
@@ -241,10 +241,10 @@ class TestDocumentPersistence:
             sample_document_data["metadata"],
         )
 
-        # Corrupt the file
-        doc_file = persistence_manager.documents_dir / "test_doc.pkl"
-        with open(doc_file, "wb") as f:
-            f.write(b"CORRUPTED DATA")
+        # Corrupt the file (v0.8.0: now uses .json instead of .pkl)
+        doc_file = persistence_manager.documents_dir / "test_doc.json"
+        with open(doc_file, "w") as f:
+            f.write("CORRUPTED DATA {{{invalid json")
 
         # Try to load
         loaded_data = persistence_manager.load_document("test_doc")
@@ -320,7 +320,8 @@ class TestDocumentPersistence:
         loaded_data = persistence_manager.load_document("test_doc")
 
         assert loaded_data["graph_data"]["nodes"] == ["test_doc_n1", "test_doc_n2"]
-        assert loaded_data["graph_data"]["edges"] == [("test_doc_n1", "test_doc_n2", 0.7)]
+        # Note: JSON converts tuples to lists, so edges are now lists (v0.8.0 format)
+        assert loaded_data["graph_data"]["edges"] == [["test_doc_n1", "test_doc_n2", 0.7]]
 
     def test_overwrite_existing_document(self, persistence_manager, sample_document_data):
         """Test that saving over existing document works correctly."""
@@ -368,7 +369,7 @@ class TestAFMHistoryPersistence:
     """Test AFM dialogue history persistence."""
 
     def test_save_afm_history(self, persistence_manager):
-        """Test saving AFM dialogue history."""
+        """Test saving AFM dialogue history (v0.8.0: JSON format)."""
         from src.afm import Message
 
         messages = [
@@ -385,8 +386,8 @@ class TestAFMHistoryPersistence:
 
         assert success is True
 
-        # Verify file exists
-        history_file = persistence_manager.afm_dir / "session1.pkl"
+        # Verify file exists (v0.8.0: now uses .json instead of .pkl)
+        history_file = persistence_manager.afm_dir / "session1.json"
         assert history_file.exists()
 
     def test_load_afm_history(self, persistence_manager):
@@ -436,7 +437,7 @@ class TestAFMHistoryPersistence:
         assert "session3" in session_list
 
     def test_delete_afm_history(self, persistence_manager):
-        """Test deleting AFM dialogue history."""
+        """Test deleting AFM dialogue history (v0.8.0: JSON format)."""
         from src.afm import Message
 
         messages = [Message(role="user", content="Test", turn_index=0)]
@@ -449,8 +450,8 @@ class TestAFMHistoryPersistence:
 
         assert success is True
 
-        # Verify file deleted
-        history_file = persistence_manager.afm_dir / "session1.pkl"
+        # Verify file deleted (v0.8.0: now uses .json instead of .pkl)
+        history_file = persistence_manager.afm_dir / "session1.json"
         assert not history_file.exists()
 
     def test_delete_nonexistent_afm_history(self, persistence_manager):
@@ -654,8 +655,8 @@ class TestErrorHandlingAndRecovery:
             sample_document_data["metadata"],
         )
 
-        # Make file read-only
-        doc_file = persistence_manager.documents_dir / "test_doc.pkl"
+        # Make file read-only (v0.8.0: now uses .json instead of .pkl)
+        doc_file = persistence_manager.documents_dir / "test_doc.json"
         os.chmod(doc_file, 0o444)
 
         try:
@@ -668,13 +669,13 @@ class TestErrorHandlingAndRecovery:
             os.chmod(doc_file, 0o644)
 
     def test_save_afm_history_with_permission_error(self, persistence_manager):
-        """Test save_afm_history with permission error."""
+        """Test save_afm_history with permission error (v0.8.0: JSON format)."""
         from src.afm import Message
 
         messages = [Message(role="user", content="Test", turn_index=0)]
 
-        # Mock pickle.dump to raise PermissionError
-        with patch("pickle.dump", side_effect=PermissionError("Permission denied")):
+        # Mock json.dump to raise PermissionError (v0.8.0: now uses JSON instead of pickle)
+        with patch("json.dump", side_effect=PermissionError("Permission denied")):
             success = persistence_manager.save_afm_history("session1", messages, 1)
 
             # Should handle gracefully
@@ -756,11 +757,11 @@ class TestErrorHandlingAndRecovery:
             assert success is False
 
     def test_load_afm_history_corrupted_file(self, persistence_manager):
-        """Test loading AFM history with corrupted file."""
-        # Create corrupted file
-        history_file = persistence_manager.afm_dir / "corrupted.pkl"
-        with open(history_file, "wb") as f:
-            f.write(b"CORRUPTED DATA")
+        """Test loading AFM history with corrupted file (v0.8.0: JSON format)."""
+        # Create corrupted file (v0.8.0: now uses .json instead of .pkl)
+        history_file = persistence_manager.afm_dir / "corrupted.json"
+        with open(history_file, "w") as f:
+            f.write("CORRUPTED DATA {{{invalid json")
 
         loaded_data = persistence_manager.load_afm_history("corrupted")
 
@@ -1149,8 +1150,8 @@ class TestStorageStatsAndUtilities:
             sample_document_data["metadata"],
         )
 
-        # Make document read-only
-        doc_file = persistence_manager.documents_dir / "doc1.pkl"
+        # Make document read-only (v0.8.0: now uses .json instead of .pkl)
+        doc_file = persistence_manager.documents_dir / "doc1.json"
         os.chmod(doc_file, 0o444)
 
         try:
