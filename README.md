@@ -175,6 +175,7 @@ See [Architecture](docs/reference/ARCHITECTURE.md) for details.
 - [Contributing](docs/getting-started/CONTRIBUTING.md) - How to contribute
 
 ### Guides
+- [Claude Code Setup](docs/guides/CLAUDE_CODE_SETUP.md) - MCP setup for Claude Code CLI
 - [How It Works](docs/guides/HOW_IT_WORKS.md) - Technical explanation
 - [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) - Complete tool reference (35 tools)
 - [File Sync](docs/guides/FILE_SYNC.md) - File sync & versioning
