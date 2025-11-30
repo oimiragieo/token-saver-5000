@@ -1,7 +1,7 @@
 """
 Multi-Modal Semantic Compressor
 
-⚠️  EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
+[WARN] EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
 
 Status: Documented feature with working examples (examples/multimodal_example.py)
 Coverage: 0% (no tests yet)
@@ -104,7 +104,7 @@ class MultiModalCompressor:
         if use_clip_for_images:
             try:
                 self.image_encoder = embedding_manager.get_image_embedder()
-                print("✓ CLIP loaded for image processing")
+                print("[OK] CLIP loaded for image processing")
             except Exception as e:
                 print(f"Warning: CLIP not available ({e})")
                 print("Image support disabled. Install: pip install clip-ViT-B-32")
@@ -199,10 +199,10 @@ class MultiModalCompressor:
                 modality = ModalityType.IMAGE
                 embedding = self._encode_image(content)
                 if embedding is None:
-                    print(f"  ⚠️  Skipping image {i} (CLIP not available)")
+                    print(f"  [WARN] Skipping image {i} (CLIP not available)")
                     continue
             else:
-                print(f"  ⚠️  Unknown type '{content_type}', treating as text")
+                print(f"  [WARN] Unknown type '{content_type}', treating as text")
                 modality = ModalityType.TEXT
                 embedding = self._encode_text(str(content))
 
@@ -275,7 +275,7 @@ class MultiModalCompressor:
             "cross_modal_connections": edge_types,
         }
 
-        print("  ✅ Created unified graph:")
+        print("  [DONE] Created unified graph:")
         print(f"     Nodes: {stats['total_nodes']}")
         print(f"     Edges: {stats['graph_edges']}")
         print(f"     Cross-modal connections: {edge_types}")
@@ -402,7 +402,7 @@ class MultiModalCompressor:
 
         # Text summary
         if text_nodes:
-            lines.append(f"📄 TEXT DOCUMENTS ({len(text_nodes)}):")
+            lines.append(f"[TEXT] TEXT DOCUMENTS ({len(text_nodes)}):")
             text_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in text_nodes[:3]:
                 preview = node.content[:80].replace("\n", " ")
@@ -413,7 +413,7 @@ class MultiModalCompressor:
 
         # Code summary
         if code_nodes:
-            lines.append(f"💻 CODE FILES ({len(code_nodes)}):")
+            lines.append(f"[CODE] CODE FILES ({len(code_nodes)}):")
             code_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in code_nodes[:3]:
                 file_name = node.metadata.get("file", "unknown")
@@ -427,7 +427,7 @@ class MultiModalCompressor:
 
         # Image summary
         if image_nodes:
-            lines.append(f"🖼️  IMAGES ({len(image_nodes)}):")
+            lines.append(f"[IMAGE] IMAGES ({len(image_nodes)}):")
             image_nodes.sort(key=lambda x: x[1].importance, reverse=True)
             for nid, node in image_nodes[:3]:
                 file_name = node.metadata.get("file", "unknown")
@@ -448,11 +448,11 @@ class MultiModalCompressor:
 
         if cross_modal:
             cross_modal.sort(key=lambda x: x[2], reverse=True)
-            lines.append("🔗 TOP CROSS-MODAL CONNECTIONS:")
+            lines.append("[LINKS] TOP CROSS-MODAL CONNECTIONS:")
             for u, v, weight in cross_modal[:5]:
                 u_mod = self.nodes[u].modality.value
                 v_mod = self.nodes[v].modality.value
-                lines.append(f"  {u} ({u_mod}) ↔ {v} ({v_mod}): {weight:.3f}")
+                lines.append(f"  {u} ({u_mod}) <-> {v} ({v_mod}): {weight:.3f}")
 
         return "\n".join(lines)
 
@@ -528,5 +528,5 @@ def train_model(model, data_loader, epochs=10):
         preview = node.content[:60].replace("\n", " ")
         print(f"  {node_id} ({modality}, score: {score:.3f}): {preview}...")
 
-    print("\n✅ Multi-modal compression demo complete!")
+    print("\n[DONE] Multi-modal compression demo complete!")
     print("Note: For full image support, install CLIP: pip install clip-ViT-B-32")

@@ -387,7 +387,7 @@ class GraphVisualizer:
         Example:
             ```
             Node: quantum_paper_n3
-            Status: ✓ KEPT (in skeleton)
+            Status: [KEPT] (in skeleton)
 
             Reasons:
             - High importance score (0.14, top 20%)
@@ -427,7 +427,7 @@ class GraphVisualizer:
         # Build explanation
         lines = []
         lines.append(f"Node: {node_id}")
-        status_marker = "✓ KEPT (in skeleton)" if in_skeleton else "✗ DROPPED (below threshold)"
+        status_marker = "[KEPT] (in skeleton)" if in_skeleton else "[DROPPED] (below threshold)"
         lines.append(f"Status: {status_marker}\n")
 
         lines.append("Reasons:")

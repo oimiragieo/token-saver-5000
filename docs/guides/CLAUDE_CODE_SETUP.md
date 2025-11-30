@@ -66,10 +66,11 @@ Add this to your project's `CLAUDE.md` or `~/.claude/CLAUDE.md` to teach Claude 
 - **ALWAYS** use `mcp__token-saver__should_compress` FIRST when:
   - User mentions a file path (estimates tokens WITHOUT reading)
   - Before reading ANY file to check if compression is needed
-  - Returns recommendation: NO_COMPRESS, RECOMMEND_COMPRESS, STRONGLY_RECOMMEND, or MUST_COMPRESS
+  - Returns recommendation: SKIP, DIRECT_READ, COMPRESS, or CONVERT_THEN_COMPRESS
+  - v0.9.2: Detects binary files (PDF, DOCX, images) that need conversion
 
 - **ALWAYS** use `mcp__token-saver__ingest_context` when:
-  - `should_compress` returns RECOMMEND_COMPRESS or higher
+  - `should_compress` returns COMPRESS
   - User shares a document longer than 500 tokens
   - User asks to analyze, summarize, or work with a large file
   - User pastes code files, documentation, or research papers
@@ -87,11 +88,23 @@ Add this to your project's `CLAUDE.md` or `~/.claude/CLAUDE.md` to teach Claude 
 
 ### Compression Workflow
 0. **Pre-check**: Use `should_compress` with file_path to estimate tokens (doesn't read file!)
-1. **Ingest**: Use `ingest_context` with the document text and a unique file_id
-2. **Review**: Use `read_skeleton` to see the compressed structure
-3. **Search**: Use `search_semantic` to find relevant sections
-4. **Expand**: Use `modulate_region` to get full detail when needed
-5. **Verify**: Use `check_blind_spots` to catch missed context
+   - Check `needs_conversion` field - if true, use MarkItDown first
+   - Check `recommendation` field for action: SKIP, DIRECT_READ, COMPRESS
+1. **Convert (if binary)**: If `needs_conversion=true`, use MarkItDown or similar tool
+2. **Ingest**: Use `ingest_context` with the document text and a unique file_id
+3. **Review**: Use `read_skeleton` to see the compressed structure
+4. **Search**: Use `search_semantic` to find relevant sections
+5. **Expand**: Use `modulate_region` to get full detail when needed
+6. **Verify**: Use `check_blind_spots` to catch missed context
+
+### Handling Binary Files (v0.9.2)
+When `should_compress` returns `needs_conversion=true`:
+1. Use MarkItDown (or pandoc, pdftotext) to convert binary to text
+2. Call `ingest_context` with the converted text
+3. If conversion tool unavailable:
+   - Try alternative: pandoc, docx2txt, pdftotext
+   - Manual text extraction
+   - Document file as "skipped - no converter available"
 
 ### Fidelity Levels (use progressively)
 - `ABSTRACT`: 1-sentence summary (~10 tokens) - start here
@@ -121,7 +134,11 @@ For a simpler setup, add this minimal section:
 ```markdown
 ## Token Compression Rules
 - Use `mcp__token-saver__should_compress` BEFORE reading any file (checks size without reading!)
-- Use `mcp__token-saver__ingest_context` when should_compress returns RECOMMEND_COMPRESS or higher
+  - If `needs_conversion=true`: Use MarkItDown first (PDF, DOCX, images)
+  - If `recommendation=COMPRESS`: Use ingest_context
+  - If `recommendation=DIRECT_READ`: Read file directly
+  - If `recommendation=SKIP`: File too small for compression
+- Use `mcp__token-saver__ingest_context` for text files >500 tokens
 - Use `mcp__token-saver__search_semantic` to find relevant sections
 - Use `mcp__token-saver__check_blind_spots` after answering document questions
 - Start with ABSTRACT fidelity, expand only as needed
@@ -461,7 +478,7 @@ All suggestions verified against your stored preferences.
 ### Resource Management (5 tools)
 | Tool | Description |
 |------|-------------|
-| `should_compress` | **Estimate tokens WITHOUT reading file** (call FIRST!) |
+| `should_compress` | **Estimate tokens WITHOUT reading file** (call FIRST!). Returns: SKIP/DIRECT_READ/COMPRESS/CONVERT_THEN_COMPRESS. v0.9.2: Detects binary files needing conversion |
 | `list_documents` | List all ingested documents |
 | `delete_document` | Remove a document |
 | `get_resource_usage` | View memory/storage usage |

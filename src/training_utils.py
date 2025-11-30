@@ -1,7 +1,7 @@
 """
 Training Utilities for SCAR Modules
 
-⚠️  EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
+[WARN] EXPERIMENTAL FEATURE - Not used in core MCP server (v0.4.3)
 
 Status: Documented feature referenced in GETTING_STARTED.md
 Coverage: 0% (no tests yet)
@@ -230,7 +230,7 @@ class SCARTrainer:
                 # Save best model
                 if eval_loss < self.best_loss:
                     self.best_loss = eval_loss
-                    print(f"  ✓ New best model (loss: {eval_loss:.6f})")
+                    print(f"  [OK] New best model (loss: {eval_loss:.6f})")
 
         return {"train_losses": self.train_losses, "eval_losses": self.eval_losses}
 
@@ -332,7 +332,7 @@ class SCARTrainer:
 
                 if eval_loss < self.best_loss:
                     self.best_loss = eval_loss
-                    print(f"  ✓ New best model (loss: {eval_loss:.6f})")
+                    print(f"  [OK] New best model (loss: {eval_loss:.6f})")
 
         return {"train_losses": self.train_losses, "eval_losses": self.eval_losses}
 
@@ -410,7 +410,7 @@ class SCARTrainer:
             "config": self.config,
         }
         torch.save(checkpoint, filepath)
-        print(f"✓ Checkpoint saved to {filepath}")
+        print(f"[OK] Checkpoint saved to {filepath}")
 
     def load_checkpoint(self, filepath: str):
         """Load model checkpoint"""
@@ -425,7 +425,7 @@ class SCARTrainer:
         self.current_epoch = checkpoint["current_epoch"]
         self.best_loss = checkpoint["best_loss"]
 
-        print(f"✓ Checkpoint loaded from {filepath}")
+        print(f"[OK] Checkpoint loaded from {filepath}")
         print(f"  Global step: {self.global_step}")
         print(f"  Best loss: {self.best_loss:.6f}")
 
@@ -517,4 +517,4 @@ if __name__ == "__main__":
     # Save checkpoint
     trainer.save_checkpoint("scar_compressor_demo.pt")
 
-    print("\n✓ Demo complete! Check scar_compressor_demo.pt for saved model.")
+    print("\n[DONE] Demo complete! Check scar_compressor_demo.pt for saved model.")

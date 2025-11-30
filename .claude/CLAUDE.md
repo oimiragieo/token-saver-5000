@@ -105,14 +105,40 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - Always run linting before committing (`ruff check src/`)
 - Use `black` for consistent code formatting
 
-## Token Saver 5000 Project Specifics (v0.9.0 - Programmer UX Improvement Plan - IN PROGRESS)
+## Token Saver 5000 Project Specifics (v0.10.0 - Experimental Module Exposure - IN PROGRESS)
 
 ### Project Overview
 **Token Saver 5000** is an MCP server implementing research-backed semantic compression for AI interactions. It achieves **85-90% token reduction (proven: 87.4%)** through graph-based semantic analysis.
 
 > **Proven Performance:** 7.9× compression (485 → 61 tokens) on real quantum computing document. See `demo_proof.py`.
 
-**Current Release (v0.9.0 - Programmer UX Improvement Plan - IN PROGRESS):**
+**Current Release (v0.10.0 - Experimental Module Exposure - IN PROGRESS):**
+- ✅ **Experimental Handlers (5 new MCP tools):**
+  - **New Handler File:** `src/handlers/experimental_handlers.py` (300+ lines)
+  - **New Test File:** `tests/test_experimental_handlers.py` (30+ tests)
+  - **TOON Tools (2):**
+    * `toon_encode`: Encode data to TOON format (~40% smaller than JSON)
+    * `toon_decode`: Decode TOON format back to structured data
+    * Pure Python, always available, no external dependencies
+  - **SCAR Tools (2):**
+    * `scar_compress`: Compress embeddings using learnable compression
+    * `scar_get_stats`: Get SCAR compressor statistics
+    * Requires PyTorch, uses UNTRAINED random weights by default
+  - **Multimodal Tool (1):**
+    * `multimodal_ingest`: Ingest mixed content (text, code, images)
+    * Requires Pillow for image support
+    * Image paths validated via PathValidator (CWE-22 protection)
+  - **All Experimental Responses Include:**
+    * `"experimental": true` flag in every response
+    * Graceful degradation when dependencies missing
+    * Helpful error messages for missing PyTorch/Pillow
+  - **Documentation:**
+    * Feature Matrix added to MCP_TOOLS_GUIDE.md
+    * SLA definitions: Production, Infrastructure, Experimental
+    * Coverage and dependency notes for all modules
+  - **Total MCP Tools:** 44 (was 39)
+
+**Previous Release (v0.9.0 - Programmer UX Improvement Plan - COMPLETE):**
 - ✅ **P0 CRITICAL: CodeSemanticCompressor Integration:**
   - **Issue:** Code files were using text chunking instead of AST-aware chunking
   - **Fix:** Created `CodeCompressionAdapter` (src/code_compression_adapter.py, 650+ lines)
@@ -152,6 +178,31 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 
 - ✅ **Test Suite:** 1063 passed, 12 skipped, 72% coverage
 - ✅ **Tool Count:** 38 MCP tools (was 35)
+
+**v0.9.2 Hardening - Binary Detection & Security (COMPLETE):**
+- ✅ **Binary File Detection Enhancement:**
+  - `should_compress` tool now detects binary files (PDF, DOCX, images)
+  - Returns `CONVERT_THEN_COMPRESS` recommendation with MarkItDown suggestion
+  - Content sniffing via null byte ratio heuristic (>1% null bytes = binary)
+  - Extension-based detection + content-based detection for unknown extensions
+  - New response fields: `needs_conversion`, `is_text_readable`, `conversion_tool`
+
+- ✅ **Security: Path Traversal Prevention in should_compress (CWE-22):**
+  - **Issue:** `handle_should_compress` directly called `os.path.exists()` without PathValidator
+  - **Attack Vector:** `../../etc/passwd` could bypass allowed directories
+  - **Fix:** Added PathValidator call before any file I/O (lines 455-472)
+  - **Graceful Degradation:** Logs warning if PathValidator unavailable in context
+
+- ✅ **Error Handling: Binary Detection Read Errors:**
+  - **Issue:** `is_binary_content()` returned `False` on read errors, silently treating unreadable files as text
+  - **Fix:** Now returns `Tuple[bool, Optional[str]]` - (is_binary, error_message)
+  - **Handler Updated:** Returns explicit error JSON when file can't be read
+
+- ✅ **New Tests:** 3 path traversal security tests
+  - `test_path_traversal_blocked` - Blocks `../../etc/passwd`
+  - `test_path_traversal_with_absolute_path` - Blocks `/etc/passwd`
+  - `test_valid_path_with_validator` - Validates allowed paths work
+  - **Test Count:** 56 resource handler tests (was 53)
 
 **Previous Release (v0.8.0 - Async Safety & Concurrency Audit - COMPLETE):**
 - ✅ **Blocking Lock Audit Fix (Issue 3):**

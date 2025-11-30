@@ -17,7 +17,7 @@ v0.9.1: Added should_compress handler for pre-read token estimation.
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 from ..types import HandlerContext  # TypedDict for handler context
 
 logger = logging.getLogger("semantic-modulator")
@@ -25,13 +25,243 @@ logger = logging.getLogger("semantic-modulator")
 # Token estimation constants
 # Average characters per token varies by content type
 CHARS_PER_TOKEN_PROSE = 4.0  # English prose averages ~4 chars/token
-CHARS_PER_TOKEN_CODE = 3.5   # Code tends to be slightly more token-dense
+CHARS_PER_TOKEN_CODE = 3.5  # Code tends to be slightly more token-dense
 CHARS_PER_TOKEN_DEFAULT = 3.8  # Conservative default
 
-# Thresholds for compression recommendations
-COMPRESS_THRESHOLD_TOKENS = 500   # Recommend compression above this
+# Thresholds for compression recommendations (v0.9.3: removed unused COMPRESS_THRESHOLD_TOKENS)
+SKIP_THRESHOLD_TOKENS = 100  # Below this, skip compression entirely
+DIRECT_READ_THRESHOLD_TOKENS = 500  # Below this, read directly without compression
+# Note: COMPRESS recommendation = DIRECT_READ_THRESHOLD_TOKENS or higher (500+)
 STRONG_COMPRESS_THRESHOLD = 2000  # Strongly recommend compression
-MUST_COMPRESS_THRESHOLD = 10000   # Must compress to fit context
+MUST_COMPRESS_THRESHOLD = 10000  # Must compress to fit context
+
+# Binary file detection constants (v0.9.2)
+BINARY_SNIFF_SIZE = 8192  # Read first 8KB for content sniffing
+NULL_BYTE_THRESHOLD = 0.01  # >1% null bytes = likely binary
+
+# Binary file extensions - require conversion before compression
+BINARY_EXTENSIONS = {
+    # Documents (need MarkItDown or similar)
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".odt",
+    ".ods",
+    ".odp",
+    ".rtf",
+    # Images
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".webp",
+    ".svg",
+    ".ico",
+    # Media
+    ".mp3",
+    ".mp4",
+    ".wav",
+    ".avi",
+    ".mov",
+    ".mkv",
+    ".flac",
+    ".ogg",
+    ".webm",
+    # Archives
+    ".zip",
+    ".tar",
+    ".gz",
+    ".rar",
+    ".7z",
+    ".bz2",
+    ".xz",
+    # Executables
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".bin",
+    # Other binary
+    ".dat",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".pickle",
+    ".pkl",
+}
+
+# Text file extensions - can be read directly
+TEXT_EXTENSIONS = {
+    # Prose/documentation
+    ".md",
+    ".txt",
+    ".rst",
+    ".adoc",
+    ".tex",
+    ".org",
+    # Code
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".go",
+    ".rs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".kt",
+    ".scala",
+    ".r",
+    ".m",
+    ".mm",
+    ".pl",
+    ".pm",
+    ".lua",
+    ".dart",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".hs",
+    ".clj",
+    ".cljs",
+    ".jl",
+    ".nim",
+    ".v",
+    ".zig",
+    # Shell
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".ps1",
+    ".bat",
+    ".cmd",
+    ".fish",
+    # Config/Data
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".csv",
+    ".tsv",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".env",
+    # Web
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".mdx",
+    # SQL
+    ".sql",
+    ".prisma",
+    # Makefiles and build
+    ".mk",
+    ".cmake",
+    ".gradle",
+    ".sbt",
+}
+
+# Code-like extensions - use lower chars/token ratio for token estimation (v0.9.3)
+# Subset of TEXT_EXTENSIONS that typically have denser token usage
+CODE_LIKE_EXTENSIONS = {
+    # Programming languages
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".go",
+    ".rs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".kt",
+    ".scala",
+    # Shell scripts
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".ps1",
+    # Data/Config (typically dense syntax)
+    ".sql",
+    ".html",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    # Web frameworks
+    ".vue",
+    ".svelte",
+}
+
+
+def is_binary_content(
+    file_path: str, sniff_size: int = BINARY_SNIFF_SIZE
+) -> Tuple[bool, Optional[str]]:
+    """
+    Check if file contains binary content by sampling first N bytes.
+
+    Uses null byte ratio heuristic: >1% null bytes indicates binary content.
+    This is similar to the binaryornot library approach.
+
+    Args:
+        file_path: Path to the file to check
+        sniff_size: Number of bytes to sample (default: 8192)
+
+    Returns:
+        Tuple of (is_binary, error_message):
+        - (True, None) if file contains binary content
+        - (False, None) if file contains text content
+        - (False, "error message") if file could not be read
+
+    v0.9.2 Hardening: Now returns error message instead of silently
+    treating read errors as text (Issue 2 fix).
+    """
+    try:
+        with open(file_path, "rb") as f:
+            chunk = f.read(sniff_size)
+        if not chunk:
+            return False, None  # Empty file is not binary
+        null_count = chunk.count(b"\x00")
+        is_binary = (null_count / len(chunk)) > NULL_BYTE_THRESHOLD
+        return is_binary, None
+    except (IOError, OSError) as e:
+        return False, f"Cannot read file for binary detection: {e}"
 
 
 async def handle_check_resource_health(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -124,6 +354,8 @@ def create_progress_bar(percentage: float, width: int = 40) -> str:
     Helper function that generates a visual progress bar with appropriate
     status indicators based on usage percentage.
 
+    v0.9.3: Uses ASCII-only characters (#, -) for terminal compatibility.
+
     Args:
         percentage: Usage percentage (0-100)
         width: Character width of the bar (default: 40)
@@ -133,25 +365,26 @@ def create_progress_bar(percentage: float, width: int = 40) -> str:
 
     Examples:
         >>> create_progress_bar(25.0)
-        '[██████████░░░░░░░░░░░░░░░░░░░░] [OK] 25%'
+        '[##########------------------------------] [OK] 25%'
 
         >>> create_progress_bar(85.0)
-        '[██████████████████████████████████░░░░░░] [WARN]  85%'
+        '[##################################------] [WARN]  85%'
 
         >>> create_progress_bar(100.0)
-        '[████████████████████████████████████████] [CRIT] FULL'
+        '[########################################] [CRIT] FULL'
     """
     filled = int((percentage / 100) * width)
     empty = width - filled
 
+    # v0.9.3: Use ASCII-only characters for terminal compatibility
     if percentage >= 100:
-        bar = "█" * width
+        bar = "#" * width
         return f"[{bar}] [CRIT] FULL"
     elif percentage >= 80:
-        bar = "█" * filled + "░" * empty
+        bar = "#" * filled + "-" * empty
         return f"[{bar}] [WARN]  {percentage:.0f}%"
     else:
-        bar = "█" * filled + "░" * empty
+        bar = "#" * filled + "-" * empty
         return f"[{bar}] [OK] {percentage:.0f}%"
 
 
@@ -334,13 +567,19 @@ async def handle_check_environment(context: HandlerContext, args: Dict[str, Any]
 
 async def handle_should_compress(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
-    Handle should_compress MCP tool (v0.9.1).
+    Handle should_compress MCP tool (v0.9.2).
 
     Estimates token count for a file WITHOUT reading it into context.
-    Uses file size heuristics to recommend whether compression is needed.
+    Uses file size heuristics AND binary content detection to recommend
+    the optimal ingestion workflow.
 
     This tool is critical for token efficiency - it allows AI to decide
     whether to use compression BEFORE wasting tokens reading the full file.
+
+    v0.9.2: Added binary file detection with content sniffing.
+    - Detects binary files by extension AND content (null byte heuristic)
+    - Returns CONVERT_THEN_COMPRESS for binary files with MarkItDown suggestion
+    - New fields: needs_conversion, is_text_readable, conversion_tool, reason
 
     Args:
         context: Server context (unused for this tool)
@@ -349,72 +588,207 @@ async def handle_should_compress(context: HandlerContext, args: Dict[str, Any]) 
             - content_type (str, optional): "prose", "code", or "auto" (default)
 
     Returns:
-        JSON with token estimate and compression recommendation
+        JSON with token estimate, binary detection, and compression recommendation
+
+    Recommendations:
+        - SKIP: File <100 tokens, read directly
+        - DIRECT_READ: File 100-500 tokens, read directly
+        - COMPRESS: File >500 tokens, use ingest_context
+        - CONVERT_THEN_COMPRESS: Binary file, use MarkItDown first
     """
     file_path = args.get("file_path")
     content_type = args.get("content_type", "auto")
 
     if not file_path:
-        return json.dumps({
-            "error": "file_path is required",
-            "recommendation": "UNKNOWN"
-        })
+        return json.dumps(
+            {
+                "error": "file_path is required",
+                "suggestion": "Provide a valid file path to assess",
+                "recommendation": "UNKNOWN",
+            }
+        )
+
+    # SECURITY: Validate path before any file I/O (v0.9.3 - PathValidator REQUIRED)
+    # Prevents path traversal attacks (CWE-22) like ../../etc/passwd
+    path_validator = context.get("path_validator")
+    if not path_validator:
+        # v0.9.3: Fail-fast for security - PathValidator is required
+        return json.dumps(
+            {
+                "error": "Path validation unavailable",
+                "suggestion": "Configure PathValidator in server context",
+                "recommendation": "UNKNOWN",
+            }
+        )
+
+    try:
+        file_path = path_validator.validate(file_path)  # Returns absolute path
+    except ValueError as e:
+        return json.dumps(
+            {
+                "error": f"Path validation failed: {args.get('file_path')}",
+                "suggestion": "File path must be within allowed directories",
+                "details": str(e),
+                "recommendation": "UNKNOWN",
+            }
+        )
 
     # Check if file exists and get size
     if not os.path.exists(file_path):
-        return json.dumps({
-            "error": f"File not found: {file_path}",
-            "recommendation": "UNKNOWN"
-        })
+        return json.dumps(
+            {
+                "error": f"File not found: {file_path}",
+                "suggestion": "Verify the file path exists and is accessible",
+                "recommendation": "UNKNOWN",
+            }
+        )
 
     try:
         file_size_bytes = os.path.getsize(file_path)
     except OSError as e:
-        return json.dumps({
-            "error": f"Cannot read file size: {e}",
-            "recommendation": "UNKNOWN"
-        })
+        return json.dumps(
+            {
+                "error": f"Cannot read file size: {e}",
+                "suggestion": "Check file permissions and accessibility",
+                "recommendation": "UNKNOWN",
+            }
+        )
 
+    # Get file extension for initial classification
+    ext = os.path.splitext(file_path)[1].lower()
+
+    # v0.9.3: Short-circuit binary detection by extension BEFORE content sniffing
+    # This avoids unnecessary file reads for known binary/text extensions
+    is_binary = False
+    detected_by = None
+
+    if ext in BINARY_EXTENSIONS:
+        # Known binary extension - skip content sniffing entirely
+        is_binary = True
+        detected_by = "extension"
+    elif ext in TEXT_EXTENSIONS:
+        # Known text extension - skip content sniffing entirely
+        is_binary = False
+        detected_by = "extension"
+    elif file_size_bytes > 0:
+        # Unknown extension - content sniffing required
+        # v0.9.2 Hardening: is_binary_content returns tuple (is_binary, error_msg)
+        is_binary, read_error = is_binary_content(file_path)
+        if read_error:
+            return json.dumps(
+                {
+                    "error": read_error,
+                    "suggestion": "Check file permissions and accessibility",
+                    "recommendation": "UNKNOWN",
+                }
+            )
+        detected_by = "content"
+    else:
+        # Empty file with unknown extension - treat as text
+        is_binary = False
+        detected_by = "empty_file"
+
+    # If binary file detected, return CONVERT_THEN_COMPRESS recommendation
+    if is_binary:
+        # Determine file type for helpful message
+        if ext in {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".odt",
+            ".ods",
+            ".odp",
+            ".rtf",
+        }:
+            file_type = "document"
+        elif ext in {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico"}:
+            file_type = "image"
+        elif ext in {".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv", ".flac", ".ogg", ".webm"}:
+            file_type = "media"
+        elif ext in {".zip", ".tar", ".gz", ".rar", ".7z", ".bz2", ".xz"}:
+            file_type = "archive"
+        elif ext in {".exe", ".dll", ".so", ".dylib", ".bin"}:
+            file_type = "executable"
+        else:
+            file_type = "binary"
+
+        reason = (
+            f"Binary file ({file_type}) detected. "
+            "Use MarkItDown (or pandoc, pdftotext) to convert to text, "
+            "then call ingest_context with the converted output."
+        )
+
+        return json.dumps(
+            {
+                # Existing fields (backward compat)
+                "file_path": file_path,
+                "file_size_bytes": file_size_bytes,
+                "estimated_tokens": 0,  # Cannot estimate for binary
+                "content_type_detected": file_type,
+                "recommendation": "CONVERT_THEN_COMPRESS",
+                "reason": reason,
+                "potential_token_savings": 0,
+                "estimated_compression_ratio": "N/A",
+                # New fields (v0.9.2)
+                "needs_conversion": True,
+                "is_text_readable": False,
+                "conversion_tool": "MarkItDown",
+                "detected_by": detected_by,
+            },
+            indent=2,
+        )
+
+    # Text file processing
     # Estimate character count (roughly 1 byte per char for UTF-8 text)
-    # This is approximate but good enough for estimation
     estimated_chars = file_size_bytes
 
     # Determine chars-per-token ratio based on content type
     if content_type == "code":
         chars_per_token = CHARS_PER_TOKEN_CODE
+        detected_type = "code"
     elif content_type == "prose":
         chars_per_token = CHARS_PER_TOKEN_PROSE
+        detected_type = "prose"
     elif content_type == "auto":
-        # Auto-detect based on file extension
-        ext = os.path.splitext(file_path)[1].lower()
-        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp',
-                          '.h', '.hpp', '.cs', '.go', '.rs', '.rb', '.php', '.swift',
-                          '.kt', '.scala', '.sh', '.bash', '.zsh', '.ps1', '.sql',
-                          '.html', '.css', '.scss', '.sass', '.less', '.json', '.xml',
-                          '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'}
-        if ext in code_extensions:
+        # Auto-detect based on file extension (v0.9.3: use module-level constant)
+        if ext in CODE_LIKE_EXTENSIONS:
             chars_per_token = CHARS_PER_TOKEN_CODE
+            detected_type = "code"
         else:
             chars_per_token = CHARS_PER_TOKEN_DEFAULT
+            detected_type = "prose/mixed"
     else:
         chars_per_token = CHARS_PER_TOKEN_DEFAULT
+        detected_type = "unknown"
 
     # Estimate token count
     estimated_tokens = int(estimated_chars / chars_per_token)
 
-    # Determine recommendation
-    if estimated_tokens < COMPRESS_THRESHOLD_TOKENS:
-        recommendation = "NO_COMPRESS"
+    # Determine recommendation using v0.9.2 thresholds
+    if file_size_bytes == 0:
+        recommendation = "SKIP"
+        reason = "File is empty. No content to process."
+    elif estimated_tokens < SKIP_THRESHOLD_TOKENS:
+        recommendation = "SKIP"
+        reason = f"File is tiny (~{estimated_tokens} tokens). Too small for compression overhead."
+    elif estimated_tokens < DIRECT_READ_THRESHOLD_TOKENS:
+        recommendation = "DIRECT_READ"
         reason = f"File is small (~{estimated_tokens} tokens). Read directly without compression."
     elif estimated_tokens < STRONG_COMPRESS_THRESHOLD:
-        recommendation = "RECOMMEND_COMPRESS"
+        recommendation = "COMPRESS"
         reason = f"File is medium (~{estimated_tokens} tokens). Compression recommended for token savings."
     elif estimated_tokens < MUST_COMPRESS_THRESHOLD:
-        recommendation = "STRONGLY_RECOMMEND"
+        recommendation = "COMPRESS"
         reason = f"File is large (~{estimated_tokens} tokens). Compression strongly recommended."
     else:
-        recommendation = "MUST_COMPRESS"
-        reason = f"File is very large (~{estimated_tokens} tokens). Must compress to fit in context."
+        recommendation = "COMPRESS"
+        reason = (
+            f"File is very large (~{estimated_tokens} tokens). Must compress to fit in context."
+        )
 
     # Calculate potential savings
     # Typical compression ratios: small docs 2-4x, medium 5-10x, large 15-20x
@@ -427,17 +801,23 @@ async def handle_should_compress(context: HandlerContext, args: Dict[str, Any]) 
     else:
         compression_ratio = 15.0
 
-    potential_savings = int(estimated_tokens * (1 - 1/compression_ratio))
+    potential_savings = int(estimated_tokens * (1 - 1 / compression_ratio))
 
-    return json.dumps({
-        "file_path": file_path,
-        "file_size_bytes": file_size_bytes,
-        "estimated_tokens": estimated_tokens,
-        "content_type_detected": content_type if content_type != "auto" else (
-            "code" if chars_per_token == CHARS_PER_TOKEN_CODE else "prose/mixed"
-        ),
-        "recommendation": recommendation,
-        "reason": reason,
-        "potential_token_savings": potential_savings,
-        "estimated_compression_ratio": f"{compression_ratio}x"
-    }, indent=2)
+    return json.dumps(
+        {
+            # Existing fields (backward compat)
+            "file_path": file_path,
+            "file_size_bytes": file_size_bytes,
+            "estimated_tokens": estimated_tokens,
+            "content_type_detected": detected_type,
+            "recommendation": recommendation,
+            "reason": reason,
+            "potential_token_savings": potential_savings,
+            "estimated_compression_ratio": f"{compression_ratio}x",
+            # New fields (v0.9.2)
+            "needs_conversion": False,
+            "is_text_readable": True,
+            "conversion_tool": None,
+        },
+        indent=2,
+    )

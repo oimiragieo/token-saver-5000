@@ -1,6 +1,6 @@
 # MCP Tools Guide: Complete Reference
 
-**Comprehensive documentation for all 29 Token Saver 5000 MCP tools**
+**Comprehensive documentation for all 44 Token Saver 5000 MCP tools**
 
 ---
 
@@ -8,12 +8,14 @@
 
 - [Overview](#overview)
 - [Quick Reference](#quick-reference)
+- [Feature Matrix](#feature-matrix) - NEW in v0.10.0
 - [Document Compression Tools (9)](#document-compression-tools)
 - [Dialogue Memory Tools (4)](#dialogue-memory-tools)
 - [Discovery & Management Tools (4)](#discovery--management-tools)
 - [File Sync & Version Management Tools (4)](#file-sync--version-management-tools) - NEW in v0.4.0
 - [ACE Framework Tools (7)](#ace-framework-tools) - NEW in v0.4.0
-- [Health Monitoring Tools (1)](#health-monitoring-tools)
+- [Health & Assessment Tools (2)](#health--assessment-tools) - Updated in v0.9.2
+- [Experimental Tools (5)](#experimental-tools) - NEW in v0.10.0
 - [Common Usage Patterns](#common-usage-patterns)
 - [Error Handling](#error-handling)
 - [Performance Tips](#performance-tips)
@@ -22,7 +24,7 @@
 
 ## Overview
 
-Token Saver 5000 exposes **30 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
+Token Saver 5000 exposes **44 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
 
 1. **Compress documents** with 80-95% token reduction
 2. **Manage dialogue memory** with ~66% token savings and safety preservation
@@ -47,17 +49,92 @@ All tools operate **locally** (no external API calls required) and use **persist
 | **Discovery & Management** | 4 tools | List, export, import, and delete documents |
 | **File Sync & Versions** | 4 tools | Track file changes and version history (v0.4.0) |
 | **ACE Framework** | 7 tools | Self-evolving playbooks for domain optimization (v0.4.0) |
-| **Health Monitoring** | 1 tool | Monitor resource usage and system health |
+| **Health & Assessment** | 2 tools | Health monitoring + pre-flight assessment (v0.9.2) |
+| **Experimental** | 5 tools | TOON serialization, SCAR compression, Multimodal (v0.10.0) |
 
 ### Typical Workflow
 
 ```
-1. ingest_context          → Compress document into semantic graph
-2. read_skeleton           → Get 80-95% compressed overview
-3. search_semantic         → Find relevant sections
-4. modulate_region         → Retrieve details at chosen fidelity
-5. check_blind_spots       → Verify no critical context missed
+0. should_compress         -> Check file type and estimate tokens (FIRST!)
+1. ingest_context          -> Compress document into semantic graph
+2. read_skeleton           -> Get 80-95% compressed overview
+3. search_semantic         -> Find relevant sections
+4. modulate_region         -> Retrieve details at chosen fidelity
+5. check_blind_spots       -> Verify no critical context missed
 ```
+
+### should_compress Recommendations (v0.9.3)
+
+| Recommendation | Token Range | Action |
+|----------------|-------------|--------|
+| `SKIP` | <100 tokens | File too small for compression overhead |
+| `DIRECT_READ` | 100-500 tokens | Read file directly, no compression needed |
+| `COMPRESS` | >=500 tokens | Use `ingest_context` for token savings |
+| `CONVERT_THEN_COMPRESS` | Binary file | Use MarkItDown first, then `ingest_context` |
+
+**v0.9.3 Enhancements:**
+- **Path Security:** All file paths are validated against allowed directories (CWE-22 prevention)
+- **Optimized Binary Detection:** Extension-based detection runs BEFORE content sniffing
+- `detected_by`: How binary status was determined (`extension`, `content`, or `empty_file`)
+
+**v0.9.2 Fields:**
+- `needs_conversion`: `true` if binary file needs conversion before compression
+- `is_text_readable`: `true` if file can be read as text directly
+- `conversion_tool`: Suggested tool (e.g., "MarkItDown") if conversion needed
+
+---
+
+## Feature Matrix
+
+**NEW in v0.10.0** - Complete inventory of modules showing production readiness, coverage, dependencies, and SLA notes.
+
+### Production Modules (39 tools)
+
+| Module | Coverage | Dependencies | SLA | Notes |
+|--------|----------|--------------|-----|-------|
+| Document Compression (9) | 99% | sentence-transformers | Production | Core compression functionality |
+| Dialogue Memory AFM (4) | 83% | None | Production | ~66% token savings |
+| File Sync & Versions (4) | 86-90% | None | Production | v0.4.0+ |
+| ACE Framework (7) | 96% | None | Production | Self-evolving playbooks |
+| Batch Processing (1) | 81% | None | Production | 4x throughput |
+| Graph Visualization (4) | 68% | pyvis (optional) | Production | HTML export degrades gracefully |
+| Detection Tools (2) | 100% | None | Production | Blind spot & hallucination |
+| Resource Management (3) | 100% | None | Production | Health checks, assessment |
+| Help (1) | 90% | None | Production | Tool documentation |
+
+### Infrastructure Modules (HTTP, Metrics, Logging)
+
+| Module | Coverage | Dependencies | SLA | Notes |
+|--------|----------|--------------|-----|-------|
+| HTTP Server | 100% | aiohttp | Infrastructure | Kubernetes health endpoints |
+| Prometheus Metrics | 86% | prometheus_client (optional) | Infrastructure | Graceful degradation |
+| Structured Logging | 91% | None | Infrastructure | JSON/human formatters |
+| OpenTelemetry Tracing | 85% | opentelemetry (optional) | Infrastructure | OTLP export (HTTP only, not MCP) |
+| Health Checks | 91% | None | Infrastructure | Liveness/readiness/diagnostics |
+
+### Experimental Modules (5 tools) - NOT PRODUCTION-READY
+
+| Module | Coverage | Dependencies | SLA | Notes |
+|--------|----------|--------------|-----|-------|
+| TOON Serialization (2) | Basic tests | None | Experimental | Exposed via toon_encode/decode; lossy decode; ~40% smaller than JSON |
+| SCAR Compression (2) | Minimal tests | PyTorch | Experimental | **Untrained** random weights; research only |
+| Multimodal Ingest (1) | Minimal tests | Pillow (images) | Experimental | Text/code/image; path validation enforced |
+
+**Experimental policy:**
+- All experimental tool responses include `"experimental": true`
+- Optional dependencies return helpful JSON errors (no crashes)
+- APIs may change; do not use in production
+
+**SLA Definitions:**
+- **Production:** Full test coverage, stable API, supported in production environments
+- **Infrastructure:** Internal modules not exposed via MCP, used by production modules
+- **Experimental:** NOT production-ready, may change without notice, requires additional dependencies
+
+**Important Notes for Experimental Tools:**
+- All responses include `"experimental": true` flag
+- SCAR uses untrained random weights - train models before meaningful use
+- Missing dependencies result in helpful error messages, not crashes
+- Path validation enforced for file-accepting tools (CWE-22 protection)
 
 ---
 
@@ -150,15 +227,15 @@ await mcp_tools.ingest_context(
 **Output:**
 
 ```
-⭐ quantum_paper_2024_n0: Quantum Error Correction: A Comprehensive Survey
+[*] quantum_paper_2024_n0: Quantum Error Correction: A Comprehensive Survey
    [ABSTRACT] This paper reviews state-of-the-art error correction techniques...
    Importance: 0.95 | Tokens: 18
 
-⭐ quantum_paper_2024_n5: Surface Codes and Logical Qubits
+[*] quantum_paper_2024_n5: Surface Codes and Logical Qubits
    [SECTION] Surface codes arrange physical qubits in 2D lattice...
    Importance: 0.87 | Tokens: 22
 
-⭐ quantum_paper_2024_n12: Fault-Tolerant Quantum Gates
+[*] quantum_paper_2024_n12: Fault-Tolerant Quantum Gates
    [SECTION] Implementing universal gate set with error detection...
    Importance: 0.82 | Tokens: 20
 
@@ -1608,6 +1685,377 @@ print(f"Cycle complete! Playbook now has {result['cycle_summary']['total_bullets
 
 ---
 
+## Experimental Tools
+
+**NEW in v0.10.0** - Experimental features for advanced use cases. NOT production-ready.
+
+All experimental tools return `"experimental": true` in their responses. These tools may require additional dependencies and should not be used in production without thorough testing.
+
+---
+
+### 29. `toon_encode`
+
+**Purpose:** Encode data to TOON format (~40% smaller than JSON).
+
+**Input Parameters:**
+
+```json
+{
+  "data": "object (required)"   // Dict or list to encode
+}
+```
+
+**Output:**
+
+```json
+{
+  "toon_output": "- item\nname: test\nvalue: 42",
+  "original_chars": 32,
+  "toon_chars": 22,
+  "savings_percent": 31.2,
+  "experimental": true,
+  "note": "TOON format is experimental - NOT production-ready"
+}
+```
+
+**Example:**
+
+```python
+result = await mcp_tools.toon_encode(
+    data={"results": [{"name": "Alice", "score": 95}, {"name": "Bob", "score": 87}]}
+)
+print(result["toon_output"])
+# Output: Compact TOON format
+```
+
+**Tips:**
+- Pure Python implementation, always available
+- Optimized for LLM consumption, not round-trip serialization
+- ~40% smaller than equivalent JSON
+
+---
+
+### 30. `toon_decode`
+
+**Purpose:** Decode TOON format back to structured data.
+
+**Input Parameters:**
+
+```json
+{
+  "toon_input": "string (required)"   // TOON-formatted string
+}
+```
+
+**Output:**
+
+```json
+{
+  "data": {"name": "test", "value": "42"},
+  "experimental": true,
+  "note": "TOON decode is approximate - format optimized for LLM consumption"
+}
+```
+
+**Tips:**
+- TOON is lossy - designed for LLM consumption
+- Decoding reconstructs approximate structure
+- Not suitable for exact data restoration
+
+---
+
+### 31. `scar_compress`
+
+**Purpose:** Compress embeddings using SCAR (learnable compression).
+
+**WARNING:** Uses UNTRAINED random weights by default. Requires PyTorch. Results are NOT meaningful without model training.
+
+**Input Parameters:**
+
+```json
+{
+  "doc_id": "string (required)",      // Document to compress
+  "target_dim": 128                   // Target dimension (default: 128)
+}
+```
+
+**Output:**
+
+```json
+{
+  "doc_id": "my_doc",
+  "original_dim": 384,
+  "compressed_dim": 128,
+  "reduction_ratio": 3.0,
+  "num_vectors": 50,
+  "model_trained": false,
+  "experimental": true,
+  "warning": "Using UNTRAINED random weights - results are NOT meaningful without training"
+}
+```
+
+**Requirements:**
+- PyTorch (`pip install torch`)
+- Document must be ingested first
+
+**Tips:**
+- Train SCAR models before production use
+- Default random weights produce meaningless results
+- Use for research and experimentation only
+
+---
+
+### 32. `scar_get_stats`
+
+**Purpose:** Get SCAR compressor statistics and model state.
+
+**Input Parameters:** None
+
+**Output:**
+
+```json
+{
+  "pytorch_available": true,
+  "pytorch_version": "2.1.0",
+  "model_trained": false,
+  "components": ["LearnableSemanticCompressor", "SemanticAlignmentModule"],
+  "default_compression_dim": 128,
+  "warning": "Model uses random weights - train before production use",
+  "experimental": true
+}
+```
+
+**Tips:**
+- Check PyTorch availability before using SCAR
+- `model_trained: false` indicates untrained weights
+- Install PyTorch with `pip install torch`
+
+---
+
+### 33. `multimodal_ingest`
+
+**Purpose:** Ingest mixed content (text, code, images) into compression graph.
+
+**Input Parameters:**
+
+```json
+{
+  "doc_id": "string (required)",
+  "text_content": "string (optional)",
+  "code_content": "string (optional)",
+  "code_language": "python",          // Default: python
+  "image_paths": ["path/to/img.png"]  // Validated for security
+}
+```
+
+**Output:**
+
+```json
+{
+  "doc_id": "mixed_doc",
+  "content_types": ["text", "code", "image"],
+  "node_count": 3,
+  "experimental": true,
+  "note": "Multimodal compression is experimental - NOT production-ready"
+}
+```
+
+**Requirements:**
+- Pillow for image support (`pip install Pillow`)
+- At least one content type required
+- Image paths validated via PathValidator (CWE-22 protection)
+
+**Tips:**
+- Can combine text, code, and images in one document
+- Image paths must be in allowed directories
+- Missing Pillow results in helpful error, not crash
+
+---
+
+## Health & Assessment Tools
+
+**Updated in v0.9.2** - Health monitoring and pre-flight file assessment.
+
+Assessment tools help you determine the best approach BEFORE processing a file, saving unnecessary computation and providing actionable recommendations.
+
+---
+
+### 34. `should_compress`
+
+**Purpose:** Assess whether a file should be compressed, read directly, or converted first.
+
+**Input Parameters:**
+
+```json
+{
+  "file_path": "string (required)",      // Path to file (validated for security)
+  "content_type": "string (optional)"    // Force content type: "code" | "prose" | "document"
+}
+```
+
+**Output:**
+
+```json
+{
+  "recommendation": "COMPRESS",
+  "file_path": "/path/to/large_file.py",
+  "estimated_tokens": 2500,
+  "potential_token_savings": 2125,
+  "is_text_readable": true,
+  "needs_conversion": false,
+  "content_type_detected": "code",
+  "detected_by": "extension"
+}
+```
+
+**Recommendations Flow:**
+
+```
+                    should_compress(file_path)
+                              |
+              +---------------+---------------+
+              |               |               |
+           <100 tokens   100-500 tokens   >=500 tokens
+              |               |               |
+           SKIP         DIRECT_READ       COMPRESS
+     (too small)      (overhead not      (use ingest)
+                       worth it)
+
+     Binary file detected?
+              |
+     CONVERT_THEN_COMPRESS
+     (use MarkItDown first)
+```
+
+**Example Usage:**
+
+```python
+# Step 1: Assess the file
+result = await mcp_tools.should_compress(file_path="/path/to/paper.pdf")
+
+# Step 2: Follow recommendation
+if result["recommendation"] == "COMPRESS":
+    # Large text file - compress directly
+    await mcp_tools.ingest_context(text=read_file(file_path), file_id="paper")
+
+elif result["recommendation"] == "CONVERT_THEN_COMPRESS":
+    # Binary file - convert first
+    markdown_text = markitdown.convert(file_path)  # External tool
+    await mcp_tools.ingest_context(text=markdown_text, file_id="paper")
+
+elif result["recommendation"] == "DIRECT_READ":
+    # Small file - read without compression
+    context = read_file(file_path)
+
+elif result["recommendation"] == "SKIP":
+    # Tiny file - not worth processing
+    pass
+```
+
+**Content Type Detection:**
+
+| Extension | Content Type | Chars/Token | Notes |
+|-----------|--------------|-------------|-------|
+| `.py`, `.js`, `.ts`, `.go` | `code` | 3.5 | Dense syntax |
+| `.txt`, `.md`, `.rst` | `prose` | 4.0 | Natural language |
+| `.pdf`, `.docx`, `.xlsx` | `document` | N/A | Requires conversion |
+| Unknown | Auto-detect | 4.0 | Content sniffing |
+
+**Binary Detection (v0.9.3):**
+
+1. **Extension-based** (fast path): `.pdf`, `.docx`, `.xlsx`, `.png`, `.jpg`, etc.
+2. **Content sniffing** (fallback): Checks for >1% null bytes in first 8KB
+
+**Security (CWE-22 Prevention):**
+
+- All paths validated via PathValidator
+- Only allowed directories accessible (cwd + home)
+- Path traversal attacks blocked (`../../etc/passwd` rejected)
+
+**Tips:**
+
+- **Always call first** before `ingest_context` to avoid wasted computation
+- Use `content_type` override for ambiguous files (e.g., `.txt` containing code)
+- `detected_by` field shows whether detection used extension or content sniffing
+- Binary files require external conversion (MarkItDown recommended)
+
+---
+
+### Assessment Workflow Pattern
+
+**Complete Pre-flight → Convert → Ingest Workflow:**
+
+```python
+async def smart_ingest(file_path: str, file_id: str) -> dict:
+    """Intelligent file ingestion with pre-flight assessment."""
+
+    # Step 1: Pre-flight assessment
+    assessment = await mcp_tools.should_compress(file_path=file_path)
+
+    recommendation = assessment["recommendation"]
+
+    if recommendation == "SKIP":
+        return {"status": "skipped", "reason": "File too small for compression"}
+
+    elif recommendation == "DIRECT_READ":
+        # Small file - read directly, no compression needed
+        with open(file_path, 'r') as f:
+            content = f.read()
+        return {"status": "direct_read", "content": content, "tokens": assessment["estimated_tokens"]}
+
+    elif recommendation == "CONVERT_THEN_COMPRESS":
+        # Binary file - convert to markdown first
+        import markitdown  # External dependency
+        markdown_content = markitdown.convert(file_path)
+
+        # Now ingest the converted content
+        result = await mcp_tools.ingest_context(
+            text=markdown_content,
+            file_id=file_id,
+            metadata={"source": file_path, "converted": True}
+        )
+        return {"status": "converted_and_ingested", **result}
+
+    else:  # COMPRESS
+        # Text file large enough for compression
+        with open(file_path, 'r') as f:
+            content = f.read()
+
+        result = await mcp_tools.ingest_context(
+            text=content,
+            file_id=file_id,
+            metadata={"source": file_path}
+        )
+        return {"status": "ingested", **result}
+```
+
+**Batch Assessment:**
+
+```python
+# Assess multiple files before batch processing
+files = ["doc1.pdf", "doc2.py", "doc3.txt", "doc4.md"]
+
+assessments = []
+for file_path in files:
+    result = await mcp_tools.should_compress(file_path=file_path)
+    assessments.append({
+        "file": file_path,
+        "recommendation": result["recommendation"],
+        "tokens": result["estimated_tokens"]
+    })
+
+# Sort by recommendation for efficient processing
+compress_files = [a for a in assessments if a["recommendation"] == "COMPRESS"]
+convert_files = [a for a in assessments if a["recommendation"] == "CONVERT_THEN_COMPRESS"]
+skip_files = [a for a in assessments if a["recommendation"] in ("SKIP", "DIRECT_READ")]
+
+print(f"To compress: {len(compress_files)}")
+print(f"To convert first: {len(convert_files)}")
+print(f"To skip/read directly: {len(skip_files)}")
+```
+
+---
+
 ## Common Usage Patterns
 
 ### Pattern 1: Basic Document Analysis
@@ -1891,7 +2339,7 @@ if stats["storage_used_mb"] > 900:  # Approaching 1GB limit
 
 ## Conclusion
 
-The 17 MCP tools provide comprehensive capabilities for:
+The 44 MCP tools provide comprehensive capabilities for:
 
 - **Document compression** (80-95% reduction)
 - **Dialogue memory** (~66% reduction with safety preservation)
@@ -1899,15 +2347,18 @@ The 17 MCP tools provide comprehensive capabilities for:
 - **Self-correction** (blind spot and hallucination detection)
 - **Adaptive compression** (JSCCM-inspired dynamic allocation)
 - **Resource management** (persistent storage, limits, cleanup)
+- **Pre-flight assessment** (file type detection, token estimation - v0.9.2)
+- **Experimental features** (TOON, SCAR, Multimodal - v0.10.0)
 
 **Key Principles:**
 
-1. **Always start with `read_skeleton`** - get the overview first
-2. **Use semantic search** - find what matters, not just keywords
-3. **Modulate fidelity progressively** - start low, upgrade as needed
-4. **Validate responses** - use blind spot and hallucination detection
-5. **Leverage AFM for conversations** - preserve safety, reduce tokens
-6. **Monitor resources** - check stats, delete old documents
+1. **Run `should_compress` first** - assess files before processing
+2. **Always start with `read_skeleton`** - get the overview first
+3. **Use semantic search** - find what matters, not just keywords
+4. **Modulate fidelity progressively** - start low, upgrade as needed
+5. **Validate responses** - use blind spot and hallucination detection
+6. **Leverage AFM for conversations** - preserve safety, reduce tokens
+7. **Monitor resources** - check stats, delete old documents
 
 **For more information:**
 

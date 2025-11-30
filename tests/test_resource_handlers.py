@@ -4,6 +4,7 @@ Comprehensive tests for resource_handlers.py
 Coverage target: 80%+ (currently 16%)
 Tests both helper functions and main handler with various health states.
 v0.9.1: Added tests for should_compress token estimation tool.
+v0.9.2: Added binary detection tests and updated recommendation names.
 """
 
 import json
@@ -15,13 +16,16 @@ from src.handlers.resource_handlers import (
     handle_check_resource_health,
     handle_should_compress,
     create_progress_bar,
+    is_binary_content,
     CHARS_PER_TOKEN_PROSE,
     CHARS_PER_TOKEN_CODE,
-    CHARS_PER_TOKEN_DEFAULT,
-    COMPRESS_THRESHOLD_TOKENS,
+    SKIP_THRESHOLD_TOKENS,
+    DIRECT_READ_THRESHOLD_TOKENS,
+    # COMPRESS_THRESHOLD_TOKENS removed in v0.9.3 (use DIRECT_READ_THRESHOLD_TOKENS)
     STRONG_COMPRESS_THRESHOLD,
-    MUST_COMPRESS_THRESHOLD,
+    MUST_COMPRESS_THRESHOLD,  # v0.9.3: new module-level constant
 )
+from src.path_validator import PathValidator
 
 
 # ============================================================================
@@ -60,13 +64,40 @@ def mock_context():
     return context
 
 
+@pytest.fixture
+def mock_context_with_validator(tmp_path):
+    """
+    Create mock HandlerContext with PathValidator for should_compress tests (v0.9.3).
+
+    v0.9.3 requires PathValidator for handle_should_compress. This fixture provides
+    a context with a PathValidator configured to allow the tmp_path directory.
+    """
+    context = {}
+    # Create PathValidator allowing the pytest tmp_path directory
+    context["path_validator"] = PathValidator(allowed_base_dirs=[str(tmp_path)])
+    return context, tmp_path
+
+
+def get_context_for_tempfile():
+    """
+    Create a context with PathValidator allowing system temp directory.
+
+    Used for tests that create temp files via tempfile.NamedTemporaryFile.
+    v0.9.3 requires PathValidator, so we create one allowing the temp dir.
+    """
+    import tempfile as tf
+
+    temp_dir = tf.gettempdir()
+    return {"path_validator": PathValidator(allowed_base_dirs=[temp_dir])}
+
+
 # ============================================================================
 # Test create_progress_bar Helper Function
 # ============================================================================
 
 
 class TestCreateProgressBar:
-    """Test progress bar creation with various percentages and states"""
+    """Test progress bar creation with various percentages and states (v0.9.3: ASCII chars)"""
 
     def test_progress_bar_healthy_low(self):
         """Test progress bar with low percentage (healthy state)"""
@@ -76,8 +107,8 @@ class TestCreateProgressBar:
         assert "]" in result
         assert "[OK]" in result
         assert "25%" in result
-        assert "█" in result  # Should have some filled blocks
-        assert "░" in result  # Should have some empty blocks
+        assert "#" in result  # v0.9.3: ASCII filled blocks
+        assert "-" in result  # v0.9.3: ASCII empty blocks
 
     def test_progress_bar_healthy_medium(self):
         """Test progress bar with medium percentage (still healthy)"""
@@ -85,8 +116,8 @@ class TestCreateProgressBar:
 
         assert "[OK]" in result
         assert "50%" in result
-        # 50% should have half filled
-        filled_count = result.count("█")
+        # 50% should have half filled (v0.9.3: "#" instead of "█")
+        filled_count = result.count("#")
         assert filled_count == 20  # Half of 40
 
     def test_progress_bar_healthy_high(self):
@@ -102,8 +133,8 @@ class TestCreateProgressBar:
 
         assert "[WARN]" in result
         assert "80%" in result
-        assert "█" in result
-        assert "░" in result
+        assert "#" in result  # v0.9.3: ASCII chars
+        assert "-" in result
 
     def test_progress_bar_warning_high(self):
         """Test progress bar at high warning percentage"""
@@ -118,8 +149,8 @@ class TestCreateProgressBar:
 
         assert "[CRIT]" in result
         assert "FULL" in result
-        # Should be all filled blocks
-        filled_count = result.count("█")
+        # Should be all filled blocks (v0.9.3: "#" instead of "█")
+        filled_count = result.count("#")
         assert filled_count == 40
 
     def test_progress_bar_over_100(self):
@@ -135,8 +166,8 @@ class TestCreateProgressBar:
 
         assert "[OK]" in result
         assert "0%" in result
-        # Should be all empty blocks
-        empty_count = result.count("░")
+        # Should be all empty blocks (v0.9.3: "-" instead of "░")
+        empty_count = result.count("-")
         assert empty_count == 40
 
     def test_progress_bar_custom_width_small(self):
@@ -145,9 +176,9 @@ class TestCreateProgressBar:
 
         assert "[OK]" in result
         assert "50%" in result
-        # Total bar width should be 10
-        filled = result.count("█")
-        empty = result.count("░")
+        # Total bar width should be 10 (v0.9.3: ASCII chars)
+        filled = result.count("#")
+        empty = result.count("-")
         assert filled + empty == 10
 
     def test_progress_bar_custom_width_large(self):
@@ -156,8 +187,9 @@ class TestCreateProgressBar:
 
         assert "[OK]" in result
         assert "75%" in result
-        filled = result.count("█")
-        empty = result.count("░")
+        # v0.9.3: ASCII chars
+        filled = result.count("#")
+        empty = result.count("-")
         assert filled + empty == 60
         # 75% of 60 = 45 filled
         assert filled == 45
@@ -408,11 +440,22 @@ class TestHandleCheckResourceHealth:
 
 @pytest.mark.asyncio
 class TestHandleShouldCompress:
-    """Test should_compress token estimation handler"""
+    """Test should_compress token estimation handler (v0.9.3: PathValidator required)"""
+
+    # v0.9.3: PathValidator requirement tests
+    async def test_should_compress_no_path_validator_returns_error(self):
+        """Test that missing PathValidator returns error (v0.9.3 security requirement)"""
+        result = await handle_should_compress({}, {"file_path": "/some/file.txt"})
+        data = json.loads(result)
+
+        assert "error" in data
+        assert "Path validation unavailable" in data["error"]
+        assert data["recommendation"] == "UNKNOWN"
+        assert "suggestion" in data
 
     async def test_should_compress_missing_file_path(self):
         """Test with missing file_path argument"""
-        result = await handle_should_compress({}, {})
+        result = await handle_should_compress(get_context_for_tempfile(), {})
         data = json.loads(result)
 
         assert data["error"] == "file_path is required"
@@ -420,79 +463,104 @@ class TestHandleShouldCompress:
 
     async def test_should_compress_file_not_found(self):
         """Test with non-existent file"""
-        result = await handle_should_compress({}, {"file_path": "/nonexistent/file.txt"})
+        result = await handle_should_compress(
+            get_context_for_tempfile(), {"file_path": "/nonexistent/file.txt"}
+        )
         data = json.loads(result)
 
         assert "error" in data
-        assert "not found" in data["error"].lower()
+        # v0.9.3: Will now fail on path validation (outside allowed dirs)
         assert data["recommendation"] == "UNKNOWN"
 
-    async def test_should_compress_small_file_no_compress(self):
-        """Test small file returns NO_COMPRESS recommendation"""
-        # Create a small temp file (~500 bytes = ~130 tokens)
+    async def test_should_compress_small_file_direct_read(self):
+        """Test small file returns DIRECT_READ recommendation (v0.9.2)"""
+        # Create a small temp file (~500 bytes = ~130 tokens, between 100-500 threshold)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("x" * 500)  # 500 bytes
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
-            assert data["recommendation"] == "NO_COMPRESS"
-            assert data["estimated_tokens"] < COMPRESS_THRESHOLD_TOKENS
+            assert data["recommendation"] == "DIRECT_READ"
+            assert data["estimated_tokens"] < DIRECT_READ_THRESHOLD_TOKENS
             assert "small" in data["reason"].lower()
             assert data["file_size_bytes"] == 500
+            # v0.9.2: New fields
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
         finally:
             os.unlink(temp_path)
 
-    async def test_should_compress_medium_file_recommend(self):
-        """Test medium file returns RECOMMEND_COMPRESS"""
+    async def test_should_compress_medium_file_compress(self):
+        """Test medium file returns COMPRESS recommendation (v0.9.2)"""
         # Create medium file (~3000 bytes = ~790 tokens at 3.8 chars/token)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("x" * 3000)
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
-            assert data["recommendation"] == "RECOMMEND_COMPRESS"
-            assert COMPRESS_THRESHOLD_TOKENS <= data["estimated_tokens"] < STRONG_COMPRESS_THRESHOLD
+            assert data["recommendation"] == "COMPRESS"
+            # v0.9.3: Use DIRECT_READ_THRESHOLD_TOKENS (COMPRESS_THRESHOLD_TOKENS removed)
+            assert (
+                DIRECT_READ_THRESHOLD_TOKENS <= data["estimated_tokens"] < STRONG_COMPRESS_THRESHOLD
+            )
             assert "medium" in data["reason"].lower()
+            # v0.9.2: New fields
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
         finally:
             os.unlink(temp_path)
 
-    async def test_should_compress_large_file_strongly_recommend(self):
-        """Test large file returns STRONGLY_RECOMMEND"""
+    async def test_should_compress_large_file_compress(self):
+        """Test large file returns COMPRESS (v0.9.2: unified compress recommendation)"""
         # Create large file (~10000 bytes = ~2632 tokens)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("x" * 10000)
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
-            assert data["recommendation"] == "STRONGLY_RECOMMEND"
+            assert data["recommendation"] == "COMPRESS"
             assert STRONG_COMPRESS_THRESHOLD <= data["estimated_tokens"] < MUST_COMPRESS_THRESHOLD
             assert "large" in data["reason"].lower()
+            # v0.9.2: New fields
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
         finally:
             os.unlink(temp_path)
 
-    async def test_should_compress_huge_file_must_compress(self):
-        """Test very large file returns MUST_COMPRESS"""
+    async def test_should_compress_huge_file_compress(self):
+        """Test very large file returns COMPRESS (v0.9.2: unified compress recommendation)"""
         # Create huge file (~50000 bytes = ~13158 tokens)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("x" * 50000)
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
-            assert data["recommendation"] == "MUST_COMPRESS"
+            assert data["recommendation"] == "COMPRESS"
             assert data["estimated_tokens"] >= MUST_COMPRESS_THRESHOLD
             assert "very large" in data["reason"].lower()
+            # v0.9.2: New fields
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
         finally:
             os.unlink(temp_path)
 
@@ -503,7 +571,9 @@ class TestHandleShouldCompress:
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
             # Should detect as code and use CHARS_PER_TOKEN_CODE (3.5)
@@ -521,7 +591,9 @@ class TestHandleShouldCompress:
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
             # Should detect as prose/mixed
@@ -537,7 +609,7 @@ class TestHandleShouldCompress:
 
         try:
             result = await handle_should_compress(
-                {}, {"file_path": temp_path, "content_type": "code"}
+                get_context_for_tempfile(), {"file_path": temp_path, "content_type": "code"}
             )
             data = json.loads(result)
 
@@ -555,7 +627,7 @@ class TestHandleShouldCompress:
 
         try:
             result = await handle_should_compress(
-                {}, {"file_path": temp_path, "content_type": "prose"}
+                get_context_for_tempfile(), {"file_path": temp_path, "content_type": "prose"}
             )
             data = json.loads(result)
 
@@ -572,7 +644,9 @@ class TestHandleShouldCompress:
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
             # Should have calculated potential savings
@@ -589,7 +663,9 @@ class TestHandleShouldCompress:
             temp_path = f.name
 
         try:
-            result = await handle_should_compress({}, {"file_path": temp_path})
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
             data = json.loads(result)
 
             # Verify all expected fields
@@ -614,8 +690,452 @@ class TestHandleShouldCompress:
                 temp_path = f.name
 
             try:
-                result = await handle_should_compress({}, {"file_path": temp_path})
+                result = await handle_should_compress(
+                    get_context_for_tempfile(), {"file_path": temp_path}
+                )
                 data = json.loads(result)
                 assert data["content_type_detected"] == "code", f"Failed for extension {ext}"
             finally:
                 os.unlink(temp_path)
+
+
+# ============================================================================
+# Test Binary Detection (v0.9.2)
+# ============================================================================
+
+
+class TestIsBinaryContent:
+    """Test is_binary_content helper function (v0.9.2 Hardening: returns tuple)"""
+
+    def test_binary_content_with_null_bytes(self):
+        """Test detection of binary content via null byte ratio"""
+        # Create file with >1% null bytes
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".dat", delete=False) as f:
+            # Write 100 bytes: 5 null bytes + 95 regular bytes = 5% null
+            f.write(b"\x00" * 5 + b"x" * 95)
+            temp_path = f.name
+
+        try:
+            is_binary, error = is_binary_content(temp_path)
+            assert is_binary is True
+            assert error is None
+        finally:
+            os.unlink(temp_path)
+
+    def test_text_content_no_null_bytes(self):
+        """Test text content detection (no null bytes)"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("This is plain text content with no null bytes.")
+            temp_path = f.name
+
+        try:
+            is_binary, error = is_binary_content(temp_path)
+            assert is_binary is False
+            assert error is None
+        finally:
+            os.unlink(temp_path)
+
+    def test_empty_file_not_binary(self):
+        """Test empty file is not considered binary"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            temp_path = f.name
+
+        try:
+            is_binary, error = is_binary_content(temp_path)
+            assert is_binary is False
+            assert error is None
+        finally:
+            os.unlink(temp_path)
+
+    def test_nonexistent_file_returns_error(self):
+        """Test nonexistent file returns error message (v0.9.2 Hardening)"""
+        is_binary, error = is_binary_content("/nonexistent/path/file.xyz")
+        assert is_binary is False
+        assert error is not None
+        assert "Cannot read file" in error
+
+
+@pytest.mark.asyncio
+class TestBinaryFileDetection:
+    """Test binary file detection in should_compress (v0.9.2)"""
+
+    # Extension-based detection tests
+
+    async def test_binary_pdf_extension(self):
+        """Test PDF file returns CONVERT_THEN_COMPRESS"""
+        # Create a dummy PDF-like file (binary content)
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+            f.write(b"%PDF-1.4\x00" + b"binary content")
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["needs_conversion"] is True
+            assert data["is_text_readable"] is False
+            assert data["conversion_tool"] == "MarkItDown"
+            assert data["content_type_detected"] == "document"
+            assert "detected_by" in data
+        finally:
+            os.unlink(temp_path)
+
+    async def test_binary_docx_extension(self):
+        """Test DOCX file returns CONVERT_THEN_COMPRESS"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".docx", delete=False) as f:
+            f.write(b"PK\x03\x04" + b"\x00" * 50)  # ZIP signature (DOCX is a ZIP)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["needs_conversion"] is True
+            assert data["is_text_readable"] is False
+            assert data["content_type_detected"] == "document"
+        finally:
+            os.unlink(temp_path)
+
+    async def test_binary_image_extension(self):
+        """Test image file (PNG) returns CONVERT_THEN_COMPRESS"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".png", delete=False) as f:
+            # PNG header
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["needs_conversion"] is True
+            assert data["content_type_detected"] == "image"
+        finally:
+            os.unlink(temp_path)
+
+    # Content-based detection tests (CRITICAL)
+
+    async def test_unknown_extension_binary_content(self):
+        """Test unknown extension with binary content detected as binary"""
+        # .xyz is not in TEXT_EXTENSIONS, so content will be sniffed
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".xyz", delete=False) as f:
+            # Write content with >1% null bytes
+            f.write(b"\x00" * 100 + b"some data" * 100)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["needs_conversion"] is True
+            assert data["is_text_readable"] is False
+            assert data["detected_by"] == "content"  # Detected by content, not extension
+        finally:
+            os.unlink(temp_path)
+
+    async def test_unknown_extension_text_content(self):
+        """Test unknown extension with text content detected as text"""
+        # .xyz is not in TEXT_EXTENSIONS, but content has no null bytes
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xyz", delete=False) as f:
+            f.write("This is plain text in an unknown extension file.\n" * 50)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            # Should NOT be detected as binary since content is text
+            assert data["recommendation"] != "CONVERT_THEN_COMPRESS"
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
+        finally:
+            os.unlink(temp_path)
+
+    async def test_text_extension_skips_content_sniff(self):
+        """Test known text extension skips content sniffing for efficiency"""
+        # .txt is in TEXT_EXTENSIONS, so content sniffing is skipped
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Normal text content")
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
+        finally:
+            os.unlink(temp_path)
+
+    # Threshold boundary tests
+
+    async def test_threshold_boundary_skip(self):
+        """Test file at exactly SKIP threshold boundary"""
+        # Create file with exactly ~99 tokens (should be SKIP)
+        # 99 tokens * 3.8 chars/token = 376 bytes
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 376)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "SKIP"
+            assert data["estimated_tokens"] < SKIP_THRESHOLD_TOKENS
+        finally:
+            os.unlink(temp_path)
+
+    async def test_threshold_boundary_direct_read(self):
+        """Test file just above SKIP threshold returns DIRECT_READ"""
+        # Create file with ~101 tokens (should be DIRECT_READ)
+        # 101 tokens * 3.8 chars/token = 384 bytes
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 400)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "DIRECT_READ"
+            assert SKIP_THRESHOLD_TOKENS <= data["estimated_tokens"] < DIRECT_READ_THRESHOLD_TOKENS
+        finally:
+            os.unlink(temp_path)
+
+    async def test_threshold_boundary_compress(self):
+        """Test file just above DIRECT_READ threshold returns COMPRESS"""
+        # Create file with ~501 tokens (should be COMPRESS)
+        # 501 tokens * 3.8 chars/token = 1904 bytes
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 1910)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "COMPRESS"
+            # v0.9.3: Use DIRECT_READ_THRESHOLD_TOKENS (COMPRESS_THRESHOLD_TOKENS removed)
+            assert data["estimated_tokens"] >= DIRECT_READ_THRESHOLD_TOKENS
+        finally:
+            os.unlink(temp_path)
+
+    async def test_empty_file_skip(self):
+        """Test empty file returns SKIP"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            temp_path = f.name  # Don't write anything
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "SKIP"
+            assert data["file_size_bytes"] == 0
+            assert "empty" in data["reason"].lower()
+        finally:
+            os.unlink(temp_path)
+
+    # Backward compatibility tests
+
+    async def test_existing_fields_unchanged(self):
+        """Test all v0.9.1 response fields still present (backward compat)"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 1000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            # v0.9.1 fields must be present
+            assert "file_path" in data
+            assert "file_size_bytes" in data
+            assert "estimated_tokens" in data
+            assert "content_type_detected" in data
+            assert "recommendation" in data
+            assert "reason" in data
+            assert "potential_token_savings" in data
+            assert "estimated_compression_ratio" in data
+        finally:
+            os.unlink(temp_path)
+
+    async def test_new_fields_added(self):
+        """Test v0.9.2 fields are present"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 1000)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            # v0.9.2 new fields must be present
+            assert "needs_conversion" in data
+            assert "is_text_readable" in data
+            assert "conversion_tool" in data
+
+            # For text files, values should be:
+            assert data["needs_conversion"] is False
+            assert data["is_text_readable"] is True
+            assert data["conversion_tool"] is None
+        finally:
+            os.unlink(temp_path)
+
+    async def test_binary_new_fields(self):
+        """Test v0.9.2 fields for binary files"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+            f.write(b"%PDF-1.4\x00binary")
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            # For binary files, values should be:
+            assert data["needs_conversion"] is True
+            assert data["is_text_readable"] is False
+            assert data["conversion_tool"] == "MarkItDown"
+        finally:
+            os.unlink(temp_path)
+
+    # Media and archive file tests
+
+    async def test_media_file_detection(self):
+        """Test media file (mp4) returns CONVERT_THEN_COMPRESS"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=False) as f:
+            f.write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 50)
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["content_type_detected"] == "media"
+        finally:
+            os.unlink(temp_path)
+
+    async def test_archive_file_detection(self):
+        """Test archive file (zip) returns CONVERT_THEN_COMPRESS"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".zip", delete=False) as f:
+            f.write(b"PK\x03\x04" + b"\x00" * 50)  # ZIP signature
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["content_type_detected"] == "archive"
+        finally:
+            os.unlink(temp_path)
+
+    async def test_executable_file_detection(self):
+        """Test executable file (exe) returns CONVERT_THEN_COMPRESS"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".exe", delete=False) as f:
+            f.write(b"MZ" + b"\x00" * 50)  # DOS header
+            temp_path = f.name
+
+        try:
+            result = await handle_should_compress(
+                get_context_for_tempfile(), {"file_path": temp_path}
+            )
+            data = json.loads(result)
+
+            assert data["recommendation"] == "CONVERT_THEN_COMPRESS"
+            assert data["content_type_detected"] == "executable"
+        finally:
+            os.unlink(temp_path)
+
+    # Security tests (v0.9.2 Hardening)
+
+    async def test_path_traversal_blocked(self):
+        """Test that path traversal attempts are blocked (CWE-22 prevention)"""
+        # Import PathValidator for the test
+        from src.path_validator import PathValidator
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create PathValidator with only tmpdir allowed
+            validator = PathValidator(allowed_base_dirs=[tmpdir])
+            context = {"path_validator": validator}
+
+            # Attempt path traversal attack
+            result = await handle_should_compress(context, {"file_path": "../../etc/passwd"})
+            data = json.loads(result)
+
+            # Should return error with UNKNOWN recommendation
+            assert "error" in data
+            assert "path" in data["error"].lower() or "validation" in data["error"].lower()
+            assert data["recommendation"] == "UNKNOWN"
+            assert "suggestion" in data
+
+    async def test_path_traversal_with_absolute_path(self):
+        """Test that absolute path outside allowed dirs is blocked"""
+        from src.path_validator import PathValidator
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            validator = PathValidator(allowed_base_dirs=[tmpdir])
+            context = {"path_validator": validator}
+
+            # Attempt to access /etc/passwd (absolute path)
+            result = await handle_should_compress(context, {"file_path": "/etc/passwd"})
+            data = json.loads(result)
+
+            assert "error" in data
+            assert data["recommendation"] == "UNKNOWN"
+
+    async def test_valid_path_with_validator(self):
+        """Test that valid paths within allowed dirs work with PathValidator"""
+        from src.path_validator import PathValidator
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a test file within the allowed directory
+            test_file = os.path.join(tmpdir, "test.txt")
+            with open(test_file, "w") as f:
+                f.write("x" * 1000)
+
+            validator = PathValidator(allowed_base_dirs=[tmpdir])
+            context = {"path_validator": validator}
+
+            # Valid path should work
+            result = await handle_should_compress(context, {"file_path": test_file})
+            data = json.loads(result)
+
+            # Should succeed, not return error
+            assert "error" not in data
+            assert data["recommendation"] in ["SKIP", "DIRECT_READ", "COMPRESS"]
+            assert data["needs_conversion"] is False

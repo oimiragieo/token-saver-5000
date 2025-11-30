@@ -28,6 +28,7 @@ from . import detection_handlers as dh
 from . import ace_handlers as ace
 from . import visualization_handlers as vh
 from . import help_handlers as hh
+from . import experimental_handlers as exp
 
 # Import structured logging for operation tracking
 from ..structured_logging import get_logger
@@ -37,7 +38,7 @@ logger = get_logger("semantic-modulator")
 
 def setup_mcp_tools() -> List[Tool]:
     """
-    Define all 39 MCP tools available in the Semantic Modulator server.
+    Define all 44 MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
@@ -54,6 +55,7 @@ def setup_mcp_tools() -> List[Tool]:
     - Resource Management (3): check_health, check_environment, should_compress
     - Help & Documentation (1): tool_help
     - ACE Framework (7): ace_generate, ace_reflect, ace_curate, ace_grow, ace_refine, ace_get_playbook, ace_execute_cycle
+    - Experimental (5): toon_encode, toon_decode, scar_compress, scar_get_stats, multimodal_ingest
     """
     return [
         # === DOCUMENT COMPRESSION TOOLS (9) ===
@@ -202,7 +204,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="list_documents",
             description=(
-                "📚 LIST DOCUMENTS: Get inventory of all ingested documents. "
+                "[LIST] LIST DOCUMENTS: Get inventory of all ingested documents. "
                 "Returns structured information about each document including file_id, "
                 "metadata, node count, token counts, and ingestion time. "
                 "Use this to discover what documents are available for querying."
@@ -241,8 +243,8 @@ def setup_mcp_tools() -> List[Tool]:
             description=(
                 "ADAPTIVE CONTEXT ALLOCATION (JSCCM-inspired): "
                 "Dynamically adjust compression based on available context window. "
-                "Low availability (like low SNR in wireless) → More compression. "
-                "High availability → Less compression, more detail. "
+                "Low availability (like low SNR in wireless) -> More compression. "
+                "High availability -> Less compression, more detail. "
                 "Uses learned rate allocator to determine optimal skeleton ratio. "
                 "Inspired by JSCCM paper's channel adaptation strategy."
             ),
@@ -566,7 +568,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="check_environment",
             description=(
-                "🔍 Check comprehensive environment health: models loaded, memory usage, "
+                "[HEALTH] Check comprehensive environment health: models loaded, memory usage, "
                 "cache hit ratio, stale documents, and disk space. "
                 "Returns recommendations for optimization. "
                 "Use this to understand system state before heavy operations."
@@ -580,19 +582,20 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="should_compress",
             description=(
-                "⚡ TOKEN-EFFICIENT PRE-CHECK: Estimate token count for a file WITHOUT reading it. "
-                "Uses file size heuristics to recommend whether compression is needed. "
-                "CRITICAL for token efficiency - call this BEFORE reading large files to avoid wasting tokens. "
-                "Returns: estimated tokens, compression recommendation (NO_COMPRESS, RECOMMEND_COMPRESS, "
-                "STRONGLY_RECOMMEND, or MUST_COMPRESS), and potential token savings. "
-                "This enables intelligent context management without burning tokens to check file size."
+                "[PRE-CHECK] TOKEN-EFFICIENT PRE-CHECK: Estimate token count for a file WITHOUT reading content. "
+                "Uses file size heuristics + binary content detection (v0.9.2). "
+                "CRITICAL: Call this BEFORE reading or ingesting any file. "
+                "Detects binary files (PDF, DOCX, images) that need conversion before compression. "
+                "Returns recommendation: SKIP (<100 tokens), DIRECT_READ (100-500), COMPRESS (>500), "
+                "or CONVERT_THEN_COMPRESS (binary files with MarkItDown suggestion). "
+                "v0.9.2 fields: needs_conversion, is_text_readable, conversion_tool, reason."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the file to estimate (does NOT read content, only checks size)",
+                        "description": "Path to the file to assess (checks size + binary detection, minimal read)",
                     },
                     "content_type": {
                         "type": "string",
@@ -608,7 +611,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="tool_help",
             description=(
-                "📚 Get detailed help, examples, and tips for any Semantic Modulator tool. "
+                "[HELP] Get detailed help, examples, and tips for any Semantic Modulator tool. "
                 "Returns structured help with parameter descriptions, usage examples, and related tools. "
                 "Use without tool_name to see all available tools organized by category. "
                 "Set verbose=true for comprehensive examples."
@@ -770,7 +773,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_refine_context",
             description=(
-                "🎯 ACE REFINE: Update bullet performance based on feedback (refine operation). "
+                "[ACE] ACE REFINE: Update bullet performance based on feedback (refine operation). "
                 "Adjusts confidence scores for specific bullets based on success/failure. "
                 "Use to reinforce successful patterns or penalize failed approaches. "
                 "Enables continuous improvement of the playbook."
@@ -802,7 +805,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_get_playbook",
             description=(
-                "📖 ACE GET PLAYBOOK: Retrieve current ACE playbook state. "
+                "[ACE] ACE GET PLAYBOOK: Retrieve current ACE playbook state. "
                 "Returns all bullets with performance stats, versioning, and delta history. "
                 "Supports filtering by confidence, bullet type, or custom criteria. "
                 "Use to inspect the evolved playbook and understand learned patterns."
@@ -841,7 +844,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ace_execute_cycle",
             description=(
-                "[SYNC] ACE EXECUTE CYCLE: Execute complete ACE cycle (Generate → Reflect → Curate). "
+                "[SYNC] ACE EXECUTE CYCLE: Execute complete ACE cycle (Generate -> Reflect -> Curate). "
                 "Convenience tool that combines the three-step ACE process into one call. "
                 "Generates trajectory, reflects on outcome, and curates insights automatically. "
                 "Use for rapid iteration and continuous playbook improvement."
@@ -877,7 +880,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="batch_ingest_documents",
             description=(
-                "🚀 Batch ingest multiple documents concurrently for 4× faster throughput. "
+                "[BATCH] Batch ingest multiple documents concurrently for 4x faster throughput. "
                 "Processes documents in parallel with bounded concurrency, progress tracking, "
                 "and error isolation. One document failure won't block the entire batch. "
                 "Returns detailed results for each document including success status and processing time. "
@@ -923,7 +926,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="ingest_directory",
             description=(
-                "📂 Bulk ingest code files from a directory using glob patterns. "
+                "[DIR] Bulk ingest code files from a directory using glob patterns. "
                 "Scans a directory for matching files and ingests them in parallel. "
                 "Uses PathValidator for security (prevents path traversal). "
                 "Ideal for quickly ingesting an entire codebase or project directory. "
@@ -1045,7 +1048,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="visualize_graph_html",
             description=(
-                "🎨 Generate interactive HTML visualization of the semantic graph. "
+                "[VIZ] Generate interactive HTML visualization of the semantic graph. "
                 "Creates a beautiful, interactive web page with draggable nodes, zoom/pan, "
                 "color-coded importance, and edge weights. Great for exploring and presenting "
                 "compression decisions. Requires pyvis library."
@@ -1073,7 +1076,7 @@ def setup_mcp_tools() -> List[Tool]:
         Tool(
             name="export_graph_graphml",
             description=(
-                "📁 Export semantic graph as GraphML for analysis tools. "
+                "[VIZ] Export semantic graph as GraphML for analysis tools. "
                 "GraphML is a standard XML format supported by Gephi, Cytoscape, igraph, "
                 "and NetworkX. Perfect for advanced network analysis, visualization, "
                 "and research workflows."
@@ -1114,6 +1117,114 @@ def setup_mcp_tools() -> List[Tool]:
                     },
                 },
                 "required": ["file_id", "node_id"],
+            },
+        ),
+        # === EXPERIMENTAL TOOLS (5) - NOT PRODUCTION-READY ===
+        Tool(
+            name="toon_encode",
+            description=(
+                "[EXPERIMENTAL] Encode data to TOON format (~40% smaller than JSON). "
+                "TOON = Token-Oriented Object Notation. Pure Python, always available. "
+                "NOT production-ready. Returns experimental flag."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "description": "Data to encode (dict or list)",
+                    },
+                },
+                "required": ["data"],
+            },
+        ),
+        Tool(
+            name="toon_decode",
+            description=(
+                "[EXPERIMENTAL] Decode TOON format back to structured data. "
+                "TOON is lossy - optimized for LLM consumption, not round-trip serialization. "
+                "NOT production-ready. Returns experimental flag."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "toon_input": {
+                        "type": "string",
+                        "description": "TOON-formatted string to decode",
+                    },
+                },
+                "required": ["toon_input"],
+            },
+        ),
+        Tool(
+            name="scar_compress",
+            description=(
+                "[EXPERIMENTAL] Compress embeddings using SCAR (learnable compression). "
+                "WARNING: Uses UNTRAINED random weights by default. Requires PyTorch. "
+                "NOT production-ready without model training. Returns experimental flag."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Document ID to compress embeddings for",
+                    },
+                    "target_dim": {
+                        "type": "integer",
+                        "description": "Target embedding dimension (default: 128)",
+                        "default": 128,
+                    },
+                },
+                "required": ["doc_id"],
+            },
+        ),
+        Tool(
+            name="scar_get_stats",
+            description=(
+                "[EXPERIMENTAL] Get SCAR compressor statistics and model state. "
+                "Shows PyTorch availability and model training status. "
+                "NOT production-ready. Returns experimental flag."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="multimodal_ingest",
+            description=(
+                "[EXPERIMENTAL] Ingest mixed content (text, code, images). "
+                "Requires Pillow for image support. Image paths validated for security. "
+                "NOT production-ready. Returns experimental flag."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Unique document identifier",
+                    },
+                    "text_content": {
+                        "type": "string",
+                        "description": "Text content to ingest",
+                    },
+                    "code_content": {
+                        "type": "string",
+                        "description": "Code content to ingest",
+                    },
+                    "code_language": {
+                        "type": "string",
+                        "description": "Code language (default: python)",
+                        "default": "python",
+                    },
+                    "image_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Paths to images (validated for security)",
+                    },
+                },
+                "required": ["doc_id"],
             },
         ),
     ]
@@ -1208,6 +1319,12 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "ace_refine_context": ace.handle_ace_refine_context,
         "ace_get_playbook": ace.handle_ace_get_playbook,
         "ace_execute_cycle": ace.handle_ace_execute_cycle,
+        # Experimental (5 tools) - NOT production-ready
+        "toon_encode": exp.handle_toon_encode,
+        "toon_decode": exp.handle_toon_decode,
+        "scar_compress": exp.handle_scar_compress,
+        "scar_get_stats": exp.handle_scar_get_stats,
+        "multimodal_ingest": exp.handle_multimodal_ingest,
     }
 
     # Lookup handler
