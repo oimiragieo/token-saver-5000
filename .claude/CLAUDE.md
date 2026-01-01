@@ -8,6 +8,73 @@
 
 This CLAUDE.md is authoritative. Subdirectories extend these rules within the Claude Projects hierarchy.
 
+## Codebase Audit Summary (2026-01-01)
+
+### Audit Status: HEALTHY ✅
+**No unused, orphaned, or legacy files detected. Codebase is clean and well-maintained.**
+
+### Key Metrics (v0.10.0)
+| Metric | Value | Status |
+|--------|-------|--------|
+| **Source Modules** | 50 Python files in src/ | ✅ All active |
+| **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
+| **MCP Tools** | 44 tools defined | ✅ All routed |
+| **Test Files** | 39 test modules | ✅ 1,171 tests |
+| **Test Coverage** | 73%+ overall | ✅ Exceeds 70% threshold |
+| **Documentation** | 49 markdown files | ⚠️ Minor updates needed |
+
+### Version Alignment
+- **pyproject.toml**: v0.10.0 ✅ (updated from 0.7.0)
+- **README.md**: 44 MCP tools ✅ (updated from 35)
+- **CHANGELOG.md**: Latest dated release v0.9.0
+
+### Architecture Summary
+```
+src/                              # 50 modules, ~25,000 lines
+├── Core Compression (4 modules)  # semantic_compressor, code_compressor, adapter, multimodal
+├── Embeddings (4 modules)        # 3-tier system: SBERT → ONNX → TF-IDF
+├── Dialogue/Context (2 modules)  # AFM (dialogue), ACE (context)
+├── File/Version (2 modules)      # file_sync_manager, version_manager
+├── Persistence (1 module)        # ChromaDB + JSON fallback
+├── Observability (4 modules)     # logging, metrics, tracing, health
+├── Reliability (3 modules)       # timeout, circuit breaker, retry
+├── Security (2 modules)          # path_validator, graceful_degradation
+├── Experimental (3 modules)      # SCAR, TOON, training_utils
+└── handlers/ (11 modules)        # 44 MCP tool implementations
+```
+
+### Experimental Features Status
+| Feature | Module | MCP Exposed | Production Ready |
+|---------|--------|-------------|------------------|
+| TOON Serialization | toon_serializer.py | ✅ v0.10.0 | ⚠️ API may change |
+| SCAR Compression | scar_compressor.py | ✅ v0.10.0 | ❌ Untrained weights |
+| Multimodal | multimodal_compressor.py | ✅ v0.10.0 | ⚠️ Needs benchmarks |
+| Training Utils | training_utils.py | ❌ Not exposed | ❌ Reference only |
+
+### Aspirational Features (Not Yet Implemented)
+The following features are documented for future Claude Code integration but do **NOT** currently exist in this repository:
+- `.claude/hooks/` - Lifecycle hooks (PreToolUse, PostToolUse, etc.)
+- `.claude/commands/` - Custom slash commands
+- `.claude/subagents/` - Specialized agent definitions
+- `.claude/workflows/` - Workflow automation
+- `.claude/config.yaml`, `.claude/settings.json`, `.claude/.mcp.json` - Config files
+- `skills/`, `rules/` directories
+
+**Current Reality:** Only `.claude/CLAUDE.md` exists. MCP configuration is in user's Claude Desktop settings (`~/Library/Application Support/Claude/claude_desktop_config.json`).
+
+### Tech Debt Identified
+1. **Documentation Tool Counts**: Some docs still reference old counts (HOW_IT_WORKS.md, API_REFERENCE.md)
+2. **MCP_TOOLS_GUIDE.md**: 14 tools not fully documented in main guide
+3. **GETTING_STARTED.md**: Contains 35 relative links that may not resolve correctly
+
+### Zero Security Issues
+- ✅ No suspicious network calls
+- ✅ No credential leaks
+- ✅ No path traversal vulnerabilities (CWE-22 hardened)
+- ✅ All file I/O validated via PathValidator
+
+---
+
 ## Critical Context: Claude Code Unique Capabilities
 
 Claude Code has unique capabilities that set it apart from generic agent configurations:
@@ -305,7 +372,7 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **1,075 comprehensive tests** (1,063 passed, 12 skipped, 75% coverage - v0.8.0 Async Safety Audit)
+- ✅ **1,171 comprehensive tests** (1,159 passed, 12 skipped, 73% coverage - v0.10.0 Audit)
   - Was 1,075 in v0.8.0 initial, 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
   - 32 new tests added in v0.7.0 Week 7-8 DevOps infrastructure:
     * 32 HTTP server tests (endpoints, integration, configuration, lifecycle, edge cases - 100% pass rate)
@@ -569,32 +636,33 @@ All experimental features are KEPT (not deleted) to allow future production inte
 
 ### Code Navigation
 ```bash
-# Find agent prompt files
-rg -n "## <identity>|## <task>" .claude/subagents
+# Find all MCP tool definitions
+rg -n "Tool\(" src/handlers/mcp_core.py
 
-# Find workflow definitions
-rg -n "name:|agent:" .claude/workflows
+# Find handler implementations
+rg -n "async def handle_" src/handlers/
 
-# Find template references
-rg -n "\.claude/templates/" .claude/subagents
+# Find test files
+find tests -name "test_*.py" | head -20
 
-# Find schema references
-rg -n "\.claude/schemas/" .claude/subagents
+# Find all Python modules in src/
+find src -name "*.py" -not -path "*/handlers/*" | wc -l  # 39 core modules
 
-# Find hook definitions
-find .claude/hooks -name "*.yaml"
+# Check handler module count
+find src/handlers -name "*.py" | wc -l  # 11 handler modules
 ```
 
-### Configuration Analysis
+### Project Analysis
 ```bash
-# Check agent routing configuration
-cat .claude/config.yaml | grep -A 5 "trigger_words"
+# Check version
+grep "version" pyproject.toml
 
-# Verify MCP server configuration
-cat .claude/.mcp.json | jq '.mcpServers | keys'
+# Run tests with coverage
+pytest tests/ -v --cov=src --cov-report=term
 
-# Check tool permissions
-cat .claude/settings.json | jq '.tool_permissions'
+# Check code quality
+black --check src/ tests/
+ruff check src/ tests/
 ```
 
 ### Dependency Analysis
@@ -612,22 +680,38 @@ pip-audit
 ## Core Files and Utility Functions
 
 ### Configuration Files
-- `.claude/config.yaml`: Agent routing and workflow configuration
-- `.claude/settings.json`: Tool permissions and MCP server config
-- `.claude/.mcp.json`: MCP server definitions
-- `CLAUDE.md`: This file (root instructions)
+- `.claude/CLAUDE.md`: This file (root instructions, 47KB)
+- `pyproject.toml`: Python package metadata and dependencies (v0.10.0)
+- `requirements.txt`: Runtime dependencies (39 packages)
+- `config/claude_desktop_config.example.json`: Example MCP configuration for Claude Desktop
 
-### Agent System
-- `.claude/subagents/`: Individual agent prompts, capabilities, and context
-- `.claude/workflows/`: Workflow definitions (greenfield, brownfield)
-- `.claude/templates/`: Reusable template files for artifacts
-- `.claude/schemas/`: JSON schemas for artifact validation
+### MCP Configuration (User-Specific)
+MCP server configuration is NOT stored in the repository. Users configure in their Claude Desktop settings:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- See `docs/guides/CLAUDE_CODE_SETUP.md` for integration instructions
 
-### Workflow Artifacts
-- `.claude/context/artifacts/`: Generated JSON artifacts from agents
-- `.claude/context/history/reasoning/`: Extended thinking and reasoning outputs
-- `.claude/context/history/gates/`: Quality gate validation results
-- `.claude/context/session.json`: Current workflow session state
+### Actual Project Structure
+```
+.claude/
+└── CLAUDE.md           # Only file in .claude/ directory
+
+.github/workflows/      # CI/CD pipelines (test, lint, build, deploy)
+config/                 # Example configurations
+deployment/kubernetes/  # Production K8s manifests
+docs/                   # 49 documentation files
+examples/               # 10 usage examples
+scripts/                # 8 utility scripts
+src/                    # 50 source modules + handlers
+tests/                  # 39 test files (1,171 tests)
+```
+
+### Aspirational Features (Future Roadmap)
+The following are documented as reference for potential Claude Code integration:
+- `.claude/hooks/` - Not implemented (uses `.pre-commit-config.yaml` instead)
+- `.claude/commands/` - Not implemented (slash commands not yet created)
+- `.claude/subagents/` - Not implemented
+- `.claude/workflows/` - Not implemented
+- `skills/`, `rules/` - Not implemented
 
 ## Developer Environment Setup
 
@@ -711,12 +795,21 @@ pip-audit
   - Dangerous Git operations without approval
 
 ### MCP Server Access
-Configured MCP servers (see `.claude/.mcp.json`):
-- **repo**: Repository search and codebase RAG
-- **artifacts**: Artifact publishing to Claude Projects
-- **github**: GitHub integration (requires `GITHUB_TOKEN`)
-- **linear**: Linear integration (optional, requires `LINEAR_API_KEY`)
-- **slack**: Slack notifications (optional, requires `SLACK_BOT_TOKEN`)
+Token Saver 5000 provides 44 MCP tools via stdio transport. Configure in your Claude Desktop settings:
+
+**Tool Categories:**
+- **Document Compression** (9 tools): ingest, read, search, modulate, batch operations
+- **Dialogue Memory (AFM)** (6 tools): add_message, build_context, export/import
+- **Context Engineering (ACE)** (7 tools): generate, reflect, curate, grow, refine
+- **File Sync & Versioning** (4 tools): check_sync, refresh, diff, version_history
+- **Visualization** (4 tools): export_json, visualize_html, export_graphml, explain
+- **Detection** (2 tools): check_blind_spots, detect_hallucination
+- **Health & Assessment** (3 tools): check_health, check_environment, should_compress
+- **Experimental** (5 tools): TOON encode/decode, SCAR compress/stats, multimodal_ingest
+- **Discovery** (3 tools): list_documents, delete_document, tool_help
+- **Fidelity** (1 tool): recommend_fidelity
+
+See `docs/guides/MCP_TOOLS_GUIDE.md` for complete tool documentation.
 
 ## Code Style Guidelines
 

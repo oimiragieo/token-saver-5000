@@ -46,7 +46,7 @@ See [Getting Started](docs/getting-started/GETTING_STARTED.md) for detailed inst
 - Semantic deduplication (0.85 threshold)
 
 **Infrastructure**
-- 35 MCP tools via stdio transport
+- 44 MCP tools via stdio transport
 - File sync with staleness detection
 - Version management with diffs
 - Resource limits (100MB/doc, 1GB total)
