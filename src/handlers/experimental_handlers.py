@@ -8,6 +8,11 @@ Features exposed:
 - SCAR (Semantic Compression with Alignment and Retrieval) - requires PyTorch
 - TOON (Token-Oriented Object Notation) - pure Python
 - Multimodal compression - requires Pillow for images
+- ASG-SI (Audited Skill-Graph Self-Improvement) - v0.11.0
+  - Contract verification for compression operations
+  - Decomposed reward calculation
+  - Evidence store with tamper-evident audit trails
+  - Adversarial test generation (experience synthesis)
 
 Dependencies are lazily imported to avoid startup failures.
 """
@@ -474,13 +479,316 @@ async def handle_multimodal_ingest(context: "HandlerContext", args: Dict[str, An
 
 
 # =============================================================================
+# ASG-SI Handlers (Audited Skill-Graph Self-Improvement)
+# =============================================================================
+
+
+def _get_compression_verifier():
+    """Lazy import for CompressionVerifier."""
+    from src.compression_verifier import CompressionVerifier
+    return CompressionVerifier()
+
+
+def _get_reward_calculator():
+    """Lazy import for CompressionRewardCalculator."""
+    from src.compression_rewards import CompressionRewardCalculator
+    return CompressionRewardCalculator()
+
+
+def _get_evidence_store():
+    """Lazy import for global EvidenceStore."""
+    from src.evidence_bundle import get_evidence_store
+    return get_evidence_store()
+
+
+def _get_experience_synthesizer(seed: int = None):
+    """Lazy import for ExperienceSynthesizer."""
+    from src.experience_synthesis import ExperienceSynthesizer
+    return ExperienceSynthesizer(seed=seed)
+
+
+async def handle_verify_compression(context: "HandlerContext", args: Dict[str, Any]) -> str:
+    """
+    Verify a compression operation using ASG-SI contracts.
+
+    Checks preconditions, postconditions, and composition invariants
+    to ensure compression quality and integrity.
+
+    Args:
+        context: Handler context (unused)
+        args: {
+            "document": str - Original document text
+            "skeleton_text": str - Compressed skeleton output
+            "node_map": dict - Node ID to description mapping
+            "original_tokens": int - Original token count
+            "skeleton_tokens": int - Skeleton token count
+            "fidelity_level": str - Target fidelity (ABSTRACT, OUTLINE, etc.)
+        }
+
+    Returns:
+        JSON with verification result, contracts_passed, violations
+    """
+    required = ["document", "skeleton_text", "original_tokens", "skeleton_tokens", "fidelity_level"]
+    missing = [f for f in required if f not in args]
+    if missing:
+        return json.dumps({
+            "error": f"Missing required arguments: {missing}",
+            "experimental": True
+        })
+
+    try:
+        verifier = _get_compression_verifier()
+
+        original_tokens = args["original_tokens"]
+        skeleton_tokens = args["skeleton_tokens"]
+        compression_ratio = original_tokens / skeleton_tokens if skeleton_tokens > 0 else 0
+
+        result = verifier.verify_compression_operation(
+            document=args["document"],
+            skeleton_text=args["skeleton_text"],
+            node_map=args.get("node_map", {}),
+            original_tokens=original_tokens,
+            skeleton_tokens=skeleton_tokens,
+            fidelity_level=args["fidelity_level"],
+            compression_ratio=compression_ratio,
+        )
+
+        return json.dumps({
+            "verified": result.verified,
+            "all_contracts_passed": result.all_contracts_passed,
+            "preconditions_passed": result.preconditions.overall_passed if result.preconditions else True,
+            "postconditions_passed": result.postconditions.overall_passed if result.postconditions else True,
+            "violations": [v.to_dict() for v in result.violations],
+            "experimental": True,
+            "note": "ASG-SI contract verification - validates compression quality"
+        })
+
+    except Exception as e:
+        logger.error(f"Compression verification failed: {e}")
+        return json.dumps({
+            "error": f"Verification failed: {str(e)}",
+            "experimental": True
+        })
+
+
+async def handle_calculate_reward(context: "HandlerContext", args: Dict[str, Any]) -> str:
+    """
+    Calculate decomposed compression reward using ASG-SI reward system.
+
+    Computes 5 reward components:
+    - Schema: Input/output validation
+    - Semantic: Meaning preservation (SSIM, embeddings)
+    - Fidelity: Compression ratio adherence
+    - Composition: Graph structure integrity
+    - Memory: Context efficiency
+
+    Args:
+        context: Handler context (unused)
+        args: {
+            "input_text": str - Original text
+            "output_text": str - Compressed output
+            "input_tokens": int - Input token count
+            "output_tokens": int - Output token count
+            "fidelity_level": str - Target fidelity level
+            "ssim_score": float (optional) - Pre-calculated SSIM
+        }
+
+    Returns:
+        JSON with total_reward, component_scores, weakest_component
+    """
+    required = ["input_text", "output_text", "input_tokens", "output_tokens", "fidelity_level"]
+    missing = [f for f in required if f not in args]
+    if missing:
+        return json.dumps({
+            "error": f"Missing required arguments: {missing}",
+            "experimental": True
+        })
+
+    try:
+        calculator = _get_reward_calculator()
+
+        reward = calculator.calculate(
+            input_text=args["input_text"],
+            output_text=args["output_text"],
+            input_tokens=args["input_tokens"],
+            output_tokens=args["output_tokens"],
+            fidelity_level=args["fidelity_level"],
+            ssim_score=args.get("ssim_score"),
+        )
+
+        weakest_name, weakest_score = reward.weakest_component
+
+        return json.dumps({
+            "total_reward": round(reward.total_reward, 4),
+            "passes_threshold": reward.passes_threshold(),
+            "component_scores": {
+                k.value: round(v, 4) for k, v in reward.component_scores.items()
+            },
+            "weakest_component": weakest_name.value,
+            "weakest_score": round(weakest_score, 4),
+            "experimental": True,
+            "note": "ASG-SI decomposed rewards - 5 component quality assessment"
+        })
+
+    except Exception as e:
+        logger.error(f"Reward calculation failed: {e}")
+        return json.dumps({
+            "error": f"Reward calculation failed: {str(e)}",
+            "experimental": True
+        })
+
+
+async def handle_get_evidence_stats(context: "HandlerContext", args: Dict[str, Any]) -> str:
+    """
+    Get evidence store statistics for audit trail.
+
+    The evidence store maintains a tamper-evident chain of all
+    compression operations with cryptographic integrity verification.
+
+    Args:
+        context: Handler context (unused)
+        args: {} (no arguments needed)
+
+    Returns:
+        JSON with total_bundles, operations breakdown, chain_valid status
+    """
+    try:
+        store = _get_evidence_store()
+
+        stats = store.get_statistics()
+        chain_valid, chain_errors = store.verify_chain()
+
+        return json.dumps({
+            "total_bundles": stats.get("total_bundles", len(store)),
+            "operations": stats.get("operations", {}),
+            "chain_valid": chain_valid,
+            "chain_errors": chain_errors[:5] if chain_errors else [],  # Limit errors
+            "experimental": True,
+            "note": "ASG-SI evidence store - tamper-evident audit trail"
+        })
+
+    except Exception as e:
+        logger.error(f"Evidence stats failed: {e}")
+        return json.dumps({
+            "error": f"Failed to get evidence stats: {str(e)}",
+            "experimental": True
+        })
+
+
+async def handle_generate_synthetic_tests(context: "HandlerContext", args: Dict[str, Any]) -> str:
+    """
+    Generate synthetic test cases for adversarial testing.
+
+    Uses ASG-SI experience synthesis to create boundary cases,
+    adversarial documents, and stress test scenarios.
+
+    Args:
+        context: Handler context (unused)
+        args: {
+            "test_type": str - "boundary", "dialogue", "ace", or "all"
+            "seed": int (optional) - Random seed for reproducibility
+        }
+
+    Returns:
+        JSON with generated test cases
+    """
+    test_type = args.get("test_type", "boundary")
+    seed = args.get("seed")
+
+    try:
+        synth = _get_experience_synthesizer(seed=seed)
+
+        if test_type == "boundary":
+            docs = synth.generate_boundary_cases()
+            return json.dumps({
+                "test_type": "boundary",
+                "count": len(docs),
+                "tests": [
+                    {
+                        "name": d.name,
+                        "category": d.category.value,
+                        "description": d.description,
+                        "token_estimate": d.token_estimate,
+                        "expected_behavior": d.expected_behavior,
+                    }
+                    for d in docs
+                ],
+                "experimental": True,
+                "note": "ASG-SI boundary tests - adversarial document cases"
+            })
+
+        elif test_type == "dialogue":
+            dialogues = synth.generate_dialogue_cases()
+            return json.dumps({
+                "test_type": "dialogue",
+                "count": len(dialogues),
+                "tests": [
+                    {
+                        "turns": len(d),
+                        "preview": d[:2] if d else [],
+                    }
+                    for d in dialogues
+                ],
+                "experimental": True,
+                "note": "ASG-SI dialogue tests - AFM memory stress tests"
+            })
+
+        elif test_type == "ace":
+            cases = synth.generate_ace_cases()
+            return json.dumps({
+                "test_type": "ace",
+                "count": len(cases),
+                "tests": [
+                    {
+                        "name": c.get("name"),
+                        "bullet_count": len(c.get("bullets", [])),
+                        "expected": c.get("expected"),
+                    }
+                    for c in cases
+                ],
+                "experimental": True,
+                "note": "ASG-SI ACE tests - context engineering edge cases"
+            })
+
+        elif test_type == "all":
+            suite = synth.generate_full_test_suite()
+            return json.dumps({
+                "test_type": "all",
+                "boundary_count": len(suite.documents),
+                "dialogue_count": len(suite.dialogues),
+                "ace_count": len(suite.ace_contexts),
+                "experimental": True,
+                "note": "ASG-SI full test suite - comprehensive adversarial testing"
+            })
+
+        else:
+            return json.dumps({
+                "error": f"Unknown test_type: {test_type}. Use: boundary, dialogue, ace, or all",
+                "experimental": True
+            })
+
+    except Exception as e:
+        logger.error(f"Synthetic test generation failed: {e}")
+        return json.dumps({
+            "error": f"Test generation failed: {str(e)}",
+            "experimental": True
+        })
+
+
+# =============================================================================
 # Handler Registry
 # =============================================================================
 
 EXPERIMENTAL_HANDLERS = {
+    # Original experimental handlers
     "toon_encode": handle_toon_encode,
     "toon_decode": handle_toon_decode,
     "scar_compress": handle_scar_compress,
     "scar_get_stats": handle_scar_get_stats,
     "multimodal_ingest": handle_multimodal_ingest,
+    # ASG-SI handlers (v0.11.0)
+    "verify_compression": handle_verify_compression,
+    "calculate_reward": handle_calculate_reward,
+    "get_evidence_stats": handle_get_evidence_stats,
+    "generate_synthetic_tests": handle_generate_synthetic_tests,
 }

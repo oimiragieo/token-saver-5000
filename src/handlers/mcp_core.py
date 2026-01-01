@@ -38,7 +38,7 @@ logger = get_logger("semantic-modulator")
 
 def setup_mcp_tools() -> List[Tool]:
     """
-    Define all 44 MCP tools available in the Semantic Modulator server.
+    Define all 48 MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
@@ -55,7 +55,8 @@ def setup_mcp_tools() -> List[Tool]:
     - Resource Management (3): check_health, check_environment, should_compress
     - Help & Documentation (1): tool_help
     - ACE Framework (7): ace_generate, ace_reflect, ace_curate, ace_grow, ace_refine, ace_get_playbook, ace_execute_cycle
-    - Experimental (5): toon_encode, toon_decode, scar_compress, scar_get_stats, multimodal_ingest
+    - Experimental (9): toon_encode, toon_decode, scar_compress, scar_get_stats, multimodal_ingest,
+                        verify_compression, calculate_reward, get_evidence_stats, generate_synthetic_tests
     """
     return [
         # === DOCUMENT COMPRESSION TOOLS (9) ===
@@ -1227,6 +1228,121 @@ def setup_mcp_tools() -> List[Tool]:
                 "required": ["doc_id"],
             },
         ),
+        # === ASG-SI TOOLS (4) - EXPERIMENTAL ===
+        Tool(
+            name="verify_compression",
+            description=(
+                "[EXPERIMENTAL] Verify compression operation using ASG-SI contracts. "
+                "Checks preconditions (valid input, fidelity level) and postconditions "
+                "(compression ratio, skeleton quality). Returns contract violations. "
+                "Based on arxiv.org/abs/2512.23760 Audited Skill-Graph Self-Improvement."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "document": {
+                        "type": "string",
+                        "description": "Original document text",
+                    },
+                    "skeleton_text": {
+                        "type": "string",
+                        "description": "Compressed skeleton output",
+                    },
+                    "node_map": {
+                        "type": "object",
+                        "description": "Node ID to description mapping",
+                    },
+                    "original_tokens": {
+                        "type": "integer",
+                        "description": "Original token count",
+                    },
+                    "skeleton_tokens": {
+                        "type": "integer",
+                        "description": "Skeleton token count",
+                    },
+                    "fidelity_level": {
+                        "type": "string",
+                        "description": "Target fidelity (ABSTRACT, OUTLINE, STRUCTURE, DETAILED, RAW)",
+                    },
+                },
+                "required": ["document", "skeleton_text", "original_tokens", "skeleton_tokens", "fidelity_level"],
+            },
+        ),
+        Tool(
+            name="calculate_reward",
+            description=(
+                "[EXPERIMENTAL] Calculate decomposed compression reward using ASG-SI system. "
+                "Computes 5 reward components: Schema (validation), Semantic (meaning preservation), "
+                "Fidelity (ratio adherence), Composition (graph integrity), Memory (efficiency). "
+                "Based on arxiv.org/abs/2512.23760 Audited Skill-Graph Self-Improvement."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "input_text": {
+                        "type": "string",
+                        "description": "Original text",
+                    },
+                    "output_text": {
+                        "type": "string",
+                        "description": "Compressed output",
+                    },
+                    "input_tokens": {
+                        "type": "integer",
+                        "description": "Input token count",
+                    },
+                    "output_tokens": {
+                        "type": "integer",
+                        "description": "Output token count",
+                    },
+                    "fidelity_level": {
+                        "type": "string",
+                        "description": "Target fidelity level",
+                    },
+                    "ssim_score": {
+                        "type": "number",
+                        "description": "Pre-calculated SSIM score (optional)",
+                    },
+                },
+                "required": ["input_text", "output_text", "input_tokens", "output_tokens", "fidelity_level"],
+            },
+        ),
+        Tool(
+            name="get_evidence_stats",
+            description=(
+                "[EXPERIMENTAL] Get evidence store statistics for audit trail. "
+                "The store maintains a tamper-evident blockchain-style chain of all "
+                "compression operations with cryptographic integrity verification. "
+                "Based on arxiv.org/abs/2512.23760 Audited Skill-Graph Self-Improvement."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="generate_synthetic_tests",
+            description=(
+                "[EXPERIMENTAL] Generate synthetic test cases for adversarial testing. "
+                "Uses ASG-SI experience synthesis to create boundary cases, adversarial "
+                "documents, and stress test scenarios for compression validation. "
+                "Based on arxiv.org/abs/2512.23760 Audited Skill-Graph Self-Improvement."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "test_type": {
+                        "type": "string",
+                        "description": "Test type: boundary, dialogue, ace, or all",
+                        "default": "boundary",
+                    },
+                    "seed": {
+                        "type": "integer",
+                        "description": "Random seed for reproducibility (optional)",
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -1325,6 +1441,11 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "scar_compress": exp.handle_scar_compress,
         "scar_get_stats": exp.handle_scar_get_stats,
         "multimodal_ingest": exp.handle_multimodal_ingest,
+        # ASG-SI (4 tools) - Experimental self-improvement framework
+        "verify_compression": exp.handle_verify_compression,
+        "calculate_reward": exp.handle_calculate_reward,
+        "get_evidence_stats": exp.handle_get_evidence_stats,
+        "generate_synthetic_tests": exp.handle_generate_synthetic_tests,
     }
 
     # Lookup handler
