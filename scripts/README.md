@@ -60,6 +60,28 @@ Long (20 turns):  67% savings in 0.5s
 
 ---
 
+### `benchmarks/run_benchmarks.py`
+
+**Purpose:** Run a fixed-corpus benchmark with golden thresholds to detect token-savings regressions.
+
+**Usage:**
+```bash
+python scripts/benchmarks/run_benchmarks.py
+python scripts/benchmarks/run_benchmarks.py --case medium_architecture
+python scripts/benchmarks/run_benchmarks.py --output artifacts/benchmarks/baseline.json
+```
+
+**What it tests:**
+- Compression ratio per benchmark case
+- Token savings percentage per benchmark case
+- Pass/fail against minimum expected thresholds
+
+**Output:**
+- Console summary with pass/fail per case
+- JSON report written to `artifacts/benchmarks/latest.json` by default
+
+---
+
 ### `test_simulation.py`
 
 **Purpose:** Run end-to-end simulation tests without requiring pytest.
