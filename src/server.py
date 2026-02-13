@@ -38,6 +38,7 @@ from .version_manager import VersionManager
 from .ace_framework import ACEFramework
 from .semantic_modulator.app.context_service import ServerContextService
 from .semantic_modulator.app.lifecycle_service import ServerLifecycleService
+from .semantic_modulator.app.progress_service import ProgressRenderService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
@@ -211,6 +212,7 @@ class SemanticModulatorServer:
         self.tooling = MCPToolingGateway()
         self.context_service = ServerContextService()
         self.lifecycle_service = ServerLifecycleService()
+        self.progress_service = ProgressRenderService()
         self.tool_profile, enabled_tools, used_fallback = self.tooling.resolve_tools_for_profile(
             configured_profile
         )
@@ -389,18 +391,7 @@ class SemanticModulatorServer:
 
     def _create_progress_bar(self, percentage: float, width: int = 40) -> str:
         """Create a text progress bar"""
-        filled = int((percentage / 100) * width)
-        empty = width - filled
-
-        if percentage >= 100:
-            bar = "█" * width
-            return f"[{bar}] [CRIT] FULL"
-        elif percentage >= 80:
-            bar = "█" * filled + "░" * empty
-            return f"[{bar}] [WARN] {percentage:.0f}%"
-        else:
-            bar = "█" * filled + "░" * empty
-            return f"[{bar}] [OK] {percentage:.0f}%"
+        return self.progress_service.create_progress_bar(percentage=percentage, width=width)
 
     async def __aenter__(self):
         """
