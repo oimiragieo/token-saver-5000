@@ -91,6 +91,7 @@ python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evid
 **Usage:**
 ```bash
 python scripts/benchmarks/check_benchmark_guard.py
+python scripts/benchmarks/check_benchmark_guard.py --summary-file artifacts/benchmarks/guard_summary.md
 ```
 
 **Config:**

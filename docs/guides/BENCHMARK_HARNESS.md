@@ -23,6 +23,7 @@ python scripts/benchmarks/run_benchmarks.py
 python scripts/benchmarks/run_benchmarks.py --mode query_guided
 python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
 python scripts/benchmarks/check_benchmark_guard.py
+python scripts/benchmarks/check_benchmark_guard.py --summary-file artifacts/benchmarks/guard_summary.md
 ```
 
 Run a single case:

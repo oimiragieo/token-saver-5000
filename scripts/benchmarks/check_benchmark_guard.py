@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,7 +37,68 @@ def build_parser() -> argparse.ArgumentParser:
         default="baseline,query_guided,evidence_aware",
         help="Comma-separated modes to validate.",
     )
+    parser.add_argument(
+        "--summary-file",
+        type=Path,
+        help="Optional path to write markdown summary report.",
+    )
     return parser
+
+
+def _build_markdown_summary(
+    *,
+    modes: List[str],
+    thresholds: dict,
+    reports_dir: Path,
+    all_violations: List[str],
+) -> str:
+    lines = ["## Benchmark Guard Summary", ""]
+    for mode in modes:
+        mode_thresholds = thresholds.get(mode, {})
+        report_path = reports_dir / f"latest_{mode}.json"
+        lines.append(f"### Mode: `{mode}`")
+        if not report_path.exists():
+            lines.append(f"- Status: FAIL (missing report `{report_path}`)")
+            lines.append("")
+            continue
+
+        report = load_json(report_path)
+        avg_ratio = float(report.get("avg_compression_ratio", 0.0))
+        avg_savings = float(report.get("avg_token_savings_pct", 0.0))
+        min_avg_ratio = float(mode_thresholds.get("min_avg_compression_ratio", 0.0))
+        min_avg_savings = float(mode_thresholds.get("min_avg_token_savings_pct", 0.0))
+        lines.append(
+            f"- avg_compression_ratio: `{avg_ratio:.3f}` (threshold `{min_avg_ratio:.3f}`, delta `{avg_ratio - min_avg_ratio:+.3f}`)"
+        )
+        lines.append(
+            f"- avg_token_savings_pct: `{avg_savings:.3f}` (threshold `{min_avg_savings:.3f}`, delta `{avg_savings - min_avg_savings:+.3f}`)"
+        )
+
+        per_case = mode_thresholds.get("per_case", {})
+        report_cases = {item.get("case_id"): item for item in report.get("results", [])}
+        if per_case:
+            lines.append("- per_case:")
+            for case_id, case_limits in per_case.items():
+                case = report_cases.get(case_id, {})
+                ratio = float(case.get("compression_ratio", 0.0))
+                savings = float(case.get("token_savings_pct", 0.0))
+                min_ratio = float(case_limits.get("min_compression_ratio", 0.0))
+                min_savings = float(case_limits.get("min_token_savings_pct", 0.0))
+                lines.append(
+                    f"  - `{case_id}` ratio `{ratio:.3f}` vs `{min_ratio:.3f}` (delta `{ratio - min_ratio:+.3f}`), "
+                    f"savings `{savings:.3f}` vs `{min_savings:.3f}` (delta `{savings - min_savings:+.3f}`)"
+                )
+        lines.append("")
+
+    if all_violations:
+        lines.append("### Violations")
+        for violation in all_violations:
+            lines.append(f"- {violation}")
+    else:
+        lines.append("### Result")
+        lines.append("- PASS: all benchmark guard thresholds satisfied")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -67,10 +129,22 @@ def main() -> int:
         print("[FAIL] Benchmark guard violations detected:", file=sys.stderr)
         for item in all_violations:
             print(f"  - {item}", file=sys.stderr)
-        return 1
+        exit_code = 1
+    else:
+        print("[PASS] Benchmark guard checks passed for all modes")
+        exit_code = 0
 
-    print("[PASS] Benchmark guard checks passed for all modes")
-    return 0
+    if args.summary_file:
+        markdown = _build_markdown_summary(
+            modes=modes,
+            thresholds=thresholds,
+            reports_dir=args.reports_dir,
+            all_violations=all_violations,
+        )
+        args.summary_file.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_file.write_text(markdown, encoding="utf-8")
+
+    return exit_code
 
 
 if __name__ == "__main__":

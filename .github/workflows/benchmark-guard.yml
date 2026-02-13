@@ -61,12 +61,21 @@ jobs:
       - name: Run benchmark regression guard
         run: |
           python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
-          python scripts/benchmarks/check_benchmark_guard.py
+          python scripts/benchmarks/check_benchmark_guard.py --summary-file artifacts/benchmarks/guard_summary.md
+
+      - name: Publish benchmark guard summary
+        if: always()
+        run: |
+          if [ -f artifacts/benchmarks/guard_summary.md ]; then
+            cat artifacts/benchmarks/guard_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-reports
-          path: artifacts/benchmarks/latest_*.json
+          path: |
+            artifacts/benchmarks/latest_*.json
+            artifacts/benchmarks/guard_summary.md
           retention-days: 7

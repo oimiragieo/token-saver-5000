@@ -42,3 +42,4 @@ def test_benchmark_guard_workflow_exists_and_has_regression_gate():
         in content
     )
     assert "python scripts/benchmarks/check_benchmark_guard.py" in content
+    assert "GITHUB_STEP_SUMMARY" in content
