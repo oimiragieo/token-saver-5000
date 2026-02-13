@@ -123,6 +123,25 @@ class TestSetupMCPTools:
             tool_names
         ), f"Missing document compression tools: {expected_doc_tools - tool_names}"
 
+    def test_read_skeleton_schema_exposes_query_modes(self):
+        tools = mcp_core.setup_mcp_tools()
+        tool = next(t for t in tools if t.name == "read_skeleton")
+        properties = tool.inputSchema["properties"]
+
+        assert "selection_mode" in properties
+        assert "query" in properties
+        assert "top_k" in properties
+        assert "min_similarity" in properties
+        assert "file_id" in tool.inputSchema.get("required", [])
+
+    def test_search_semantic_schema_exposes_evidence_mode(self):
+        tools = mcp_core.setup_mcp_tools()
+        tool = next(t for t in tools if t.name == "search_semantic")
+        properties = tool.inputSchema["properties"]
+
+        assert "evidence_aware" in properties
+        assert "min_similarity" in properties
+
     def test_afm_dialogue_tools_present(self):
         """Test that all 6 AFM dialogue tools are registered"""
         tools = mcp_core.setup_mcp_tools()

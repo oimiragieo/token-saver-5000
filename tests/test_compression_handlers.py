@@ -15,6 +15,7 @@ Coverage target: 85%+ of compression_handlers.py
 import pytest
 import json
 from unittest.mock import Mock, patch, AsyncMock
+from types import SimpleNamespace
 from src.handlers import compression_handlers as ch
 from src.semantic_compressor import FidelityLevel
 
@@ -192,6 +193,65 @@ class TestHandleReadSkeleton:
         assert data["file_id"] == "doc1"
         assert data["skeleton_text"] == "Mock skeleton text"
         assert data["compression_ratio"] == 10.0
+        assert data["selection_mode"] == "baseline"
+
+    @pytest.mark.asyncio
+    async def test_query_guided_mode_calls_query_skeleton(self, mock_validate_file):
+        """Test query-guided selection mode passes query to compressor."""
+        args = {"file_id": "doc1", "selection_mode": "query_guided", "query": "error correction"}
+
+        await ch.handle_read_skeleton(self.context, args)
+
+        self.mock_compressor._generate_skeleton.assert_called_once_with(
+            "doc1", query="error correction"
+        )
+
+    @pytest.mark.asyncio
+    async def test_evidence_aware_mode_adds_evidence_payload(self, mock_validate_file):
+        """Test evidence-aware mode calls retrieve_evidence and returns evidence diagnostics."""
+        self.mock_compressor.retrieve_evidence.return_value = SimpleNamespace(
+            sufficient=True,
+            best_score=0.91,
+            threshold=0.35,
+            used_expanded_search=False,
+            message="ok",
+            node_ids=["doc1_n0"],
+        )
+        args = {
+            "file_id": "doc1",
+            "selection_mode": "evidence_aware",
+            "query": "surface code",
+            "top_k": 2,
+            "min_similarity": 0.4,
+        }
+
+        result = await ch.handle_read_skeleton(self.context, args)
+        data = json.loads(result)
+
+        self.mock_compressor.retrieve_evidence.assert_called_once_with(
+            query="surface code",
+            file_id="doc1",
+            top_k=2,
+            min_similarity=0.4,
+        )
+        assert "evidence" in data
+        assert data["evidence"]["sufficient"] is True
+
+    @pytest.mark.asyncio
+    async def test_read_skeleton_rejects_invalid_selection_mode(self, mock_validate_file):
+        args = {"file_id": "doc1", "selection_mode": "invalid"}
+
+        with pytest.raises(ValueError) as exc_info:
+            await ch.handle_read_skeleton(self.context, args)
+        assert "Invalid selection_mode" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_read_skeleton_requires_query_for_non_baseline(self, mock_validate_file):
+        args = {"file_id": "doc1", "selection_mode": "query_guided"}
+
+        with pytest.raises(ValueError) as exc_info:
+            await ch.handle_read_skeleton(self.context, args)
+        assert "query is required" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_staleness_warning_shown(self, mock_validate_file):
@@ -339,6 +399,35 @@ class TestHandleSearchSemantic:
         self.mock_compressor.search_semantic_with_scores.assert_called_once_with(
             "test query", None, 10
         )
+
+    @pytest.mark.asyncio
+    async def test_evidence_aware_search_uses_retrieve_evidence(self):
+        self.mock_compressor.retrieve_evidence.return_value = SimpleNamespace(
+            sufficient=False,
+            best_score=0.12,
+            threshold=0.4,
+            used_expanded_search=True,
+            message="insufficient",
+            scores=[("doc1_n0", 0.12)],
+        )
+        args = {
+            "query": "hard query",
+            "top_k": 3,
+            "evidence_aware": True,
+            "min_similarity": 0.4,
+        }
+
+        result = await ch.handle_search_semantic(self.context, args)
+        data = json.loads(result)
+
+        self.mock_compressor.retrieve_evidence.assert_called_once_with(
+            query="hard query",
+            file_id=None,
+            top_k=3,
+            min_similarity=0.4,
+        )
+        assert data["evidence_aware"] is True
+        assert data["evidence"]["used_expanded_search"] is True
 
 
 class TestHandleGetStats:

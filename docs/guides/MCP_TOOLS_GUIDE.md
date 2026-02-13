@@ -220,7 +220,11 @@ await mcp_tools.ingest_context(
 
 ```json
 {
-  "file_id": "string (required)"  // Document identifier
+  "file_id": "string (required)",                         // Document identifier
+  "selection_mode": "baseline|query_guided|evidence_aware", // Optional (default: baseline)
+  "query": "string (optional)",                           // Required for non-baseline modes
+  "top_k": 5,                                             // Optional for evidence_aware
+  "min_similarity": 0.35                                  // Optional for evidence_aware
 }
 ```
 
@@ -348,7 +352,9 @@ await mcp_tools.modulate_region(
 {
   "query": "string (required)",       // Natural language search query
   "file_id": "string (optional)",     // Limit to specific document
-  "top_k": 5                          // Number of results (default: 5)
+  "top_k": 5,                         // Number of results (default: 5)
+  "evidence_aware": false,            // Optional insufficiency detection
+  "min_similarity": 0.35              // Optional sufficiency threshold
 }
 ```
 
@@ -417,6 +423,7 @@ await mcp_tools.search_semantic(
 - Semantic search finds related concepts, not just keyword matches
 - Combine with `modulate_region` to retrieve full content
 - Higher `similarity` scores (>0.8) indicate very relevant matches
+- Set `evidence_aware=true` to detect insufficient evidence and trigger expanded retrieval
 
 ---
 

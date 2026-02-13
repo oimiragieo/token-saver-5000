@@ -107,7 +107,8 @@ def setup_mcp_tools() -> List[Tool]:
                 "Read the compressed skeleton view of a previously ingested document. "
                 "Shows high-importance 'anchor' concepts with summaries, and lists "
                 "other sections as expandable nodes. Achieves 80-95% token reduction. "
-                "Use this FIRST before requesting specific details."
+                "Use this FIRST before requesting specific details. "
+                "Opt-in selection modes: baseline, query_guided, and evidence_aware."
             ),
             inputSchema={
                 "type": "object",
@@ -115,6 +116,26 @@ def setup_mcp_tools() -> List[Tool]:
                     "file_id": {
                         "type": "string",
                         "description": "The document identifier",
+                    },
+                    "selection_mode": {
+                        "type": "string",
+                        "enum": ["baseline", "query_guided", "evidence_aware"],
+                        "description": "Anchor selection strategy (default: baseline)",
+                        "default": "baseline",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional query used for query_guided/evidence_aware selection",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Evidence node count for evidence_aware mode",
+                        "default": 5,
+                    },
+                    "min_similarity": {
+                        "type": "number",
+                        "description": "Evidence sufficiency threshold for evidence_aware mode",
+                        "default": 0.35,
                     },
                 },
                 "required": ["file_id"],
@@ -163,7 +184,8 @@ def setup_mcp_tools() -> List[Tool]:
                 "Semantic search across ingested documents. "
                 "Uses vector similarity to find relevant sections, "
                 "even if exact keywords don't match. "
-                "Returns ranked node IDs."
+                "Returns ranked node IDs. "
+                "Optionally enables evidence-aware insufficiency detection."
             ),
             inputSchema={
                 "type": "object",
@@ -180,6 +202,16 @@ def setup_mcp_tools() -> List[Tool]:
                         "type": "integer",
                         "description": "Number of results to return",
                         "default": 5,
+                    },
+                    "evidence_aware": {
+                        "type": "boolean",
+                        "description": "Use insufficiency detection and expanded retrieval when needed",
+                        "default": False,
+                    },
+                    "min_similarity": {
+                        "type": "number",
+                        "description": "Minimum best-match similarity for sufficient evidence",
+                        "default": 0.35,
                     },
                 },
                 "required": ["query"],

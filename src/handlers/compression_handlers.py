@@ -332,6 +332,23 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         RuntimeError: If reading skeleton fails
     """
     file_id = args["file_id"]
+    selection_mode = args.get("selection_mode", "baseline")
+    query = args.get("query")
+    top_k = args.get("top_k", 5)
+    min_similarity = args.get("min_similarity", 0.35)
+
+    valid_modes = {"baseline", "query_guided", "evidence_aware"}
+    if selection_mode not in valid_modes:
+        raise ValueError(
+            f"Invalid selection_mode: '{selection_mode}'\n"
+            f"[TIP] Valid modes: {sorted(valid_modes)}"
+        )
+    if selection_mode != "baseline" and not query:
+        raise ValueError(
+            f"query is required when selection_mode='{selection_mode}'\n"
+            "[TIP] Provide a natural-language query to guide anchor selection."
+        )
+
     validate_file_id(file_id, context, must_exist=True)
 
     logger.info(f"Reading skeleton: {file_id}")
@@ -350,7 +367,31 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             }
 
     try:
-        skeleton_response = context["compressor"]._generate_skeleton(file_id)
+        evidence_info = None
+        if selection_mode == "query_guided":
+            skeleton_response = context["compressor"]._generate_skeleton(file_id, query=query)
+        elif selection_mode == "evidence_aware":
+            evidence = context["compressor"].retrieve_evidence(
+                query=query,
+                file_id=file_id,
+                top_k=top_k,
+                min_similarity=min_similarity,
+            )
+            skeleton_response = context["compressor"]._generate_skeleton(
+                file_id,
+                query=query,
+                anchor_node_ids=set(evidence.node_ids),
+            )
+            evidence_info = {
+                "sufficient": evidence.sufficient,
+                "best_score": round(evidence.best_score, 3),
+                "threshold": evidence.threshold,
+                "used_expanded_search": evidence.used_expanded_search,
+                "message": evidence.message,
+                "node_ids": evidence.node_ids,
+            }
+        else:
+            skeleton_response = context["compressor"]._generate_skeleton(file_id)
 
         # Build JSON response
         response = {
@@ -361,7 +402,12 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "compression_ratio": skeleton_response.compression_ratio,
             "skeleton_text": skeleton_response.skeleton_text,
             "node_map": skeleton_response.node_map,
+            "selection_mode": selection_mode,
         }
+        if query:
+            response["query"] = query
+        if evidence_info:
+            response["evidence"] = evidence_info
 
         if staleness_warning:
             response["staleness_warning"] = staleness_warning
@@ -464,11 +510,23 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     query = args["query"]
     file_id = args.get("file_id")
     top_k = args.get("top_k", 5)
+    evidence_aware = args.get("evidence_aware", False)
+    min_similarity = args.get("min_similarity", 0.35)
 
     logger.info(f"Semantic search: '{query}' in {file_id or 'all files'}")
 
-    # Use search_semantic_with_scores to get both node IDs and similarity scores
-    search_results = context["compressor"].search_semantic_with_scores(query, file_id, top_k)
+    if evidence_aware:
+        evidence = context["compressor"].retrieve_evidence(
+            query=query,
+            file_id=file_id,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+        search_results = evidence.scores[:top_k]
+    else:
+        evidence = None
+        # Use search_semantic_with_scores to get both node IDs and similarity scores
+        search_results = context["compressor"].search_semantic_with_scores(query, file_id, top_k)
 
     # Build structured results with both similarity and importance
     results = []
@@ -489,6 +547,7 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     response = {
         "query": query,
         "file_id": file_id,
+        "evidence_aware": evidence_aware,
         "total_results": len(results),
         "results": results,
         "tip": "Use modulate_region() with node_ids to retrieve full content",
@@ -497,6 +556,14 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
             "importance": "PageRank centrality in document graph (higher = more central)",
         },
     }
+    if evidence is not None:
+        response["evidence"] = {
+            "sufficient": evidence.sufficient,
+            "best_score": round(evidence.best_score, 3),
+            "threshold": evidence.threshold,
+            "used_expanded_search": evidence.used_expanded_search,
+            "message": evidence.message,
+        }
 
     return json.dumps(response, indent=2)
 
