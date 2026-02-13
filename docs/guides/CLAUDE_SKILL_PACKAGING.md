@@ -7,6 +7,7 @@ This project now includes a starter skill package for context compression:
   - `scripts/skills/profile_tokens.py`
   - `scripts/skills/compress_context.py`
   - `scripts/skills/validate_evidence.py`
+  - `scripts/skills/run_skill_workflow.py`
 
 ## Recommended Flow
 
@@ -16,6 +17,8 @@ This project now includes a starter skill package for context compression:
    - `python scripts/skills/compress_context.py --file path/to/context.txt --mode evidence_aware --query "your question"`
 3. Validate evidence sufficiency for high-stakes responses:
    - `python scripts/skills/validate_evidence.py --file path/to/context.txt --query "your question"`
+4. Or run the full flow in one command:
+   - `python scripts/skills/run_skill_workflow.py --file path/to/context.txt --query "your question" --mode evidence_aware`
 
 ## Integration Notes
 

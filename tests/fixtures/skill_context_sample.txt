@@ -1,0 +1,6 @@
+System architecture notes:
+The API gateway forwards requests to the auth service and billing service.
+The auth service validates tokens, refreshes sessions, and enforces role checks.
+Retry behavior is controlled with exponential backoff and bounded retries.
+Error handling paths emit structured logs with request IDs and service tags.
+If retries exceed thresholds, requests are routed to dead-letter handling.

@@ -124,6 +124,21 @@ python scripts/skills/validate_evidence.py --file path/to/context.txt --query "a
 
 ---
 
+### `skills/run_skill_workflow.py`
+
+**Purpose:** Run profile + compression + evidence validation in one workflow command.
+
+**Usage:**
+```bash
+python scripts/skills/run_skill_workflow.py --file path/to/context.txt --query "auth flow" --mode evidence_aware
+```
+
+**Notes:**
+- Emits one JSON payload containing `profile`, `compressed`, and `evidence_validation`.
+- Use `--fail-on-insufficient-evidence` to return non-zero on insufficient evidence.
+
+---
+
 ### `test_simulation.py`
 
 **Purpose:** Run end-to-end simulation tests without requiring pytest.
