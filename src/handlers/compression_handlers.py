@@ -34,6 +34,55 @@ from ..node_identity import collect_file_ids, extract_file_id_from_node
 logger = logging.getLogger("semantic-modulator")
 
 
+def _flatten_output_fields(schema: Dict[str, Any], prefix: str = "") -> List[str]:
+    """Flatten nested dict/list schema keys to dotted output field paths."""
+    fields: List[str] = []
+    for key, value in schema.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            fields.extend(_flatten_output_fields(value, prefix=full_key))
+        elif isinstance(value, list) and value and isinstance(value[0], dict):
+            list_prefix = f"{full_key}[]"
+            fields.extend(_flatten_output_fields(value[0], prefix=list_prefix))
+        else:
+            fields.append(full_key)
+    return fields
+
+
+SEARCH_SEMANTIC_RESPONSE_TEMPLATE: Dict[str, Any] = {
+    "query": "",
+    "file_id": "",
+    "evidence_aware": False,
+    "total_results": 0,
+    "results": [
+        {
+            "node_id": "",
+            "similarity": 0.0,
+            "importance": 0.0,
+            "summary": "",
+            "tokens": 0,
+        }
+    ],
+    "tip": "",
+    "score_explanation": {
+        "similarity": "",
+        "importance": "",
+    },
+    "evidence": {
+        "sufficient": True,
+        "best_score": 0.0,
+        "threshold": 0.0,
+        "used_expanded_search": False,
+        "message": "",
+    },
+}
+
+
+def get_search_semantic_output_fields() -> List[str]:
+    """Get canonical output field paths for search_semantic help/docs."""
+    return _flatten_output_fields(SEARCH_SEMANTIC_RESPONSE_TEMPLATE)
+
+
 # ===========================
 # Validation Helpers
 # ===========================

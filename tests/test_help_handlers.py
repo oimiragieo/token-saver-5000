@@ -11,6 +11,10 @@ from src.handlers.resource_handlers import (
     get_check_environment_output_fields,
     handle_check_environment,
 )
+from src.handlers.compression_handlers import (
+    get_search_semantic_output_fields,
+    handle_search_semantic,
+)
 
 
 @pytest.mark.asyncio
@@ -89,3 +93,36 @@ async def test_check_environment_help_output_fields_match_canonical_schema():
     data = json.loads(result)
 
     assert data.get("output_fields", []) == get_check_environment_output_fields()
+
+
+@pytest.mark.asyncio
+async def test_search_semantic_help_output_fields_match_canonical_schema():
+    result = await handle_tool_help({}, {"tool_name": "search_semantic", "verbose": True})
+    data = json.loads(result)
+
+    assert data.get("output_fields", []) == get_search_semantic_output_fields()
+
+
+@pytest.mark.asyncio
+async def test_search_semantic_help_output_fields_cover_runtime_keys():
+    help_result = await handle_tool_help({}, {"tool_name": "search_semantic", "verbose": True})
+    help_data = json.loads(help_result)
+    documented_fields = help_data.get("output_fields", [])
+
+    node = SimpleNamespace(text="Auth token logic", importance=0.93, metadata={"tokens": 42})
+    compressor = SimpleNamespace(
+        chunks={"doc1_n0": node},
+        search_semantic_with_scores=lambda query, file_id, top_k: [("doc1_n0", 0.87)],
+        _generate_summary=lambda text, max_length: text[:max_length],
+    )
+    runtime_result = await handle_search_semantic(
+        {"compressor": compressor},
+        {"query": "auth token", "file_id": "doc1", "top_k": 1},
+    )
+    runtime_data = json.loads(runtime_result)
+
+    assert "query" in documented_fields
+    assert "results[].node_id" in documented_fields
+    assert "results[].similarity" in documented_fields
+    assert "results[].importance" in documented_fields
+    assert runtime_data["results"][0]["node_id"] == "doc1_n0"

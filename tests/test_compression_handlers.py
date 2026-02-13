@@ -430,6 +430,18 @@ class TestHandleSearchSemantic:
         assert data["evidence"]["used_expanded_search"] is True
 
 
+class TestSearchSemanticOutputFields:
+    """Schema tests for search_semantic output field docs."""
+
+    def test_search_semantic_output_fields_include_result_paths(self):
+        output_fields = ch.get_search_semantic_output_fields()
+        assert "query" in output_fields
+        assert "results[].node_id" in output_fields
+        assert "results[].similarity" in output_fields
+        assert "results[].importance" in output_fields
+        assert "evidence.sufficient" in output_fields
+
+
 class TestHandleGetStats:
     """Test handle_get_stats handler (4 tests)"""
 
