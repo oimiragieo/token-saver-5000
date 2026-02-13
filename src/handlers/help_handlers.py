@@ -53,13 +53,37 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Get a compressed skeleton view of an ingested document.",
         "parameters": {
             "file_id": "ID of the document to read (required)",
+            "selection_mode": "Optional: baseline, query_guided, or evidence_aware (default: baseline)",
+            "query": "Optional query text. Required for query_guided and evidence_aware modes",
+            "top_k": "Optional evidence node count for evidence_aware mode (default: 5)",
+            "min_similarity": "Optional sufficiency threshold for evidence_aware mode (default: 0.35)",
         },
         "examples": [
             {"description": "Read document skeleton", "args": {"file_id": "my_doc"}},
+            {
+                "description": "Query-guided skeleton",
+                "args": {
+                    "file_id": "my_doc",
+                    "selection_mode": "query_guided",
+                    "query": "error handling strategy",
+                },
+            },
+            {
+                "description": "Evidence-aware skeleton",
+                "args": {
+                    "file_id": "my_doc",
+                    "selection_mode": "evidence_aware",
+                    "query": "authentication flow",
+                    "top_k": 5,
+                    "min_similarity": 0.4,
+                },
+            },
         ],
         "tips": [
             "Skeleton shows high-importance nodes only (~20% of content)",
             "Node IDs in skeleton can be used with modulate_region",
+            "Use selection_mode=query_guided to bias anchors toward your task",
+            "Use selection_mode=evidence_aware to detect insufficient evidence",
             "Returns staleness warning if source file changed",
         ],
         "related_tools": ["ingest_context", "modulate_region", "check_file_sync"],
@@ -95,6 +119,8 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "query": "Search query (required)",
             "file_id": "Optional: limit search to specific document",
             "top_k": "Number of results to return (default: 5)",
+            "evidence_aware": "Optional: enable insufficiency detection with expanded retrieval (default: false)",
+            "min_similarity": "Optional sufficiency threshold for evidence_aware mode (default: 0.35)",
         },
         "examples": [
             {"description": "Search all docs", "args": {"query": "authentication logic"}},
@@ -102,10 +128,20 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
                 "description": "Search specific doc",
                 "args": {"query": "error handling", "file_id": "auth.py", "top_k": 10},
             },
+            {
+                "description": "Evidence-aware search",
+                "args": {
+                    "query": "token refresh race condition",
+                    "file_id": "auth.py",
+                    "evidence_aware": True,
+                    "min_similarity": 0.4,
+                },
+            },
         ],
         "tips": [
             "Returns both similarity (query match) and importance (PageRank) scores",
             "Use file_id to focus search on specific documents",
+            "Set evidence_aware=true when correctness matters more than speed",
             "Results are ranked by semantic similarity, not keyword match",
         ],
         "related_tools": ["modulate_region", "read_skeleton", "check_blind_spots"],

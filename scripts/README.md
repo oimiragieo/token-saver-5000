@@ -84,6 +84,46 @@ python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evid
 
 ---
 
+### `skills/profile_tokens.py`
+
+**Purpose:** Quick token profile for raw input vs compressed skeleton output.
+
+**Usage:**
+```bash
+python scripts/skills/profile_tokens.py --file path/to/context.txt
+python scripts/skills/profile_tokens.py --text "inline text"
+```
+
+---
+
+### `skills/compress_context.py`
+
+**Purpose:** Generate compressed context in baseline, query-guided, or evidence-aware mode.
+
+**Usage:**
+```bash
+python scripts/skills/compress_context.py --file path/to/context.txt --mode baseline
+python scripts/skills/compress_context.py --file path/to/context.txt --mode query_guided --query "auth flow"
+python scripts/skills/compress_context.py --file path/to/context.txt --mode evidence_aware --query "auth flow" --min-similarity 0.4
+```
+
+---
+
+### `skills/validate_evidence.py`
+
+**Purpose:** Validate whether query evidence is sufficient before final answer generation.
+
+**Usage:**
+```bash
+python scripts/skills/validate_evidence.py --file path/to/context.txt --query "auth flow"
+```
+
+**Exit codes:**
+- `0`: evidence sufficient
+- `1`: evidence insufficient
+
+---
+
 ### `test_simulation.py`
 
 **Purpose:** Run end-to-end simulation tests without requiring pytest.
