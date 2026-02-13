@@ -705,6 +705,21 @@ class TestHandleRecommendFidelity:
         assert "simple" in str(exc_info.value)
 
 
+class TestValidationHelpers:
+    """Targeted tests for validation helper edge cases."""
+
+    def test_validate_node_ids_preserves_file_id_with_non_index_n_segment(self):
+        context = {"compressor": Mock()}
+        context["compressor"].chunks = {"design_notes_n0": Mock(), "design_notes_n1": Mock()}
+
+        with pytest.raises(ValueError) as exc_info:
+            ch.validate_node_ids(["design_notes"], context)
+
+        error_msg = str(exc_info.value)
+        assert "file 'design_notes'" in error_msg
+        assert "file 'design'" not in error_msg
+
+
 # ===========================
 # Test Count Summary
 # ===========================

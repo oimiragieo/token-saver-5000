@@ -2,6 +2,16 @@
 
 All notable changes to Token Saver 5000.
 
+## [Unreleased]
+
+### Changed
+- Normalized node identity parsing in `src/node_identity.py` to treat only `"_n<digits>"` as text-node suffixes.
+- Updated `validate_node_ids` in `src/handlers/compression_handlers.py` to use shared node-ID parsing and file-id matching logic.
+
+### Added
+- Added targeted node identity tests in `tests/test_node_identity.py`.
+- Added a validation regression test for non-index `_n` segments in `tests/test_compression_handlers.py`.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**

@@ -81,19 +81,13 @@ def validate_node_ids(node_ids: List[str], context: HandlerContext) -> None:
 
     invalid_nodes = [nid for nid in node_ids if nid not in context["compressor"].chunks]
     if invalid_nodes:
-        # Extract file_id from first node to give better error message
-        # Handle both text node format (file_id_n0) and code node format (file_id::name)
-        first_node = node_ids[0]
-        if "::" in first_node:
-            file_id = first_node.split("::")[0]
-        elif "_n" in first_node:
-            file_id = first_node.rsplit("_n", 1)[0]
-        else:
-            file_id = first_node
+        # Extract file_id from first node to give better error message.
+        # Use shared parser so handlers and server stay in sync.
+        file_id = extract_file_id_from_node(node_ids[0])
         valid_nodes = [
             nid
             for nid in context["compressor"].chunks.keys()
-            if nid.startswith(f"{file_id}_") or nid.startswith(f"{file_id}::")
+            if extract_file_id_from_node(nid) == file_id
         ]
 
         if not valid_nodes:

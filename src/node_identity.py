@@ -6,7 +6,10 @@ Node IDs in this project currently use two patterns:
 - Code nodes: "{file_id}::{symbol}" (example: "main.py::parse_args")
 """
 
+import re
 from typing import Iterable, Set
+
+_TEXT_NODE_SUFFIX_RE = re.compile(r"^(?P<file_id>.+)_n\d+$")
 
 
 def extract_file_id_from_node(node_id: str) -> str:
@@ -21,8 +24,9 @@ def extract_file_id_from_node(node_id: str) -> str:
     """
     if "::" in node_id:
         return node_id.split("::", 1)[0]
-    if "_n" in node_id:
-        return node_id.rsplit("_n", 1)[0]
+    match = _TEXT_NODE_SUFFIX_RE.match(node_id)
+    if match:
+        return match.group("file_id")
     return node_id
 
 
