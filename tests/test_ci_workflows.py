@@ -41,3 +41,4 @@ def test_benchmark_guard_workflow_exists_and_has_regression_gate():
         "python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware"
         in content
     )
+    assert "python scripts/benchmarks/check_benchmark_guard.py" in content

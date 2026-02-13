@@ -84,6 +84,21 @@ python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evid
 
 ---
 
+### `benchmarks/check_benchmark_guard.py`
+
+**Purpose:** Validate generated benchmark reports against CI threshold config.
+
+**Usage:**
+```bash
+python scripts/benchmarks/check_benchmark_guard.py
+```
+
+**Config:**
+- Threshold file: `artifacts/benchmarks/golden_thresholds.json`
+- Reports directory: `artifacts/benchmarks/`
+
+---
+
 ### `skills/profile_tokens.py`
 
 **Purpose:** Quick token profile for raw input vs compressed skeleton output.

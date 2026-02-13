@@ -61,6 +61,7 @@ jobs:
       - name: Run benchmark regression guard
         run: |
           python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
+          python scripts/benchmarks/check_benchmark_guard.py
 
       - name: Upload benchmark artifacts
         if: always()

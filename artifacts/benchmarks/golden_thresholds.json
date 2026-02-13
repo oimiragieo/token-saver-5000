@@ -1,0 +1,47 @@
+{
+  "description": "Benchmark regression guard thresholds for CI",
+  "modes": {
+    "baseline": {
+      "min_avg_compression_ratio": 8.0,
+      "min_avg_token_savings_pct": 87.0,
+      "per_case": {
+        "medium_architecture": {
+          "min_compression_ratio": 6.5,
+          "min_token_savings_pct": 85.0
+        },
+        "large_repetitive_tech": {
+          "min_compression_ratio": 9.5,
+          "min_token_savings_pct": 89.0
+        }
+      }
+    },
+    "query_guided": {
+      "min_avg_compression_ratio": 8.0,
+      "min_avg_token_savings_pct": 87.0,
+      "per_case": {
+        "medium_architecture": {
+          "min_compression_ratio": 6.5,
+          "min_token_savings_pct": 85.0
+        },
+        "large_repetitive_tech": {
+          "min_compression_ratio": 9.5,
+          "min_token_savings_pct": 89.0
+        }
+      }
+    },
+    "evidence_aware": {
+      "min_avg_compression_ratio": 8.0,
+      "min_avg_token_savings_pct": 87.0,
+      "per_case": {
+        "medium_architecture": {
+          "min_compression_ratio": 6.5,
+          "min_token_savings_pct": 85.0
+        },
+        "large_repetitive_tech": {
+          "min_compression_ratio": 9.5,
+          "min_token_savings_pct": 89.0
+        }
+      }
+    }
+  }
+}

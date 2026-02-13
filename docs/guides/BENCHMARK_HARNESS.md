@@ -13,6 +13,7 @@ This guide documents the fixed-corpus benchmark harness used to track token-savi
 - Corpus fixture: `tests/fixtures/benchmark_corpus.json`
 - Harness logic: `src/benchmark_harness.py`
 - Runner script: `scripts/benchmarks/run_benchmarks.py`
+- Guard script: `scripts/benchmarks/check_benchmark_guard.py`
 - Tests: `tests/test_benchmark_harness.py`
 
 ## Run
@@ -21,6 +22,7 @@ This guide documents the fixed-corpus benchmark harness used to track token-savi
 python scripts/benchmarks/run_benchmarks.py
 python scripts/benchmarks/run_benchmarks.py --mode query_guided
 python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
+python scripts/benchmarks/check_benchmark_guard.py
 ```
 
 Run a single case:
@@ -48,6 +50,7 @@ The report includes:
 - pass/fail target checks
 - aggregate averages
 - benchmark mode (`baseline`, `query_guided`, `evidence_aware`)
+- CI guard thresholds from `artifacts/benchmarks/golden_thresholds.json`
 
 ## TDD Workflow
 
