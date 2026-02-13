@@ -157,6 +157,25 @@ Three-layer design:
 **Layer 1: Core Compression** (`semantic_compressor.py`)
 - Chunks documents (~512 tokens)
 - Generates embeddings (sentence-transformers)
+
+## MCP Tool Profiles
+
+Use `MCP_TOOL_PROFILE` to control the exposed MCP surface:
+
+- `full` (default): all 48 tools (compression, AFM, ACE, visualization, experimental)
+- `core_stable`: only 7 stable tools
+  - `ingest_context`
+  - `read_skeleton`
+  - `search_semantic`
+  - `modulate_region`
+  - `get_stats`
+  - `list_documents`
+  - `delete_document`
+
+Example:
+```bash
+MCP_TOOL_PROFILE=core_stable python -m src.server
+```
 - Builds weighted graph (NetworkX, cosine similarity)
 - Calculates importance via PageRank
 - Creates skeleton (high-importance nodes only)

@@ -15,7 +15,7 @@ Architecture:
 - Handlers receive context dict with all necessary server components
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from mcp.types import Tool
 
@@ -35,8 +35,41 @@ from ..structured_logging import get_logger
 
 logger = get_logger("semantic-modulator")
 
+CORE_STABLE_TOOL_NAMES: Set[str] = {
+    "ingest_context",
+    "read_skeleton",
+    "search_semantic",
+    "modulate_region",
+    "get_stats",
+    "list_documents",
+    "delete_document",
+}
+SUPPORTED_TOOL_PROFILES = {"full", "core_stable"}
 
-def setup_mcp_tools() -> List[Tool]:
+
+def _normalize_tool_profile(profile: str) -> str:
+    normalized = (profile or "full").strip().lower()
+    if normalized not in SUPPORTED_TOOL_PROFILES:
+        raise ValueError(
+            f"Unknown tool profile '{profile}'. "
+            f"Supported profiles: {sorted(SUPPORTED_TOOL_PROFILES)}"
+        )
+    return normalized
+
+
+def _enabled_tool_names(all_names: Set[str], profile: str) -> Set[str]:
+    normalized = _normalize_tool_profile(profile)
+    if normalized == "full":
+        return set(all_names)
+    return set(all_names) & CORE_STABLE_TOOL_NAMES
+
+
+def _tools_for_profile(tools: List[Tool], profile: str) -> List[Tool]:
+    enabled_names = _enabled_tool_names({tool.name for tool in tools}, profile)
+    return [tool for tool in tools if tool.name in enabled_names]
+
+
+def setup_mcp_tools(profile: str = "full") -> List[Tool]:
     """
     Define all 48 MCP tools available in the Semantic Modulator server.
 
@@ -58,7 +91,7 @@ def setup_mcp_tools() -> List[Tool]:
     - Experimental (9): toon_encode, toon_decode, scar_compress, scar_get_stats, multimodal_ingest,
                         verify_compression, calculate_reward, get_evidence_stats, generate_synthetic_tests
     """
-    return [
+    all_tools = [
         # === DOCUMENT COMPRESSION TOOLS (9) ===
         Tool(
             name="ingest_context",
@@ -1388,9 +1421,12 @@ def setup_mcp_tools() -> List[Tool]:
             },
         ),
     ]
+    return _tools_for_profile(all_tools, profile)
 
 
-async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, Any]) -> str:
+async def route_tool_call(
+    name: str, args: Dict[str, Any], context: Dict[str, Any], tool_profile: str = "full"
+) -> str:
     """
     Route MCP tool calls to appropriate handler functions.
 
@@ -1492,13 +1528,22 @@ async def route_tool_call(name: str, args: Dict[str, Any], context: Dict[str, An
         "generate_synthetic_tests": exp.handle_generate_synthetic_tests,
     }
 
+    enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)
+
     # Lookup handler
     if name not in router:
-        available_tools = ", ".join(sorted(router.keys()))
+        available_tools = ", ".join(sorted(enabled_tools))
         raise ValueError(
             f"Unknown tool: '{name}'\n\n"
-            f"Available tools ({len(router)}):\n{available_tools}\n\n"
+            f"Available tools ({len(enabled_tools)}):\n{available_tools}\n\n"
             f"[TIP] Tip: Use list_tools() to see all available tools with descriptions"
+        )
+    if name not in enabled_tools:
+        available_tools = ", ".join(sorted(enabled_tools))
+        raise ValueError(
+            f"Tool '{name}' is not enabled in profile '{_normalize_tool_profile(tool_profile)}'.\n\n"
+            f"Available tools ({len(enabled_tools)}):\n{available_tools}\n\n"
+            f"[TIP] Tip: Use profile 'full' to enable advanced tools"
         )
 
     # Route to handler (async)

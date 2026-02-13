@@ -7,10 +7,13 @@ All notable changes to Token Saver 5000.
 ### Changed
 - Normalized node identity parsing in `src/node_identity.py` to treat only `"_n<digits>"` as text-node suffixes.
 - Updated `validate_node_ids` in `src/handlers/compression_handlers.py` to use shared node-ID parsing and file-id matching logic.
+- `src/handlers/mcp_core.py` now supports profile-aware tool listing and routing gates.
+- `src/server.py` now reads `MCP_TOOL_PROFILE` and applies profile-aware `list_tools`/routing behavior.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.
 - Added a validation regression test for non-index `_n` segments in `tests/test_compression_handlers.py`.
+- Added MCP tool profile support (`full`, `core_stable`) for gradual surface simplification.
 
 ## [0.9.0] - 2025-11-29
 

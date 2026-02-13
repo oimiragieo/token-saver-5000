@@ -46,6 +46,29 @@ class TestSetupMCPTools:
         # - Experimental: 9 (v0.11.0) - TOON, SCAR, Multimodal, ASG-SI suite
         assert len(tools) == 48, f"Expected 48 tools, got {len(tools)}"
 
+    def test_core_stable_profile_has_expected_tools(self):
+        """Test that core_stable profile exposes only stable core tools."""
+        tools = mcp_core.setup_mcp_tools(profile="core_stable")
+        tool_names = {tool.name for tool in tools}
+        expected = {
+            "ingest_context",
+            "read_skeleton",
+            "search_semantic",
+            "modulate_region",
+            "get_stats",
+            "list_documents",
+            "delete_document",
+        }
+
+        assert len(tools) == 7
+        assert tool_names == expected
+
+    def test_invalid_profile_raises_value_error(self):
+        """Test that unsupported profile names fail fast."""
+        with pytest.raises(ValueError) as exc_info:
+            mcp_core.setup_mcp_tools(profile="invalid")
+        assert "Unknown tool profile" in str(exc_info.value)
+
     def test_all_tools_have_required_fields(self):
         """Test that all tools have name, description, and inputSchema"""
         tools = mcp_core.setup_mcp_tools()
@@ -230,6 +253,21 @@ class TestRouteToolCall:
         assert "Unknown tool" in error_msg
         assert "nonexistent_tool" in error_msg
         assert "Available tools" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_core_stable_profile_blocks_non_core_tool(self):
+        """Test that non-core tools are blocked when profile is core_stable."""
+        with pytest.raises(ValueError) as exc_info:
+            await mcp_core.route_tool_call(
+                "afm_add_message",
+                {},
+                self.mock_context,
+                tool_profile="core_stable",
+            )
+
+        error_msg = str(exc_info.value)
+        assert "not enabled" in error_msg
+        assert "core_stable" in error_msg
 
     @pytest.mark.asyncio
     async def test_error_message_lists_available_tools(self):

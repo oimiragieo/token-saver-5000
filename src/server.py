@@ -206,6 +206,17 @@ class SemanticModulatorServer:
             "used_tokens": 0,
             "history": [],
         }
+        self.tool_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
+        try:
+            # Fail fast on invalid profile names; fallback keeps server bootable.
+            mcp_core.setup_mcp_tools(profile=self.tool_profile)
+        except ValueError:
+            logger.warning(
+                "invalid_tool_profile",
+                configured_profile=self.tool_profile,
+                fallback_profile="full",
+            )
+            self.tool_profile = "full"
 
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
@@ -322,14 +333,16 @@ class SemanticModulatorServer:
         @self.server.list_tools()
         async def list_tools() -> List[Tool]:
             """List available semantic modulation tools"""
-            return mcp_core.setup_mcp_tools()
+            return mcp_core.setup_mcp_tools(profile=self.tool_profile)
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             """Handle tool calls via centralized router"""
             try:
                 context = self._build_context()
-                result = await mcp_core.route_tool_call(name, arguments, context)
+                result = await mcp_core.route_tool_call(
+                    name, arguments, context, tool_profile=self.tool_profile
+                )
                 return [TextContent(type="text", text=str(result))]
             except Exception as e:
                 logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)
