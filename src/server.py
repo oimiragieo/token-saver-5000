@@ -38,6 +38,9 @@ from .version_manager import VersionManager
 from .ace_framework import ACEFramework
 from .semantic_modulator.app.context_service import ServerContextService
 from .semantic_modulator.app.lifecycle_service import ServerLifecycleService
+from .semantic_modulator.app.persistence_orchestration_service import (
+    PersistenceOrchestrationService,
+)
 from .semantic_modulator.app.progress_service import ProgressRenderService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
@@ -213,6 +216,7 @@ class SemanticModulatorServer:
         self.context_service = ServerContextService()
         self.lifecycle_service = ServerLifecycleService()
         self.progress_service = ProgressRenderService()
+        self.persistence_service = PersistenceOrchestrationService()
         self.tool_profile, enabled_tools, used_fallback = self.tooling.resolve_tools_for_profile(
             configured_profile
         )
@@ -240,77 +244,28 @@ class SemanticModulatorServer:
 
     def _load_persisted_documents(self):
         """Load previously persisted documents on server start"""
-        try:
-            file_ids = self.persistence.list_documents()
-            if not file_ids:
-                logger.info(
-                    "persistence_load", status="empty", message="No persisted documents found"
-                )
-                return
-
-            logger.info("persistence_load_started", document_count=len(file_ids))
-            loaded_count = 0
-
-            for file_id in file_ids:
-                try:
-                    data = self.persistence.load_document(file_id)
-                    if data:
-                        # Restore to compressor
-                        self.compressor.chunks.update(data["chunks"])
-                        self.compressor.graphs[file_id] = data["graph_data"]
-                        self.compressor.file_metadata[file_id] = data["metadata"]
-
-                        # Register with resource manager
-                        # Estimate size from chunks
-                        total_size = sum(len(chunk.text) for chunk in data["chunks"].values())
-                        self.resource_manager.register_document(file_id, total_size)
-
-                        loaded_count += 1
-                        logger.info(
-                            "document_loaded", file_id=file_id, node_count=len(data["chunks"])
-                        )
-                except Exception as e:
-                    logger.error("document_load_failed", file_id=file_id, error=str(e))
-
-            logger.info(
-                "persistence_load_complete",
-                loaded=loaded_count,
-                total=len(file_ids),
-                success_rate=f"{loaded_count}/{len(file_ids)}",
-            )
-
-        except Exception as e:
-            logger.error("persistence_load_error", error=str(e), exc_info=True)
+        self.persistence_service.load_persisted_documents(
+            compressor=self.compressor,
+            persistence=self.persistence,
+            resource_manager=self.resource_manager,
+            logger=logger,
+        )
 
     def _load_file_sync_metadata(self):
         """Load file sync metadata on server start"""
-        try:
-            metadata = self.persistence.load_file_sync_metadata()
-            if not metadata:
-                logger.info(
-                    "file_sync_load",
-                    status="empty",
-                    message="No file sync metadata found (first run or no tracked files)",
-                )
-                return
-
-            self.sync_manager.import_metadata(metadata)
-            logger.info("file_sync_load_complete", document_count=len(metadata))
-
-        except Exception as e:
-            logger.error("file_sync_load_error", error=str(e), exc_info=True)
+        self.persistence_service.load_file_sync_metadata(
+            persistence=self.persistence,
+            sync_manager=self.sync_manager,
+            logger=logger,
+        )
 
     def _save_file_sync_metadata(self):
         """Save file sync metadata to persistent storage"""
-        try:
-            metadata = self.sync_manager.export_metadata()
-            success = self.persistence.save_file_sync_metadata(metadata)
-            if success:
-                logger.info("file_sync_save_complete", document_count=len(metadata))
-            else:
-                logger.warning("file_sync_save_warning", message="No file sync metadata to save")
-        except Exception as e:
-            logger.error("file_sync_save_error", error=str(e))
+        self.persistence_service.save_file_sync_metadata(
+            sync_manager=self.sync_manager,
+            persistence=self.persistence,
+            logger=logger,
+        )
 
     def _build_context(self) -> HandlerContext:
         """
