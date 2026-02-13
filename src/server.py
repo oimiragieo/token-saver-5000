@@ -37,6 +37,7 @@ from .file_sync_manager import FileSyncManager
 from .version_manager import VersionManager
 from .ace_framework import ACEFramework
 from .semantic_modulator.app.context_service import ServerContextService
+from .semantic_modulator.app.lifecycle_service import ServerLifecycleService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
@@ -209,6 +210,7 @@ class SemanticModulatorServer:
         configured_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
         self.tooling = MCPToolingGateway()
         self.context_service = ServerContextService()
+        self.lifecycle_service = ServerLifecycleService()
         self.tool_profile, enabled_tools, used_fallback = self.tooling.resolve_tools_for_profile(
             configured_profile
         )
@@ -407,13 +409,11 @@ class SemanticModulatorServer:
         This implements MCP best practice for lifespan management, ensuring
         proper resource initialization before the server starts handling requests.
         """
-        logger.info("server_startup", phase="initializing")
-
-        # Auto-load persisted state
-        self._load_persisted_documents()
-        self._load_file_sync_metadata()
-
-        logger.info("server_startup", phase="complete")
+        self.lifecycle_service.startup(
+            load_persisted_documents=self._load_persisted_documents,
+            load_file_sync_metadata=self._load_file_sync_metadata,
+            logger=logger,
+        )
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -426,17 +426,10 @@ class SemanticModulatorServer:
         Returns:
             False to not suppress exceptions
         """
-        logger.info("server_shutdown", phase="started")
-
-        try:
-            # Persist file sync metadata
-            self._save_file_sync_metadata()
-            logger.info("server_shutdown", phase="state_persisted")
-        except Exception as e:
-            logger.error("server_shutdown_error", error=str(e), exc_info=True)
-
-        logger.info("server_shutdown", phase="complete")
-        return False  # Don't suppress exceptions
+        return self.lifecycle_service.shutdown(
+            save_file_sync_metadata=self._save_file_sync_metadata,
+            logger=logger,
+        )
 
     async def run(self):
         """Run the MCP server"""
