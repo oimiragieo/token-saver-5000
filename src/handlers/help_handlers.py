@@ -13,6 +13,7 @@ from typing import Any, Dict
 
 from ..types import HandlerContext
 from .compression_handlers import (
+    get_ingest_context_output_fields,
     get_read_skeleton_output_fields,
     get_search_semantic_output_fields,
 )
@@ -32,6 +33,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "file_path": "Optional path to source file for sync tracking",
             "metadata": "Optional metadata dict (author, date, source, tags)",
         },
+        "output_fields": get_ingest_context_output_fields(),
         "examples": [
             {
                 "description": "Basic text ingestion",

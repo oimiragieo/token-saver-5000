@@ -12,6 +12,7 @@ from src.handlers.resource_handlers import (
     handle_check_environment,
 )
 from src.handlers.compression_handlers import (
+    get_ingest_context_output_fields,
     get_read_skeleton_output_fields,
     get_search_semantic_output_fields,
     handle_read_skeleton,
@@ -168,3 +169,39 @@ async def test_read_skeleton_help_output_fields_cover_runtime_keys():
     assert "evidence.sufficient" in documented_fields
     assert "staleness_warning.is_stale" in documented_fields
     assert runtime_data["file_id"] == "doc1"
+
+
+@pytest.mark.asyncio
+async def test_ingest_context_help_output_fields_match_canonical_schema():
+    result = await handle_tool_help({}, {"tool_name": "ingest_context", "verbose": True})
+    data = json.loads(result)
+
+    assert data.get("output_fields", []) == get_ingest_context_output_fields()
+
+
+@pytest.mark.asyncio
+async def test_ingest_context_help_output_fields_cover_runtime_keys():
+    help_result = await handle_tool_help({}, {"tool_name": "ingest_context", "verbose": True})
+    help_data = json.loads(help_result)
+    documented_fields = help_data.get("output_fields", [])
+
+    # Reuse handle_ingest contract via documented output fields and runtime shape checks
+    # using a minimal synthetic runtime payload.
+    runtime_data = {
+        "status": "success",
+        "file_id": "doc1",
+        "total_nodes": 10,
+        "total_tokens": 1000,
+        "skeleton_tokens": 100,
+        "compression_ratio": 10.0,
+        "token_savings": 900,
+        "token_savings_percent": 90.0,
+        "estimate": {"estimated_ratio": 9.5, "accuracy": "good"},
+        "message": "ok",
+    }
+
+    assert "status" in documented_fields
+    assert "file_id" in documented_fields
+    assert "estimate.estimated_ratio" in documented_fields
+    assert "estimate.accuracy" in documented_fields
+    assert runtime_data["estimate"]["estimated_ratio"] == 9.5

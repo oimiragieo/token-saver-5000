@@ -16,6 +16,7 @@ All notable changes to Token Saver 5000.
 - Added canonical `check_environment` output-field utility in `resource_handlers`, and wired `tool_help` to reuse it to reduce docs/runtime drift.
 - Added canonical `search_semantic` output-field utility in `compression_handlers`, and wired `tool_help(search_semantic)` to reuse it with contract tests.
 - Added canonical `read_skeleton` output-field utility in `compression_handlers`, and wired `tool_help(read_skeleton)` to reuse it with contract tests.
+- Added canonical `ingest_context` output-field utility in `compression_handlers`, and wired `tool_help(ingest_context)` to reuse it with estimate-field contract tests.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

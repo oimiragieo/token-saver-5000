@@ -119,6 +119,31 @@ def get_read_skeleton_output_fields() -> List[str]:
     return _flatten_output_fields(READ_SKELETON_RESPONSE_TEMPLATE)
 
 
+INGEST_CONTEXT_RESPONSE_TEMPLATE: Dict[str, Any] = {
+    "status": "success",
+    "file_id": "",
+    "total_nodes": 0,
+    "total_tokens": 0,
+    "skeleton_tokens": 0,
+    "compression_ratio": 0.0,
+    "token_savings": 0,
+    "token_savings_percent": 0.0,
+    "estimate": {
+        "estimated_ratio": 0.0,
+        "accuracy": "",
+    },
+    "message": "",
+    "file_sync_enabled": False,
+    "file_path": "",
+    "version": 0,
+}
+
+
+def get_ingest_context_output_fields() -> List[str]:
+    """Get canonical output field paths for ingest_context help/docs."""
+    return _flatten_output_fields(INGEST_CONTEXT_RESPONSE_TEMPLATE)
+
+
 # ===========================
 # Validation Helpers
 # ===========================

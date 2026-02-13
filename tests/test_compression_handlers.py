@@ -153,6 +153,31 @@ class TestHandleIngest:
 
         assert "exceeds limit" in str(exc_info.value)
 
+    @pytest.mark.asyncio
+    async def test_ingest_response_includes_estimate_fields(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        args = {
+            "text": "This is a test document with enough content to be meaningful.",
+            "file_id": "test_doc",
+        }
+
+        with patch("src.handlers.compression_handlers.CompressionAdvisor") as mock_advisor_cls:
+            mock_advisor = Mock()
+            mock_estimate = Mock()
+            mock_estimate.compression_ratio = 9.5
+            mock_estimate.original_tokens = 1000
+            mock_estimate.estimated_compressed = 105
+            mock_advisor.estimate_compression.return_value = mock_estimate
+            mock_advisor_cls.return_value = mock_advisor
+
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert "estimate" in data
+        assert "estimated_ratio" in data["estimate"]
+        assert "accuracy" in data["estimate"]
+
 
 @patch("src.handlers.compression_handlers.validate_file_id")
 class TestHandleReadSkeleton:
@@ -452,6 +477,18 @@ class TestReadSkeletonOutputFields:
         assert "node_map" in output_fields
         assert "evidence.sufficient" in output_fields
         assert "staleness_warning.is_stale" in output_fields
+
+
+class TestIngestOutputFields:
+    """Schema tests for ingest_context output field docs."""
+
+    def test_ingest_output_fields_include_estimate_paths(self):
+        output_fields = ch.get_ingest_context_output_fields()
+        assert "status" in output_fields
+        assert "file_id" in output_fields
+        assert "token_savings_percent" in output_fields
+        assert "estimate.estimated_ratio" in output_fields
+        assert "estimate.accuracy" in output_fields
 
 
 class TestHandleGetStats:
