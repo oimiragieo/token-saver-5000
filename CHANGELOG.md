@@ -9,6 +9,7 @@ All notable changes to Token Saver 5000.
 - Updated `validate_node_ids` in `src/handlers/compression_handlers.py` to use shared node-ID parsing and file-id matching logic.
 - `src/handlers/mcp_core.py` now supports profile-aware tool listing and routing gates.
 - `src/server.py` now reads `MCP_TOOL_PROFILE` and applies profile-aware `list_tools`/routing behavior.
+- `src/server.py` now logs startup MCP profile diagnostics (`mcp_tool_profile_active`) with enabled tool count.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

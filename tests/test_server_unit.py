@@ -360,12 +360,97 @@ class TestSemanticModulatorServerInitialization:
             patch.object(SemanticModulatorServer, "_setup_handlers"),
             patch(
                 "src.server.mcp_core.setup_mcp_tools",
-                side_effect=ValueError("invalid profile"),
+                side_effect=[ValueError("invalid profile"), []],
             ),
             patch.dict(os.environ, {"MCP_TOOL_PROFILE": "broken_profile"}, clear=False),
         ):
             server = SemanticModulatorServer()
             assert server.tool_profile == "full"
+
+    @patch("src.server.CodeCompressionAdapter")
+    @patch("src.server.BlindSpotDetector")
+    @patch("src.server.HaloEffectDetector")
+    @patch("src.server.PersistenceManager")
+    @patch("src.server.ResourceManager")
+    @patch("src.server.FileSyncManager")
+    @patch("src.server.VersionManager")
+    @patch("src.server.ACEFramework")
+    def test_initialization_logs_active_tool_profile_with_count(
+        self,
+        mock_ace,
+        mock_version,
+        mock_sync,
+        mock_resource,
+        mock_persistence,
+        mock_halo,
+        mock_blind_spot,
+        mock_compressor,
+    ):
+        with (
+            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
+            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
+            patch.object(SemanticModulatorServer, "_setup_handlers"),
+            patch(
+                "src.server.mcp_core.setup_mcp_tools",
+                return_value=[Mock() for _ in range(7)],
+            ),
+            patch("src.server.logger.info") as mock_logger_info,
+            patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
+        ):
+            SemanticModulatorServer()
+
+            assert any(
+                call.args
+                and call.args[0] == "mcp_tool_profile_active"
+                and call.kwargs.get("profile") == "core_stable"
+                and call.kwargs.get("enabled_tools") == 7
+                for call in mock_logger_info.call_args_list
+            )
+
+    @patch("src.server.CodeCompressionAdapter")
+    @patch("src.server.BlindSpotDetector")
+    @patch("src.server.HaloEffectDetector")
+    @patch("src.server.PersistenceManager")
+    @patch("src.server.ResourceManager")
+    @patch("src.server.FileSyncManager")
+    @patch("src.server.VersionManager")
+    @patch("src.server.ACEFramework")
+    def test_invalid_profile_logs_fallback_active_profile(
+        self,
+        mock_ace,
+        mock_version,
+        mock_sync,
+        mock_resource,
+        mock_persistence,
+        mock_halo,
+        mock_blind_spot,
+        mock_compressor,
+    ):
+        with (
+            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
+            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
+            patch.object(SemanticModulatorServer, "_setup_handlers"),
+            patch(
+                "src.server.mcp_core.setup_mcp_tools",
+                side_effect=[ValueError("invalid profile"), [Mock() for _ in range(48)]],
+            ),
+            patch("src.server.logger.info") as mock_logger_info,
+            patch("src.server.logger.warning") as mock_logger_warning,
+            patch.dict(os.environ, {"MCP_TOOL_PROFILE": "bad_profile"}, clear=False),
+        ):
+            SemanticModulatorServer()
+
+            assert any(
+                call.args and call.args[0] == "invalid_tool_profile"
+                for call in mock_logger_warning.call_args_list
+            )
+            assert any(
+                call.args
+                and call.args[0] == "mcp_tool_profile_active"
+                and call.kwargs.get("profile") == "full"
+                and call.kwargs.get("enabled_tools") == 48
+                for call in mock_logger_info.call_args_list
+            )
 
 
 class TestLoadPersistedDocuments:

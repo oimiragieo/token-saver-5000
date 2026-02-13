@@ -207,9 +207,10 @@ class SemanticModulatorServer:
             "history": [],
         }
         self.tool_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
+        enabled_tools = []
         try:
             # Fail fast on invalid profile names; fallback keeps server bootable.
-            mcp_core.setup_mcp_tools(profile=self.tool_profile)
+            enabled_tools = mcp_core.setup_mcp_tools(profile=self.tool_profile)
         except ValueError:
             logger.warning(
                 "invalid_tool_profile",
@@ -217,6 +218,13 @@ class SemanticModulatorServer:
                 fallback_profile="full",
             )
             self.tool_profile = "full"
+            enabled_tools = mcp_core.setup_mcp_tools(profile=self.tool_profile)
+        logger.info(
+            "mcp_tool_profile_active",
+            profile=self.tool_profile,
+            enabled_tools=len(enabled_tools),
+            supported_profiles=sorted(mcp_core.SUPPORTED_TOOL_PROFILES),
+        )
 
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
