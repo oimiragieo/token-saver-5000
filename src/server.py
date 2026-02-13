@@ -36,10 +36,10 @@ from .resource_manager import ResourceManager, ResourceLimits
 from .file_sync_manager import FileSyncManager
 from .version_manager import VersionManager
 from .ace_framework import ACEFramework
+from .semantic_modulator.app.context_service import ServerContextService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
-from .node_identity import extract_file_id_from_node
 
 
 # Configure structured logging
@@ -208,6 +208,7 @@ class SemanticModulatorServer:
         }
         configured_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
         self.tooling = MCPToolingGateway()
+        self.context_service = ServerContextService()
         self.tool_profile, enabled_tools, used_fallback = self.tooling.resolve_tools_for_profile(
             configured_profile
         )
@@ -314,27 +315,27 @@ class SemanticModulatorServer:
         Returns:
             HandlerContext TypedDict containing all components needed by handlers
         """
-        return {
-            "compressor": self.compressor,
-            "blind_spot_detector": self.blind_spot_detector,
-            "halo_detector": self.halo_detector,
-            "context_window_adapter": self.context_window_adapter,
-            "multilevel_encoder": self.multilevel_encoder,
-            "focus_manager": self.focus_manager,
-            "persistence": self.persistence,
-            "resource_manager": self.resource_manager,
-            "sync_manager": self.sync_manager,
-            "version_manager": self.version_manager,
-            "path_validator": self.path_validator,  # Security: CWE-22 path traversal prevention
-            "ace_framework": self.ace_framework,
-            "ace_contexts": self.ace_contexts,
-            "validate_file_id": self._validate_file_id,
-            "validate_node_ids": self._validate_node_ids,
-            "validate_token_count": self._validate_token_count,
-            "save_file_sync_metadata": self._save_file_sync_metadata,
-            "tool_profile": self.tool_profile,
-            "enabled_tool_names": self.enabled_tool_names,
-        }
+        return self.context_service.build_context(
+            compressor=self.compressor,
+            blind_spot_detector=self.blind_spot_detector,
+            halo_detector=self.halo_detector,
+            context_window_adapter=self.context_window_adapter,
+            multilevel_encoder=self.multilevel_encoder,
+            focus_manager=self.focus_manager,
+            persistence=self.persistence,
+            resource_manager=self.resource_manager,
+            sync_manager=self.sync_manager,
+            version_manager=self.version_manager,
+            path_validator=self.path_validator,
+            ace_framework=self.ace_framework,
+            ace_contexts=self.ace_contexts,
+            validate_file_id=self._validate_file_id,
+            validate_node_ids=self._validate_node_ids,
+            validate_token_count=self._validate_token_count,
+            save_file_sync_metadata=self._save_file_sync_metadata,
+            tool_profile=self.tool_profile,
+            enabled_tool_names=self.enabled_tool_names,
+        )
 
     def _setup_handlers(self):
         """Register MCP tool handlers using centralized routing"""
@@ -363,70 +364,26 @@ class SemanticModulatorServer:
         - Text pattern: 'doc_n0', 'doc_n1' -> 'doc'
         - Code pattern: 'file.py::ClassName', 'file.py::func_name' -> 'file.py'
         """
-        return extract_file_id_from_node(node_id)
+        return self.context_service.extract_file_id_from_node(node_id)
 
     def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
         """Validate file_id and provide helpful error messages"""
-        if not file_id:
-            raise ValueError("file_id cannot be empty")
-
-        if must_exist:
-            if file_id not in self.compressor.chunks:
-                # Extract file IDs from all node IDs (handle both _n and :: patterns)
-                available = list(
-                    set(
-                        [
-                            self._extract_file_id_from_node(nid)
-                            for nid in self.compressor.chunks.keys()
-                        ]
-                    )
-                )
-                raise ValueError(
-                    f"Document '{file_id}' not found. "
-                    f"Available documents: {available if available else '(none)'}\n"
-                    f"Tip: Use ingest_context() to add documents first."
-                )
+        self.context_service.validate_file_id(
+            compressor=self.compressor,
+            file_id=file_id,
+            must_exist=must_exist,
+        )
 
     def _validate_node_ids(self, node_ids: List[str]) -> None:
         """Validate node_ids and provide helpful suggestions"""
-        if not node_ids:
-            raise ValueError("node_ids list cannot be empty")
-
-        invalid_nodes = [nid for nid in node_ids if nid not in self.compressor.chunks]
-        if invalid_nodes:
-            # Extract file_id from first node to give better error message
-            # Handle both _n and :: patterns
-            file_id = self._extract_file_id_from_node(node_ids[0])
-            valid_nodes = [
-                nid
-                for nid in self.compressor.chunks.keys()
-                if self._extract_file_id_from_node(nid) == file_id
-            ]
-
-            raise ValueError(
-                f"Invalid node IDs: {invalid_nodes[:3]}\n"
-                f"Tip: Use read_skeleton('{file_id}') to see valid node IDs.\n"
-                f"   Valid nodes for '{file_id}': {valid_nodes[:5]}..."
-                if valid_nodes
-                else f"   No nodes found for '{file_id}'. Document may not be ingested."
-            )
+        self.context_service.validate_node_ids(compressor=self.compressor, node_ids=node_ids)
 
     def _validate_token_count(self, available_tokens: int, max_tokens: int = None) -> None:
         """Validate token counts"""
-        if available_tokens < 0:
-            raise ValueError(f"available_tokens must be non-negative, got {available_tokens}")
-
-        if available_tokens == 0:
-            raise ValueError(
-                "available_tokens is 0 - no space for content!\n"
-                "Tip: Provide a positive number (e.g., 10000 for 10k tokens available)"
-            )
-
-        if max_tokens is not None and available_tokens > max_tokens:
-            raise ValueError(
-                f"available_tokens ({available_tokens}) exceeds max_tokens ({max_tokens})\n"
-                "Tip: available_tokens should be ≤ max_tokens"
-            )
+        self.context_service.validate_token_count(
+            available_tokens=available_tokens,
+            max_tokens=max_tokens,
+        )
 
     def _create_progress_bar(self, percentage: float, width: int = 40) -> str:
         """Create a text progress bar"""
