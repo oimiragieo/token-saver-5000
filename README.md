@@ -176,6 +176,9 @@ Example:
 ```bash
 MCP_TOOL_PROFILE=core_stable python -m src.server
 ```
+
+Runtime verification:
+- Call `check_environment` to see `tool_profile.profile`, `enabled_tool_count`, and `enabled_tools`.
 - Builds weighted graph (NetworkX, cosine similarity)
 - Calculates importance via PageRank
 - Creates skeleton (high-importance nodes only)

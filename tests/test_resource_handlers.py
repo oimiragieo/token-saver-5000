@@ -12,8 +12,10 @@ import os
 import pytest
 import tempfile
 from unittest.mock import Mock, AsyncMock
+from types import SimpleNamespace
 from src.handlers.resource_handlers import (
     handle_check_resource_health,
+    handle_check_environment,
     handle_should_compress,
     create_progress_bar,
     is_binary_content,
@@ -431,6 +433,56 @@ class TestHandleCheckResourceHealth:
         # Verify
         assert "Resource Health" in result
         assert "Healthy" in result
+
+
+@pytest.mark.asyncio
+class TestHandleCheckEnvironment:
+    """Test check_environment handler profile diagnostics."""
+
+    async def test_check_environment_includes_tool_profile_metadata(self):
+        compressor = SimpleNamespace(graphs={}, chunks={})
+        sync_manager = Mock()
+        sync_manager.export_metadata.return_value = {}
+
+        context = {
+            "compressor": compressor,
+            "sync_manager": sync_manager,
+            "tool_profile": "core_stable",
+            "enabled_tool_names": [
+                "ingest_context",
+                "read_skeleton",
+                "search_semantic",
+                "modulate_region",
+                "get_stats",
+                "list_documents",
+                "delete_document",
+            ],
+        }
+
+        result = await handle_check_environment(context, {})
+        payload = json.loads(result)
+
+        assert "tool_profile" in payload
+        assert payload["tool_profile"]["profile"] == "core_stable"
+        assert payload["tool_profile"]["enabled_tool_count"] == 7
+        assert payload["tool_profile"]["enabled_tools"] == context["enabled_tool_names"]
+
+    async def test_check_environment_defaults_tool_profile_metadata(self):
+        compressor = SimpleNamespace(graphs={}, chunks={})
+        sync_manager = Mock()
+        sync_manager.export_metadata.return_value = {}
+
+        context = {
+            "compressor": compressor,
+            "sync_manager": sync_manager,
+        }
+
+        result = await handle_check_environment(context, {})
+        payload = json.loads(result)
+
+        assert payload["tool_profile"]["profile"] == "full"
+        assert payload["tool_profile"]["enabled_tool_count"] == 0
+        assert payload["tool_profile"]["enabled_tools"] == []
 
 
 # ============================================================================

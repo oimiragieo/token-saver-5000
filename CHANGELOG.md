@@ -10,6 +10,7 @@ All notable changes to Token Saver 5000.
 - `src/handlers/mcp_core.py` now supports profile-aware tool listing and routing gates.
 - `src/server.py` now reads `MCP_TOOL_PROFILE` and applies profile-aware `list_tools`/routing behavior.
 - `src/server.py` now logs startup MCP profile diagnostics (`mcp_tool_profile_active`) with enabled tool count.
+- `check_environment` now reports runtime tool profile diagnostics (`profile`, `enabled_tool_count`, `enabled_tools`).
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

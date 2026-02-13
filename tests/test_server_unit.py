@@ -860,6 +860,32 @@ class TestBuildContext:
             assert callable(context["validate_token_count"])
             assert callable(context["save_file_sync_metadata"])
 
+    @patch("src.server.CodeCompressionAdapter")
+    @patch("src.server.PersistenceManager")
+    def test_build_context_includes_tool_profile_metadata(
+        self, mock_persistence_cls, mock_compressor_cls
+    ):
+        with (
+            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
+            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
+            patch.object(SemanticModulatorServer, "_setup_handlers"),
+            patch("src.server.mcp_core.setup_mcp_tools") as mock_setup_tools,
+            patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
+        ):
+            mock_setup_tools.return_value = [
+                Mock(name="ingest_context"),
+                Mock(name="read_skeleton"),
+            ]
+            # Mock objects need explicit name field (unittest mock arg is internal id)
+            mock_setup_tools.return_value[0].name = "ingest_context"
+            mock_setup_tools.return_value[1].name = "read_skeleton"
+
+            server = SemanticModulatorServer()
+            context = server._build_context()
+
+            assert context["tool_profile"] == "core_stable"
+            assert context["enabled_tool_names"] == ["ingest_context", "read_skeleton"]
+
 
 class TestValidateFileId:
     """Tests for _validate_file_id validation helper"""

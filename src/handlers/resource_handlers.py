@@ -553,6 +553,13 @@ async def handle_check_environment(context: HandlerContext, args: Dict[str, Any]
     if disk_space_mb is not None:
         response["disk_space_mb"] = disk_space_mb
 
+    enabled_tool_names = list(context.get("enabled_tool_names", []))
+    response["tool_profile"] = {
+        "profile": str(context.get("tool_profile", "full")),
+        "enabled_tool_count": len(enabled_tool_names),
+        "enabled_tools": enabled_tool_names,
+    }
+
     if warnings:
         response["warnings"] = warnings
 

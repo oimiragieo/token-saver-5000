@@ -225,6 +225,7 @@ class SemanticModulatorServer:
             enabled_tools=len(enabled_tools),
             supported_profiles=sorted(mcp_core.SUPPORTED_TOOL_PROFILES),
         )
+        self.enabled_tool_names = [tool.name for tool in enabled_tools]
 
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
@@ -333,6 +334,8 @@ class SemanticModulatorServer:
             "validate_node_ids": self._validate_node_ids,
             "validate_token_count": self._validate_token_count,
             "save_file_sync_metadata": self._save_file_sync_metadata,
+            "tool_profile": self.tool_profile,
+            "enabled_tool_names": self.enabled_tool_names,
         }
 
     def _setup_handlers(self):
