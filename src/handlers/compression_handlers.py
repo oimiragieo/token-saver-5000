@@ -144,6 +144,21 @@ def get_ingest_context_output_fields() -> List[str]:
     return _flatten_output_fields(INGEST_CONTEXT_RESPONSE_TEMPLATE)
 
 
+RECOMMEND_FIDELITY_RESPONSE_TEMPLATE: Dict[str, Any] = {
+    "recommended_level": "",
+    "confidence": 0.0,
+    "reasoning": "",
+    "token_estimate": 0,
+    "alternatives": [],
+    "usage_tip": "",
+}
+
+
+def get_recommend_fidelity_output_fields() -> List[str]:
+    """Get canonical output field paths for recommend_fidelity help/docs."""
+    return _flatten_output_fields(RECOMMEND_FIDELITY_RESPONSE_TEMPLATE)
+
+
 # ===========================
 # Validation Helpers
 # ===========================

@@ -15,6 +15,7 @@ from ..types import HandlerContext
 from .compression_handlers import (
     get_ingest_context_output_fields,
     get_read_skeleton_output_fields,
+    get_recommend_fidelity_output_fields,
     get_search_semantic_output_fields,
 )
 from .resource_handlers import get_check_environment_output_fields
@@ -358,6 +359,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "token_budget": "Optional maximum tokens available",
             "query_complexity": "Optional: 'simple', 'medium', or 'complex'",
         },
+        "output_fields": get_recommend_fidelity_output_fields(),
         "examples": [
             {
                 "description": "Get recommendation for summary",

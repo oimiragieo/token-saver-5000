@@ -14,7 +14,9 @@ from src.handlers.resource_handlers import (
 from src.handlers.compression_handlers import (
     get_ingest_context_output_fields,
     get_read_skeleton_output_fields,
+    get_recommend_fidelity_output_fields,
     get_search_semantic_output_fields,
+    handle_recommend_fidelity,
     handle_read_skeleton,
     handle_search_semantic,
 )
@@ -205,3 +207,31 @@ async def test_ingest_context_help_output_fields_cover_runtime_keys():
     assert "estimate.estimated_ratio" in documented_fields
     assert "estimate.accuracy" in documented_fields
     assert runtime_data["estimate"]["estimated_ratio"] == 9.5
+
+
+@pytest.mark.asyncio
+async def test_recommend_fidelity_help_output_fields_match_canonical_schema():
+    result = await handle_tool_help({}, {"tool_name": "recommend_fidelity", "verbose": True})
+    data = json.loads(result)
+
+    assert data.get("output_fields", []) == get_recommend_fidelity_output_fields()
+
+
+@pytest.mark.asyncio
+async def test_recommend_fidelity_help_output_fields_cover_runtime_keys():
+    help_result = await handle_tool_help({}, {"tool_name": "recommend_fidelity", "verbose": True})
+    help_data = json.loads(help_result)
+    documented_fields = help_data.get("output_fields", [])
+
+    runtime_result = await handle_recommend_fidelity(
+        {},
+        {"use_case": "question_answering", "num_nodes": 3},
+    )
+    runtime_data = json.loads(runtime_result)
+
+    assert "recommended_level" in documented_fields
+    assert "confidence" in documented_fields
+    assert "token_estimate" in documented_fields
+    assert "alternatives" in documented_fields
+    assert "usage_tip" in documented_fields
+    assert "recommended_level" in runtime_data

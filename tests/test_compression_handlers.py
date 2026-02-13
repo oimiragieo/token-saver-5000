@@ -491,6 +491,19 @@ class TestIngestOutputFields:
         assert "estimate.accuracy" in output_fields
 
 
+class TestRecommendFidelityOutputFields:
+    """Schema tests for recommend_fidelity output field docs."""
+
+    def test_recommend_fidelity_output_fields_include_key_paths(self):
+        output_fields = ch.get_recommend_fidelity_output_fields()
+        assert "recommended_level" in output_fields
+        assert "confidence" in output_fields
+        assert "reasoning" in output_fields
+        assert "token_estimate" in output_fields
+        assert "alternatives" in output_fields
+        assert "usage_tip" in output_fields
+
+
 class TestHandleGetStats:
     """Test handle_get_stats handler (4 tests)"""
 
