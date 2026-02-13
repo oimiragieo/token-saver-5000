@@ -327,6 +327,18 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "Check environment health: models, memory, cache, disk space, and MCP tool profile."
         ),
         "parameters": {},
+        "output_fields": [
+            "status",
+            "embedding_tier",
+            "models_loaded",
+            "cache_hit_ratio",
+            "total_documents",
+            "total_chunks",
+            "stale_count",
+            "tool_profile.profile",
+            "tool_profile.enabled_tool_count",
+            "tool_profile.enabled_tools",
+        ],
         "examples": [
             {"description": "Check environment", "args": {}},
         ],
@@ -440,6 +452,8 @@ async def handle_tool_help(context: HandlerContext, args: Dict[str, Any]) -> str
         "tips": info.get("tips", []),
         "related_tools": info.get("related_tools", []),
     }
+    if "output_fields" in info:
+        result["output_fields"] = info.get("output_fields", [])
 
     if verbose:
         result["examples"] = info.get("examples", [])

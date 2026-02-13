@@ -12,6 +12,7 @@ All notable changes to Token Saver 5000.
 - `src/server.py` now logs startup MCP profile diagnostics (`mcp_tool_profile_active`) with enabled tool count.
 - `check_environment` now reports runtime tool profile diagnostics (`profile`, `enabled_tool_count`, `enabled_tools`).
 - `tool_help` documentation for `check_environment` now includes tool profile diagnostics guidance.
+- `tool_help(check_environment)` now publishes explicit `output_fields`, with tests enforcing alignment to runtime profile diagnostics keys.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.
