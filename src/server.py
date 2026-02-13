@@ -39,6 +39,7 @@ from .ace_framework import ACEFramework
 from .handlers import mcp_core
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
+from .node_identity import extract_file_id_from_node
 
 
 # Configure structured logging
@@ -340,15 +341,7 @@ class SemanticModulatorServer:
         - Text pattern: 'doc_n0', 'doc_n1' -> 'doc'
         - Code pattern: 'file.py::ClassName', 'file.py::func_name' -> 'file.py'
         """
-        if "::" in node_id:
-            # Code-style semantic node ID (e.g., "file.py::ClassName")
-            return node_id.split("::")[0]
-        elif "_n" in node_id:
-            # Text-style numeric node ID (e.g., "doc_n0")
-            return node_id.rsplit("_n", 1)[0]
-        else:
-            # Fallback: assume entire node_id is file_id
-            return node_id
+        return extract_file_id_from_node(node_id)
 
     def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
         """Validate file_id and provide helpful error messages"""

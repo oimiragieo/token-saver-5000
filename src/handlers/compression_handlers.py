@@ -28,6 +28,7 @@ from ..compression_advisor import CompressionAdvisor
 from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
 from ..constants import MAX_TEXT_LENGTH_BYTES
+from ..node_identity import collect_file_ids, extract_file_id_from_node
 
 
 logger = logging.getLogger("semantic-modulator")
@@ -394,8 +395,7 @@ async def handle_modulate_region(context: HandlerContext, args: Dict[str, Any]) 
     validate_node_ids(node_ids, context)
 
     # NEW: Check file sync status before modulating
-    # Extract file_id from first node (format: file_id_n123)
-    file_id = "_".join(node_ids[0].split("_")[:-1]) if node_ids else None
+    file_id = extract_file_id_from_node(node_ids[0]) if node_ids else None
     warning = ""
     if file_id and file_id in context["sync_manager"].file_metadata:
         status = context["sync_manager"].check_file_sync(file_id)
@@ -431,8 +431,7 @@ Proceeding with cached version...
 
     # Track retrieval for blind spot detection
     for node_id in node_ids:
-        # Extract file_id from node_id (format: file_id_n123)
-        file_id = "_".join(node_id.split("_")[:-1])
+        file_id = extract_file_id_from_node(node_id)
         if file_id not in context["retrieval_history"]:
             context["retrieval_history"][file_id] = []
         if node_id not in context["retrieval_history"][file_id]:
@@ -555,8 +554,8 @@ async def handle_list_documents(context: HandlerContext, args: Dict[str, Any]) -
     """
     logger.info("Listing all ingested documents")
 
-    # Get all unique file_ids from chunks
-    file_ids = list(set([nid.split("_n")[0] for nid in context["compressor"].chunks.keys()]))
+    # Get all unique file_ids from chunks (supports both text and code node formats)
+    file_ids = sorted(collect_file_ids(context["compressor"].chunks.keys()))
 
     if not file_ids:
         return """
@@ -724,7 +723,7 @@ Memory freed: ~{node_count * 2}KB (estimated)
    -Persistent storage (ChromaDB/JSON)
    -Resource tracking
 
-[TIP] Remaining documents: {len(set([nid.split('_n')[0] for nid in context['compressor'].chunks.keys()]))}
+[TIP] Remaining documents: {len(collect_file_ids(context["compressor"].chunks.keys()))}
    Use list_documents() to see what's left.
 """
 

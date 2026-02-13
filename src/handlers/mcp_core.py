@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 39 MCP tool schemas
+- setup_mcp_tools: Returns list of all 48 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -1265,7 +1265,13 @@ def setup_mcp_tools() -> List[Tool]:
                         "description": "Target fidelity (ABSTRACT, OUTLINE, STRUCTURE, DETAILED, RAW)",
                     },
                 },
-                "required": ["document", "skeleton_text", "original_tokens", "skeleton_tokens", "fidelity_level"],
+                "required": [
+                    "document",
+                    "skeleton_text",
+                    "original_tokens",
+                    "skeleton_tokens",
+                    "fidelity_level",
+                ],
             },
         ),
         Tool(
@@ -1304,7 +1310,13 @@ def setup_mcp_tools() -> List[Tool]:
                         "description": "Pre-calculated SSIM score (optional)",
                     },
                 },
-                "required": ["input_text", "output_text", "input_tokens", "output_tokens", "fidelity_level"],
+                "required": [
+                    "input_text",
+                    "output_text",
+                    "input_tokens",
+                    "output_tokens",
+                    "fidelity_level",
+                ],
             },
         ),
         Tool(

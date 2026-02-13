@@ -357,7 +357,7 @@ WHY: 10 seconds balances responsiveness with performance overhead.
 # Version Information
 # ============================================================================
 
-VERSION = "0.7.0"
+VERSION = "0.10.0"
 """Current version of Token Saver 5000 (Single source of truth)"""
 
 VERSION_STRING = f"Token Saver 5000 v{VERSION}"

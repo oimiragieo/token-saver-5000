@@ -46,7 +46,7 @@ See [Getting Started](docs/getting-started/GETTING_STARTED.md) for detailed inst
 - Semantic deduplication (0.85 threshold)
 
 **Infrastructure**
-- 44 MCP tools via stdio transport
+- 48 MCP tools via stdio transport
 - File sync with staleness detection
 - Version management with diffs
 - Resource limits (100MB/doc, 1GB total)
@@ -112,7 +112,7 @@ docker-compose up -d
 }
 ```
 
-See [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) for all 35 tools.
+See [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) for all tools.
 
 ## Research
 
@@ -160,7 +160,7 @@ Three-layer design:
 - Auto-suggests retrieval
 
 **Layer 3: MCP Interface** (`server.py` + `handlers/`)
-- 35 MCP tools via stdio
+- 48 MCP tools via stdio
 - Modular handler architecture
 - Document persistence (ChromaDB/JSON)
 - Resource management
@@ -177,7 +177,7 @@ See [Architecture](docs/reference/ARCHITECTURE.md) for details.
 ### Guides
 - [Claude Code Setup](docs/guides/CLAUDE_CODE_SETUP.md) - MCP setup for Claude Code CLI
 - [How It Works](docs/guides/HOW_IT_WORKS.md) - Technical explanation
-- [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) - Complete tool reference (35 tools)
+- [MCP Tools Guide](docs/guides/MCP_TOOLS_GUIDE.md) - Complete tool reference
 - [File Sync](docs/guides/FILE_SYNC.md) - File sync & versioning
 - [Troubleshooting](docs/guides/TROUBLESHOOTING.md) - Common issues
 
@@ -222,6 +222,6 @@ Contributions welcome! See [Contributing Guide](docs/getting-started/CONTRIBUTIN
 
 ## Version
 
-**Current:** v0.9.0
+**Current:** v0.10.0
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.

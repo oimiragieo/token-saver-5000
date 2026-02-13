@@ -461,7 +461,7 @@ class TestExperimentalHandlerRegistry:
     """Tests for EXPERIMENTAL_HANDLERS registry."""
 
     def test_registry_contains_all_handlers(self):
-        """Verify all 5 handlers are in the registry."""
+        """Verify all experimental handlers are in the registry."""
         from src.handlers.experimental_handlers import EXPERIMENTAL_HANDLERS
 
         expected = [
@@ -470,6 +470,10 @@ class TestExperimentalHandlerRegistry:
             "scar_compress",
             "scar_get_stats",
             "multimodal_ingest",
+            "verify_compression",
+            "calculate_reward",
+            "get_evidence_stats",
+            "generate_synthetic_tests",
         ]
 
         for handler_name in expected:
@@ -507,17 +511,21 @@ class TestMCPCoreIntegration:
             "scar_compress",
             "scar_get_stats",
             "multimodal_ingest",
+            "verify_compression",
+            "calculate_reward",
+            "get_evidence_stats",
+            "generate_synthetic_tests",
         ]
 
         for name in expected:
             assert name in tool_names, f"Tool schema missing: {name}"
 
-    def test_tool_count_is_44(self):
-        """Verify total tool count is 44 (39 + 5 experimental)."""
+    def test_tool_count_is_48(self):
+        """Verify total tool count is 48."""
         from src.handlers.mcp_core import setup_mcp_tools
 
         tools = setup_mcp_tools()
-        assert len(tools) == 44, f"Expected 44 tools, got {len(tools)}"
+        assert len(tools) == 48, f"Expected 48 tools, got {len(tools)}"
 
     def test_experimental_tools_have_experimental_in_description(self):
         """Verify all experimental tool descriptions mention EXPERIMENTAL."""

@@ -8,7 +8,7 @@ Coverage:
 - setup_mcp_tools(): Tool schema definitions
 - route_tool_call(): Routing dispatch logic
 - Error handling for unknown tools
-- All 30 tools are properly registered
+- All tools are properly registered
 """
 
 import pytest
@@ -28,10 +28,10 @@ class TestSetupMCPTools:
         assert len(tools) > 0
 
     def test_correct_number_of_tools(self):
-        """Test that all 44 tools are registered (v0.10.0)"""
+        """Test that all 48 tools are registered (v0.10.0)"""
         tools = mcp_core.setup_mcp_tools()
 
-        # Expected count: 44 tools total (v0.10.0)
+        # Expected count: 48 tools total (v0.10.0)
         # - Document Compression: 9
         # - Batch Processing: 1 (NEW in v0.6.0)
         # - Directory Ingestion: 1 (NEW in v0.9.0)
@@ -39,12 +39,12 @@ class TestSetupMCPTools:
         # - Detection: 2
         # - AFM Dialogue: 6
         # - File Sync: 4
-        # - Resource Management: 2 (added check_environment in v0.9.0)
+        # - Resource Management: 3 (check_resource_health, check_environment, should_compress)
         # - Help & Documentation: 1 (NEW in v0.9.0)
         # - ACE Framework: 7
         # - Visualization: 4 (NEW in v0.6.0)
-        # - Experimental: 5 (NEW in v0.10.0) - TOON, SCAR, Multimodal
-        assert len(tools) == 44, f"Expected 44 tools, got {len(tools)}"
+        # - Experimental: 9 (v0.11.0) - TOON, SCAR, Multimodal, ASG-SI suite
+        assert len(tools) == 48, f"Expected 48 tools, got {len(tools)}"
 
     def test_all_tools_have_required_fields(self):
         """Test that all tools have name, description, and inputSchema"""
@@ -220,8 +220,8 @@ class TestRouteToolCall:
             pytest.fail("Expected ValueError to be raised")
         except ValueError as e:
             error_msg = str(e)
-            # Should mention count of available tools (v0.10.0: 44 tools)
-            assert "44" in error_msg or "(44)" in error_msg or "44)" in error_msg
+            # Should mention count of available tools (v0.10.0+: 48 tools)
+            assert "48" in error_msg or "(48)" in error_msg or "48)" in error_msg
             # Should list some tool names
             assert "ingest_context" in error_msg or "afm_add_message" in error_msg
 
