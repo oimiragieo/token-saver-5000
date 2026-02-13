@@ -38,14 +38,14 @@ def test_bootstrap_wrapper_exposes_server_factory():
     assert server.__class__.__name__ == "SemanticModulatorServer"
 
 
-def test_server_uses_enterprise_registry_wrapper(monkeypatch):
+def test_server_uses_enterprise_tooling_gateway(monkeypatch):
     server_module = importlib.import_module("src.server")
     called: dict[str, str] = {}
 
-    def fake_setup(profile: str = "full"):
-        called["profile"] = profile
-        return []
+    def fake_resolve(self, configured_profile: str):
+        called["profile"] = configured_profile
+        return "full", [], False
 
-    monkeypatch.setattr(server_module.mcp_registry, "setup_mcp_tools", fake_setup)
+    monkeypatch.setattr(server_module.MCPToolingGateway, "resolve_tools_for_profile", fake_resolve)
     _ = server_module.SemanticModulatorServer()
     assert called["profile"] == "full"

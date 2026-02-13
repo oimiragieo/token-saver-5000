@@ -329,7 +329,10 @@ class TestSemanticModulatorServerInitialization:
             patch.object(SemanticModulatorServer, "_load_persisted_documents"),
             patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
             patch.object(SemanticModulatorServer, "_setup_handlers"),
-            patch("src.server.mcp_registry.setup_mcp_tools", return_value=[]),
+            patch(
+                "src.server.MCPToolingGateway.resolve_tools_for_profile",
+                return_value=("core_stable", [], False),
+            ),
             patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
         ):
             server = SemanticModulatorServer()
@@ -359,8 +362,8 @@ class TestSemanticModulatorServerInitialization:
             patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
             patch.object(SemanticModulatorServer, "_setup_handlers"),
             patch(
-                "src.server.mcp_registry.setup_mcp_tools",
-                side_effect=[ValueError("invalid profile"), []],
+                "src.server.MCPToolingGateway.resolve_tools_for_profile",
+                return_value=("full", [], True),
             ),
             patch.dict(os.environ, {"MCP_TOOL_PROFILE": "broken_profile"}, clear=False),
         ):
@@ -391,8 +394,8 @@ class TestSemanticModulatorServerInitialization:
             patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
             patch.object(SemanticModulatorServer, "_setup_handlers"),
             patch(
-                "src.server.mcp_registry.setup_mcp_tools",
-                return_value=[Mock() for _ in range(7)],
+                "src.server.MCPToolingGateway.resolve_tools_for_profile",
+                return_value=("core_stable", [Mock() for _ in range(7)], False),
             ),
             patch("src.server.logger.info") as mock_logger_info,
             patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
@@ -431,8 +434,8 @@ class TestSemanticModulatorServerInitialization:
             patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
             patch.object(SemanticModulatorServer, "_setup_handlers"),
             patch(
-                "src.server.mcp_registry.setup_mcp_tools",
-                side_effect=[ValueError("invalid profile"), [Mock() for _ in range(48)]],
+                "src.server.MCPToolingGateway.resolve_tools_for_profile",
+                return_value=("full", [Mock() for _ in range(48)], True),
             ),
             patch("src.server.logger.info") as mock_logger_info,
             patch("src.server.logger.warning") as mock_logger_warning,
@@ -869,16 +872,17 @@ class TestBuildContext:
             patch.object(SemanticModulatorServer, "_load_persisted_documents"),
             patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
             patch.object(SemanticModulatorServer, "_setup_handlers"),
-            patch("src.server.mcp_registry.setup_mcp_tools") as mock_setup_tools,
+            patch("src.server.MCPToolingGateway.resolve_tools_for_profile") as mock_resolve_tools,
             patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
         ):
-            mock_setup_tools.return_value = [
+            mock_tools = [
                 Mock(name="ingest_context"),
                 Mock(name="read_skeleton"),
             ]
             # Mock objects need explicit name field (unittest mock arg is internal id)
-            mock_setup_tools.return_value[0].name = "ingest_context"
-            mock_setup_tools.return_value[1].name = "read_skeleton"
+            mock_tools[0].name = "ingest_context"
+            mock_tools[1].name = "read_skeleton"
+            mock_resolve_tools.return_value = ("core_stable", mock_tools, False)
 
             server = SemanticModulatorServer()
             context = server._build_context()
