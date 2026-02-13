@@ -13,6 +13,7 @@ All notable changes to Token Saver 5000.
 - `check_environment` now reports runtime tool profile diagnostics (`profile`, `enabled_tool_count`, `enabled_tools`).
 - `tool_help` documentation for `check_environment` now includes tool profile diagnostics guidance.
 - `tool_help(check_environment)` now publishes explicit `output_fields`, with tests enforcing alignment to runtime profile diagnostics keys.
+- Added canonical `check_environment` output-field utility in `resource_handlers`, and wired `tool_help` to reuse it to reduce docs/runtime drift.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

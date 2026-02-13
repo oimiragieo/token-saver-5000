@@ -7,7 +7,10 @@ from unittest.mock import Mock
 import pytest
 
 from src.handlers.help_handlers import handle_tool_help
-from src.handlers.resource_handlers import handle_check_environment
+from src.handlers.resource_handlers import (
+    get_check_environment_output_fields,
+    handle_check_environment,
+)
 
 
 @pytest.mark.asyncio
@@ -78,3 +81,11 @@ async def test_check_environment_help_output_fields_match_runtime_keys():
     assert "tool_profile.enabled_tools" in documented_fields
     assert runtime_profile.get("profile") == "core_stable"
     assert runtime_profile.get("enabled_tool_count") == 1
+
+
+@pytest.mark.asyncio
+async def test_check_environment_help_output_fields_match_canonical_schema():
+    result = await handle_tool_help({}, {"tool_name": "check_environment", "verbose": True})
+    data = json.loads(result)
+
+    assert data.get("output_fields", []) == get_check_environment_output_fields()

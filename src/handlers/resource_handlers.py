@@ -17,7 +17,7 @@ v0.9.1: Added should_compress handler for pre-read token estimation.
 import json
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from ..types import HandlerContext  # TypedDict for handler context
 
 logger = logging.getLogger("semantic-modulator")
@@ -38,6 +38,47 @@ MUST_COMPRESS_THRESHOLD = 10000  # Must compress to fit context
 # Binary file detection constants (v0.9.2)
 BINARY_SNIFF_SIZE = 8192  # Read first 8KB for content sniffing
 NULL_BYTE_THRESHOLD = 0.01  # >1% null bytes = likely binary
+
+
+def _flatten_output_fields(schema: Dict[str, Any], prefix: str = "") -> List[str]:
+    """Flatten nested dict keys to dotted output field paths."""
+    fields: List[str] = []
+    for key, value in schema.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            fields.extend(_flatten_output_fields(value, prefix=full_key))
+        else:
+            fields.append(full_key)
+    return fields
+
+
+CHECK_ENVIRONMENT_RESPONSE_TEMPLATE: Dict[str, Any] = {
+    "status": "",
+    "embedding_tier": "",
+    "models_loaded": [],
+    "estimated_memory_mb": 0,
+    "cache_hit_ratio": 0.0,
+    "cache_stats": {},
+    "total_documents": 0,
+    "total_chunks": 0,
+    "stale_documents": [],
+    "stale_count": 0,
+    "disk_space_mb": 0,
+    "warnings": [],
+    "recommendations": [],
+    "message": "",
+    "tool_profile": {
+        "profile": "",
+        "enabled_tool_count": 0,
+        "enabled_tools": [],
+    },
+}
+
+
+def get_check_environment_output_fields() -> List[str]:
+    """Get canonical output field paths for check_environment help/docs."""
+    return _flatten_output_fields(CHECK_ENVIRONMENT_RESPONSE_TEMPLATE)
+
 
 # Binary file extensions - require conversion before compression
 BINARY_EXTENSIONS = {

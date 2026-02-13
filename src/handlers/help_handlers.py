@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict
 
 from ..types import HandlerContext
+from .resource_handlers import get_check_environment_output_fields
 
 logger = logging.getLogger("semantic-modulator")
 
@@ -327,18 +328,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "Check environment health: models, memory, cache, disk space, and MCP tool profile."
         ),
         "parameters": {},
-        "output_fields": [
-            "status",
-            "embedding_tier",
-            "models_loaded",
-            "cache_hit_ratio",
-            "total_documents",
-            "total_chunks",
-            "stale_count",
-            "tool_profile.profile",
-            "tool_profile.enabled_tool_count",
-            "tool_profile.enabled_tools",
-        ],
+        "output_fields": get_check_environment_output_fields(),
         "examples": [
             {"description": "Check environment", "args": {}},
         ],

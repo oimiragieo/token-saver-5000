@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from src.handlers.resource_handlers import (
     handle_check_resource_health,
     handle_check_environment,
+    get_check_environment_output_fields,
     handle_should_compress,
     create_progress_bar,
     is_binary_content,
@@ -483,6 +484,12 @@ class TestHandleCheckEnvironment:
         assert payload["tool_profile"]["profile"] == "full"
         assert payload["tool_profile"]["enabled_tool_count"] == 0
         assert payload["tool_profile"]["enabled_tools"] == []
+
+    async def test_check_environment_output_fields_contains_profile_keys(self):
+        output_fields = get_check_environment_output_fields()
+        assert "tool_profile.profile" in output_fields
+        assert "tool_profile.enabled_tool_count" in output_fields
+        assert "tool_profile.enabled_tools" in output_fields
 
 
 # ============================================================================
