@@ -36,7 +36,8 @@ from .resource_manager import ResourceManager, ResourceLimits
 from .file_sync_manager import FileSyncManager
 from .version_manager import VersionManager
 from .ace_framework import ACEFramework
-from .handlers import mcp_core
+from .semantic_modulator.api.mcp import registry as mcp_registry
+from .semantic_modulator.api.mcp import router as mcp_router
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
 from .node_identity import extract_file_id_from_node
@@ -210,7 +211,7 @@ class SemanticModulatorServer:
         enabled_tools = []
         try:
             # Fail fast on invalid profile names; fallback keeps server bootable.
-            enabled_tools = mcp_core.setup_mcp_tools(profile=self.tool_profile)
+            enabled_tools = mcp_registry.setup_mcp_tools(profile=self.tool_profile)
         except ValueError:
             logger.warning(
                 "invalid_tool_profile",
@@ -218,12 +219,12 @@ class SemanticModulatorServer:
                 fallback_profile="full",
             )
             self.tool_profile = "full"
-            enabled_tools = mcp_core.setup_mcp_tools(profile=self.tool_profile)
+            enabled_tools = mcp_registry.setup_mcp_tools(profile=self.tool_profile)
         logger.info(
             "mcp_tool_profile_active",
             profile=self.tool_profile,
             enabled_tools=len(enabled_tools),
-            supported_profiles=sorted(mcp_core.SUPPORTED_TOOL_PROFILES),
+            supported_profiles=sorted(mcp_registry.SUPPORTED_TOOL_PROFILES),
         )
         self.enabled_tool_names = [tool.name for tool in enabled_tools]
 
@@ -344,14 +345,14 @@ class SemanticModulatorServer:
         @self.server.list_tools()
         async def list_tools() -> List[Tool]:
             """List available semantic modulation tools"""
-            return mcp_core.setup_mcp_tools(profile=self.tool_profile)
+            return mcp_registry.setup_mcp_tools(profile=self.tool_profile)
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             """Handle tool calls via centralized router"""
             try:
                 context = self._build_context()
-                result = await mcp_core.route_tool_call(
+                result = await mcp_router.route_tool_call(
                     name, arguments, context, tool_profile=self.tool_profile
                 )
                 return [TextContent(type="text", text=str(result))]

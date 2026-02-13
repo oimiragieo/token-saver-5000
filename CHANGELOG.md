@@ -23,6 +23,7 @@ All notable changes to Token Saver 5000.
 - Fixed `AuditedSemanticGraph.get_node_with_history` to include the node creation bundle via provenance-linked `creation_bundle_id`.
 - Fixed compression postcondition contracts to allow empty `node_map` in `RAW` mode.
 - Added Phase 1 enterprise namespace scaffolding under `src/semantic_modulator/` (`app/bootstrap`, `api/mcp/registry`, `api/mcp/router`) as compatibility facades over existing server/router modules.
+- `src/server.py` now consumes MCP registry/router through `src.semantic_modulator.api.mcp` facades as the canonical import path (behavior unchanged).
 - Synchronized `skills/token-saver-context-compression/` with the new self-contained `.claude` skill package, including TOON/JSON/auto output routing and local benchmark guard scripts.
 
 ### Added
@@ -32,6 +33,7 @@ All notable changes to Token Saver 5000.
 - Added profile contract tests in `tests/test_tool_profiles.py` and server profile env tests in `tests/test_server_unit.py`.
 - Added dedicated CI workflow `.github/workflows/mcp-profile-guard.yml` for MCP profile regression checks.
 - Added enterprise layout contract tests in `tests/test_enterprise_layout.py` to lock namespace/bootstrap/router wrapper behavior.
+- Added enterprise import-path contract coverage to ensure `SemanticModulatorServer` initializes tool setup via the new facade module.
 
 ## [0.9.0] - 2025-11-29
 

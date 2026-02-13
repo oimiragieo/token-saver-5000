@@ -36,3 +36,16 @@ def test_bootstrap_wrapper_exposes_server_factory():
     server = bootstrap.create_server()
     assert server is not None
     assert server.__class__.__name__ == "SemanticModulatorServer"
+
+
+def test_server_uses_enterprise_registry_wrapper(monkeypatch):
+    server_module = importlib.import_module("src.server")
+    called: dict[str, str] = {}
+
+    def fake_setup(profile: str = "full"):
+        called["profile"] = profile
+        return []
+
+    monkeypatch.setattr(server_module.mcp_registry, "setup_mcp_tools", fake_setup)
+    _ = server_module.SemanticModulatorServer()
+    assert called["profile"] == "full"
