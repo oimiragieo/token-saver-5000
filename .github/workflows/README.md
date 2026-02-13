@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Workflows
 
-This directory contains 5 production-grade GitHub Actions workflows for Token Saver 5000 with comprehensive automation, caching, and validation.
+This directory contains 6 production-grade GitHub Actions workflows for Token Saver 5000 with comprehensive automation, caching, and validation.
 
 ## Workflows Overview
 
@@ -242,6 +242,32 @@ This directory contains 5 production-grade GitHub Actions workflows for Token Sa
 **Performance:**
 - Typical run time: 2-4 minutes
 - Runs only when skill-related files change
+
+---
+
+### 6. benchmark-guard.yml - Benchmark Regression Guard
+**Purpose:** Prevent token-savings regressions in benchmark-sensitive changes.
+
+**Trigger Events:**
+- Push/PR changes scoped to:
+  - `src/semantic_compressor.py`
+  - `src/benchmark_harness.py`
+  - `scripts/benchmarks/**`
+  - `tests/test_benchmark_harness.py`
+  - `tests/fixtures/benchmark_corpus.json`
+  - workflow file itself
+
+**Key Features:**
+- Python 3.12 setup with pip cache
+- Scope-limited Black + Ruff checks for benchmark files
+- Benchmark harness test run
+- Regression gate command:
+  - `python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware`
+- Uploads benchmark JSON artifacts for inspection
+
+**Performance:**
+- Typical run time: 3-6 minutes
+- Runs only on benchmark-related file changes
 
 ---
 

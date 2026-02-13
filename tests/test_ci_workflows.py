@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_CI = ROOT / ".github" / "workflows" / "skill-ci.yml"
+BENCHMARK_GUARD = ROOT / ".github" / "workflows" / "benchmark-guard.yml"
 
 
 def test_skill_ci_workflow_exists():
@@ -23,4 +24,20 @@ def test_skill_ci_workflow_has_path_filters_and_commands():
     assert "python -m ruff check" in content
     assert (
         'pytest -q -o addopts="" tests/test_skill_scripts.py tests/test_help_handlers.py' in content
+    )
+
+
+def test_benchmark_guard_workflow_exists_and_has_regression_gate():
+    assert BENCHMARK_GUARD.exists()
+    content = BENCHMARK_GUARD.read_text(encoding="utf-8")
+
+    assert "name: Benchmark Guard" in content
+    assert "pull_request:" in content
+    assert "paths:" in content
+    assert "src/benchmark_harness.py" in content
+    assert "scripts/benchmarks/**" in content
+    assert "tests/fixtures/benchmark_corpus.json" in content
+    assert (
+        "python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware"
+        in content
     )

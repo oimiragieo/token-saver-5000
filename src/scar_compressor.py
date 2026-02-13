@@ -375,6 +375,11 @@ class SCAREnhancedCompressor:
         Returns:
             List of (node_id, combined_score) tuples
         """
+        if not 0.0 <= alignment_weight <= 1.0:
+            raise ValueError(
+                f"alignment_weight must be between 0.0 and 1.0, got {alignment_weight}"
+            )
+
         # Get query embedding
         query_embedding = self.base_compressor.model.encode([query])[0]
 
@@ -399,12 +404,13 @@ class SCAREnhancedCompressor:
             else:
                 alignment_score = cosine_sim
 
-            # Combine scores
-            combined_score = (
-                1 - alignment_weight
-            ) * cosine_sim + alignment_weight * alignment_score
+            # Combine scores and normalize to [0, 1] for deterministic downstream behavior.
+            # Raw cosine/alignment values are in [-1, 1], so we map via (x + 1) / 2.
+            combined_raw = (1 - alignment_weight) * cosine_sim + alignment_weight * alignment_score
+            combined_score = (combined_raw + 1.0) / 2.0
+            combined_score = float(np.clip(combined_score, 0.0, 1.0))
 
-            candidates.append((node_id, float(combined_score)))
+            candidates.append((node_id, combined_score))
 
         # Sort by combined score
         candidates.sort(key=lambda x: x[1], reverse=True)

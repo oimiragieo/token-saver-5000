@@ -1,0 +1,71 @@
+name: Benchmark Guard
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - src/semantic_compressor.py
+      - src/benchmark_harness.py
+      - scripts/benchmarks/**
+      - tests/test_benchmark_harness.py
+      - tests/fixtures/benchmark_corpus.json
+      - .github/workflows/benchmark-guard.yml
+  push:
+    branches: [main, develop, claude/**]
+    paths:
+      - src/semantic_compressor.py
+      - src/benchmark_harness.py
+      - scripts/benchmarks/**
+      - tests/test_benchmark_harness.py
+      - tests/fixtures/benchmark_corpus.json
+      - .github/workflows/benchmark-guard.yml
+
+concurrency:
+  group: benchmark-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark-guard:
+    name: Benchmark Regression Guard
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "**/requirements.txt"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio black ruff
+
+      - name: Lint/format guard (benchmark scope)
+        run: |
+          python -m black --check src/benchmark_harness.py scripts/benchmarks/run_benchmarks.py tests/test_benchmark_harness.py
+          python -m ruff check src/benchmark_harness.py scripts/benchmarks/run_benchmarks.py tests/test_benchmark_harness.py
+
+      - name: Benchmark harness tests
+        run: |
+          pytest -q -o addopts="" tests/test_benchmark_harness.py
+
+      - name: Run benchmark regression guard
+        run: |
+          python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: artifacts/benchmarks/latest_*.json
+          retention-days: 7
