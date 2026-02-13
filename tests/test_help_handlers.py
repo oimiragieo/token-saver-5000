@@ -12,7 +12,9 @@ from src.handlers.resource_handlers import (
     handle_check_environment,
 )
 from src.handlers.compression_handlers import (
+    get_read_skeleton_output_fields,
     get_search_semantic_output_fields,
+    handle_read_skeleton,
     handle_search_semantic,
 )
 
@@ -126,3 +128,43 @@ async def test_search_semantic_help_output_fields_cover_runtime_keys():
     assert "results[].similarity" in documented_fields
     assert "results[].importance" in documented_fields
     assert runtime_data["results"][0]["node_id"] == "doc1_n0"
+
+
+@pytest.mark.asyncio
+async def test_read_skeleton_help_output_fields_match_canonical_schema():
+    result = await handle_tool_help({}, {"tool_name": "read_skeleton", "verbose": True})
+    data = json.loads(result)
+
+    assert data.get("output_fields", []) == get_read_skeleton_output_fields()
+
+
+@pytest.mark.asyncio
+async def test_read_skeleton_help_output_fields_cover_runtime_keys():
+    help_result = await handle_tool_help({}, {"tool_name": "read_skeleton", "verbose": True})
+    help_data = json.loads(help_result)
+    documented_fields = help_data.get("output_fields", [])
+
+    skeleton = SimpleNamespace(
+        file_id="doc1",
+        total_nodes=2,
+        total_tokens=120,
+        skeleton_tokens=30,
+        compression_ratio=4.0,
+        skeleton_text="skeleton",
+        node_map={"doc1_n0": "summary"},
+    )
+    compressor = SimpleNamespace(
+        _generate_skeleton=lambda file_id, query=None: skeleton, graphs={"doc1": object()}
+    )
+    sync_manager = SimpleNamespace(file_metadata={})
+    context = {"compressor": compressor, "sync_manager": sync_manager}
+
+    runtime_result = await handle_read_skeleton(context, {"file_id": "doc1"})
+    runtime_data = json.loads(runtime_result)
+
+    assert "file_id" in documented_fields
+    assert "node_map" in documented_fields
+    assert "selection_mode" in documented_fields
+    assert "evidence.sufficient" in documented_fields
+    assert "staleness_warning.is_stale" in documented_fields
+    assert runtime_data["file_id"] == "doc1"

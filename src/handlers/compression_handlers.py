@@ -40,7 +40,10 @@ def _flatten_output_fields(schema: Dict[str, Any], prefix: str = "") -> List[str
     for key, value in schema.items():
         full_key = f"{prefix}.{key}" if prefix else key
         if isinstance(value, dict):
-            fields.extend(_flatten_output_fields(value, prefix=full_key))
+            if value:
+                fields.extend(_flatten_output_fields(value, prefix=full_key))
+            else:
+                fields.append(full_key)
         elif isinstance(value, list) and value and isinstance(value[0], dict):
             list_prefix = f"{full_key}[]"
             fields.extend(_flatten_output_fields(value[0], prefix=list_prefix))
@@ -81,6 +84,39 @@ SEARCH_SEMANTIC_RESPONSE_TEMPLATE: Dict[str, Any] = {
 def get_search_semantic_output_fields() -> List[str]:
     """Get canonical output field paths for search_semantic help/docs."""
     return _flatten_output_fields(SEARCH_SEMANTIC_RESPONSE_TEMPLATE)
+
+
+READ_SKELETON_RESPONSE_TEMPLATE: Dict[str, Any] = {
+    "file_id": "",
+    "total_nodes": 0,
+    "total_tokens": 0,
+    "skeleton_tokens": 0,
+    "compression_ratio": 0.0,
+    "skeleton_text": "",
+    "node_map": {},
+    "selection_mode": "baseline",
+    "query": "",
+    "evidence": {
+        "sufficient": True,
+        "best_score": 0.0,
+        "threshold": 0.0,
+        "used_expanded_search": False,
+        "message": "",
+        "node_ids": [],
+    },
+    "staleness_warning": {
+        "is_stale": False,
+        "reason": "",
+        "cached_time": 0,
+        "current_time": 0,
+        "recommendation": "",
+    },
+}
+
+
+def get_read_skeleton_output_fields() -> List[str]:
+    """Get canonical output field paths for read_skeleton help/docs."""
+    return _flatten_output_fields(READ_SKELETON_RESPONSE_TEMPLATE)
 
 
 # ===========================

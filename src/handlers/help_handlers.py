@@ -12,7 +12,10 @@ import logging
 from typing import Any, Dict
 
 from ..types import HandlerContext
-from .compression_handlers import get_search_semantic_output_fields
+from .compression_handlers import (
+    get_read_skeleton_output_fields,
+    get_search_semantic_output_fields,
+)
 from .resource_handlers import get_check_environment_output_fields
 
 logger = logging.getLogger("semantic-modulator")
@@ -60,6 +63,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "top_k": "Optional evidence node count for evidence_aware mode (default: 5)",
             "min_similarity": "Optional sufficiency threshold for evidence_aware mode (default: 0.35)",
         },
+        "output_fields": get_read_skeleton_output_fields(),
         "examples": [
             {"description": "Read document skeleton", "args": {"file_id": "my_doc"}},
             {

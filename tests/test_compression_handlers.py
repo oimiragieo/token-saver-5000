@@ -442,6 +442,18 @@ class TestSearchSemanticOutputFields:
         assert "evidence.sufficient" in output_fields
 
 
+class TestReadSkeletonOutputFields:
+    """Schema tests for read_skeleton output field docs."""
+
+    def test_read_skeleton_output_fields_include_optional_paths(self):
+        output_fields = ch.get_read_skeleton_output_fields()
+        assert "file_id" in output_fields
+        assert "selection_mode" in output_fields
+        assert "node_map" in output_fields
+        assert "evidence.sufficient" in output_fields
+        assert "staleness_warning.is_stale" in output_fields
+
+
 class TestHandleGetStats:
     """Test handle_get_stats handler (4 tests)"""
 
