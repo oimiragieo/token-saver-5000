@@ -323,7 +323,9 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
     "check_environment": {
         "category": "Resource Management",
-        "description": "Check environment health: models, memory, cache, disk space.",
+        "description": (
+            "Check environment health: models, memory, cache, disk space, and MCP tool profile."
+        ),
         "parameters": {},
         "examples": [
             {"description": "Check environment", "args": {}},
@@ -332,6 +334,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "Shows which embedding models are loaded",
             "Reports cache hit ratio for performance tuning",
             "Lists any stale documents that need refresh",
+            "Includes tool_profile diagnostics (active profile and enabled_tools list)",
         ],
         "related_tools": ["check_resource_health", "check_file_sync"],
     },

@@ -35,3 +35,16 @@ async def test_tool_list_response_contains_total_tools():
     data = json.loads(result)
     assert data["status"] == "tool_list"
     assert data["total_tools"] > 0
+
+
+@pytest.mark.asyncio
+async def test_check_environment_help_mentions_tool_profile_diagnostics():
+    result = await handle_tool_help({}, {"tool_name": "check_environment", "verbose": True})
+    data = json.loads(result)
+
+    tips_text = " ".join(data.get("tips", [])).lower()
+    description_text = data.get("description", "").lower()
+
+    assert "tool_profile" in tips_text or "tool profile" in tips_text
+    assert "enabled_tools" in tips_text or "enabled tool" in tips_text
+    assert "environment" in description_text
