@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Workflows
 
-This directory contains 4 production-grade GitHub Actions workflows for Token Saver 5000 with comprehensive automation, caching, and validation.
+This directory contains 5 production-grade GitHub Actions workflows for Token Saver 5000 with comprehensive automation, caching, and validation.
 
 ## Workflows Overview
 
@@ -216,6 +216,32 @@ This directory contains 4 production-grade GitHub Actions workflows for Token Sa
 **Performance:**
 - Staging deployment: 3-5 minutes (including health checks)
 - Production deployment: 5-10 minutes (longer validation)
+
+---
+
+### 5. skill-ci.yml - Skill Script Fast Checks
+**Purpose:** Fast feedback loop for Claude skill scripts and help metadata.
+
+**Trigger Events:**
+- Push/PR changes scoped to:
+  - `scripts/skills/**`
+  - `skills/**`
+  - `tests/test_skill_scripts.py`
+  - `tests/test_help_handlers.py`
+  - `src/handlers/help_handlers.py`
+  - workflow file itself
+
+**Key Features:**
+- Python 3.12 setup with pip cache
+- Black check scoped to skill-related files
+- Ruff check scoped to skill-related files
+- Fast test run:
+  - `tests/test_skill_scripts.py`
+  - `tests/test_help_handlers.py`
+
+**Performance:**
+- Typical run time: 2-4 minutes
+- Runs only when skill-related files change
 
 ---
 

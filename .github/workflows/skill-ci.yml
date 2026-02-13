@@ -1,0 +1,64 @@
+name: Skill CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - scripts/skills/**
+      - skills/**
+      - tests/test_skill_scripts.py
+      - tests/test_help_handlers.py
+      - tests/fixtures/skill_context_sample.txt
+      - src/handlers/help_handlers.py
+      - .github/workflows/skill-ci.yml
+  push:
+    branches: [main, develop, claude/**]
+    paths:
+      - scripts/skills/**
+      - skills/**
+      - tests/test_skill_scripts.py
+      - tests/test_help_handlers.py
+      - tests/fixtures/skill_context_sample.txt
+      - src/handlers/help_handlers.py
+      - .github/workflows/skill-ci.yml
+
+concurrency:
+  group: skill-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skill-ci:
+    name: Skill Script Checks
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "**/requirements.txt"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black ruff pytest pytest-asyncio
+
+      - name: Black (skills scope)
+        run: |
+          python -m black --check scripts/skills tests/test_skill_scripts.py tests/test_help_handlers.py src/handlers/help_handlers.py
+
+      - name: Ruff (skills scope)
+        run: |
+          python -m ruff check scripts/skills tests/test_skill_scripts.py tests/test_help_handlers.py src/handlers/help_handlers.py
+
+      - name: Skill tests
+        run: |
+          pytest -q -o addopts="" tests/test_skill_scripts.py tests/test_help_handlers.py
