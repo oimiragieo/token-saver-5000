@@ -156,3 +156,51 @@ def test_check_benchmark_guard_writes_summary_markdown(tmp_path: Path):
     assert "Benchmark Guard Summary" in content
     assert "baseline" in content
     assert "avg_compression_ratio" in content
+
+
+def test_check_benchmark_guard_strict_case_set(tmp_path: Path):
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    thresholds = tmp_path / "thresholds.json"
+
+    thresholds_payload = {
+        "modes": {
+            "baseline": {
+                "min_avg_compression_ratio": 8.0,
+                "min_avg_token_savings_pct": 87.0,
+                "per_case": {
+                    "c1": {"min_compression_ratio": 5.0, "min_token_savings_pct": 75.0},
+                    "c2": {"min_compression_ratio": 5.0, "min_token_savings_pct": 75.0},
+                },
+            }
+        }
+    }
+    _write_json(thresholds, thresholds_payload)
+    # Missing c2, and has unexpected c3.
+    report = {
+        "avg_compression_ratio": 8.5,
+        "avg_token_savings_pct": 88.0,
+        "results": [
+            {"case_id": "c1", "compression_ratio": 6.0, "token_savings_pct": 80.0},
+            {"case_id": "c3", "compression_ratio": 6.0, "token_savings_pct": 80.0},
+        ],
+    }
+    _write_json(reports_dir / "latest_baseline.json", report)
+
+    cmd = [
+        sys.executable,
+        "scripts/benchmarks/check_benchmark_guard.py",
+        "--thresholds",
+        str(thresholds),
+        "--reports-dir",
+        str(reports_dir),
+        "--modes",
+        "baseline",
+        "--strict-case-set",
+    ]
+    result = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    assert (
+        "missing expected cases" in result.stderr.lower()
+        or "unexpected cases" in result.stderr.lower()
+    )

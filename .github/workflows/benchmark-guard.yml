@@ -61,7 +61,7 @@ jobs:
       - name: Run benchmark regression guard
         run: |
           python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
-          python scripts/benchmarks/check_benchmark_guard.py --summary-file artifacts/benchmarks/guard_summary.md
+          python scripts/benchmarks/check_benchmark_guard.py --strict-case-set --summary-file artifacts/benchmarks/guard_summary.md
 
       - name: Publish benchmark guard summary
         if: always()

@@ -42,7 +42,46 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional path to write markdown summary report.",
     )
+    parser.add_argument(
+        "--strict-case-set",
+        action="store_true",
+        help=(
+            "Fail when report case IDs differ from threshold per_case IDs "
+            "(missing or unexpected cases)."
+        ),
+    )
     return parser
+
+
+def _evaluate_case_set(
+    *,
+    mode: str,
+    report: dict,
+    mode_thresholds: dict,
+) -> List[str]:
+    expected_case_ids = {
+        str(case_id)
+        for case_id in mode_thresholds.get("per_case", {}).keys()
+        if str(case_id).strip()
+    }
+    if not expected_case_ids:
+        return []
+
+    actual_case_ids = {
+        str(item.get("case_id")).strip()
+        for item in report.get("results", [])
+        if str(item.get("case_id", "")).strip()
+    }
+    missing_case_ids = sorted(expected_case_ids - actual_case_ids)
+    unexpected_case_ids = sorted(actual_case_ids - expected_case_ids)
+    violations: List[str] = []
+    if missing_case_ids:
+        violations.append(
+            f"[{mode}] case_set: missing expected cases: {', '.join(missing_case_ids)}"
+        )
+    if unexpected_case_ids:
+        violations.append(f"[{mode}] case_set: unexpected cases: {', '.join(unexpected_case_ids)}")
+    return violations
 
 
 def _build_markdown_summary(
@@ -114,6 +153,15 @@ def main() -> int:
             all_violations.append(f"[{mode}] missing report: {report_path}")
             continue
         report = load_json(report_path)
+        if args.strict_case_set:
+            mode_thresholds = thresholds.get(mode, {})
+            all_violations.extend(
+                _evaluate_case_set(
+                    mode=mode,
+                    report=report,
+                    mode_thresholds=mode_thresholds,
+                )
+            )
         violations = evaluate_report_against_thresholds(
             mode=mode,
             report=report,

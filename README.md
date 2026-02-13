@@ -136,6 +136,14 @@ pytest tests/test_token_savings.py -v           # Compression benchmarks (21 tes
 pytest tests/test_afm.py -v                     # Dialogue memory (29 tests)
 pytest tests/test_code_compressor.py -v         # Code compression (47 tests)
 
+# Benchmark guard policy
+python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
+python scripts/benchmarks/check_benchmark_guard.py --strict-case-set --summary-file artifacts/benchmarks/guard_summary.md
+
+`check_benchmark_guard.py --strict-case-set` enforces that benchmark report case IDs exactly match
+the `per_case` IDs in `artifacts/benchmarks/golden_thresholds.json` and fails CI on missing or
+unexpected cases.
+
 # Coverage
 pytest tests/ --cov=src --cov-report=term
 ```
