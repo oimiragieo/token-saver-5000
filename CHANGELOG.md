@@ -14,6 +14,8 @@ All notable changes to Token Saver 5000.
 - Added targeted node identity tests in `tests/test_node_identity.py`.
 - Added a validation regression test for non-index `_n` segments in `tests/test_compression_handlers.py`.
 - Added MCP tool profile support (`full`, `core_stable`) for gradual surface simplification.
+- Added profile contract tests in `tests/test_tool_profiles.py` and server profile env tests in `tests/test_server_unit.py`.
+- Added dedicated CI workflow `.github/workflows/mcp-profile-guard.yml` for MCP profile regression checks.
 
 ## [0.9.0] - 2025-11-29
 

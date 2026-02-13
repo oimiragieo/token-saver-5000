@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_CI = ROOT / ".github" / "workflows" / "skill-ci.yml"
 BENCHMARK_GUARD = ROOT / ".github" / "workflows" / "benchmark-guard.yml"
+MCP_PROFILE_GUARD = ROOT / ".github" / "workflows" / "mcp-profile-guard.yml"
 
 
 def test_skill_ci_workflow_exists():
@@ -44,3 +45,18 @@ def test_benchmark_guard_workflow_exists_and_has_regression_gate():
     assert "python scripts/benchmarks/check_benchmark_guard.py" in content
     assert "--strict-case-set" in content
     assert "GITHUB_STEP_SUMMARY" in content
+
+
+def test_mcp_profile_guard_workflow_exists_and_checks_core_contract():
+    assert MCP_PROFILE_GUARD.exists()
+    content = MCP_PROFILE_GUARD.read_text(encoding="utf-8")
+
+    assert "name: MCP Profile Guard" in content
+    assert "pull_request:" in content
+    assert "src/handlers/mcp_core.py" in content
+    assert "src/server.py" in content
+    assert "tests/test_tool_profiles.py" in content
+    assert "tests/test_server_unit.py" in content
+    assert (
+        'pytest -q -o addopts="" tests/test_tool_profiles.py tests/test_server_unit.py' in content
+    )

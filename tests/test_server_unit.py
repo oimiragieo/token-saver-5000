@@ -306,6 +306,67 @@ class TestSemanticModulatorServerInitialization:
             assert call_args.max_documents == 1000
             assert call_args.max_memory_mb == 2048.0
 
+    @patch("src.server.CodeCompressionAdapter")
+    @patch("src.server.BlindSpotDetector")
+    @patch("src.server.HaloEffectDetector")
+    @patch("src.server.PersistenceManager")
+    @patch("src.server.ResourceManager")
+    @patch("src.server.FileSyncManager")
+    @patch("src.server.VersionManager")
+    @patch("src.server.ACEFramework")
+    def test_initialization_reads_mcp_tool_profile_env(
+        self,
+        mock_ace,
+        mock_version,
+        mock_sync,
+        mock_resource,
+        mock_persistence,
+        mock_halo,
+        mock_blind_spot,
+        mock_compressor,
+    ):
+        with (
+            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
+            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
+            patch.object(SemanticModulatorServer, "_setup_handlers"),
+            patch("src.server.mcp_core.setup_mcp_tools", return_value=[]),
+            patch.dict(os.environ, {"MCP_TOOL_PROFILE": "core_stable"}, clear=False),
+        ):
+            server = SemanticModulatorServer()
+            assert server.tool_profile == "core_stable"
+
+    @patch("src.server.CodeCompressionAdapter")
+    @patch("src.server.BlindSpotDetector")
+    @patch("src.server.HaloEffectDetector")
+    @patch("src.server.PersistenceManager")
+    @patch("src.server.ResourceManager")
+    @patch("src.server.FileSyncManager")
+    @patch("src.server.VersionManager")
+    @patch("src.server.ACEFramework")
+    def test_initialization_falls_back_to_full_on_invalid_mcp_tool_profile(
+        self,
+        mock_ace,
+        mock_version,
+        mock_sync,
+        mock_resource,
+        mock_persistence,
+        mock_halo,
+        mock_blind_spot,
+        mock_compressor,
+    ):
+        with (
+            patch.object(SemanticModulatorServer, "_load_persisted_documents"),
+            patch.object(SemanticModulatorServer, "_load_file_sync_metadata"),
+            patch.object(SemanticModulatorServer, "_setup_handlers"),
+            patch(
+                "src.server.mcp_core.setup_mcp_tools",
+                side_effect=ValueError("invalid profile"),
+            ),
+            patch.dict(os.environ, {"MCP_TOOL_PROFILE": "broken_profile"}, clear=False),
+        ):
+            server = SemanticModulatorServer()
+            assert server.tool_profile == "full"
+
 
 class TestLoadPersistedDocuments:
     """Tests for _load_persisted_documents method (v0.4.4 - called in __aenter__)"""
