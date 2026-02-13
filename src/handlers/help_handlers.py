@@ -102,7 +102,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Retrieve content at specified fidelity level for specific nodes.",
         "parameters": {
             "node_ids": "List of node IDs to retrieve (required)",
-            "fidelity": "Detail level: ABSTRACT, OUTLINE, STRUCTURE, DETAILED, RAW",
+            "fidelity_level": "Detail level: ABSTRACT, OUTLINE, STRUCTURE, DETAILED, RAW",
         },
         "examples": [
             {

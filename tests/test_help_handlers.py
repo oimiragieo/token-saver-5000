@@ -45,6 +45,16 @@ async def test_search_semantic_help_includes_evidence_aware_params():
 
 
 @pytest.mark.asyncio
+async def test_modulate_region_help_uses_fidelity_level_parameter_name():
+    result = await handle_tool_help({}, {"tool_name": "modulate_region", "verbose": True})
+    data = json.loads(result)
+
+    params = data["parameters"]
+    assert "fidelity_level" in params
+    assert "fidelity" not in params
+
+
+@pytest.mark.asyncio
 async def test_tool_list_response_contains_total_tools():
     result = await handle_tool_help({}, {})
     data = json.loads(result)

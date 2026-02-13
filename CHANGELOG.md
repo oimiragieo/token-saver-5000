@@ -18,6 +18,7 @@ All notable changes to Token Saver 5000.
 - Added canonical `read_skeleton` output-field utility in `compression_handlers`, and wired `tool_help(read_skeleton)` to reuse it with contract tests.
 - Added canonical `ingest_context` output-field utility in `compression_handlers`, and wired `tool_help(ingest_context)` to reuse it with estimate-field contract tests.
 - Added canonical `recommend_fidelity` output-field utility in `compression_handlers`, and wired `tool_help(recommend_fidelity)` to reuse it with contract tests.
+- Fixed `tool_help(modulate_region)` parameter naming drift to use `fidelity_level` consistently with handler and MCP schema.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.
