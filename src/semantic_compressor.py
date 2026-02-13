@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from os import cpu_count
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
 
 import numpy as np
@@ -69,6 +69,19 @@ class SkeletonResponse:
     compression_ratio: float
     skeleton_text: str
     node_map: Dict[str, str]  # node_id -> short description
+
+
+@dataclass
+class EvidenceResult:
+    """Evidence retrieval diagnostics for query-aware compression."""
+
+    node_ids: List[str]
+    scores: List[Tuple[str, float]]
+    sufficient: bool
+    best_score: float
+    threshold: float
+    used_expanded_search: bool
+    message: str
 
 
 class SemanticCompressor:
@@ -513,7 +526,101 @@ class SemanticCompressor:
 
             return skeleton_response
 
-    def _generate_skeleton(self, file_id: str) -> SkeletonResponse:
+    def _normalize_scores(self, values: Dict[str, float]) -> Dict[str, float]:
+        """Min-max normalize score dictionary to 0..1 range."""
+        if not values:
+            return {}
+        min_value = min(values.values())
+        max_value = max(values.values())
+        if max_value <= min_value:
+            return {key: 1.0 for key in values}
+        span = max_value - min_value
+        return {key: (value - min_value) / span for key, value in values.items()}
+
+    def _select_skeleton_nodes(
+        self,
+        file_nodes: List[Tuple[str, SemanticNode]],
+        num_skeleton: int,
+        query: Optional[str] = None,
+        redundancy_penalty: float = 0.2,
+    ) -> Set[str]:
+        """
+        Select skeleton nodes.
+
+        Baseline mode:
+        - PageRank-only (importance sort)
+
+        Query-guided mode:
+        - Hybrid ranking: importance + query relevance
+        - Redundancy penalty via greedy MMR-style selection
+        """
+        if num_skeleton <= 0 or not file_nodes:
+            return set()
+
+        if not query or not query.strip():
+            ranked = sorted(file_nodes, key=lambda item: item[1].importance, reverse=True)
+            return {node_id for node_id, _ in ranked[:num_skeleton]}
+
+        # Query-guided selection
+        query_embedding = self.model.encode([query])[0]
+        importance_scores = {node_id: node.importance for node_id, node in file_nodes}
+        relevance_scores = {
+            node_id: float(cosine_similarity([query_embedding], [node.embedding])[0][0])
+            for node_id, node in file_nodes
+        }
+
+        importance_norm = self._normalize_scores(importance_scores)
+        relevance_norm = self._normalize_scores(relevance_scores)
+
+        # Weighted hybrid score: prioritize query relevance while preserving global structure.
+        hybrid_scores = {
+            node_id: 0.35 * importance_norm.get(node_id, 0.0)
+            + 0.65 * relevance_norm.get(node_id, 0.0)
+            for node_id, _ in file_nodes
+        }
+
+        selected: List[str] = []
+        selected_set: Set[str] = set()
+        candidate_ids = [node_id for node_id, _ in file_nodes]
+        node_lookup = {node_id: node for node_id, node in file_nodes}
+
+        while len(selected) < num_skeleton and candidate_ids:
+            best_id = None
+            best_score = float("-inf")
+
+            for candidate_id in candidate_ids:
+                candidate_score = hybrid_scores[candidate_id]
+                if selected:
+                    max_similarity = max(
+                        float(
+                            cosine_similarity(
+                                [node_lookup[candidate_id].embedding],
+                                [node_lookup[selected_id].embedding],
+                            )[0][0]
+                        )
+                        for selected_id in selected
+                    )
+                    candidate_score -= redundancy_penalty * max_similarity
+
+                if candidate_score > best_score:
+                    best_score = candidate_score
+                    best_id = candidate_id
+
+            if best_id is None:
+                break
+
+            selected.append(best_id)
+            selected_set.add(best_id)
+            candidate_ids.remove(best_id)
+
+        return selected_set
+
+    def _generate_skeleton(
+        self,
+        file_id: str,
+        query: Optional[str] = None,
+        anchor_node_ids: Optional[Set[str]] = None,
+    ) -> SkeletonResponse:
         """
         Step 2: Rate Allocation (JSCCM)
 
@@ -529,18 +636,27 @@ class SemanticCompressor:
         # Get all nodes for this file
         file_nodes = [(nid, self.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)]
 
-        # Sort by importance
+        # Sort by importance for stable iteration order and deterministic output
         file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
 
         # Determine skeleton nodes (top N%)
         num_skeleton = max(1, int(len(file_nodes) * self.skeleton_ratio))
-        skeleton_nodes = set(nid for nid, _ in file_nodes[:num_skeleton])
+        if anchor_node_ids:
+            skeleton_nodes = set(anchor_node_ids)
+            if len(skeleton_nodes) < num_skeleton:
+                selected = self._select_skeleton_nodes(file_nodes, num_skeleton, query=query)
+                skeleton_nodes.update(selected)
+        else:
+            skeleton_nodes = self._select_skeleton_nodes(file_nodes, num_skeleton, query=query)
 
         # Build skeleton text
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
         skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
         skeleton_lines.append(f"Compression: {self.skeleton_ratio:.0%} of content shown\n")
+        if query and query.strip():
+            skeleton_lines.append("Selection mode: QUERY_GUIDED")
+            skeleton_lines.append(f"Query: {query}\n")
 
         node_map = {}
         total_tokens = 0
@@ -584,15 +700,101 @@ class SemanticCompressor:
             node_map=node_map,
         )
 
-    def read_skeleton(self, file_id: str) -> str:
+    def read_skeleton(self, file_id: str, query: Optional[str] = None) -> str:
         """
         MCP Tool: read_skeleton
 
         Returns the compressed skeleton view of a document.
         ~80-95% token savings vs raw text.
         """
-        skeleton = self._generate_skeleton(file_id)
+        skeleton = self._generate_skeleton(file_id, query=query)
         return skeleton.skeleton_text
+
+    def retrieve_evidence(
+        self,
+        query: str,
+        file_id: Optional[str] = None,
+        top_k: int = 5,
+        min_similarity: float = 0.35,
+        expansion_factor: int = 2,
+    ) -> EvidenceResult:
+        """
+        Retrieve evidence with insufficiency detection.
+
+        If best similarity is below threshold, run a broader retrieval pass.
+        """
+        if not query or not query.strip():
+            raise ValueError("query must be non-empty")
+        if top_k <= 0:
+            raise ValueError("top_k must be > 0")
+
+        initial_scores = self.search_semantic_with_scores(query, file_id=file_id, top_k=top_k)
+        best_score = initial_scores[0][1] if initial_scores else 0.0
+        sufficient = best_score >= min_similarity
+        used_expanded_search = False
+        final_scores = initial_scores
+
+        if not sufficient:
+            used_expanded_search = True
+            expanded_k = max(top_k + 1, top_k * max(1, expansion_factor))
+            final_scores = self.search_semantic_with_scores(
+                query,
+                file_id=file_id,
+                top_k=expanded_k,
+            )
+            best_score = final_scores[0][1] if final_scores else 0.0
+            sufficient = best_score >= min_similarity
+
+        node_ids = [node_id for node_id, _ in final_scores[:top_k]]
+        if sufficient:
+            message = "Evidence sufficient for query-guided compression."
+        else:
+            message = (
+                "Evidence appears insufficient; consider broader retrieval or "
+                "falling back to lower compression."
+            )
+
+        return EvidenceResult(
+            node_ids=node_ids,
+            scores=final_scores,
+            sufficient=sufficient,
+            best_score=best_score,
+            threshold=min_similarity,
+            used_expanded_search=used_expanded_search,
+            message=message,
+        )
+
+    def read_skeleton_evidence_aware(
+        self,
+        file_id: str,
+        query: str,
+        top_k: int = 5,
+        min_similarity: float = 0.35,
+    ) -> str:
+        """Generate skeleton anchored by query evidence and include sufficiency diagnostics."""
+        evidence = self.retrieve_evidence(
+            query=query,
+            file_id=file_id,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+        skeleton = self._generate_skeleton(
+            file_id=file_id,
+            query=query,
+            anchor_node_ids=set(evidence.node_ids),
+        )
+        status = "SUFFICIENT" if evidence.sufficient else "INSUFFICIENT"
+        lines = [
+            f"=== EVIDENCE STATUS: {status} ===",
+            (
+                f"best_score={evidence.best_score:.3f} threshold={evidence.threshold:.3f} "
+                f"expanded_search={evidence.used_expanded_search}"
+            ),
+            evidence.message,
+            "",
+            skeleton.skeleton_text,
+        ]
+        return "\n".join(lines)
 
     def modulate_region(
         self, node_ids: List[str], fidelity_level: FidelityLevel = FidelityLevel.RAW

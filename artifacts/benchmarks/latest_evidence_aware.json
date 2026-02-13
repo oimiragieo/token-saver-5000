@@ -1,0 +1,35 @@
+{
+  "generated_at_utc": "2026-02-13T02:11:07.121673+00:00",
+  "total_cases": 2,
+  "passed_cases": 2,
+  "failed_cases": 0,
+  "avg_compression_ratio": 8.386130811662728,
+  "avg_token_savings_pct": 87.64167595689335,
+  "results": [
+    {
+      "case_id": "medium_architecture",
+      "name": "Medium Architecture Spec",
+      "mode": "evidence_aware",
+      "original_tokens": 184,
+      "skeleton_tokens": 27,
+      "compression_ratio": 6.814814814814815,
+      "token_savings_pct": 85.32608695652173,
+      "meets_ratio_target": true,
+      "meets_savings_target": true,
+      "passed": true
+    },
+    {
+      "case_id": "large_repetitive_tech",
+      "name": "Large Repetitive Technical Document",
+      "mode": "evidence_aware",
+      "original_tokens": 468,
+      "skeleton_tokens": 47,
+      "compression_ratio": 9.957446808510639,
+      "token_savings_pct": 89.95726495726495,
+      "meets_ratio_target": true,
+      "meets_savings_target": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true
+}

@@ -28,6 +28,7 @@ class BenchmarkCase:
     text: str
     min_compression_ratio: float
     min_token_savings_pct: float
+    query: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class BenchmarkResult:
 
     case_id: str
     name: str
+    mode: str
     original_tokens: int
     skeleton_tokens: int
     compression_ratio: float
@@ -90,6 +92,7 @@ def load_benchmark_cases(corpus_path: Path | str) -> List[BenchmarkCase]:
                 text=raw["text"],
                 min_compression_ratio=float(raw["min_compression_ratio"]),
                 min_token_savings_pct=float(raw["min_token_savings_pct"]),
+                query=raw.get("query"),
             )
         )
     return cases
@@ -103,6 +106,7 @@ def _savings_pct(compression_ratio: float) -> float:
 
 def run_benchmark_cases(
     cases: Iterable[BenchmarkCase],
+    mode: str = "baseline",
     similarity_threshold: float = 0.75,
     skeleton_ratio: float = 0.2,
 ) -> BenchmarkSummary:
@@ -114,13 +118,25 @@ def run_benchmark_cases(
 
     results: List[BenchmarkResult] = []
     for case in cases:
-        response = compressor.ingest_file(case.text, f"bench_{case.case_id}")
+        file_id = f"bench_{case.case_id}"
+        response = compressor.ingest_file(case.text, file_id)
+        if mode == "query_guided" and case.query:
+            response = compressor._generate_skeleton(file_id, query=case.query)
+        elif mode == "evidence_aware" and case.query:
+            evidence = compressor.retrieve_evidence(case.query, file_id=file_id, top_k=5)
+            response = compressor._generate_skeleton(
+                file_id=file_id,
+                query=case.query,
+                anchor_node_ids=set(evidence.node_ids),
+            )
+
         ratio = float(response.compression_ratio)
         savings = _savings_pct(ratio)
 
         result = BenchmarkResult(
             case_id=case.case_id,
             name=case.name,
+            mode=mode,
             original_tokens=response.total_tokens,
             skeleton_tokens=response.skeleton_tokens,
             compression_ratio=ratio,

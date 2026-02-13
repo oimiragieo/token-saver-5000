@@ -43,6 +43,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Case ID to run (repeatable). If omitted, runs all cases.",
     )
     parser.add_argument(
+        "--mode",
+        choices=["baseline", "query_guided", "evidence_aware"],
+        default="baseline",
+        help="Benchmark mode to run.",
+    )
+    parser.add_argument(
+        "--compare",
+        type=str,
+        default="",
+        help="Comma-separated list of modes to compare (overrides --mode).",
+    )
+    parser.add_argument(
         "--similarity-threshold",
         type=float,
         default=0.75,
@@ -72,29 +84,41 @@ def main() -> int:
         print("No benchmark cases selected. Check --case values.", file=sys.stderr)
         return 2
 
-    summary = run_benchmark_cases(
-        selected_cases,
-        similarity_threshold=args.similarity_threshold,
-        skeleton_ratio=args.skeleton_ratio,
-    )
-    output_path = write_summary(summary, args.output)
+    modes = [args.mode]
+    if args.compare:
+        modes = [item.strip() for item in args.compare.split(",") if item.strip()]
 
-    print(f"Benchmark report: {output_path}")
-    print(
-        "Cases: "
-        f"{summary.passed_cases}/{summary.total_cases} passed | "
-        f"avg ratio={summary.avg_compression_ratio:.2f}x | "
-        f"avg savings={summary.avg_token_savings_pct:.1f}%"
-    )
-    for result in summary.results:
-        status = "PASS" if result.passed else "FAIL"
-        print(
-            f"- [{status}] {result.case_id}: ratio={result.compression_ratio:.2f}x "
-            f"savings={result.token_savings_pct:.1f}% "
-            f"(target {result.meets_ratio_target}/{result.meets_savings_target})"
+    all_passed = True
+    for mode in modes:
+        summary = run_benchmark_cases(
+            selected_cases,
+            mode=mode,
+            similarity_threshold=args.similarity_threshold,
+            skeleton_ratio=args.skeleton_ratio,
         )
 
-    if summary.all_passed or args.allow_failures:
+        output_path = args.output
+        if len(modes) > 1:
+            output_path = args.output.with_name(f"{args.output.stem}_{mode}{args.output.suffix}")
+        output_path = write_summary(summary, output_path)
+
+        print(f"Benchmark report ({mode}): {output_path}")
+        print(
+            "Cases: "
+            f"{summary.passed_cases}/{summary.total_cases} passed | "
+            f"avg ratio={summary.avg_compression_ratio:.2f}x | "
+            f"avg savings={summary.avg_token_savings_pct:.1f}%"
+        )
+        for result in summary.results:
+            status = "PASS" if result.passed else "FAIL"
+            print(
+                f"- [{status}] {result.case_id}: ratio={result.compression_ratio:.2f}x "
+                f"savings={result.token_savings_pct:.1f}% "
+                f"(target {result.meets_ratio_target}/{result.meets_savings_target})"
+            )
+        all_passed = all_passed and summary.all_passed
+
+    if all_passed or args.allow_failures:
         return 0
     return 1
 

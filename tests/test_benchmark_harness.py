@@ -40,6 +40,16 @@ def test_run_benchmark_cases_meets_golden_thresholds():
     assert summary.avg_token_savings_pct >= 60.0
 
 
+def test_run_benchmark_cases_query_guided_mode():
+    cases = load_benchmark_cases(default_corpus_path())
+    selected = filter_cases(cases, ["medium_architecture"])
+
+    summary = run_benchmark_cases(selected, mode="query_guided")
+    assert summary.total_cases == 1
+    assert summary.results[0].mode == "query_guided"
+    assert summary.results[0].passed is True
+
+
 def test_summary_to_dict_and_write_output(tmp_path: Path):
     cases = load_benchmark_cases(default_corpus_path())
     selected = filter_cases(cases, ["medium_architecture"])

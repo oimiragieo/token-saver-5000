@@ -69,6 +69,8 @@ Long (20 turns):  67% savings in 0.5s
 python scripts/benchmarks/run_benchmarks.py
 python scripts/benchmarks/run_benchmarks.py --case medium_architecture
 python scripts/benchmarks/run_benchmarks.py --output artifacts/benchmarks/baseline.json
+python scripts/benchmarks/run_benchmarks.py --mode query_guided
+python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
 ```
 
 **What it tests:**

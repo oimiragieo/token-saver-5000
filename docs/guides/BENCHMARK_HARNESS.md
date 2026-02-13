@@ -19,6 +19,8 @@ This guide documents the fixed-corpus benchmark harness used to track token-savi
 
 ```bash
 python scripts/benchmarks/run_benchmarks.py
+python scripts/benchmarks/run_benchmarks.py --mode query_guided
+python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
 ```
 
 Run a single case:
@@ -45,6 +47,7 @@ The report includes:
 - per-case compression ratio and savings
 - pass/fail target checks
 - aggregate averages
+- benchmark mode (`baseline`, `query_guided`, `evidence_aware`)
 
 ## TDD Workflow
 
