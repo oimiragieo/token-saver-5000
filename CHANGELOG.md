@@ -19,6 +19,9 @@ All notable changes to Token Saver 5000.
 - Added canonical `ingest_context` output-field utility in `compression_handlers`, and wired `tool_help(ingest_context)` to reuse it with estimate-field contract tests.
 - Added canonical `recommend_fidelity` output-field utility in `compression_handlers`, and wired `tool_help(recommend_fidelity)` to reuse it with contract tests.
 - Fixed `tool_help(modulate_region)` parameter naming drift to use `fidelity_level` consistently with handler and MCP schema.
+- Cleared repo-wide lint/format debt across audited graph, verifier, rewards, evidence, synthesis, and related tests so `ruff` and `black --check` pass on `src/tests/scripts`.
+- Fixed `AuditedSemanticGraph.get_node_with_history` to include the node creation bundle via provenance-linked `creation_bundle_id`.
+- Fixed compression postcondition contracts to allow empty `node_map` in `RAW` mode.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

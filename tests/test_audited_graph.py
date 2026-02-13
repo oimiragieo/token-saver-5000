@@ -10,7 +10,6 @@ Tests for:
 - Evidence bundle integration
 """
 
-import pytest
 import time
 import numpy as np
 
@@ -339,7 +338,7 @@ class TestAuditedSemanticGraph:
         graph = AuditedSemanticGraph()
         embedding = np.array([1.0, 0.0, 0.0])
 
-        bundle = graph.add_node(
+        graph.add_node(
             node_id="test",
             text="content",
             embedding=embedding,
@@ -626,10 +625,7 @@ class TestGraphWithConstraints:
         graph.add_node("n2", "c2", embedding)
         graph.add_node("n3", "c3", embedding)
 
-        graph.add_edge(
-            "n1", "n2",
-            constraints=["requires:n3"]
-        )
+        graph.add_edge("n1", "n2", constraints=["requires:n3"])
 
         # Composition with n3 should pass
         valid, _ = graph.verify_composition_constraints(["n1", "n2", "n3"])
@@ -667,7 +663,7 @@ class TestEdgeCases:
         graph = AuditedSemanticGraph()
         embedding = np.random.randn(768)  # BERT-sized embedding
 
-        bundle = graph.add_node("large", "content", embedding)
+        graph.add_node("large", "content", embedding)
 
         node = graph.get_node("large")
         assert node.embedding.shape == (768,)

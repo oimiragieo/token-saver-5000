@@ -39,7 +39,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 class ContractStatus(Enum):
     """Status of a contract check"""
+
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -58,6 +59,7 @@ class ContractStatus(Enum):
 @dataclass
 class ContractCheck:
     """Individual contract check result"""
+
     name: str
     status: ContractStatus
     message: Optional[str] = None
@@ -68,7 +70,7 @@ class ContractCheck:
             "name": self.name,
             "status": self.status.value,
             "message": self.message,
-            "details": self.details
+            "details": self.details,
         }
 
     @classmethod
@@ -77,7 +79,7 @@ class ContractCheck:
             name=data["name"],
             status=ContractStatus(data["status"]),
             message=data.get("message"),
-            details=data.get("details")
+            details=data.get("details"),
         )
 
 
@@ -91,6 +93,7 @@ class ContractResult:
         overall_passed: Whether all required checks passed
         timestamp: When verification was performed
     """
+
     checks: List[ContractCheck] = field(default_factory=list)
     overall_passed: bool = True
     timestamp: float = field(default_factory=time.time)
@@ -104,11 +107,7 @@ class ContractResult:
 
     def add_error(self, name: str, error: str) -> None:
         """Add an error check"""
-        self.checks.append(ContractCheck(
-            name=name,
-            status=ContractStatus.ERROR,
-            message=error
-        ))
+        self.checks.append(ContractCheck(name=name, status=ContractStatus.ERROR, message=error))
         self.overall_passed = False
 
     @property
@@ -123,14 +122,13 @@ class ContractResult:
         return {
             "checks": [c.to_dict() for c in self.checks],
             "overall_passed": self.overall_passed,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ContractResult":
         result = cls(
-            overall_passed=data["overall_passed"],
-            timestamp=data.get("timestamp", time.time())
+            overall_passed=data["overall_passed"], timestamp=data.get("timestamp", time.time())
         )
         result.checks = [ContractCheck.from_dict(c) for c in data.get("checks", [])]
         return result
@@ -148,6 +146,7 @@ class QualityMetrics:
     - token_reduction: Percentage of tokens saved
     - structure_score: Graph connectivity preservation
     """
+
     ssim_score: Optional[float] = None
     embedding_similarity: Optional[float] = None
     compression_ratio: Optional[float] = None
@@ -179,7 +178,7 @@ class QualityMetrics:
             compression_ratio=data.get("compression_ratio"),
             token_reduction=data.get("token_reduction"),
             structure_score=data.get("structure_score"),
-            custom_metrics=data.get("custom_metrics", {})
+            custom_metrics=data.get("custom_metrics", {}),
         )
 
 
@@ -207,6 +206,7 @@ class EvidenceBundle:
         previous_bundle_hash: Hash of previous bundle (chain integrity)
         bundle_hash: Hash of this bundle (computed on creation)
     """
+
     bundle_id: str
     operation: str
     timestamp: float
@@ -467,9 +467,7 @@ class EvidenceStore:
         return [b for b in self._bundles if b.operation == operation]
 
     def get_by_time_range(
-        self,
-        start_time: Optional[float] = None,
-        end_time: Optional[float] = None
+        self, start_time: Optional[float] = None, end_time: Optional[float] = None
     ) -> List[EvidenceBundle]:
         """Get bundles within a time range"""
         result = self._bundles
@@ -508,9 +506,9 @@ class EvidenceStore:
         for op in operations:
             count = operations[op]["count"]
             op_bundles = [b for b in self._bundles if b.operation == op]
-            operations[op]["avg_compression"] = sum(
-                b.compression_achieved for b in op_bundles
-            ) / count
+            operations[op]["avg_compression"] = (
+                sum(b.compression_achieved for b in op_bundles) / count
+            )
 
         return {
             "total_bundles": len(self._bundles),
@@ -528,10 +526,7 @@ class EvidenceStore:
             return
 
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "version": "1.0.0",
-            "bundles": [b.to_dict() for b in self._bundles]
-        }
+        data = {"version": "1.0.0", "bundles": [b.to_dict() for b in self._bundles]}
         with open(self._storage_path, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -544,9 +539,7 @@ class EvidenceStore:
             with open(self._storage_path, "r") as f:
                 data = json.load(f)
 
-            self._bundles = [
-                EvidenceBundle.from_dict(b) for b in data.get("bundles", [])
-            ]
+            self._bundles = [EvidenceBundle.from_dict(b) for b in data.get("bundles", [])]
 
             # Verify chain on load
             self.verify_chain()

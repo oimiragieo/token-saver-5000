@@ -41,7 +41,6 @@ import os
 import pickle
 import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -190,7 +189,9 @@ def _save_graph_data(graph_data: Dict[str, Any], output_base: Path) -> bool:
 def _save_chunks_data(chunks_data: Dict[str, Any], output_base: Path) -> bool:
     """Save chunks data in safe format."""
     json_file = output_base.with_suffix(".json")
-    embeddings_file = output_base.parent / (output_base.stem.replace("_chunks", "_chunk_embeddings.npz"))
+    embeddings_file = output_base.parent / (
+        output_base.stem.replace("_chunks", "_chunk_embeddings.npz")
+    )
 
     # Separate embeddings from chunk data
     embeddings_dict = {}

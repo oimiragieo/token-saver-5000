@@ -9,7 +9,6 @@ Comprehensive tests for:
 """
 
 import json
-import pytest
 import tempfile
 import time
 from pathlib import Path
@@ -31,11 +30,7 @@ class TestContractCheck:
 
     def test_create_passed_check(self):
         """Test creating a passed check"""
-        check = ContractCheck(
-            name="test_check",
-            status=ContractStatus.PASSED,
-            message="All good"
-        )
+        check = ContractCheck(name="test_check", status=ContractStatus.PASSED, message="All good")
         assert check.name == "test_check"
         assert check.status == ContractStatus.PASSED
         assert check.message == "All good"
@@ -46,28 +41,21 @@ class TestContractCheck:
             name="validation",
             status=ContractStatus.FAILED,
             message="Validation failed",
-            details={"field": "input", "reason": "empty"}
+            details={"field": "input", "reason": "empty"},
         )
         assert check.status == ContractStatus.FAILED
         assert check.details["field"] == "input"
 
     def test_to_dict(self):
         """Test serialization to dict"""
-        check = ContractCheck(
-            name="test",
-            status=ContractStatus.PASSED
-        )
+        check = ContractCheck(name="test", status=ContractStatus.PASSED)
         d = check.to_dict()
         assert d["name"] == "test"
         assert d["status"] == "passed"
 
     def test_from_dict(self):
         """Test deserialization from dict"""
-        data = {
-            "name": "test",
-            "status": "failed",
-            "message": "Error"
-        }
+        data = {"name": "test", "status": "failed", "message": "Error"}
         check = ContractCheck.from_dict(data)
         assert check.name == "test"
         assert check.status == ContractStatus.FAILED
@@ -135,18 +123,13 @@ class TestQualityMetrics:
 
     def test_partial_metrics(self):
         """Test partial metrics"""
-        metrics = QualityMetrics(
-            ssim_score=0.92,
-            compression_ratio=5.5
-        )
+        metrics = QualityMetrics(ssim_score=0.92, compression_ratio=5.5)
         assert metrics.ssim_score == 0.92
         assert metrics.embedding_similarity is None
 
     def test_custom_metrics(self):
         """Test custom metrics dict"""
-        metrics = QualityMetrics(
-            custom_metrics={"my_metric": 0.75}
-        )
+        metrics = QualityMetrics(custom_metrics={"my_metric": 0.75})
         assert metrics.custom_metrics["my_metric"] == 0.75
 
     def test_to_dict_filters_none(self):
@@ -158,11 +141,7 @@ class TestQualityMetrics:
 
     def test_from_dict(self):
         """Test from_dict reconstruction"""
-        data = {
-            "ssim_score": 0.88,
-            "compression_ratio": 7.5,
-            "custom_metrics": {"test": 1.0}
-        }
+        data = {"ssim_score": 0.88, "compression_ratio": 7.5, "custom_metrics": {"test": 1.0}}
         metrics = QualityMetrics.from_dict(data)
         assert metrics.ssim_score == 0.88
         assert metrics.compression_ratio == 7.5
@@ -180,7 +159,7 @@ class TestEvidenceBundle:
             output_data="skeleton",
             input_token_count=2,
             output_token_count=1,
-            parameters={"fidelity": "BALANCED"}
+            parameters={"fidelity": "BALANCED"},
         )
 
         assert bundle.operation == "ingest"
@@ -197,7 +176,7 @@ class TestEvidenceBundle:
             "output_data": "same output",
             "input_token_count": 10,
             "output_token_count": 5,
-            "parameters": {"key": "value"}
+            "parameters": {"key": "value"},
         }
 
         bundle1 = EvidenceBundle.create(**params)
@@ -219,14 +198,13 @@ class TestEvidenceBundle:
             output_data="result",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
 
         # Should pass integrity check
         assert bundle.verify_integrity()
 
         # Tamper with content
-        original_hash = bundle.bundle_hash
         bundle.input_token_count = 999
 
         # Integrity check should fail (hash doesn't match)
@@ -240,7 +218,7 @@ class TestEvidenceBundle:
             output_data="summary",
             input_token_count=100,
             output_token_count=10,
-            parameters={}
+            parameters={},
         )
 
         assert bundle.compression_achieved == 10.0
@@ -261,7 +239,7 @@ class TestEvidenceBundle:
             output_token_count=1,
             parameters={},
             preconditions=pre,
-            postconditions=post
+            postconditions=post,
         )
 
         assert bundle.contracts_satisfied
@@ -278,7 +256,7 @@ class TestEvidenceBundle:
             output_token_count=1,
             parameters={},
             preconditions=pre,
-            postconditions=post2
+            postconditions=post2,
         )
 
         assert not bundle2.contracts_satisfied
@@ -303,7 +281,7 @@ class TestEvidenceBundle:
             quality_metrics=metrics,
             preconditions=pre,
             postconditions=post,
-            metadata={"source": "test"}
+            metadata={"source": "test"},
         )
 
         # Serialize
@@ -341,7 +319,7 @@ class TestEvidenceStore:
             output_data="out1",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
 
         store.append(bundle1)
@@ -357,7 +335,7 @@ class TestEvidenceStore:
             output_data="out1",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store.append(bundle1)
 
@@ -367,7 +345,7 @@ class TestEvidenceStore:
             output_data="out2",
             input_token_count=2,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store.append(bundle2)
 
@@ -383,9 +361,9 @@ class TestEvidenceStore:
                 operation=f"op{i}",
                 input_data=f"in{i}",
                 output_data=f"out{i}",
-                input_token_count=i+1,
+                input_token_count=i + 1,
                 output_token_count=1,
-                parameters={}
+                parameters={},
             )
             store.append(bundle)
 
@@ -403,7 +381,7 @@ class TestEvidenceStore:
             output_data="out1",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store.append(bundle1)
 
@@ -413,7 +391,7 @@ class TestEvidenceStore:
             output_data="out2",
             input_token_count=2,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store.append(bundle2)
 
@@ -435,7 +413,7 @@ class TestEvidenceStore:
                 output_data="result",
                 input_token_count=1,
                 output_token_count=1,
-                parameters={}
+                parameters={},
             )
             store.append(bundle)
 
@@ -457,7 +435,7 @@ class TestEvidenceStore:
             input_token_count=1,
             output_token_count=1,
             parameters={},
-            postconditions=good_post
+            postconditions=good_post,
         )
         store.append(good)
 
@@ -472,7 +450,7 @@ class TestEvidenceStore:
             input_token_count=1,
             output_token_count=1,
             parameters={},
-            postconditions=bad_post
+            postconditions=bad_post,
         )
         store.append(bad)
 
@@ -491,7 +469,7 @@ class TestEvidenceStore:
                 output_data="result",
                 input_token_count=(i + 1) * 10,
                 output_token_count=10,
-                parameters={}
+                parameters={},
             )
             store.append(bundle)
 
@@ -512,9 +490,9 @@ class TestEvidenceStore:
                     operation=f"op{i}",
                     input_data=f"in{i}",
                     output_data=f"out{i}",
-                    input_token_count=i+1,
+                    input_token_count=i + 1,
                     output_token_count=1,
-                    parameters={}
+                    parameters={},
                 )
                 store1.append(bundle)
 
@@ -537,7 +515,7 @@ class TestEvidenceStore:
                 output_data=f"out{i}",
                 input_token_count=1,
                 output_token_count=1,
-                parameters={}
+                parameters={},
             )
             store.append(bundle)
 
@@ -554,7 +532,7 @@ class TestEvidenceStore:
             output_data="out",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store.append(bundle)
 
@@ -583,7 +561,7 @@ class TestGlobalStore:
             output_data="out",
             input_token_count=1,
             output_token_count=1,
-            parameters={}
+            parameters={},
         )
         store1.append(bundle)
 

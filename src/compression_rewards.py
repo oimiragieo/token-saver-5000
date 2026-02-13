@@ -36,18 +36,18 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from src.semantic_compressor import SkeletonResponse, FidelityLevel
+    pass
 
 logger = logging.getLogger(__name__)
 
 
 # Expected compression ratios per fidelity level
 FIDELITY_TARGET_RATIOS = {
-    "ABSTRACT": 20.0,   # ~95% reduction
-    "OUTLINE": 10.0,    # ~90% reduction
-    "STRUCTURE": 5.0,   # ~80% reduction
-    "DETAILED": 2.5,    # ~60% reduction
-    "RAW": 1.0,         # No reduction
+    "ABSTRACT": 20.0,  # ~95% reduction
+    "OUTLINE": 10.0,  # ~90% reduction
+    "STRUCTURE": 5.0,  # ~80% reduction
+    "DETAILED": 2.5,  # ~60% reduction
+    "RAW": 1.0,  # No reduction
 }
 
 # Token budgets per fidelity level (approximate)
@@ -62,6 +62,7 @@ FIDELITY_TOKEN_BUDGETS = {
 
 class RewardComponent(Enum):
     """Individual reward components"""
+
     SCHEMA = "schema"
     SEMANTIC = "semantic"
     FIDELITY = "fidelity"
@@ -72,6 +73,7 @@ class RewardComponent(Enum):
 @dataclass
 class SchemaValidationResult:
     """Result of schema validation checks"""
+
     input_valid: bool = True
     input_errors: List[str] = field(default_factory=list)
     output_valid: bool = True
@@ -92,6 +94,7 @@ class SchemaValidationResult:
 @dataclass
 class SemanticPreservationResult:
     """Result of semantic preservation checks"""
+
     ssim_score: float = 0.0
     embedding_similarity: float = 0.0
     structure_preservation: float = 0.0
@@ -105,7 +108,7 @@ class SemanticPreservationResult:
             self.ssim_score,
             self.embedding_similarity,
             self.structure_preservation,
-            self.keyword_retention
+            self.keyword_retention,
         ]
         return sum(w * s for w, s in zip(weights, scores))
 
@@ -113,6 +116,7 @@ class SemanticPreservationResult:
 @dataclass
 class FidelityAdherenceResult:
     """Result of fidelity adherence checks"""
+
     target_fidelity: str = "BALANCED"
     achieved_ratio: float = 1.0
     target_ratio: float = 1.0
@@ -138,6 +142,7 @@ class FidelityAdherenceResult:
 @dataclass
 class CompositionIntegrityResult:
     """Result of composition integrity checks"""
+
     node_consistency: bool = True
     edge_consistency: bool = True
     node_id_valid: bool = True
@@ -160,6 +165,7 @@ class CompositionIntegrityResult:
 @dataclass
 class MemoryDisciplineResult:
     """Result of memory discipline checks"""
+
     context_growth_rate: float = 0.0  # New tokens / total tokens
     eviction_efficiency: float = 1.0  # LRU effectiveness
     peak_memory_mb: float = 0.0
@@ -182,11 +188,7 @@ class MemoryDisciplineResult:
     @property
     def score(self) -> float:
         """Calculate memory discipline score"""
-        return (
-            self.growth_score * 0.4 +
-            self.eviction_efficiency * 0.3 +
-            self.memory_score * 0.3
-        )
+        return self.growth_score * 0.4 + self.eviction_efficiency * 0.3 + self.memory_score * 0.3
 
 
 @dataclass
@@ -201,6 +203,7 @@ class CompressionReward:
     4. Composition Integrity - Graph consistency
     5. Memory Discipline - Context growth control
     """
+
     schema: SchemaValidationResult = field(default_factory=SchemaValidationResult)
     semantic: SemanticPreservationResult = field(default_factory=SemanticPreservationResult)
     fidelity: FidelityAdherenceResult = field(default_factory=FidelityAdherenceResult)
@@ -208,13 +211,15 @@ class CompressionReward:
     memory: MemoryDisciplineResult = field(default_factory=MemoryDisciplineResult)
 
     # Component weights (must sum to 1.0)
-    weights: Dict[RewardComponent, float] = field(default_factory=lambda: {
-        RewardComponent.SCHEMA: 0.15,
-        RewardComponent.SEMANTIC: 0.35,
-        RewardComponent.FIDELITY: 0.20,
-        RewardComponent.COMPOSITION: 0.15,
-        RewardComponent.MEMORY: 0.15,
-    })
+    weights: Dict[RewardComponent, float] = field(
+        default_factory=lambda: {
+            RewardComponent.SCHEMA: 0.15,
+            RewardComponent.SEMANTIC: 0.35,
+            RewardComponent.FIDELITY: 0.20,
+            RewardComponent.COMPOSITION: 0.15,
+            RewardComponent.MEMORY: 0.15,
+        }
+    )
 
     @property
     def schema_score(self) -> float:
@@ -276,32 +281,32 @@ class CompressionReward:
             "schema": {
                 "input_valid": self.schema.input_valid,
                 "output_valid": self.schema.output_valid,
-                "score": self.schema_score
+                "score": self.schema_score,
             },
             "semantic": {
                 "ssim_score": self.semantic.ssim_score,
                 "embedding_similarity": self.semantic.embedding_similarity,
                 "structure_preservation": self.semantic.structure_preservation,
                 "keyword_retention": self.semantic.keyword_retention,
-                "score": self.semantic_score
+                "score": self.semantic_score,
             },
             "fidelity": {
                 "target_fidelity": self.fidelity.target_fidelity,
                 "achieved_ratio": self.fidelity.achieved_ratio,
                 "within_budget": self.fidelity.within_budget,
-                "score": self.fidelity_score
+                "score": self.fidelity_score,
             },
             "composition": {
                 "node_consistency": self.composition.node_consistency,
                 "edge_consistency": self.composition.edge_consistency,
                 "orphan_nodes": self.composition.orphan_nodes,
-                "score": self.composition_score
+                "score": self.composition_score,
             },
             "memory": {
                 "context_growth_rate": self.memory.context_growth_rate,
                 "eviction_efficiency": self.memory.eviction_efficiency,
-                "score": self.memory_score
-            }
+                "score": self.memory_score,
+            },
         }
 
 
@@ -316,7 +321,7 @@ class CompressionRewardCalculator:
     def __init__(
         self,
         weights: Optional[Dict[RewardComponent, float]] = None,
-        memory_budget_mb: float = 100.0
+        memory_budget_mb: float = 100.0,
     ):
         """
         Initialize reward calculator.
@@ -376,15 +381,11 @@ class CompressionRewardCalculator:
 
         # Calculate semantic preservation
         semantic = self._calculate_semantic(
-            input_text, output_text,
-            input_embedding, output_embedding,
-            ssim_score
+            input_text, output_text, input_embedding, output_embedding, ssim_score
         )
 
         # Calculate fidelity adherence
-        fidelity = self._calculate_fidelity(
-            input_tokens, output_tokens, fidelity_level
-        )
+        fidelity = self._calculate_fidelity(input_tokens, output_tokens, fidelity_level)
 
         # Calculate composition integrity
         composition = self._calculate_composition(node_map, graph_edges)
@@ -394,7 +395,7 @@ class CompressionRewardCalculator:
             context_growth_rate=context_growth_rate,
             eviction_efficiency=eviction_efficiency,
             peak_memory_mb=peak_memory_mb,
-            memory_budget_mb=self.memory_budget_mb
+            memory_budget_mb=self.memory_budget_mb,
         )
 
         return CompressionReward(
@@ -403,14 +404,11 @@ class CompressionRewardCalculator:
             fidelity=fidelity,
             composition=composition,
             memory=memory,
-            weights=self.weights
+            weights=self.weights,
         )
 
     def _validate_schema(
-        self,
-        input_text: str,
-        output_text: str,
-        node_map: Optional[Dict[str, str]]
+        self, input_text: str, output_text: str, node_map: Optional[Dict[str, str]]
     ) -> SchemaValidationResult:
         """Validate input/output schema"""
         result = SchemaValidationResult()
@@ -442,7 +440,7 @@ class CompressionRewardCalculator:
         output_text: str,
         input_embedding: Optional[np.ndarray],
         output_embedding: Optional[np.ndarray],
-        ssim_score: Optional[float]
+        ssim_score: Optional[float],
     ) -> SemanticPreservationResult:
         """Calculate semantic preservation metrics"""
         result = SemanticPreservationResult()
@@ -486,10 +484,7 @@ class CompressionRewardCalculator:
         return result
 
     def _calculate_fidelity(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        fidelity_level: str
+        self, input_tokens: int, output_tokens: int, fidelity_level: str
     ) -> FidelityAdherenceResult:
         """Calculate fidelity adherence"""
         result = FidelityAdherenceResult(target_fidelity=fidelity_level)
@@ -515,9 +510,7 @@ class CompressionRewardCalculator:
         return result
 
     def _calculate_composition(
-        self,
-        node_map: Optional[Dict[str, str]],
-        graph_edges: Optional[List[Tuple[str, str]]]
+        self, node_map: Optional[Dict[str, str]], graph_edges: Optional[List[Tuple[str, str]]]
     ) -> CompositionIntegrityResult:
         """Calculate composition integrity"""
         result = CompositionIntegrityResult()
@@ -529,10 +522,7 @@ class CompressionRewardCalculator:
         node_ids = set(node_map.keys())
 
         # Check node ID validity
-        result.node_id_valid = all(
-            isinstance(nid, str) and len(nid) > 0
-            for nid in node_ids
-        )
+        result.node_id_valid = all(isinstance(nid, str) and len(nid) > 0 for nid in node_ids)
 
         # Check edge consistency
         if graph_edges:
@@ -553,25 +543,18 @@ class CompressionRewardCalculator:
 
         return result
 
-    def calculate_batch(
-        self,
-        operations: List[Dict[str, Any]]
-    ) -> List[CompressionReward]:
+    def calculate_batch(self, operations: List[Dict[str, Any]]) -> List[CompressionReward]:
         """Calculate rewards for a batch of operations"""
         return [self.calculate(**op) for op in operations]
 
-    def aggregate_rewards(
-        self,
-        rewards: List[CompressionReward]
-    ) -> Dict[str, Any]:
+    def aggregate_rewards(self, rewards: List[CompressionReward]) -> Dict[str, Any]:
         """Aggregate statistics from multiple rewards"""
         if not rewards:
             return {"count": 0}
 
         total_rewards = [r.total_reward for r in rewards]
         component_scores = {
-            comp: [r.component_scores[comp] for r in rewards]
-            for comp in RewardComponent
+            comp: [r.component_scores[comp] for r in rewards] for comp in RewardComponent
         }
 
         return {
@@ -583,17 +566,13 @@ class CompressionRewardCalculator:
                 "max": max(total_rewards),
             },
             "component_means": {
-                comp.value: np.mean(scores)
-                for comp, scores in component_scores.items()
+                comp.value: np.mean(scores) for comp, scores in component_scores.items()
             },
             "pass_rate": sum(1 for r in rewards if r.passes_threshold()) / len(rewards),
             "weakest_components": self._count_weakest(rewards),
         }
 
-    def _count_weakest(
-        self,
-        rewards: List[CompressionReward]
-    ) -> Dict[str, int]:
+    def _count_weakest(self, rewards: List[CompressionReward]) -> Dict[str, int]:
         """Count how often each component is the weakest"""
         counts = {comp.value: 0 for comp in RewardComponent}
         for reward in rewards:

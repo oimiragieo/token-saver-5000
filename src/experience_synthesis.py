@@ -32,20 +32,20 @@ import string
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
     from .semantic_compressor import SemanticCompressor
     from .afm import FocusManager
-    from .ace_framework import ACEFramework
 
 logger = logging.getLogger(__name__)
 
 
 class TestCategory(Enum):
     """Categories of test cases"""
+
     BOUNDARY = "boundary"
     ADVERSARIAL = "adversarial"
     STRESS = "stress"
@@ -56,6 +56,7 @@ class TestCategory(Enum):
 @dataclass
 class SyntheticDocument:
     """A synthetically generated test document"""
+
     content: str
     category: TestCategory
     name: str
@@ -72,6 +73,7 @@ class SyntheticDocument:
 @dataclass
 class StressTestResult:
     """Result of a stress test"""
+
     test_name: str
     passed: bool
     duration_ms: float
@@ -93,6 +95,7 @@ class StressTestResult:
 @dataclass
 class BoundaryTestSuite:
     """Suite of boundary test cases"""
+
     documents: List[SyntheticDocument]
     dialogues: List[List[Dict[str, str]]]
     ace_contexts: List[Dict[str, Any]]
@@ -194,7 +197,7 @@ class ExperienceSynthesizer:
             name="max_token_document",
             description=f"Large document with ~{target_tokens} tokens",
             expected_behavior="Should compress with high ratio",
-            metadata={"target_tokens": target_tokens}
+            metadata={"target_tokens": target_tokens},
         )
 
     def _highly_repetitive(self) -> SyntheticDocument:
@@ -213,9 +216,7 @@ class ExperienceSynthesizer:
     def _no_semantic_structure(self) -> SyntheticDocument:
         """Document with no semantic structure"""
         # Random words without coherent meaning
-        words = [
-            self._random_word() for _ in range(200)
-        ]
+        words = [self._random_word() for _ in range(200)]
         content = " ".join(words)
 
         return SyntheticDocument(
@@ -361,10 +362,33 @@ print(fibonacci(10))
     def _generate_paragraph(self, word_count: int) -> str:
         """Generate a paragraph with given word count"""
         words = [
-            "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
-            "semantic", "compression", "reduces", "tokens", "while", "preserving",
-            "meaning", "and", "structure", "in", "documents", "for", "efficient",
-            "AI", "interactions", "using", "graph", "based", "analysis"
+            "the",
+            "quick",
+            "brown",
+            "fox",
+            "jumps",
+            "over",
+            "lazy",
+            "dog",
+            "semantic",
+            "compression",
+            "reduces",
+            "tokens",
+            "while",
+            "preserving",
+            "meaning",
+            "and",
+            "structure",
+            "in",
+            "documents",
+            "for",
+            "efficient",
+            "AI",
+            "interactions",
+            "using",
+            "graph",
+            "based",
+            "analysis",
         ]
         paragraph_words = [self.rng.choice(words) for _ in range(word_count)]
         return " ".join(paragraph_words) + "."
@@ -420,8 +444,10 @@ print(fibonacci(10))
             {"role": "user", "content": "Can you suggest a restaurant?"},
             {"role": "assistant", "content": "I'll find peanut-free options."},
             # Many filler turns
-            *[{"role": "user" if i % 2 == 0 else "assistant",
-               "content": f"Filler turn {i}"} for i in range(50)],
+            *[
+                {"role": "user" if i % 2 == 0 else "assistant", "content": f"Filler turn {i}"}
+                for i in range(50)
+            ],
             # Critical test - allergy should still be remembered
             {"role": "user", "content": "What food should I avoid?"},
         ]
@@ -432,14 +458,12 @@ print(fibonacci(10))
         dialogue = []
         for i in range(25):
             topic = topics[i % len(topics)]
-            dialogue.append({
-                "role": "user",
-                "content": f"Let's talk about {topic}. What do you think?"
-            })
-            dialogue.append({
-                "role": "assistant",
-                "content": f"Sure, {topic} is interesting. Here's my view..."
-            })
+            dialogue.append(
+                {"role": "user", "content": f"Let's talk about {topic}. What do you think?"}
+            )
+            dialogue.append(
+                {"role": "assistant", "content": f"Sure, {topic} is interesting. Here's my view..."}
+            )
         return dialogue
 
     def _repetitive_dialogue(self) -> List[Dict[str, str]]:
@@ -527,10 +551,7 @@ print(fibonacci(10))
 
     def _max_bullets(self) -> Dict[str, Any]:
         """ACE context at maximum bullet limit"""
-        bullets = [
-            {"text": f"Principle number {i}", "type": "principle"}
-            for i in range(100)
-        ]
+        bullets = [{"text": f"Principle number {i}", "type": "principle"} for i in range(100)]
         return {
             "name": "max_bullets",
             "bullets": bullets,
@@ -567,7 +588,7 @@ print(fibonacci(10))
 
             try:
                 iter_start = time.time()
-                result = compressor.ingest_file(doc, f"stress_doc_{i}")
+                compressor.ingest_file(doc, f"stress_doc_{i}")
                 iter_time = (time.time() - iter_start) * 1000
 
                 # Get skeleton for compression ratio
@@ -594,7 +615,7 @@ print(fibonacci(10))
                 "max_compression_ratio": max(compression_ratios) if compression_ratios else 0,
                 "avg_processing_time_ms": np.mean(processing_times) if processing_times else 0,
                 "error_rate": len(errors) / iterations,
-            }
+            },
         )
 
     def stress_test_afm(
@@ -652,7 +673,7 @@ print(fibonacci(10))
                 "avg_build_time_ms": np.mean(build_times) if build_times else 0,
                 "max_build_time_ms": max(build_times) if build_times else 0,
                 "turns_added": turns,
-            }
+            },
         )
 
     def generate_full_test_suite(self) -> BoundaryTestSuite:

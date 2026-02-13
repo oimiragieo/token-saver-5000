@@ -486,24 +486,28 @@ async def handle_multimodal_ingest(context: "HandlerContext", args: Dict[str, An
 def _get_compression_verifier():
     """Lazy import for CompressionVerifier."""
     from src.compression_verifier import CompressionVerifier
+
     return CompressionVerifier()
 
 
 def _get_reward_calculator():
     """Lazy import for CompressionRewardCalculator."""
     from src.compression_rewards import CompressionRewardCalculator
+
     return CompressionRewardCalculator()
 
 
 def _get_evidence_store():
     """Lazy import for global EvidenceStore."""
     from src.evidence_bundle import get_evidence_store
+
     return get_evidence_store()
 
 
 def _get_experience_synthesizer(seed: int = None):
     """Lazy import for ExperienceSynthesizer."""
     from src.experience_synthesis import ExperienceSynthesizer
+
     return ExperienceSynthesizer(seed=seed)
 
 
@@ -531,10 +535,7 @@ async def handle_verify_compression(context: "HandlerContext", args: Dict[str, A
     required = ["document", "skeleton_text", "original_tokens", "skeleton_tokens", "fidelity_level"]
     missing = [f for f in required if f not in args]
     if missing:
-        return json.dumps({
-            "error": f"Missing required arguments: {missing}",
-            "experimental": True
-        })
+        return json.dumps({"error": f"Missing required arguments: {missing}", "experimental": True})
 
     try:
         verifier = _get_compression_verifier()
@@ -553,22 +554,25 @@ async def handle_verify_compression(context: "HandlerContext", args: Dict[str, A
             compression_ratio=compression_ratio,
         )
 
-        return json.dumps({
-            "verified": result.verified,
-            "all_contracts_passed": result.all_contracts_passed,
-            "preconditions_passed": result.preconditions.overall_passed if result.preconditions else True,
-            "postconditions_passed": result.postconditions.overall_passed if result.postconditions else True,
-            "violations": [v.to_dict() for v in result.violations],
-            "experimental": True,
-            "note": "ASG-SI contract verification - validates compression quality"
-        })
+        return json.dumps(
+            {
+                "verified": result.verified,
+                "all_contracts_passed": result.all_contracts_passed,
+                "preconditions_passed": (
+                    result.preconditions.overall_passed if result.preconditions else True
+                ),
+                "postconditions_passed": (
+                    result.postconditions.overall_passed if result.postconditions else True
+                ),
+                "violations": [v.to_dict() for v in result.violations],
+                "experimental": True,
+                "note": "ASG-SI contract verification - validates compression quality",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Compression verification failed: {e}")
-        return json.dumps({
-            "error": f"Verification failed: {str(e)}",
-            "experimental": True
-        })
+        return json.dumps({"error": f"Verification failed: {str(e)}", "experimental": True})
 
 
 async def handle_calculate_reward(context: "HandlerContext", args: Dict[str, Any]) -> str:
@@ -599,10 +603,7 @@ async def handle_calculate_reward(context: "HandlerContext", args: Dict[str, Any
     required = ["input_text", "output_text", "input_tokens", "output_tokens", "fidelity_level"]
     missing = [f for f in required if f not in args]
     if missing:
-        return json.dumps({
-            "error": f"Missing required arguments: {missing}",
-            "experimental": True
-        })
+        return json.dumps({"error": f"Missing required arguments: {missing}", "experimental": True})
 
     try:
         calculator = _get_reward_calculator()
@@ -618,24 +619,23 @@ async def handle_calculate_reward(context: "HandlerContext", args: Dict[str, Any
 
         weakest_name, weakest_score = reward.weakest_component
 
-        return json.dumps({
-            "total_reward": round(reward.total_reward, 4),
-            "passes_threshold": reward.passes_threshold(),
-            "component_scores": {
-                k.value: round(v, 4) for k, v in reward.component_scores.items()
-            },
-            "weakest_component": weakest_name.value,
-            "weakest_score": round(weakest_score, 4),
-            "experimental": True,
-            "note": "ASG-SI decomposed rewards - 5 component quality assessment"
-        })
+        return json.dumps(
+            {
+                "total_reward": round(reward.total_reward, 4),
+                "passes_threshold": reward.passes_threshold(),
+                "component_scores": {
+                    k.value: round(v, 4) for k, v in reward.component_scores.items()
+                },
+                "weakest_component": weakest_name.value,
+                "weakest_score": round(weakest_score, 4),
+                "experimental": True,
+                "note": "ASG-SI decomposed rewards - 5 component quality assessment",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Reward calculation failed: {e}")
-        return json.dumps({
-            "error": f"Reward calculation failed: {str(e)}",
-            "experimental": True
-        })
+        return json.dumps({"error": f"Reward calculation failed: {str(e)}", "experimental": True})
 
 
 async def handle_get_evidence_stats(context: "HandlerContext", args: Dict[str, Any]) -> str:
@@ -658,21 +658,22 @@ async def handle_get_evidence_stats(context: "HandlerContext", args: Dict[str, A
         stats = store.get_statistics()
         chain_valid, chain_errors = store.verify_chain()
 
-        return json.dumps({
-            "total_bundles": stats.get("total_bundles", len(store)),
-            "operations": stats.get("operations", {}),
-            "chain_valid": chain_valid,
-            "chain_errors": chain_errors[:5] if chain_errors else [],  # Limit errors
-            "experimental": True,
-            "note": "ASG-SI evidence store - tamper-evident audit trail"
-        })
+        return json.dumps(
+            {
+                "total_bundles": stats.get("total_bundles", len(store)),
+                "operations": stats.get("operations", {}),
+                "chain_valid": chain_valid,
+                "chain_errors": chain_errors[:5] if chain_errors else [],  # Limit errors
+                "experimental": True,
+                "note": "ASG-SI evidence store - tamper-evident audit trail",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Evidence stats failed: {e}")
-        return json.dumps({
-            "error": f"Failed to get evidence stats: {str(e)}",
-            "experimental": True
-        })
+        return json.dumps(
+            {"error": f"Failed to get evidence stats: {str(e)}", "experimental": True}
+        )
 
 
 async def handle_generate_synthetic_tests(context: "HandlerContext", args: Dict[str, Any]) -> str:
@@ -700,79 +701,86 @@ async def handle_generate_synthetic_tests(context: "HandlerContext", args: Dict[
 
         if test_type == "boundary":
             docs = synth.generate_boundary_cases()
-            return json.dumps({
-                "test_type": "boundary",
-                "count": len(docs),
-                "tests": [
-                    {
-                        "name": d.name,
-                        "category": d.category.value,
-                        "description": d.description,
-                        "token_estimate": d.token_estimate,
-                        "expected_behavior": d.expected_behavior,
-                    }
-                    for d in docs
-                ],
-                "experimental": True,
-                "note": "ASG-SI boundary tests - adversarial document cases"
-            })
+            return json.dumps(
+                {
+                    "test_type": "boundary",
+                    "count": len(docs),
+                    "tests": [
+                        {
+                            "name": d.name,
+                            "category": d.category.value,
+                            "description": d.description,
+                            "token_estimate": d.token_estimate,
+                            "expected_behavior": d.expected_behavior,
+                        }
+                        for d in docs
+                    ],
+                    "experimental": True,
+                    "note": "ASG-SI boundary tests - adversarial document cases",
+                }
+            )
 
         elif test_type == "dialogue":
             dialogues = synth.generate_dialogue_cases()
-            return json.dumps({
-                "test_type": "dialogue",
-                "count": len(dialogues),
-                "tests": [
-                    {
-                        "turns": len(d),
-                        "preview": d[:2] if d else [],
-                    }
-                    for d in dialogues
-                ],
-                "experimental": True,
-                "note": "ASG-SI dialogue tests - AFM memory stress tests"
-            })
+            return json.dumps(
+                {
+                    "test_type": "dialogue",
+                    "count": len(dialogues),
+                    "tests": [
+                        {
+                            "turns": len(d),
+                            "preview": d[:2] if d else [],
+                        }
+                        for d in dialogues
+                    ],
+                    "experimental": True,
+                    "note": "ASG-SI dialogue tests - AFM memory stress tests",
+                }
+            )
 
         elif test_type == "ace":
             cases = synth.generate_ace_cases()
-            return json.dumps({
-                "test_type": "ace",
-                "count": len(cases),
-                "tests": [
-                    {
-                        "name": c.get("name"),
-                        "bullet_count": len(c.get("bullets", [])),
-                        "expected": c.get("expected"),
-                    }
-                    for c in cases
-                ],
-                "experimental": True,
-                "note": "ASG-SI ACE tests - context engineering edge cases"
-            })
+            return json.dumps(
+                {
+                    "test_type": "ace",
+                    "count": len(cases),
+                    "tests": [
+                        {
+                            "name": c.get("name"),
+                            "bullet_count": len(c.get("bullets", [])),
+                            "expected": c.get("expected"),
+                        }
+                        for c in cases
+                    ],
+                    "experimental": True,
+                    "note": "ASG-SI ACE tests - context engineering edge cases",
+                }
+            )
 
         elif test_type == "all":
             suite = synth.generate_full_test_suite()
-            return json.dumps({
-                "test_type": "all",
-                "boundary_count": len(suite.documents),
-                "dialogue_count": len(suite.dialogues),
-                "ace_count": len(suite.ace_contexts),
-                "experimental": True,
-                "note": "ASG-SI full test suite - comprehensive adversarial testing"
-            })
+            return json.dumps(
+                {
+                    "test_type": "all",
+                    "boundary_count": len(suite.documents),
+                    "dialogue_count": len(suite.dialogues),
+                    "ace_count": len(suite.ace_contexts),
+                    "experimental": True,
+                    "note": "ASG-SI full test suite - comprehensive adversarial testing",
+                }
+            )
 
         else:
-            return json.dumps({
-                "error": f"Unknown test_type: {test_type}. Use: boundary, dialogue, ace, or all",
-                "experimental": True
-            })
+            return json.dumps(
+                {
+                    "error": f"Unknown test_type: {test_type}. Use: boundary, dialogue, ace, or all",
+                    "experimental": True,
+                }
+            )
 
     except Exception as e:
         logger.error(f"Synthetic test generation failed: {e}")
-        return json.dumps({
-            "error": f"Test generation failed: {str(e)}",
-            "experimental": True
-        })
+        return json.dumps({"error": f"Test generation failed: {str(e)}", "experimental": True})
 
 
 # =============================================================================

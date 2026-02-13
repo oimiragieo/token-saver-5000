@@ -8,8 +8,6 @@ Tests for:
 - ContractViolation tracking
 """
 
-import pytest
-
 from src.compression_verifier import (
     CompressionContract,
     CompressionVerifier,
@@ -21,7 +19,6 @@ from src.compression_verifier import (
 from src.evidence_bundle import (
     EvidenceBundle,
     ContractResult,
-    QualityMetrics,
 )
 
 
@@ -31,8 +28,7 @@ class TestCompressionContractPreconditions:
     def test_valid_input(self):
         """Test valid input passes all preconditions"""
         result = CompressionContract.check_preconditions(
-            document="This is a valid document with multiple words.",
-            fidelity_level="BALANCED"
+            document="This is a valid document with multiple words.", fidelity_level="BALANCED"
         )
 
         assert result.overall_passed
@@ -40,10 +36,7 @@ class TestCompressionContractPreconditions:
 
     def test_empty_document(self):
         """Test empty document fails"""
-        result = CompressionContract.check_preconditions(
-            document="",
-            fidelity_level="BALANCED"
-        )
+        result = CompressionContract.check_preconditions(document="", fidelity_level="BALANCED")
 
         assert not result.overall_passed
         # Should fail non_empty_document check
@@ -53,8 +46,7 @@ class TestCompressionContractPreconditions:
     def test_invalid_fidelity(self):
         """Test invalid fidelity level fails"""
         result = CompressionContract.check_preconditions(
-            document="Valid document",
-            fidelity_level="INVALID_LEVEL"
+            document="Valid document", fidelity_level="INVALID_LEVEL"
         )
 
         assert not result.overall_passed
@@ -64,8 +56,7 @@ class TestCompressionContractPreconditions:
     def test_null_bytes(self):
         """Test document with null bytes fails"""
         result = CompressionContract.check_preconditions(
-            document="Document with\x00null byte",
-            fidelity_level="BALANCED"
+            document="Document with\x00null byte", fidelity_level="BALANCED"
         )
 
         assert not result.overall_passed
@@ -73,9 +64,7 @@ class TestCompressionContractPreconditions:
     def test_unsafe_file_path(self):
         """Test unsafe file path detection"""
         result = CompressionContract.check_preconditions(
-            document="Valid document",
-            fidelity_level="BALANCED",
-            file_path="../../../etc/passwd"
+            document="Valid document", fidelity_level="BALANCED", file_path="../../../etc/passwd"
         )
 
         assert not result.overall_passed
@@ -84,8 +73,7 @@ class TestCompressionContractPreconditions:
         """Test all valid fidelity levels"""
         for level in ["ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW", "BALANCED"]:
             result = CompressionContract.check_preconditions(
-                document="Test document",
-                fidelity_level=level
+                document="Test document", fidelity_level=level
             )
             assert result.overall_passed, f"Failed for fidelity level: {level}"
 
@@ -101,7 +89,7 @@ class TestCompressionContractPostconditions:
             original_tokens=100,
             skeleton_tokens=20,
             fidelity_level="BALANCED",
-            compression_ratio=5.0
+            compression_ratio=5.0,
         )
 
         assert result.overall_passed
@@ -114,7 +102,7 @@ class TestCompressionContractPostconditions:
             original_tokens=100,
             skeleton_tokens=0,
             fidelity_level="BALANCED",
-            compression_ratio=0.0
+            compression_ratio=0.0,
         )
 
         assert not result.overall_passed
@@ -127,7 +115,7 @@ class TestCompressionContractPostconditions:
             original_tokens=100,
             skeleton_tokens=60000,  # Over 50k limit
             fidelity_level="BALANCED",
-            compression_ratio=0.5
+            compression_ratio=0.5,
         )
 
         assert not result.overall_passed
@@ -140,7 +128,7 @@ class TestCompressionContractPostconditions:
             original_tokens=100,
             skeleton_tokens=90,
             fidelity_level="ABSTRACT",  # Expects high compression
-            compression_ratio=1.1
+            compression_ratio=1.1,
         )
 
         # ABSTRACT expects 10x, achieved 1.1x
@@ -154,7 +142,7 @@ class TestCompressionContractPostconditions:
             original_tokens=100,
             skeleton_tokens=100,  # No reduction
             fidelity_level="RAW",
-            compression_ratio=1.0
+            compression_ratio=1.0,
         )
 
         # RAW mode should pass even with no compression
@@ -169,7 +157,7 @@ class TestCompressionContractInvariants:
         result = CompressionContract.check_composition_invariants(
             node_ids=["n1", "n2", "n3"],
             edges=[("n1", "n2"), ("n2", "n3")],
-            skeleton_text="[n1] connects to [n2]"
+            skeleton_text="[n1] connects to [n2]",
         )
 
         assert result.overall_passed
@@ -177,9 +165,7 @@ class TestCompressionContractInvariants:
     def test_edge_to_missing_node(self):
         """Test edge pointing to non-existent node"""
         result = CompressionContract.check_composition_invariants(
-            node_ids=["n1", "n2"],
-            edges=[("n1", "n3")],  # n3 doesn't exist
-            skeleton_text=""
+            node_ids=["n1", "n2"], edges=[("n1", "n3")], skeleton_text=""  # n3 doesn't exist
         )
 
         assert not result.overall_passed
@@ -187,9 +173,7 @@ class TestCompressionContractInvariants:
     def test_duplicate_edges(self):
         """Test duplicate edge detection"""
         result = CompressionContract.check_composition_invariants(
-            node_ids=["n1", "n2"],
-            edges=[("n1", "n2"), ("n1", "n2")],  # Duplicate
-            skeleton_text=""
+            node_ids=["n1", "n2"], edges=[("n1", "n2"), ("n1", "n2")], skeleton_text=""  # Duplicate
         )
 
         assert not result.overall_passed
@@ -204,13 +188,13 @@ class TestCompressionVerifier:
 
         result = verifier.verify_compression_operation(
             document="This is a test document with multiple sentences. "
-                     "It contains enough content to compress meaningfully.",
+            "It contains enough content to compress meaningfully.",
             skeleton_text="Test document with sentences.",
             node_map={"node1": "test content"},
             original_tokens=20,
             skeleton_tokens=5,
             fidelity_level="BALANCED",
-            compression_ratio=4.0
+            compression_ratio=4.0,
         )
 
         assert result.verified
@@ -227,7 +211,7 @@ class TestCompressionVerifier:
             original_tokens=0,
             skeleton_tokens=1,
             fidelity_level="BALANCED",
-            compression_ratio=0.0
+            compression_ratio=0.0,
         )
 
         assert not result.verified
@@ -252,7 +236,7 @@ class TestCompressionVerifier:
             output_token_count=5,
             parameters={"fidelity": "BALANCED"},
             preconditions=pre,
-            postconditions=post
+            postconditions=post,
         )
 
         result = verifier.verify_bundle(bundle)
@@ -269,7 +253,7 @@ class TestCompressionVerifier:
             output_data="out",
             input_token_count=5,
             output_token_count=2,
-            parameters={}
+            parameters={},
         )
 
         # Tamper with bundle
@@ -294,7 +278,7 @@ class TestCompressionVerifier:
                 original_tokens=10,
                 skeleton_tokens=5,
                 fidelity_level="BALANCED",
-                compression_ratio=2.0
+                compression_ratio=2.0,
             )
 
         stats = verifier.get_statistics()
@@ -311,7 +295,7 @@ class TestCompressionVerifier:
             original_tokens=5,
             skeleton_tokens=1,
             fidelity_level="BALANCED",
-            compression_ratio=5.0
+            compression_ratio=5.0,
         )
 
         verifier.reset_statistics()
@@ -342,7 +326,7 @@ class TestBatchVerifier:
                 output_token_count=5,
                 parameters={},
                 preconditions=pre,
-                postconditions=post
+                postconditions=post,
             )
             bundles.append(bundle)
 
@@ -373,7 +357,7 @@ class TestBatchVerifier:
                 output_token_count=5,
                 parameters={},
                 preconditions=pre,
-                postconditions=post
+                postconditions=post,
             )
             bundles.append(bundle)
 
@@ -390,9 +374,7 @@ class TestVerificationResult:
     def test_to_dict(self):
         """Test serialization"""
         result = VerificationResult(
-            verified=True,
-            preconditions=ContractResult(),
-            postconditions=ContractResult()
+            verified=True, preconditions=ContractResult(), postconditions=ContractResult()
         )
 
         d = result.to_dict()
@@ -408,23 +390,21 @@ class TestVerificationResult:
         post = ContractResult()
         post.add_check("check", True)
 
-        result = VerificationResult(
-            verified=True,
-            preconditions=pre,
-            postconditions=post
-        )
+        result = VerificationResult(verified=True, preconditions=pre, postconditions=post)
 
         assert result.all_contracts_passed
 
     def test_violations_tracking(self):
         """Test violation tracking"""
         result = VerificationResult(verified=False)
-        result.violations.append(ContractViolation(
-            contract_name="test",
-            contract_type=ContractType.PRECONDITION,
-            expected="pass",
-            actual="fail"
-        ))
+        result.violations.append(
+            ContractViolation(
+                contract_name="test",
+                contract_type=ContractType.PRECONDITION,
+                expected="pass",
+                actual="fail",
+            )
+        )
 
         assert len(result.violations) == 1
         assert result.violations[0].contract_type == ContractType.PRECONDITION
@@ -441,7 +421,7 @@ class TestContractViolation:
             expected="non-empty",
             actual="empty",
             severity="error",
-            remediation="Provide valid input"
+            remediation="Provide valid input",
         )
 
         d = violation.to_dict()

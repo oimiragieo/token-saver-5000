@@ -29,9 +29,8 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -42,10 +41,9 @@ from .evidence_bundle import (
     QualityMetrics,
     ContractResult,
 )
-from .compression_verifier import CompressionContract
 
 if TYPE_CHECKING:
-    from .semantic_compressor import FidelityLevel
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +51,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NodeProvenance:
     """Provenance information for a semantic node"""
+
     created_at: float
     created_by: str  # Operation that created this node
     creation_bundle_id: Optional[str] = None
@@ -91,6 +90,7 @@ class NodeProvenance:
 @dataclass
 class QualityHistory:
     """Quality metrics history for a node"""
+
     scores: List[float] = field(default_factory=list)
     timestamps: List[float] = field(default_factory=list)
     operations: List[str] = field(default_factory=list)
@@ -145,6 +145,7 @@ class AuditedSemanticNode:
     - Access tracking
     - Composition constraints
     """
+
     node_id: str
     text: str
     embedding: np.ndarray
@@ -152,10 +153,9 @@ class AuditedSemanticNode:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Audit fields
-    provenance: NodeProvenance = field(default_factory=lambda: NodeProvenance(
-        created_at=time.time(),
-        created_by="unknown"
-    ))
+    provenance: NodeProvenance = field(
+        default_factory=lambda: NodeProvenance(created_at=time.time(), created_by="unknown")
+    )
     quality_history: QualityHistory = field(default_factory=QualityHistory)
     access_count: int = 0
     last_accessed: Optional[float] = None
@@ -163,9 +163,9 @@ class AuditedSemanticNode:
     # Composition constraints
     preconditions: List[str] = field(default_factory=list)
     postconditions: List[str] = field(default_factory=list)
-    compatible_fidelities: List[str] = field(default_factory=lambda: [
-        "ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW"
-    ])
+    compatible_fidelities: List[str] = field(
+        default_factory=lambda: ["ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW"]
+    )
 
     def record_access(self) -> None:
         """Record node access for usage tracking"""
@@ -188,9 +188,9 @@ class AuditedSemanticNode:
     def promotion_eligible(self) -> bool:
         """Check if node is eligible for promotion (frequently used, high quality)"""
         return (
-            self.access_count >= 3 and
-            self.quality_history.average_score >= 0.7 and
-            self.quality_history.trend != "declining"
+            self.access_count >= 3
+            and self.quality_history.average_score >= 0.7
+            and self.quality_history.trend != "declining"
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -212,6 +212,7 @@ class AuditedSemanticNode:
 @dataclass
 class CompositionEdge:
     """Edge in the audited graph with composition constraints"""
+
     source_id: str
     target_id: str
     edge_type: str = "semantic"  # semantic, structural, temporal
@@ -253,9 +254,7 @@ class AuditedSemanticGraph:
         self.graph = nx.DiGraph()
         self._nodes: Dict[str, AuditedSemanticNode] = {}
         self._edges: List[CompositionEdge] = []
-        self._evidence_store = EvidenceStore(
-            storage_path=storage_path if storage_path else None
-        )
+        self._evidence_store = EvidenceStore(storage_path=storage_path if storage_path else None)
         self._operation_count = 0
 
     @property
@@ -409,8 +408,7 @@ class AuditedSemanticGraph:
         return node
 
     def get_node_with_history(
-        self,
-        node_id: str
+        self, node_id: str
     ) -> Tuple[Optional[AuditedSemanticNode], List[EvidenceBundle]]:
         """
         Get node with its evidence history.
@@ -427,24 +425,22 @@ class AuditedSemanticGraph:
 
         # Find all bundles mentioning this node
         related_bundles = []
+        creation_bundle_id = node.provenance.creation_bundle_id
         for bundle in self._evidence_store:
-            if node_id in str(bundle.parameters) or node_id in bundle.output_hash:
+            if creation_bundle_id and bundle.bundle_id == creation_bundle_id:
+                related_bundles.append(bundle)
+                continue
+            if node_id in str(bundle.parameters):
                 related_bundles.append(bundle)
 
         return node, related_bundles
 
     def get_edges_for_node(self, node_id: str) -> List[CompositionEdge]:
         """Get all edges connected to a node"""
-        return [
-            e for e in self._edges
-            if e.source_id == node_id or e.target_id == node_id
-        ]
+        return [e for e in self._edges if e.source_id == node_id or e.target_id == node_id]
 
     def update_quality(
-        self,
-        node_id: str,
-        quality_score: float,
-        operation: str = "quality_update"
+        self, node_id: str, quality_score: float, operation: str = "quality_update"
     ) -> bool:
         """
         Update quality score for a node.
@@ -466,25 +462,20 @@ class AuditedSemanticGraph:
 
     def get_promotion_candidates(self) -> List[AuditedSemanticNode]:
         """Get nodes eligible for promotion (high quality, frequently used)"""
-        return [
-            node for node in self._nodes.values()
-            if node.promotion_eligible
-        ]
+        return [node for node in self._nodes.values() if node.promotion_eligible]
 
     def get_demotion_candidates(self) -> List[AuditedSemanticNode]:
         """Get nodes that should be demoted (declining quality, rarely used)"""
         return [
-            node for node in self._nodes.values()
+            node
+            for node in self._nodes.values()
             if (
-                node.quality_history.trend == "declining" or
-                (node.access_count < 2 and node.quality_history.average_score < 0.5)
+                node.quality_history.trend == "declining"
+                or (node.access_count < 2 and node.quality_history.average_score < 0.5)
             )
         ]
 
-    def verify_composition_constraints(
-        self,
-        node_ids: List[str]
-    ) -> Tuple[bool, List[str]]:
+    def verify_composition_constraints(self, node_ids: List[str]) -> Tuple[bool, List[str]]:
         """
         Verify composition constraints for a set of nodes.
 
@@ -586,22 +577,26 @@ class AuditedSemanticGraph:
         """Export graph data for visualization"""
         nodes = []
         for node in self._nodes.values():
-            nodes.append({
-                "id": node.node_id,
-                "importance": node.importance,
-                "access_count": node.access_count,
-                "quality_score": node.quality_history.average_score,
-                "text_preview": node.text[:100] + "..." if len(node.text) > 100 else node.text,
-            })
+            nodes.append(
+                {
+                    "id": node.node_id,
+                    "importance": node.importance,
+                    "access_count": node.access_count,
+                    "quality_score": node.quality_history.average_score,
+                    "text_preview": node.text[:100] + "..." if len(node.text) > 100 else node.text,
+                }
+            )
 
         edges = []
         for edge in self._edges:
-            edges.append({
-                "source": edge.source_id,
-                "target": edge.target_id,
-                "type": edge.edge_type,
-                "weight": edge.weight,
-            })
+            edges.append(
+                {
+                    "source": edge.source_id,
+                    "target": edge.target_id,
+                    "type": edge.edge_type,
+                    "weight": edge.weight,
+                }
+            )
 
         return {
             "nodes": nodes,

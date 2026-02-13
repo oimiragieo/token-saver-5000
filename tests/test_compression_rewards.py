@@ -8,7 +8,6 @@ Tests for:
 - Progressive reward shaping
 """
 
-import pytest
 import numpy as np
 
 from src.compression_rewards import (
@@ -37,28 +36,19 @@ class TestSchemaValidationResult:
 
     def test_input_invalid(self):
         """Test invalid input"""
-        result = SchemaValidationResult(
-            input_valid=False,
-            input_errors=["Empty input"]
-        )
+        result = SchemaValidationResult(input_valid=False, input_errors=["Empty input"])
         assert not result.all_valid
         assert result.score == 0.5
 
     def test_output_invalid(self):
         """Test invalid output"""
-        result = SchemaValidationResult(
-            output_valid=False,
-            output_errors=["Malformed output"]
-        )
+        result = SchemaValidationResult(output_valid=False, output_errors=["Malformed output"])
         assert not result.all_valid
         assert result.score == 0.5
 
     def test_both_invalid(self):
         """Test both invalid"""
-        result = SchemaValidationResult(
-            input_valid=False,
-            output_valid=False
-        )
+        result = SchemaValidationResult(input_valid=False, output_valid=False)
         assert not result.all_valid
         assert result.score == 0.0
 
@@ -72,7 +62,7 @@ class TestSemanticPreservationResult:
             ssim_score=1.0,
             embedding_similarity=1.0,
             structure_preservation=1.0,
-            keyword_retention=1.0
+            keyword_retention=1.0,
         )
         assert result.score == 1.0
 
@@ -82,7 +72,7 @@ class TestSemanticPreservationResult:
             ssim_score=0.8,  # weight: 0.35
             embedding_similarity=0.9,  # weight: 0.30
             structure_preservation=0.7,  # weight: 0.20
-            keyword_retention=0.6  # weight: 0.15
+            keyword_retention=0.6,  # weight: 0.15
         )
         expected = 0.35 * 0.8 + 0.30 * 0.9 + 0.20 * 0.7 + 0.15 * 0.6
         assert abs(result.score - expected) < 0.001
@@ -103,7 +93,7 @@ class TestFidelityAdherenceResult:
             achieved_ratio=5.0,
             target_ratio=5.0,
             within_budget=True,
-            budget_utilization=0.8
+            budget_utilization=0.8,
         )
         assert result.ratio_score == 1.0
         assert result.score == 1.0
@@ -111,9 +101,7 @@ class TestFidelityAdherenceResult:
     def test_within_tolerance(self):
         """Test ratio within tolerance"""
         result = FidelityAdherenceResult(
-            achieved_ratio=4.5,  # 10% below target
-            target_ratio=5.0,
-            within_budget=True
+            achieved_ratio=4.5, target_ratio=5.0, within_budget=True  # 10% below target
         )
         # 10% deviation = 0.9 ratio score
         assert result.ratio_score == 0.9
@@ -121,11 +109,7 @@ class TestFidelityAdherenceResult:
 
     def test_budget_exceeded(self):
         """Test budget exceeded"""
-        result = FidelityAdherenceResult(
-            achieved_ratio=5.0,
-            target_ratio=5.0,
-            within_budget=False
-        )
+        result = FidelityAdherenceResult(achieved_ratio=5.0, target_ratio=5.0, within_budget=False)
         # Perfect ratio (1.0) but budget missed (0.5)
         assert result.score == 0.75
 
@@ -140,25 +124,18 @@ class TestCompositionIntegrityResult:
 
     def test_edge_inconsistency(self):
         """Test edge inconsistency"""
-        result = CompositionIntegrityResult(
-            edge_consistency=False
-        )
+        result = CompositionIntegrityResult(edge_consistency=False)
         assert result.score < 1.0
 
     def test_orphan_nodes_penalty(self):
         """Test orphan nodes penalty"""
-        result = CompositionIntegrityResult(
-            orphan_nodes=3
-        )
+        result = CompositionIntegrityResult(orphan_nodes=3)
         # Penalty is 0.1 per orphan
-        expected_orphan_score = max(0.0, 1.0 - 0.3)
         assert result.score < 1.0
 
     def test_disconnected_graph(self):
         """Test disconnected graph (partial credit)"""
-        result = CompositionIntegrityResult(
-            graph_connected=False
-        )
+        result = CompositionIntegrityResult(graph_connected=False)
         # Should get partial credit (0.5) instead of 0
         assert result.score > 0.5
 
@@ -172,7 +149,7 @@ class TestMemoryDisciplineResult:
             context_growth_rate=0.0,
             eviction_efficiency=1.0,
             peak_memory_mb=50,
-            memory_budget_mb=100
+            memory_budget_mb=100,
         )
         assert result.growth_score == 1.0
         assert result.memory_score == 1.0
@@ -184,7 +161,7 @@ class TestMemoryDisciplineResult:
             context_growth_rate=0.5,  # 50% growth
             eviction_efficiency=1.0,
             peak_memory_mb=50,
-            memory_budget_mb=100
+            memory_budget_mb=100,
         )
         assert result.growth_score == 0.0
         assert result.score < 1.0
@@ -195,7 +172,7 @@ class TestMemoryDisciplineResult:
             context_growth_rate=0.0,
             eviction_efficiency=1.0,
             peak_memory_mb=120,  # 120% of budget
-            memory_budget_mb=100
+            memory_budget_mb=100,
         )
         assert result.memory_score < 1.0
 
@@ -211,17 +188,13 @@ class TestCompressionReward:
                 ssim_score=1.0,
                 embedding_similarity=1.0,
                 structure_preservation=1.0,
-                keyword_retention=1.0
+                keyword_retention=1.0,
             ),
             fidelity=FidelityAdherenceResult(
-                achieved_ratio=5.0,
-                target_ratio=5.0,
-                within_budget=True
+                achieved_ratio=5.0, target_ratio=5.0, within_budget=True
             ),
             composition=CompositionIntegrityResult(),
-            memory=MemoryDisciplineResult(
-                eviction_efficiency=1.0
-            )
+            memory=MemoryDisciplineResult(eviction_efficiency=1.0),
         )
 
         assert reward.total_reward == 1.0
@@ -243,9 +216,11 @@ class TestCompressionReward:
         reward = CompressionReward(
             schema=SchemaValidationResult(input_valid=False),  # 0.5
             semantic=SemanticPreservationResult(ssim_score=0.9, embedding_similarity=0.9),
-            fidelity=FidelityAdherenceResult(achieved_ratio=5.0, target_ratio=5.0, within_budget=True),
+            fidelity=FidelityAdherenceResult(
+                achieved_ratio=5.0, target_ratio=5.0, within_budget=True
+            ),
             composition=CompositionIntegrityResult(),
-            memory=MemoryDisciplineResult(eviction_efficiency=1.0)
+            memory=MemoryDisciplineResult(eviction_efficiency=1.0),
         )
 
         weakest, score = reward.weakest_component
@@ -272,8 +247,12 @@ class TestCompressionReward:
 
         # With defaults (all 1.0 or close)
         high_reward = CompressionReward(
-            semantic=SemanticPreservationResult(ssim_score=0.9, embedding_similarity=0.9,
-                                                 structure_preservation=0.9, keyword_retention=0.9)
+            semantic=SemanticPreservationResult(
+                ssim_score=0.9,
+                embedding_similarity=0.9,
+                structure_preservation=0.9,
+                keyword_retention=0.9,
+            )
         )
         assert high_reward.passes_threshold(0.5)
 
@@ -291,7 +270,7 @@ class TestCompressionRewardCalculator:
             input_tokens=8,
             output_tokens=3,
             fidelity_level="BALANCED",
-            node_map={"node1": "description"}
+            node_map={"node1": "description"},
         )
 
         assert isinstance(reward, CompressionReward)
@@ -306,7 +285,7 @@ class TestCompressionRewardCalculator:
             output_text="output",
             input_tokens=0,
             output_tokens=1,
-            fidelity_level="BALANCED"
+            fidelity_level="BALANCED",
         )
 
         assert reward.schema.input_valid is False
@@ -326,7 +305,7 @@ class TestCompressionRewardCalculator:
             output_tokens=5,
             fidelity_level="BALANCED",
             input_embedding=input_emb,
-            output_embedding=output_emb
+            output_embedding=output_emb,
         )
 
         # Should have high embedding similarity
@@ -342,7 +321,7 @@ class TestCompressionRewardCalculator:
             input_tokens=10,
             output_tokens=5,
             fidelity_level="BALANCED",
-            ssim_score=0.95
+            ssim_score=0.95,
         )
 
         assert reward.semantic.ssim_score == 0.95
@@ -361,7 +340,7 @@ class TestCompressionRewardCalculator:
             output_tokens=5,
             fidelity_level="BALANCED",
             node_map=node_map,
-            graph_edges=edges
+            graph_edges=edges,
         )
 
         assert reward.composition.edge_consistency is True
@@ -376,7 +355,7 @@ class TestCompressionRewardCalculator:
                 "output_text": f"doc {i}",
                 "input_tokens": 10,
                 "output_tokens": 5,
-                "fidelity_level": "BALANCED"
+                "fidelity_level": "BALANCED",
             }
             for i in range(5)
         ]
@@ -395,7 +374,7 @@ class TestCompressionRewardCalculator:
                 output_text=f"d{i}",
                 input_tokens=10,
                 output_tokens=5,
-                fidelity_level="BALANCED"
+                fidelity_level="BALANCED",
             )
             for i in range(10)
         ]

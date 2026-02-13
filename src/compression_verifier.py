@@ -30,21 +30,18 @@ Usage:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-import numpy as np
 
-from .evidence_bundle import ContractResult, ContractCheck, ContractStatus, EvidenceBundle
+from .evidence_bundle import ContractResult, ContractStatus, EvidenceBundle
 
 if TYPE_CHECKING:
-    from .semantic_compressor import SkeletonResponse, FidelityLevel, SemanticCompressor
+    from .semantic_compressor import SemanticCompressor
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +55,7 @@ MAX_SKELETON_TOKENS = 50_000  # 50k token limit for skeleton
 
 class ContractType(Enum):
     """Types of contracts"""
+
     PRECONDITION = "precondition"
     POSTCONDITION = "postcondition"
     INVARIANT = "invariant"
@@ -66,6 +64,7 @@ class ContractType(Enum):
 @dataclass
 class ContractViolation:
     """Details of a contract violation"""
+
     contract_name: str
     contract_type: ContractType
     expected: str
@@ -87,6 +86,7 @@ class ContractViolation:
 @dataclass
 class VerificationResult:
     """Result of verification operation"""
+
     verified: bool
     timestamp: float = field(default_factory=time.time)
     preconditions: Optional[ContractResult] = None
@@ -155,17 +155,11 @@ class CompressionContract:
         result = ContractResult()
 
         # Check: non-empty document
-        result.add_check(
-            "non_empty_document",
-            len(document) > 0,
-            "Document must be non-empty"
-        )
+        result.add_check("non_empty_document", len(document) > 0, "Document must be non-empty")
 
         # Check: document is string
         result.add_check(
-            "document_is_string",
-            isinstance(document, str),
-            "Document must be a string"
+            "document_is_string", isinstance(document, str), "Document must be a string"
         )
 
         # Check: valid UTF-8
@@ -180,7 +174,7 @@ class CompressionContract:
         result.add_check(
             "document_size_limit",
             doc_size_mb <= MAX_DOCUMENT_SIZE_MB,
-            f"Document size {doc_size_mb:.2f}MB exceeds {MAX_DOCUMENT_SIZE_MB}MB limit"
+            f"Document size {doc_size_mb:.2f}MB exceeds {MAX_DOCUMENT_SIZE_MB}MB limit",
         )
 
         # Check: valid fidelity level
@@ -188,26 +182,21 @@ class CompressionContract:
         result.add_check(
             "valid_fidelity_level",
             fidelity_level.upper() in valid_levels,
-            f"Fidelity level must be one of {valid_levels}"
+            f"Fidelity level must be one of {valid_levels}",
         )
 
         # Check: no null bytes (potential security issue)
         result.add_check(
             "no_null_bytes",
             "\x00" not in document,
-            "Document contains null bytes (potential binary content)"
+            "Document contains null bytes (potential binary content)",
         )
 
         # Check: file path safety (if provided)
         if file_path:
-            path_safe = not any(
-                seq in file_path
-                for seq in ["../", "..\\", "/etc/", "C:\\Windows"]
-            )
+            path_safe = not any(seq in file_path for seq in ["../", "..\\", "/etc/", "C:\\Windows"])
             result.add_check(
-                "safe_file_path",
-                path_safe,
-                "File path contains potentially unsafe sequences"
+                "safe_file_path", path_safe, "File path contains potentially unsafe sequences"
             )
 
         return result
@@ -245,32 +234,28 @@ class CompressionContract:
         result = ContractResult()
 
         # Check: skeleton is non-empty
-        result.add_check(
-            "skeleton_non_empty",
-            len(skeleton_text) > 0,
-            "Skeleton must be non-empty"
-        )
+        result.add_check("skeleton_non_empty", len(skeleton_text) > 0, "Skeleton must be non-empty")
 
         # Check: skeleton within token limit
         result.add_check(
             "skeleton_token_limit",
             skeleton_tokens <= MAX_SKELETON_TOKENS,
-            f"Skeleton {skeleton_tokens} tokens exceeds {MAX_SKELETON_TOKENS} limit"
+            f"Skeleton {skeleton_tokens} tokens exceeds {MAX_SKELETON_TOKENS} limit",
         )
 
         # Check: node map is valid dict
         result.add_check(
-            "valid_node_map",
-            isinstance(node_map, dict),
-            "Node map must be a dictionary"
+            "valid_node_map", isinstance(node_map, dict), "Node map must be a dictionary"
         )
 
         # Check: node map has entries (unless very short document)
-        if original_tokens > 50:
+        if fidelity_level.upper() == "RAW":
+            result.add_check("node_map_populated", True, "RAW mode - node map optional")
+        elif original_tokens > 50:
             result.add_check(
                 "node_map_populated",
                 len(node_map) > 0,
-                "Node map should have entries for non-trivial documents"
+                "Node map should have entries for non-trivial documents",
             )
         else:
             result.add_check("node_map_populated", True, "Skipped for small document")
@@ -291,7 +276,7 @@ class CompressionContract:
             result.add_check(
                 "compression_achieved",
                 compression_ratio >= target * MIN_COMPRESSION_RATIO,
-                f"Compression ratio {compression_ratio:.2f}x below target {target}x (min {target * MIN_COMPRESSION_RATIO:.2f}x)"
+                f"Compression ratio {compression_ratio:.2f}x below target {target}x (min {target * MIN_COMPRESSION_RATIO:.2f}x)",
             )
         else:
             result.add_check("compression_achieved", True, "RAW mode - no compression expected")
@@ -301,7 +286,7 @@ class CompressionContract:
             result.add_check(
                 "tokens_reduced",
                 skeleton_tokens < original_tokens,
-                f"Skeleton ({skeleton_tokens}) should have fewer tokens than original ({original_tokens})"
+                f"Skeleton ({skeleton_tokens}) should have fewer tokens than original ({original_tokens})",
             )
         else:
             result.add_check("tokens_reduced", True, "RAW mode - no reduction expected")
@@ -315,7 +300,7 @@ class CompressionContract:
             result.add_check(
                 "valid_node_ids",
                 valid_ids,
-                "All node IDs must be non-empty strings with string values"
+                "All node IDs must be non-empty strings with string values",
             )
 
         return result
@@ -356,7 +341,7 @@ class CompressionContract:
         result.add_check(
             "edge_endpoints_valid",
             len(missing_nodes) == 0,
-            f"Edges reference {len(missing_nodes)} missing nodes: {list(missing_nodes)[:5]}"
+            f"Edges reference {len(missing_nodes)} missing nodes: {list(missing_nodes)[:5]}",
         )
 
         # Check: no duplicate edges
@@ -364,19 +349,19 @@ class CompressionContract:
         result.add_check(
             "no_duplicate_edges",
             len(edge_set) == len(edges),
-            f"Found {len(edges) - len(edge_set)} duplicate edges"
+            f"Found {len(edges) - len(edge_set)} duplicate edges",
         )
 
         # Check: skeleton references valid nodes (if it references any)
         # Look for patterns like [node_123] or (node_abc)
-        node_refs = re.findall(r'\[([^\]]+)\]|\(node_([^\)]+)\)', skeleton_text)
+        node_refs = re.findall(r"\[([^\]]+)\]|\(node_([^\)]+)\)", skeleton_text)
         if node_refs:
             flat_refs = [r[0] or r[1] for r in node_refs if r[0] or r[1]]
             invalid_refs = [r for r in flat_refs if r not in node_set]
             result.add_check(
                 "skeleton_refs_valid",
                 len(invalid_refs) == 0,
-                f"Skeleton references {len(invalid_refs)} invalid nodes"
+                f"Skeleton references {len(invalid_refs)} invalid nodes",
             )
         else:
             result.add_check("skeleton_refs_valid", True, "No node references in skeleton")
@@ -412,9 +397,7 @@ class CompressionVerifier:
         file_path: Optional[str] = None,
     ) -> ContractResult:
         """Check preconditions before compression"""
-        return CompressionContract.check_preconditions(
-            document, fidelity_level, file_path
-        )
+        return CompressionContract.check_preconditions(document, fidelity_level, file_path)
 
     def check_postconditions(
         self,
@@ -427,8 +410,12 @@ class CompressionVerifier:
     ) -> ContractResult:
         """Check postconditions after compression"""
         return CompressionContract.check_postconditions(
-            skeleton_text, node_map, original_tokens, skeleton_tokens,
-            fidelity_level, compression_ratio
+            skeleton_text,
+            node_map,
+            original_tokens,
+            skeleton_tokens,
+            fidelity_level,
+            compression_ratio,
         )
 
     def verify_bundle(self, bundle: EvidenceBundle) -> VerificationResult:
@@ -452,14 +439,16 @@ class CompressionVerifier:
 
         # Step 1: Verify bundle integrity
         if not bundle.verify_integrity():
-            result.violations.append(ContractViolation(
-                contract_name="bundle_integrity",
-                contract_type=ContractType.INVARIANT,
-                expected="Hash matches content",
-                actual="Hash mismatch detected",
-                severity="error",
-                remediation="Bundle may have been tampered with"
-            ))
+            result.violations.append(
+                ContractViolation(
+                    contract_name="bundle_integrity",
+                    contract_type=ContractType.INVARIANT,
+                    expected="Hash matches content",
+                    actual="Hash mismatch detected",
+                    severity="error",
+                    remediation="Bundle may have been tampered with",
+                )
+            )
             result.verification_time_ms = (time.time() - start_time) * 1000
             return result
 
@@ -470,23 +459,27 @@ class CompressionVerifier:
         # Collect violations from failed checks
         for check in bundle.preconditions.checks:
             if check.status != ContractStatus.PASSED:
-                result.violations.append(ContractViolation(
-                    contract_name=check.name,
-                    contract_type=ContractType.PRECONDITION,
-                    expected="Check should pass",
-                    actual=check.message or "Check failed",
-                    severity="error" if check.status == ContractStatus.FAILED else "warning"
-                ))
+                result.violations.append(
+                    ContractViolation(
+                        contract_name=check.name,
+                        contract_type=ContractType.PRECONDITION,
+                        expected="Check should pass",
+                        actual=check.message or "Check failed",
+                        severity="error" if check.status == ContractStatus.FAILED else "warning",
+                    )
+                )
 
         for check in bundle.postconditions.checks:
             if check.status != ContractStatus.PASSED:
-                result.violations.append(ContractViolation(
-                    contract_name=check.name,
-                    contract_type=ContractType.POSTCONDITION,
-                    expected="Check should pass",
-                    actual=check.message or "Check failed",
-                    severity="error" if check.status == ContractStatus.FAILED else "warning"
-                ))
+                result.violations.append(
+                    ContractViolation(
+                        contract_name=check.name,
+                        contract_type=ContractType.POSTCONDITION,
+                        expected="Check should pass",
+                        actual=check.message or "Check failed",
+                        severity="error" if check.status == ContractStatus.FAILED else "warning",
+                    )
+                )
 
         # Step 3: Set verification status
         result.verified = bundle.contracts_satisfied and len(result.violations) == 0
@@ -534,8 +527,12 @@ class CompressionVerifier:
 
         # Check postconditions
         result.postconditions = self.check_postconditions(
-            skeleton_text, node_map, original_tokens, skeleton_tokens,
-            fidelity_level, compression_ratio
+            skeleton_text,
+            node_map,
+            original_tokens,
+            skeleton_tokens,
+            fidelity_level,
+            compression_ratio,
         )
 
         # Check composition invariants if edges provided
@@ -545,34 +542,40 @@ class CompressionVerifier:
             )
             for check in invariants.checks:
                 if check.status != ContractStatus.PASSED:
-                    result.violations.append(ContractViolation(
-                        contract_name=check.name,
-                        contract_type=ContractType.INVARIANT,
-                        expected="Invariant should hold",
-                        actual=check.message or "Invariant violated",
-                        severity="warning"
-                    ))
+                    result.violations.append(
+                        ContractViolation(
+                            contract_name=check.name,
+                            contract_type=ContractType.INVARIANT,
+                            expected="Invariant should hold",
+                            actual=check.message or "Invariant violated",
+                            severity="warning",
+                        )
+                    )
 
         # Collect all violations
         for check in result.preconditions.checks:
             if check.status != ContractStatus.PASSED:
-                result.violations.append(ContractViolation(
-                    contract_name=check.name,
-                    contract_type=ContractType.PRECONDITION,
-                    expected="Check should pass",
-                    actual=check.message or "Check failed",
-                    severity="error"
-                ))
+                result.violations.append(
+                    ContractViolation(
+                        contract_name=check.name,
+                        contract_type=ContractType.PRECONDITION,
+                        expected="Check should pass",
+                        actual=check.message or "Check failed",
+                        severity="error",
+                    )
+                )
 
         for check in result.postconditions.checks:
             if check.status != ContractStatus.PASSED:
-                result.violations.append(ContractViolation(
-                    contract_name=check.name,
-                    contract_type=ContractType.POSTCONDITION,
-                    expected="Check should pass",
-                    actual=check.message or "Check failed",
-                    severity="error"
-                ))
+                result.violations.append(
+                    ContractViolation(
+                        contract_name=check.name,
+                        contract_type=ContractType.POSTCONDITION,
+                        expected="Check should pass",
+                        actual=check.message or "Check failed",
+                        severity="error",
+                    )
+                )
 
         result.verified = result.all_contracts_passed
         self._verification_count += 1
@@ -610,8 +613,7 @@ class BatchVerifier:
         self.verifier = verifier or CompressionVerifier()
 
     def verify_bundles(
-        self,
-        bundles: List[EvidenceBundle]
+        self, bundles: List[EvidenceBundle]
     ) -> Tuple[List[VerificationResult], Dict[str, Any]]:
         """
         Verify a batch of evidence bundles.
@@ -630,10 +632,7 @@ class BatchVerifier:
         stats = self._aggregate_statistics(results)
         return results, stats
 
-    def _aggregate_statistics(
-        self,
-        results: List[VerificationResult]
-    ) -> Dict[str, Any]:
+    def _aggregate_statistics(self, results: List[VerificationResult]) -> Dict[str, Any]:
         """Aggregate statistics from verification results"""
         if not results:
             return {"count": 0}

@@ -9,9 +9,6 @@ Tests for:
 - Stress testing infrastructure
 """
 
-import pytest
-import numpy as np
-
 from src.experience_synthesis import (
     ExperienceSynthesizer,
     SyntheticDocument,
@@ -263,8 +260,7 @@ class TestExperienceSynthesizerDialogues:
 
         # Find dialogue mentioning allergy
         safety_dialogues = [
-            d for d in dialogues
-            if any("allergy" in turn.get("content", "").lower() for turn in d)
+            d for d in dialogues if any("allergy" in turn.get("content", "").lower() for turn in d)
         ]
         assert len(safety_dialogues) >= 1
 
