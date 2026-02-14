@@ -38,6 +38,10 @@ All notable changes to Token Saver 5000.
 - Updated factory composition wiring so ServerFactoryService.build(...) now constructs and returns runtime_service plus service_adapter, removing duplicate constructor wiring from src/server.py.
 - Added constructor wiring contract test tests/test_server_wiring_contract.py to lock factory ownership of runtime + adapter dependencies.
 
+- Added ServerFactoryService.build_default(...) to centralize production class wiring while preserving the existing explicit uild(...) factory contract.
+- src/server.py now uses uild_default(...) with class_overrides from module-level aliases to preserve unit-test patch compatibility while reducing constructor wiring verbosity.
+- Added a default-factory delegation contract test in 	ests/test_server_factory_service.py.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**

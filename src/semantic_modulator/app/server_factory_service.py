@@ -8,6 +8,76 @@ from typing import Any
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
+    @classmethod
+    def build_default(
+        cls,
+        *,
+        preload_code_model: bool,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        logger,
+        class_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        from ...ace_framework import ACEFramework
+        from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
+        from ...afm import AFMConfig, FocusManager
+        from ...blind_spot_detector import BlindSpotDetector, HaloEffectDetector
+        from ...code_compression_adapter import CodeCompressionAdapter
+        from ...file_sync_manager import FileSyncManager
+        from ...path_validator import PathValidator
+        from ...persistence import PersistenceManager
+        from ...resource_manager import ResourceLimits, ResourceManager
+        from ...version_manager import VersionManager
+        from .ace_context_manager import ACEContextManager
+        from .context_service import ServerContextService
+        from .lifecycle_service import ServerLifecycleService
+        from .persistence_orchestration_service import PersistenceOrchestrationService
+        from .progress_service import ProgressRenderService
+        from .runtime_service import RuntimeService
+        from .server_service_adapter import ServerServiceAdapter
+        from .tool_profile_service import ToolProfileBootstrapService
+        from .tooling import MCPToolingGateway
+
+        overrides = class_overrides or {}
+
+        return cls.build(
+            preload_code_model=preload_code_model,
+            cwd=cwd,
+            home_dir=home_dir,
+            max_ace_contexts=max_ace_contexts,
+            code_adapter_cls=overrides.get("CodeCompressionAdapter", CodeCompressionAdapter),
+            blind_spot_cls=overrides.get("BlindSpotDetector", BlindSpotDetector),
+            halo_cls=overrides.get("HaloEffectDetector", HaloEffectDetector),
+            context_window_adapter_cls=overrides.get("ContextWindowAdapter", ContextWindowAdapter),
+            multilevel_encoder_cls=overrides.get(
+                "MultiLevelSemanticEncoder", MultiLevelSemanticEncoder
+            ),
+            afm_config_cls=overrides.get("AFMConfig", AFMConfig),
+            focus_manager_cls=overrides.get("FocusManager", FocusManager),
+            persistence_cls=overrides.get("PersistenceManager", PersistenceManager),
+            resource_limits_cls=overrides.get("ResourceLimits", ResourceLimits),
+            resource_manager_cls=overrides.get("ResourceManager", ResourceManager),
+            file_sync_cls=overrides.get("FileSyncManager", FileSyncManager),
+            version_manager_cls=overrides.get("VersionManager", VersionManager),
+            path_validator_cls=overrides.get("PathValidator", PathValidator),
+            ace_framework_cls=overrides.get("ACEFramework", ACEFramework),
+            ace_context_manager_cls=overrides.get("ACEContextManager", ACEContextManager),
+            tooling_gateway_cls=overrides.get("MCPToolingGateway", MCPToolingGateway),
+            context_service_cls=overrides.get("ServerContextService", ServerContextService),
+            lifecycle_service_cls=overrides.get("ServerLifecycleService", ServerLifecycleService),
+            progress_service_cls=overrides.get("ProgressRenderService", ProgressRenderService),
+            persistence_service_cls=overrides.get(
+                "PersistenceOrchestrationService", PersistenceOrchestrationService
+            ),
+            tool_profile_service_cls=overrides.get(
+                "ToolProfileBootstrapService", ToolProfileBootstrapService
+            ),
+            runtime_service_cls=overrides.get("RuntimeService", RuntimeService),
+            server_service_adapter_cls=overrides.get("ServerServiceAdapter", ServerServiceAdapter),
+            logger=logger,
+        )
+
     @staticmethod
     def build(
         *,

@@ -102,3 +102,37 @@ def test_factory_build_uses_cwd_and_home_for_path_validator():
     )
 
     assert captured["dirs"] == ["C:/repo", "C:/Users/test"]
+
+
+def test_factory_build_default_delegates_to_build_with_production_wiring():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+    service = module.ServerFactoryService()
+
+    sentinel = {"ok": True}
+    original_build = module.ServerFactoryService.build
+    call_kwargs = {}
+
+    def fake_build(**kwargs):
+        call_kwargs.update(kwargs)
+        return sentinel
+
+    module.ServerFactoryService.build = staticmethod(fake_build)
+    try:
+        result = service.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=77,
+            logger=Mock(),
+        )
+    finally:
+        module.ServerFactoryService.build = original_build
+
+    assert result is sentinel
+    assert call_kwargs["preload_code_model"] is True
+    assert call_kwargs["cwd"] == "C:/repo"
+    assert call_kwargs["home_dir"] == "C:/Users/test"
+    assert call_kwargs["max_ace_contexts"] == 77
+    assert callable(call_kwargs["tooling_gateway_cls"])
+    assert callable(call_kwargs["runtime_service_cls"])
+    assert callable(call_kwargs["server_service_adapter_cls"])

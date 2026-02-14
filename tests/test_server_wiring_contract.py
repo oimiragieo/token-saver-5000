@@ -39,7 +39,7 @@ def test_server_constructor_relies_on_factory_for_runtime_and_adapter():
     )
 
     with (
-        patch("src.server.ServerFactoryService.build", return_value=fake_factory_output),
+        patch("src.server.ServerFactoryService.build_default", return_value=fake_factory_output),
         patch.object(SemanticModulatorServer, "_setup_handlers"),
     ):
         server = SemanticModulatorServer()

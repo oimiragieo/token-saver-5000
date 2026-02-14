@@ -18,36 +18,25 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent
 
-from .types import HandlerContext  # TypedDict for handler context
-from .code_compression_adapter import CodeCompressionAdapter
-from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector
-from .adaptive_rate_allocator import (
-    ContextWindowAdapter,
-    MultiLevelSemanticEncoder,
-)
-from .afm import FocusManager, AFMConfig
-from .persistence import PersistenceManager
-from .resource_manager import ResourceManager, ResourceLimits
-from .file_sync_manager import FileSyncManager
-from .version_manager import VersionManager
-from .ace_framework import ACEFramework
-from .semantic_modulator.app.context_service import ServerContextService
-from .semantic_modulator.app.lifecycle_service import ServerLifecycleService
-from .semantic_modulator.app.persistence_orchestration_service import (
-    PersistenceOrchestrationService,
-)
-from .semantic_modulator.app.progress_service import ProgressRenderService
-from .semantic_modulator.app.server_factory_service import ServerFactoryService
-from .semantic_modulator.app.router_binding import bind_mcp_handlers
-from .semantic_modulator.app.runtime_service import RuntimeService
-from .semantic_modulator.app.server_service_adapter import ServerServiceAdapter
-from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
-from .semantic_modulator.app.tooling import MCPToolingGateway
-from .constants import MAX_ACE_CONTEXTS
-from .structured_logging import get_logger, configure_structlog
+# Compatibility imports for unit-test patch targets.
+from .ace_framework import ACEFramework  # noqa: F401
+from .adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder  # noqa: F401
+from .afm import AFMConfig, FocusManager  # noqa: F401
+from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector  # noqa: F401
+from .code_compression_adapter import CodeCompressionAdapter  # noqa: F401
+from .file_sync_manager import FileSyncManager  # noqa: F401
+from .persistence import PersistenceManager  # noqa: F401
+from .resource_manager import ResourceLimits, ResourceManager  # noqa: F401
 from .semantic_modulator.app.ace_context_manager import ACEContextManager
 from .semantic_modulator.app.bootstrap import async_main as bootstrap_async_main
 from .semantic_modulator.app.bootstrap import main as bootstrap_main
+from .semantic_modulator.app.router_binding import bind_mcp_handlers
+from .semantic_modulator.app.server_factory_service import ServerFactoryService
+from .semantic_modulator.app.tooling import MCPToolingGateway  # noqa: F401
+from .structured_logging import configure_structlog, get_logger
+from .types import HandlerContext  # TypedDict for handler context
+from .version_manager import VersionManager  # noqa: F401
+from .constants import MAX_ACE_CONTEXTS
 
 
 # Configure structured logging
@@ -55,43 +44,40 @@ configure_structlog(log_level="INFO")
 logger = get_logger("semantic-modulator")
 
 
+def _build_default_overrides() -> dict[str, object]:
+    return {
+        "CodeCompressionAdapter": CodeCompressionAdapter,
+        "BlindSpotDetector": BlindSpotDetector,
+        "HaloEffectDetector": HaloEffectDetector,
+        "ContextWindowAdapter": ContextWindowAdapter,
+        "MultiLevelSemanticEncoder": MultiLevelSemanticEncoder,
+        "AFMConfig": AFMConfig,
+        "FocusManager": FocusManager,
+        "PersistenceManager": PersistenceManager,
+        "ResourceLimits": ResourceLimits,
+        "ResourceManager": ResourceManager,
+        "FileSyncManager": FileSyncManager,
+        "VersionManager": VersionManager,
+        "ACEFramework": ACEFramework,
+        "ACEContextManager": ACEContextManager,
+        "MCPToolingGateway": MCPToolingGateway,
+    }
+
+
 class SemanticModulatorServer:
     """MCP Server for Semantic Modulation"""
 
     def __init__(self):
         self.server = Server("semantic-modulator")
-        from .path_validator import PathValidator
 
         self.factory_service = ServerFactoryService()
-        components = self.factory_service.build(
+        components = self.factory_service.build_default(
             preload_code_model=os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true",
             cwd=os.getcwd(),
             home_dir=os.path.expanduser("~"),
             max_ace_contexts=MAX_ACE_CONTEXTS,
-            code_adapter_cls=CodeCompressionAdapter,
-            blind_spot_cls=BlindSpotDetector,
-            halo_cls=HaloEffectDetector,
-            context_window_adapter_cls=ContextWindowAdapter,
-            multilevel_encoder_cls=MultiLevelSemanticEncoder,
-            afm_config_cls=AFMConfig,
-            focus_manager_cls=FocusManager,
-            persistence_cls=PersistenceManager,
-            resource_limits_cls=ResourceLimits,
-            resource_manager_cls=ResourceManager,
-            file_sync_cls=FileSyncManager,
-            version_manager_cls=VersionManager,
-            path_validator_cls=PathValidator,
-            ace_framework_cls=ACEFramework,
-            ace_context_manager_cls=ACEContextManager,
-            tooling_gateway_cls=MCPToolingGateway,
-            context_service_cls=ServerContextService,
-            lifecycle_service_cls=ServerLifecycleService,
-            progress_service_cls=ProgressRenderService,
-            persistence_service_cls=PersistenceOrchestrationService,
-            tool_profile_service_cls=ToolProfileBootstrapService,
-            runtime_service_cls=RuntimeService,
-            server_service_adapter_cls=ServerServiceAdapter,
             logger=logger,
+            class_overrides=_build_default_overrides(),
         )
         self.__dict__.update(components)
         configured_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
