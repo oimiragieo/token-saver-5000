@@ -289,6 +289,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     helper_kwargs = {"code_adapter_cls": object()}
 
     original_default_map = module.ServerFactoryService.default_class_map
+    original_validate = module.ServerFactoryService.validate_default_class_map
     original_resolve = module.ServerFactoryService.resolve_class_overrides
     original_helper = module.ServerFactoryService.build_kwargs_from_resolved_classes
     original_build = module.ServerFactoryService.__dict__["build"]
@@ -297,6 +298,9 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
 
     def fake_default_map():
         return {"CodeCompressionAdapter": object()}
+
+    def fake_validate(default_map):
+        return default_map
 
     def fake_resolve(*, defaults, overrides):
         captured["defaults"] = defaults
@@ -312,6 +316,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
         return sentinel_result
 
     module.ServerFactoryService.default_class_map = staticmethod(fake_default_map)
+    module.ServerFactoryService.validate_default_class_map = staticmethod(fake_validate)
     module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
     module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_helper)
     module.ServerFactoryService.build = classmethod(fake_build)
@@ -326,6 +331,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
         )
     finally:
         module.ServerFactoryService.default_class_map = original_default_map
+        module.ServerFactoryService.validate_default_class_map = original_validate
         module.ServerFactoryService.resolve_class_overrides = original_resolve
         module.ServerFactoryService.build_kwargs_from_resolved_classes = original_helper
         module.ServerFactoryService.build = original_build
@@ -1047,3 +1053,48 @@ def test_factory_typed_artifact_contracts_are_declared():
         "context_window_monitor",
         "retrieval_history",
     }.issubset(build_keys)
+
+
+def test_factory_class_map_contract_declared_and_aligned_with_overrides():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module, "FactoryClassMap")
+    assert set(module.FactoryClassMap.__annotations__.keys()) == set(module.ALLOWED_OVERRIDE_KEYS)
+
+
+def test_build_default_rejects_default_class_map_drift_before_override_merge():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    original_default_map = module.ServerFactoryService.default_class_map
+    original_validate = module.ServerFactoryService.validate_default_class_map
+    original_resolve = module.ServerFactoryService.resolve_class_overrides
+
+    called = {"resolve": False}
+
+    def bad_default_map():
+        result = original_default_map()
+        result.pop("FocusManager")
+        return result
+
+    def should_not_run(*, defaults, overrides):
+        called["resolve"] = True
+        return defaults
+
+    module.ServerFactoryService.default_class_map = staticmethod(bad_default_map)
+    module.ServerFactoryService.resolve_class_overrides = staticmethod(should_not_run)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default(
+                preload_code_model=False,
+                cwd="C:/repo",
+                home_dir="C:/Users/test",
+                max_ace_contexts=5,
+                logger=Mock(),
+            )
+    finally:
+        module.ServerFactoryService.default_class_map = original_default_map
+        module.ServerFactoryService.validate_default_class_map = original_validate
+        module.ServerFactoryService.resolve_class_overrides = original_resolve
+
+    assert "FocusManager" in str(exc_info.value)
+    assert called["resolve"] is False

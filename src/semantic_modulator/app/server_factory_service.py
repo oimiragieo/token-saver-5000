@@ -2,11 +2,39 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from .server_aliases import ALLOWED_FACTORY_OVERRIDE_KEYS, validate_override_keys
 
 ALLOWED_OVERRIDE_KEYS: frozenset[str] = ALLOWED_FACTORY_OVERRIDE_KEYS
+
+
+class FactoryClassMap(TypedDict):
+    """Class-alias map used by build_default/override resolution."""
+
+    CodeCompressionAdapter: Any
+    BlindSpotDetector: Any
+    HaloEffectDetector: Any
+    ContextWindowAdapter: Any
+    MultiLevelSemanticEncoder: Any
+    AFMConfig: Any
+    FocusManager: Any
+    PersistenceManager: Any
+    ResourceLimits: Any
+    ResourceManager: Any
+    FileSyncManager: Any
+    VersionManager: Any
+    PathValidator: Any
+    ACEFramework: Any
+    ACEContextManager: Any
+    MCPToolingGateway: Any
+    ServerContextService: Any
+    ServerLifecycleService: Any
+    ProgressRenderService: Any
+    PersistenceOrchestrationService: Any
+    ToolProfileBootstrapService: Any
+    RuntimeService: Any
+    ServerServiceAdapter: Any
 
 
 class CoreRuntimeArtifacts(TypedDict):
@@ -51,7 +79,7 @@ class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
     @staticmethod
-    def default_class_map() -> dict[str, Any]:
+    def default_class_map() -> FactoryClassMap:
         """Build production default class wiring map for build_default()."""
         from ...ace_framework import ACEFramework
         from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
@@ -100,18 +128,31 @@ class ServerFactoryService:
         }
 
     @staticmethod
+    def validate_default_class_map(default_map: dict[str, Any]) -> FactoryClassMap:
+        """Fail fast when default class map keys drift from allowed override aliases."""
+        expected_keys = set(ALLOWED_OVERRIDE_KEYS)
+        actual_keys = set(default_map.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+
+        if missing or extra:
+            raise ValueError(f"default_class_map keys mismatch: missing={missing} extra={extra}")
+
+        return cast(FactoryClassMap, default_map)
+
+    @staticmethod
     def resolve_class_overrides(
         *,
-        defaults: dict[str, Any],
+        defaults: FactoryClassMap,
         overrides: dict[str, Any] | None,
-    ) -> dict[str, Any]:
+    ) -> FactoryClassMap:
         """Merge class overrides into defaults with strict unknown-key validation."""
         validate_override_keys(overrides=overrides, allowed_keys=ALLOWED_OVERRIDE_KEYS)
         active_overrides = overrides or {}
-        return {**defaults, **active_overrides}
+        return cast(FactoryClassMap, {**defaults, **active_overrides})
 
     @staticmethod
-    def build_kwargs_from_resolved_classes(resolved_classes: dict[str, Any]) -> dict[str, Any]:
+    def build_kwargs_from_resolved_classes(resolved_classes: FactoryClassMap) -> dict[str, Any]:
         """Translate resolved class alias map into build() keyword arguments."""
         return {
             "code_adapter_cls": resolved_classes["CodeCompressionAdapter"],
@@ -306,8 +347,9 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
+        defaults = cls.validate_default_class_map(cls.default_class_map())
         resolved_classes = cls.resolve_class_overrides(
-            defaults=cls.default_class_map(),
+            defaults=defaults,
             overrides=class_overrides,
         )
 
