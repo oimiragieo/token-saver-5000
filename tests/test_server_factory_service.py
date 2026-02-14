@@ -1634,3 +1634,123 @@ def test_build_default_from_validation_rejects_validation_drift_before_request_m
 
     assert "resolved_classes" in str(exc_info.value)
     assert called["merge"] is False
+
+
+def test_validate_default_build_inputs_runs_request_then_factory_validation():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+    sentinel_request = {"preload_code_model": True, "cwd": "C:/repo"}
+    sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+
+    original_request = module.ServerFactoryService.build_default_request
+    original_validate_request = module.ServerFactoryService.validate_build_default_request_map
+    original_validate_factory = module.ServerFactoryService.validate_factory_contracts
+
+    def fake_request(*, preload_code_model, cwd, home_dir, max_ace_contexts, logger):
+        calls.append("build_default_request")
+        return sentinel_request
+
+    def fake_validate_request(request):
+        calls.append("validate_build_default_request_map")
+        assert request is sentinel_request
+        return request
+
+    def fake_validate_factory(_cls, *, class_overrides):
+        calls.append("validate_factory_contracts")
+        assert class_overrides == {"FocusManager": object_override}
+        return sentinel_validation
+
+    object_override = object()
+
+    module.ServerFactoryService.build_default_request = staticmethod(fake_request)
+    module.ServerFactoryService.validate_build_default_request_map = staticmethod(
+        fake_validate_request
+    )
+    module.ServerFactoryService.validate_factory_contracts = classmethod(fake_validate_factory)
+    try:
+        result = module.ServerFactoryService.validate_default_build_inputs(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=3,
+            logger=Mock(),
+            class_overrides={"FocusManager": object_override},
+        )
+    finally:
+        module.ServerFactoryService.build_default_request = original_request
+        module.ServerFactoryService.validate_build_default_request_map = original_validate_request
+        module.ServerFactoryService.validate_factory_contracts = original_validate_factory
+
+    assert calls == [
+        "build_default_request",
+        "validate_build_default_request_map",
+        "validate_factory_contracts",
+    ]
+    assert result["request"] is sentinel_request
+    assert result["validation"] is sentinel_validation
+
+
+def test_build_default_delegates_to_validate_default_build_inputs():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    sentinel = {
+        "request": {"preload_code_model": True, "cwd": "C:/repo"},
+        "validation": {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}},
+    }
+    captured = {}
+
+    original_validate_inputs = module.ServerFactoryService.validate_default_build_inputs
+    original_build_default_from_validation = (
+        module.ServerFactoryService.build_default_from_validation
+    )
+
+    def fake_validate_inputs(
+        _cls,
+        *,
+        preload_code_model,
+        cwd,
+        home_dir,
+        max_ace_contexts,
+        logger,
+        class_overrides,
+    ):
+        captured["validate_inputs"] = {
+            "preload_code_model": preload_code_model,
+            "cwd": cwd,
+            "home_dir": home_dir,
+            "max_ace_contexts": max_ace_contexts,
+            "logger": logger,
+            "class_overrides": class_overrides,
+        }
+        return sentinel
+
+    def fake_build_default_from_validation(_cls, *, request, validation):
+        captured["request"] = request
+        captured["validation"] = validation
+        return {"ok": True}
+
+    module.ServerFactoryService.validate_default_build_inputs = classmethod(fake_validate_inputs)
+    module.ServerFactoryService.build_default_from_validation = classmethod(
+        fake_build_default_from_validation
+    )
+    try:
+        result = module.ServerFactoryService.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=4,
+            logger=Mock(),
+            class_overrides={"FocusManager": object()},
+        )
+    finally:
+        module.ServerFactoryService.validate_default_build_inputs = original_validate_inputs
+        module.ServerFactoryService.build_default_from_validation = (
+            original_build_default_from_validation
+        )
+
+    assert result == {"ok": True}
+    assert captured["validate_inputs"]["cwd"] == "C:/repo"
+    assert "FocusManager" in captured["validate_inputs"]["class_overrides"]
+    assert captured["request"] is sentinel["request"]
+    assert captured["validation"] is sentinel["validation"]

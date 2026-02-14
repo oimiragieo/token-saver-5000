@@ -110,6 +110,13 @@ class FactoryValidationResult(TypedDict):
     build_kwargs: BuildKwargsMap
 
 
+class DefaultBuildInputs(TypedDict):
+    """Validated runtime and wiring inputs used by build_default orchestration."""
+
+    request: BuildDefaultRequest
+    validation: FactoryValidationResult
+
+
 class BuildDefaultRequest(TypedDict):
     """Default-build runtime parameters that are independent from class wiring."""
 
@@ -494,6 +501,31 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
+        inputs = cls.validate_default_build_inputs(
+            preload_code_model=preload_code_model,
+            cwd=cwd,
+            home_dir=home_dir,
+            max_ace_contexts=max_ace_contexts,
+            logger=logger,
+            class_overrides=class_overrides,
+        )
+        return cls.build_default_from_validation(
+            request=inputs["request"],
+            validation=inputs["validation"],
+        )
+
+    @classmethod
+    def validate_default_build_inputs(
+        cls,
+        *,
+        preload_code_model: bool,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        logger,
+        class_overrides: dict[str, Any] | None,
+    ) -> DefaultBuildInputs:
+        """Validate runtime request and class-wiring contracts for build_default()."""
         request = cls.build_default_request(
             preload_code_model=preload_code_model,
             cwd=cwd,
@@ -503,10 +535,7 @@ class ServerFactoryService:
         )
         validated_request = cls.validate_build_default_request_map(request)
         validation = cls.validate_factory_contracts(class_overrides=class_overrides)
-        return cls.build_default_from_validation(
-            request=validated_request,
-            validation=validation,
-        )
+        return {"request": validated_request, "validation": validation}
 
     @classmethod
     def build_default_from_validation(
