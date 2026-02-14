@@ -42,6 +42,7 @@ from .semantic_modulator.app.persistence_orchestration_service import (
 )
 from .semantic_modulator.app.progress_service import ProgressRenderService
 from .semantic_modulator.app.server_factory_service import ServerFactoryService
+from .semantic_modulator.app.server_service_adapter import ServerServiceAdapter
 from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
@@ -171,6 +172,12 @@ class SemanticModulatorServer:
             tooling=self.tooling,
             logger=logger,
         )
+        self.service_adapter = ServerServiceAdapter(
+            persistence_service=self.persistence_service,
+            context_service=self.context_service,
+            progress_service=self.progress_service,
+            logger=logger,
+        )
 
         # NOTE: Auto-load moved to __aenter__ for proper lifespan management
         # This ensures clean startup/shutdown sequencing
@@ -179,27 +186,24 @@ class SemanticModulatorServer:
 
     def _load_persisted_documents(self):
         """Load previously persisted documents on server start"""
-        self.persistence_service.load_persisted_documents(
+        self.service_adapter.load_persisted_documents(
             compressor=self.compressor,
             persistence=self.persistence,
             resource_manager=self.resource_manager,
-            logger=logger,
         )
 
     def _load_file_sync_metadata(self):
         """Load file sync metadata on server start"""
-        self.persistence_service.load_file_sync_metadata(
+        self.service_adapter.load_file_sync_metadata(
             persistence=self.persistence,
             sync_manager=self.sync_manager,
-            logger=logger,
         )
 
     def _save_file_sync_metadata(self):
         """Save file sync metadata to persistent storage"""
-        self.persistence_service.save_file_sync_metadata(
+        self.service_adapter.save_file_sync_metadata(
             sync_manager=self.sync_manager,
             persistence=self.persistence,
-            logger=logger,
         )
 
     def _build_context(self) -> HandlerContext:
@@ -209,7 +213,7 @@ class SemanticModulatorServer:
         Returns:
             HandlerContext TypedDict containing all components needed by handlers
         """
-        return self.context_service.build_context(
+        return self.service_adapter.build_context(
             compressor=self.compressor,
             blind_spot_detector=self.blind_spot_detector,
             halo_detector=self.halo_detector,
@@ -258,11 +262,11 @@ class SemanticModulatorServer:
         - Text pattern: 'doc_n0', 'doc_n1' -> 'doc'
         - Code pattern: 'file.py::ClassName', 'file.py::func_name' -> 'file.py'
         """
-        return self.context_service.extract_file_id_from_node(node_id)
+        return self.service_adapter.extract_file_id_from_node(node_id)
 
     def _validate_file_id(self, file_id: str, must_exist: bool = True) -> None:
         """Validate file_id and provide helpful error messages"""
-        self.context_service.validate_file_id(
+        self.service_adapter.validate_file_id(
             compressor=self.compressor,
             file_id=file_id,
             must_exist=must_exist,
@@ -270,18 +274,18 @@ class SemanticModulatorServer:
 
     def _validate_node_ids(self, node_ids: List[str]) -> None:
         """Validate node_ids and provide helpful suggestions"""
-        self.context_service.validate_node_ids(compressor=self.compressor, node_ids=node_ids)
+        self.service_adapter.validate_node_ids(compressor=self.compressor, node_ids=node_ids)
 
     def _validate_token_count(self, available_tokens: int, max_tokens: int = None) -> None:
         """Validate token counts"""
-        self.context_service.validate_token_count(
+        self.service_adapter.validate_token_count(
             available_tokens=available_tokens,
             max_tokens=max_tokens,
         )
 
     def _create_progress_bar(self, percentage: float, width: int = 40) -> str:
         """Create a text progress bar"""
-        return self.progress_service.create_progress_bar(percentage=percentage, width=width)
+        return self.service_adapter.create_progress_bar(percentage=percentage, width=width)
 
     async def __aenter__(self):
         """
