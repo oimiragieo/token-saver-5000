@@ -1187,3 +1187,113 @@ def test_build_default_rejects_build_kwargs_drift_before_build_call():
 
     assert "focus_manager_cls" in str(exc_info.value)
     assert called["build"] is False
+
+
+def test_validate_factory_contracts_runs_validation_pipeline_in_order():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+    defaults_map = {"CodeCompressionAdapter": object()}
+    resolved_map = {"CodeCompressionAdapter": object()}
+    build_kwargs = {"code_adapter_cls": object()}
+
+    original_default = module.ServerFactoryService.default_class_map
+    original_validate_default = module.ServerFactoryService.validate_default_class_map
+    original_resolve = module.ServerFactoryService.resolve_class_overrides
+    original_build_kwargs = module.ServerFactoryService.build_kwargs_from_resolved_classes
+    original_validate_build = module.ServerFactoryService.validate_build_kwargs_map
+
+    def fake_default_map():
+        calls.append("default_class_map")
+        return defaults_map
+
+    def fake_validate_default(default_map):
+        calls.append("validate_default_class_map")
+        assert default_map is defaults_map
+        return default_map
+
+    def fake_resolve(*, defaults, overrides):
+        calls.append("resolve_class_overrides")
+        assert defaults is defaults_map
+        assert overrides == {"FocusManager": object_override}
+        return resolved_map
+
+    def fake_build_kwargs(resolved_classes):
+        calls.append("build_kwargs_from_resolved_classes")
+        assert resolved_classes is resolved_map
+        return build_kwargs
+
+    def fake_validate_build_kwargs(kwargs):
+        calls.append("validate_build_kwargs_map")
+        assert kwargs is build_kwargs
+        return kwargs
+
+    object_override = object()
+
+    module.ServerFactoryService.default_class_map = staticmethod(fake_default_map)
+    module.ServerFactoryService.validate_default_class_map = staticmethod(fake_validate_default)
+    module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
+    module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_build_kwargs)
+    module.ServerFactoryService.validate_build_kwargs_map = staticmethod(fake_validate_build_kwargs)
+    try:
+        result = module.ServerFactoryService.validate_factory_contracts(
+            class_overrides={"FocusManager": object_override}
+        )
+    finally:
+        module.ServerFactoryService.default_class_map = original_default
+        module.ServerFactoryService.validate_default_class_map = original_validate_default
+        module.ServerFactoryService.resolve_class_overrides = original_resolve
+        module.ServerFactoryService.build_kwargs_from_resolved_classes = original_build_kwargs
+        module.ServerFactoryService.validate_build_kwargs_map = original_validate_build
+
+    assert calls == [
+        "default_class_map",
+        "validate_default_class_map",
+        "resolve_class_overrides",
+        "build_kwargs_from_resolved_classes",
+        "validate_build_kwargs_map",
+    ]
+    assert result["resolved_classes"] is resolved_map
+    assert result["build_kwargs"] is build_kwargs
+
+
+def test_build_default_delegates_to_validate_factory_contracts():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    sentinel = {
+        "resolved_classes": {"CodeCompressionAdapter": object()},
+        "build_kwargs": {"code_adapter_cls": object()},
+    }
+    captured = {}
+
+    original_validate = module.ServerFactoryService.validate_factory_contracts
+    original_build = module.ServerFactoryService.__dict__["build"]
+
+    def fake_validate(_cls, *, class_overrides):
+        captured["class_overrides"] = class_overrides
+        return sentinel
+
+    def fake_build(_cls, **kwargs):
+        captured["build_kwargs"] = kwargs
+        return {"ok": True}
+
+    module.ServerFactoryService.validate_factory_contracts = classmethod(fake_validate)
+    module.ServerFactoryService.build = classmethod(fake_build)
+    try:
+        result = module.ServerFactoryService.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=7,
+            logger=Mock(),
+            class_overrides={"FocusManager": object()},
+        )
+    finally:
+        module.ServerFactoryService.validate_factory_contracts = original_validate
+        module.ServerFactoryService.build = original_build
+
+    assert result == {"ok": True}
+    assert "FocusManager" in captured["class_overrides"]
+    assert (
+        captured["build_kwargs"]["code_adapter_cls"] is sentinel["build_kwargs"]["code_adapter_cls"]
+    )

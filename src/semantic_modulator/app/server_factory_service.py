@@ -103,6 +103,13 @@ class BuildArtifacts(CoreRuntimeArtifacts, ServiceLayerArtifacts):
     retrieval_history: dict[str, Any]
 
 
+class FactoryValidationResult(TypedDict):
+    """Validated class and build-kwargs maps used by build_default."""
+
+    resolved_classes: FactoryClassMap
+    build_kwargs: BuildKwargsMap
+
+
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
@@ -381,6 +388,26 @@ class ServerFactoryService:
         }
 
     @classmethod
+    def validate_factory_contracts(
+        cls,
+        *,
+        class_overrides: dict[str, Any] | None,
+    ) -> FactoryValidationResult:
+        """Run class-map and build-kwargs validations before factory build."""
+        defaults = cls.validate_default_class_map(cls.default_class_map())
+        resolved_classes = cls.resolve_class_overrides(
+            defaults=defaults,
+            overrides=class_overrides,
+        )
+        build_kwargs = cls.validate_build_kwargs_map(
+            cls.build_kwargs_from_resolved_classes(resolved_classes)
+        )
+        return {
+            "resolved_classes": resolved_classes,
+            "build_kwargs": build_kwargs,
+        }
+
+    @classmethod
     def build_default(
         cls,
         *,
@@ -391,14 +418,7 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
-        defaults = cls.validate_default_class_map(cls.default_class_map())
-        resolved_classes = cls.resolve_class_overrides(
-            defaults=defaults,
-            overrides=class_overrides,
-        )
-        build_kwargs = cls.validate_build_kwargs_map(
-            cls.build_kwargs_from_resolved_classes(resolved_classes)
-        )
+        validation = cls.validate_factory_contracts(class_overrides=class_overrides)
 
         return cls.build(
             preload_code_model=preload_code_model,
@@ -406,7 +426,7 @@ class ServerFactoryService:
             home_dir=home_dir,
             max_ace_contexts=max_ace_contexts,
             logger=logger,
-            **build_kwargs,
+            **validation["build_kwargs"],
         )
 
     @classmethod
