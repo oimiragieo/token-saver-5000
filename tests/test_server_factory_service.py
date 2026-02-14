@@ -107,14 +107,14 @@ def test_factory_build_default_delegates_to_build_with_production_wiring():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
 
     sentinel = {"ok": True}
-    original_build = module.ServerFactoryService.build
+    original_build = module.ServerFactoryService.__dict__["build"]
     call_kwargs = {}
 
-    def fake_build(**kwargs):
+    def fake_build(_cls, **kwargs):
         call_kwargs.update(kwargs)
         return sentinel
 
-    module.ServerFactoryService.build = staticmethod(fake_build)
+    module.ServerFactoryService.build = classmethod(fake_build)
     try:
         result = module.ServerFactoryService.build_default(
             preload_code_model=True,
@@ -212,19 +212,19 @@ def test_build_default_uses_resolve_class_overrides_result_for_build_wiring():
     captured_build = {}
 
     original_resolve = module.ServerFactoryService.resolve_class_overrides
-    original_build = module.ServerFactoryService.build
+    original_build = module.ServerFactoryService.__dict__["build"]
 
     def fake_resolve(*, defaults, overrides):
         captured_resolve["defaults"] = defaults
         captured_resolve["overrides"] = overrides
         return resolved
 
-    def fake_build(**kwargs):
+    def fake_build(_cls, **kwargs):
         captured_build.update(kwargs)
         return sentinel_result
 
     module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
-    module.ServerFactoryService.build = staticmethod(fake_build)
+    module.ServerFactoryService.build = classmethod(fake_build)
     try:
         result = module.ServerFactoryService.build_default(
             preload_code_model=True,
@@ -291,7 +291,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     original_default_map = module.ServerFactoryService.default_class_map
     original_resolve = module.ServerFactoryService.resolve_class_overrides
     original_helper = module.ServerFactoryService.build_kwargs_from_resolved_classes
-    original_build = module.ServerFactoryService.build
+    original_build = module.ServerFactoryService.__dict__["build"]
 
     captured = {}
 
@@ -307,14 +307,14 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
         captured["resolved"] = resolved
         return helper_kwargs
 
-    def fake_build(**kwargs):
+    def fake_build(_cls, **kwargs):
         captured["build_kwargs"] = kwargs
         return sentinel_result
 
     module.ServerFactoryService.default_class_map = staticmethod(fake_default_map)
     module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
     module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_helper)
-    module.ServerFactoryService.build = staticmethod(fake_build)
+    module.ServerFactoryService.build = classmethod(fake_build)
     try:
         result = module.ServerFactoryService.build_default(
             preload_code_model=True,
@@ -435,3 +435,103 @@ def test_build_uses_helper_configs_for_constructor_kwargs():
     assert captured["afm_kwargs"] == module.ServerFactoryService.afm_config_kwargs()
     assert captured["resource_kwargs"] == module.ServerFactoryService.resource_limits_kwargs()
     assert captured["ace_kwargs"] == module.ServerFactoryService.ace_framework_kwargs()
+
+
+def test_build_class_dispatch_uses_subclass_helper_overrides():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    class DerivedFactory(module.ServerFactoryService):
+        @staticmethod
+        def code_adapter_config(*, preload_code_model: bool):
+            return {
+                "text_model": "text-x",
+                "code_model": "code-y",
+                "similarity_threshold": 0.11,
+                "skeleton_ratio": 0.33,
+                "preload_code_model": preload_code_model,
+            }
+
+        @staticmethod
+        def afm_config_kwargs():
+            return {
+                "tau_high": 0.9,
+                "tau_mid": 0.4,
+                "half_life": 3,
+                "use_llm_importance": True,
+                "use_llm_compression": True,
+            }
+
+        @staticmethod
+        def resource_limits_kwargs():
+            return {
+                "max_document_size_mb": 1.0,
+                "max_total_storage_mb": 2.0,
+                "max_documents": 3,
+                "max_memory_mb": 4.0,
+            }
+
+        @staticmethod
+        def ace_framework_kwargs():
+            return {"deduplication_threshold": 0.1, "max_bullets": 7}
+
+        @staticmethod
+        def default_context_window_monitor():
+            return {"max_tokens": 42, "used_tokens": 1, "history": ["seed"]}
+
+    captured = {}
+
+    def code_adapter_cls(**kwargs):
+        captured["code"] = kwargs
+        return Mock()
+
+    def afm_config_cls(**kwargs):
+        captured["afm"] = kwargs
+        return Mock()
+
+    def resource_limits_cls(**kwargs):
+        captured["resource"] = kwargs
+        return Mock()
+
+    def ace_framework_cls(**kwargs):
+        captured["ace"] = kwargs
+        return Mock()
+
+    def noop(*args, **kwargs):
+        return Mock()
+
+    components = DerivedFactory.build(
+        preload_code_model=True,
+        cwd="C:/repo",
+        home_dir="C:/Users/test",
+        max_ace_contexts=5,
+        code_adapter_cls=code_adapter_cls,
+        blind_spot_cls=noop,
+        halo_cls=noop,
+        context_window_adapter_cls=noop,
+        multilevel_encoder_cls=noop,
+        afm_config_cls=afm_config_cls,
+        focus_manager_cls=noop,
+        persistence_cls=noop,
+        resource_limits_cls=resource_limits_cls,
+        resource_manager_cls=noop,
+        file_sync_cls=noop,
+        version_manager_cls=noop,
+        path_validator_cls=noop,
+        ace_framework_cls=ace_framework_cls,
+        ace_context_manager_cls=noop,
+        tooling_gateway_cls=noop,
+        context_service_cls=noop,
+        lifecycle_service_cls=noop,
+        progress_service_cls=noop,
+        persistence_service_cls=noop,
+        tool_profile_service_cls=noop,
+        runtime_service_cls=noop,
+        server_service_adapter_cls=noop,
+        logger=Mock(),
+    )
+
+    assert captured["code"]["text_model"] == "text-x"
+    assert captured["afm"]["half_life"] == 3
+    assert captured["resource"]["max_documents"] == 3
+    assert captured["ace"]["max_bullets"] == 7
+    assert components["context_window_monitor"]["max_tokens"] == 42

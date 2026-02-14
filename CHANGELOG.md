@@ -64,7 +64,7 @@ All notable changes to Token Saver 5000.
 
 - Refactored `ServerFactoryService.build(...)` to consume centralized helper configs for code adapter, AFM, resource limits, ACE defaults, and context-window monitor shape.
 - Added factory contract tests in `tests/test_server_factory_service.py` to lock helper default values and constructor-kwargs wiring behavior.
-## [0.9.0] - 2025-11-29
+- Converted `ServerFactoryService.build(...)` to class-dispatch (`@classmethod`) so helper config overrides are extensible for derived factories without altering default behavior.`r`n- Added subclass-dispatch contract coverage in `tests/test_server_factory_service.py` to verify `build()` uses helper overrides via `cls` dispatch.`r`n`r`n## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**
 
@@ -557,6 +557,7 @@ Goal: Achieve 95/100 production readiness through systematic hardening across re
 - SCAR (arXiv:2511.14063v1)
 - AFM (arXiv:2511.12712v1)
 - ACE (arXiv:2510.04618v1)
+
 
 
 

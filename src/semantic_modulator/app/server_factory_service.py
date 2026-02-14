@@ -171,8 +171,9 @@ class ServerFactoryService:
             **cls.build_kwargs_from_resolved_classes(resolved_classes),
         )
 
-    @staticmethod
+    @classmethod
     def build(
+        cls,
         *,
         preload_code_model: bool,
         cwd: str,
@@ -204,20 +205,18 @@ class ServerFactoryService:
         logger,
     ) -> dict[str, Any]:
         compressor = code_adapter_cls(
-            **ServerFactoryService.code_adapter_config(preload_code_model=preload_code_model)
+            **cls.code_adapter_config(preload_code_model=preload_code_model)
         )
         blind_spot_detector = blind_spot_cls(compressor)
         halo_detector = halo_cls(compressor)
         context_window_adapter = context_window_adapter_cls(compressor)
         multilevel_encoder = multilevel_encoder_cls(compressor)
 
-        afm_config = afm_config_cls(**ServerFactoryService.afm_config_kwargs())
+        afm_config = afm_config_cls(**cls.afm_config_kwargs())
         focus_manager = focus_manager_cls(afm_config)
 
         persistence = persistence_cls()
-        resource_manager = resource_manager_cls(
-            resource_limits_cls(**ServerFactoryService.resource_limits_kwargs())
-        )
+        resource_manager = resource_manager_cls(resource_limits_cls(**cls.resource_limits_kwargs()))
 
         sync_manager = file_sync_cls()
         version_manager = version_manager_cls()
@@ -230,7 +229,7 @@ class ServerFactoryService:
             security_feature="CWE-22 path traversal prevention",
         )
 
-        ace_framework = ace_framework_cls(**ServerFactoryService.ace_framework_kwargs())
+        ace_framework = ace_framework_cls(**cls.ace_framework_kwargs())
         ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
         logger.info(
             "ace_framework_initialized",
@@ -274,6 +273,6 @@ class ServerFactoryService:
             "tool_profile_service": tool_profile_service,
             "runtime_service": runtime_service,
             "service_adapter": service_adapter,
-            "context_window_monitor": ServerFactoryService.default_context_window_monitor(),
+            "context_window_monitor": cls.default_context_window_monitor(),
             "retrieval_history": {},
         }
