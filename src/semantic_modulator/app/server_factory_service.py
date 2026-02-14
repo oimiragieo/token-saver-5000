@@ -453,6 +453,21 @@ class ServerFactoryService:
             "logger": logger,
         }
 
+    @staticmethod
+    def validate_build_default_request_map(
+        request: dict[str, Any],
+    ) -> BuildDefaultRequest:
+        """Fail fast when default runtime request keys drift from contract."""
+        expected_keys = set(BuildDefaultRequest.__annotations__.keys())
+        actual_keys = set(request.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                f"build_default_request_map keys mismatch: missing={missing} extra={extra}"
+            )
+        return cast(BuildDefaultRequest, request)
+
     @classmethod
     def build_default(
         cls,
@@ -464,7 +479,6 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
-        validation = cls.validate_factory_contracts(class_overrides=class_overrides)
         request = cls.build_default_request(
             preload_code_model=preload_code_model,
             cwd=cwd,
@@ -472,8 +486,10 @@ class ServerFactoryService:
             max_ace_contexts=max_ace_contexts,
             logger=logger,
         )
+        validated_request = cls.validate_build_default_request_map(request)
+        validation = cls.validate_factory_contracts(class_overrides=class_overrides)
         return cls.build_default_from_validation(
-            request=request,
+            request=validated_request,
             validation=validation,
         )
 

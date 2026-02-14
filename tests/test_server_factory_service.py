@@ -1538,3 +1538,55 @@ def test_build_from_request_rejects_request_drift_before_build_call():
 
     assert "cwd" in str(exc_info.value)
     assert called["build"] is False
+
+
+def test_validate_build_default_request_map_contract_declared_and_aligned():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module.ServerFactoryService, "validate_build_default_request_map")
+    assert set(module.BuildDefaultRequest.__annotations__.keys()) == {
+        "preload_code_model",
+        "cwd",
+        "home_dir",
+        "max_ace_contexts",
+        "logger",
+    }
+
+
+def test_build_default_rejects_default_request_drift_before_factory_validation():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    original_request = module.ServerFactoryService.build_default_request
+    original_validate_factory = module.ServerFactoryService.validate_factory_contracts
+
+    called = {"validate_factory": False}
+
+    def bad_request(*, preload_code_model, cwd, home_dir, max_ace_contexts, logger):
+        return {
+            "preload_code_model": preload_code_model,
+            "home_dir": home_dir,
+            "max_ace_contexts": max_ace_contexts,
+            "logger": logger,
+        }
+
+    def fake_validate_factory(_cls, *, class_overrides):
+        called["validate_factory"] = True
+        return {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+
+    module.ServerFactoryService.build_default_request = staticmethod(bad_request)
+    module.ServerFactoryService.validate_factory_contracts = classmethod(fake_validate_factory)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default(
+                preload_code_model=True,
+                cwd="C:/repo",
+                home_dir="C:/Users/test",
+                max_ace_contexts=3,
+                logger=Mock(),
+            )
+    finally:
+        module.ServerFactoryService.build_default_request = original_request
+        module.ServerFactoryService.validate_factory_contracts = original_validate_factory
+
+    assert "cwd" in str(exc_info.value)
+    assert called["validate_factory"] is False
