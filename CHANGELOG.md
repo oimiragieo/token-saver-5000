@@ -55,6 +55,9 @@ All notable changes to Token Saver 5000.
 - Added ServerFactoryService.default_class_map() as a dedicated source of production wiring defaults, and updated uild_default() to consume it through esolve_class_overrides(...) for cleaner composition semantics.
 - Added factory contracts in 	ests/test_server_factory_service.py to lock default-map coverage and enforce that uild_default() uses resolved override output for downstream build wiring.
 
+- Added uild_kwargs_from_resolved_classes(...) in ServerFactoryService to centralize alias-to-build-argument translation and reduce mapping drift risk in uild_default().
+- Added factory contracts in 	ests/test_server_factory_service.py for build-kwargs mapping correctness and uild_default() delegation through the new helper path.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**

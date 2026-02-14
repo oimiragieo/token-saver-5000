@@ -248,3 +248,97 @@ def test_build_default_uses_resolve_class_overrides_result_for_build_wiring():
     assert "FocusManager" in captured_resolve["overrides"]
     assert captured_build["focus_manager_cls"] is resolved["FocusManager"]
     assert captured_build["server_service_adapter_cls"] is resolved["ServerServiceAdapter"]
+
+
+def test_build_kwargs_from_resolved_classes_maps_expected_build_arguments():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    resolved = {
+        "CodeCompressionAdapter": object(),
+        "BlindSpotDetector": object(),
+        "HaloEffectDetector": object(),
+        "ContextWindowAdapter": object(),
+        "MultiLevelSemanticEncoder": object(),
+        "AFMConfig": object(),
+        "FocusManager": object(),
+        "PersistenceManager": object(),
+        "ResourceLimits": object(),
+        "ResourceManager": object(),
+        "FileSyncManager": object(),
+        "VersionManager": object(),
+        "PathValidator": object(),
+        "ACEFramework": object(),
+        "ACEContextManager": object(),
+        "MCPToolingGateway": object(),
+        "ServerContextService": object(),
+        "ServerLifecycleService": object(),
+        "ProgressRenderService": object(),
+        "PersistenceOrchestrationService": object(),
+        "ToolProfileBootstrapService": object(),
+        "RuntimeService": object(),
+        "ServerServiceAdapter": object(),
+    }
+
+    kwargs = module.ServerFactoryService.build_kwargs_from_resolved_classes(resolved)
+
+    assert kwargs["code_adapter_cls"] is resolved["CodeCompressionAdapter"]
+    assert kwargs["path_validator_cls"] is resolved["PathValidator"]
+    assert kwargs["server_service_adapter_cls"] is resolved["ServerServiceAdapter"]
+    assert len(kwargs) == 23
+
+
+def test_build_default_uses_build_kwargs_helper_for_build_invocation():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+    service = module.ServerFactoryService()
+
+    sentinel_result = {"ok": True}
+    helper_kwargs = {"code_adapter_cls": object()}
+
+    original_default_map = module.ServerFactoryService.default_class_map
+    original_resolve = module.ServerFactoryService.resolve_class_overrides
+    original_helper = module.ServerFactoryService.build_kwargs_from_resolved_classes
+    original_build = module.ServerFactoryService.build
+
+    captured = {}
+
+    def fake_default_map():
+        return {"CodeCompressionAdapter": object()}
+
+    def fake_resolve(*, defaults, overrides):
+        captured["defaults"] = defaults
+        captured["overrides"] = overrides
+        return {"CodeCompressionAdapter": object()}
+
+    def fake_helper(resolved):
+        captured["resolved"] = resolved
+        return helper_kwargs
+
+    def fake_build(**kwargs):
+        captured["build_kwargs"] = kwargs
+        return sentinel_result
+
+    module.ServerFactoryService.default_class_map = staticmethod(fake_default_map)
+    module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
+    module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_helper)
+    module.ServerFactoryService.build = staticmethod(fake_build)
+    try:
+        result = service.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=9,
+            logger=Mock(),
+            class_overrides={"CodeCompressionAdapter": object()},
+        )
+    finally:
+        module.ServerFactoryService.default_class_map = original_default_map
+        module.ServerFactoryService.resolve_class_overrides = original_resolve
+        module.ServerFactoryService.build_kwargs_from_resolved_classes = original_helper
+        module.ServerFactoryService.build = original_build
+
+    assert result is sentinel_result
+    assert captured["build_kwargs"]["code_adapter_cls"] is helper_kwargs["code_adapter_cls"]
+    assert captured["build_kwargs"]["preload_code_model"] is True
+    assert captured["build_kwargs"]["cwd"] == "C:/repo"
+    assert captured["build_kwargs"]["home_dir"] == "C:/Users/test"
+    assert captured["build_kwargs"]["max_ace_contexts"] == 9

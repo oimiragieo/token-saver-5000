@@ -86,6 +86,35 @@ class ServerFactoryService:
             raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
         return {**defaults, **active_overrides}
 
+    @staticmethod
+    def build_kwargs_from_resolved_classes(resolved_classes: dict[str, Any]) -> dict[str, Any]:
+        """Translate resolved class alias map into build() keyword arguments."""
+        return {
+            "code_adapter_cls": resolved_classes["CodeCompressionAdapter"],
+            "blind_spot_cls": resolved_classes["BlindSpotDetector"],
+            "halo_cls": resolved_classes["HaloEffectDetector"],
+            "context_window_adapter_cls": resolved_classes["ContextWindowAdapter"],
+            "multilevel_encoder_cls": resolved_classes["MultiLevelSemanticEncoder"],
+            "afm_config_cls": resolved_classes["AFMConfig"],
+            "focus_manager_cls": resolved_classes["FocusManager"],
+            "persistence_cls": resolved_classes["PersistenceManager"],
+            "resource_limits_cls": resolved_classes["ResourceLimits"],
+            "resource_manager_cls": resolved_classes["ResourceManager"],
+            "file_sync_cls": resolved_classes["FileSyncManager"],
+            "version_manager_cls": resolved_classes["VersionManager"],
+            "path_validator_cls": resolved_classes["PathValidator"],
+            "ace_framework_cls": resolved_classes["ACEFramework"],
+            "ace_context_manager_cls": resolved_classes["ACEContextManager"],
+            "tooling_gateway_cls": resolved_classes["MCPToolingGateway"],
+            "context_service_cls": resolved_classes["ServerContextService"],
+            "lifecycle_service_cls": resolved_classes["ServerLifecycleService"],
+            "progress_service_cls": resolved_classes["ProgressRenderService"],
+            "persistence_service_cls": resolved_classes["PersistenceOrchestrationService"],
+            "tool_profile_service_cls": resolved_classes["ToolProfileBootstrapService"],
+            "runtime_service_cls": resolved_classes["RuntimeService"],
+            "server_service_adapter_cls": resolved_classes["ServerServiceAdapter"],
+        }
+
     @classmethod
     def build_default(
         cls,
@@ -107,30 +136,8 @@ class ServerFactoryService:
             cwd=cwd,
             home_dir=home_dir,
             max_ace_contexts=max_ace_contexts,
-            code_adapter_cls=resolved_classes["CodeCompressionAdapter"],
-            blind_spot_cls=resolved_classes["BlindSpotDetector"],
-            halo_cls=resolved_classes["HaloEffectDetector"],
-            context_window_adapter_cls=resolved_classes["ContextWindowAdapter"],
-            multilevel_encoder_cls=resolved_classes["MultiLevelSemanticEncoder"],
-            afm_config_cls=resolved_classes["AFMConfig"],
-            focus_manager_cls=resolved_classes["FocusManager"],
-            persistence_cls=resolved_classes["PersistenceManager"],
-            resource_limits_cls=resolved_classes["ResourceLimits"],
-            resource_manager_cls=resolved_classes["ResourceManager"],
-            file_sync_cls=resolved_classes["FileSyncManager"],
-            version_manager_cls=resolved_classes["VersionManager"],
-            path_validator_cls=resolved_classes["PathValidator"],
-            ace_framework_cls=resolved_classes["ACEFramework"],
-            ace_context_manager_cls=resolved_classes["ACEContextManager"],
-            tooling_gateway_cls=resolved_classes["MCPToolingGateway"],
-            context_service_cls=resolved_classes["ServerContextService"],
-            lifecycle_service_cls=resolved_classes["ServerLifecycleService"],
-            progress_service_cls=resolved_classes["ProgressRenderService"],
-            persistence_service_cls=resolved_classes["PersistenceOrchestrationService"],
-            tool_profile_service_cls=resolved_classes["ToolProfileBootstrapService"],
-            runtime_service_cls=resolved_classes["RuntimeService"],
-            server_service_adapter_cls=resolved_classes["ServerServiceAdapter"],
             logger=logger,
+            **cls.build_kwargs_from_resolved_classes(resolved_classes),
         )
 
     @staticmethod
