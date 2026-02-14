@@ -89,6 +89,8 @@ class SemanticModulatorServer:
             progress_service_cls=ProgressRenderService,
             persistence_service_cls=PersistenceOrchestrationService,
             tool_profile_service_cls=ToolProfileBootstrapService,
+            runtime_service_cls=RuntimeService,
+            server_service_adapter_cls=ServerServiceAdapter,
             logger=logger,
         )
         self.__dict__.update(components)
@@ -98,13 +100,6 @@ class SemanticModulatorServer:
             tooling=self.tooling,
             logger=logger,
         )
-        self.service_adapter = ServerServiceAdapter(
-            persistence_service=self.persistence_service,
-            context_service=self.context_service,
-            progress_service=self.progress_service,
-            logger=logger,
-        )
-        self.runtime_service = RuntimeService()
 
         # NOTE: Auto-load moved to __aenter__ for proper lifespan management
         # This ensures clean startup/shutdown sequencing

@@ -36,6 +36,8 @@ class ServerFactoryService:
         progress_service_cls,
         persistence_service_cls,
         tool_profile_service_cls,
+        runtime_service_cls,
+        server_service_adapter_cls,
         logger,
     ) -> dict[str, Any]:
         compressor = code_adapter_cls(
@@ -92,6 +94,19 @@ class ServerFactoryService:
             max_contexts=max_ace_contexts,
         )
 
+        context_service = context_service_cls()
+        lifecycle_service = lifecycle_service_cls()
+        progress_service = progress_service_cls()
+        persistence_service = persistence_service_cls()
+        tool_profile_service = tool_profile_service_cls()
+        runtime_service = runtime_service_cls()
+        service_adapter = server_service_adapter_cls(
+            persistence_service=persistence_service,
+            context_service=context_service,
+            progress_service=progress_service,
+            logger=logger,
+        )
+
         return {
             "compressor": compressor,
             "blind_spot_detector": blind_spot_detector,
@@ -107,11 +122,13 @@ class ServerFactoryService:
             "ace_framework": ace_framework,
             "ace_contexts": ace_contexts,
             "tooling": tooling_gateway_cls(),
-            "context_service": context_service_cls(),
-            "lifecycle_service": lifecycle_service_cls(),
-            "progress_service": progress_service_cls(),
-            "persistence_service": persistence_service_cls(),
-            "tool_profile_service": tool_profile_service_cls(),
+            "context_service": context_service,
+            "lifecycle_service": lifecycle_service,
+            "progress_service": progress_service,
+            "persistence_service": persistence_service,
+            "tool_profile_service": tool_profile_service,
+            "runtime_service": runtime_service,
+            "service_adapter": service_adapter,
             "context_window_monitor": {"max_tokens": 100000, "used_tokens": 0, "history": []},
             "retrieval_history": {},
         }

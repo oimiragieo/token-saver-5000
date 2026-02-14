@@ -42,6 +42,8 @@ def test_factory_build_creates_core_components_and_services():
         progress_service_cls=make("progress_service"),
         persistence_service_cls=make("persistence_service"),
         tool_profile_service_cls=make("tool_profile_service"),
+        runtime_service_cls=make("runtime_service"),
+        server_service_adapter_cls=make("service_adapter"),
         logger=Mock(),
     )
 
@@ -49,6 +51,8 @@ def test_factory_build_creates_core_components_and_services():
     assert "resource_manager" in components
     assert "path_validator" in components
     assert "tooling" in components
+    assert "runtime_service" in components
+    assert "service_adapter" in components
     assert "context_window_monitor" in components
     assert components["retrieval_history"] == {}
 
@@ -92,6 +96,8 @@ def test_factory_build_uses_cwd_and_home_for_path_validator():
         progress_service_cls=noop,
         persistence_service_cls=noop,
         tool_profile_service_cls=noop,
+        runtime_service_cls=noop,
+        server_service_adapter_cls=noop,
         logger=Mock(),
     )
 
