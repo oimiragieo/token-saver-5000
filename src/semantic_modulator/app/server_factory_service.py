@@ -527,7 +527,13 @@ class ServerFactoryService:
             raise ValueError(
                 f"default_build_inputs_map keys mismatch: missing={missing} extra={extra}"
             )
-        return cast(DefaultBuildInputs, inputs)
+        validated_request = ServerFactoryService.validate_build_default_request_map(
+            cast(dict[str, Any], inputs["request"])
+        )
+        validated_validation = ServerFactoryService.validate_factory_validation_result_map(
+            cast(dict[str, Any], inputs["validation"])
+        )
+        return {"request": validated_request, "validation": validated_validation}
 
     @classmethod
     def validate_default_build_inputs(

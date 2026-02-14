@@ -1695,7 +1695,13 @@ def test_build_default_delegates_to_validate_default_build_inputs():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
 
     sentinel = {
-        "request": {"preload_code_model": True, "cwd": "C:/repo"},
+        "request": {
+            "preload_code_model": True,
+            "cwd": "C:/repo",
+            "home_dir": "C:/Users/test",
+            "max_ace_contexts": 4,
+            "logger": Mock(),
+        },
         "validation": {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}},
     }
     captured = {}
@@ -1814,4 +1820,107 @@ def test_build_default_rejects_default_build_inputs_drift_before_dispatch():
         module.ServerFactoryService.build_default_from_validation = original_dispatch
 
     assert "validation" in str(exc_info.value)
+    assert called["dispatch"] is False
+
+
+def test_validate_default_build_inputs_map_validates_nested_payloads_in_order():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+    sentinel_request = {"preload_code_model": True, "cwd": "C:/repo"}
+    sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+
+    original_validate_request = module.ServerFactoryService.validate_build_default_request_map
+    original_validate_validation = (
+        module.ServerFactoryService.validate_factory_validation_result_map
+    )
+
+    def fake_validate_request(request):
+        calls.append("validate_build_default_request_map")
+        assert request is sentinel_request
+        return {
+            "preload_code_model": True,
+            "cwd": "C:/repo",
+            "home_dir": "X",
+            "max_ace_contexts": 1,
+            "logger": Mock(),
+        }
+
+    def fake_validate_validation(validation):
+        calls.append("validate_factory_validation_result_map")
+        assert validation is sentinel_validation
+        return validation
+
+    module.ServerFactoryService.validate_build_default_request_map = staticmethod(
+        fake_validate_request
+    )
+    module.ServerFactoryService.validate_factory_validation_result_map = staticmethod(
+        fake_validate_validation
+    )
+    try:
+        result = module.ServerFactoryService.validate_default_build_inputs_map(
+            {"request": sentinel_request, "validation": sentinel_validation}
+        )
+    finally:
+        module.ServerFactoryService.validate_build_default_request_map = original_validate_request
+        module.ServerFactoryService.validate_factory_validation_result_map = (
+            original_validate_validation
+        )
+
+    assert calls == [
+        "validate_build_default_request_map",
+        "validate_factory_validation_result_map",
+    ]
+    assert result["validation"] is sentinel_validation
+    assert result["request"]["cwd"] == "C:/repo"
+
+
+def test_build_default_rejects_default_build_inputs_nested_request_drift_before_dispatch():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    original_validate_inputs = module.ServerFactoryService.validate_default_build_inputs
+    original_dispatch = module.ServerFactoryService.build_default_from_validation
+
+    called = {"dispatch": False}
+
+    def bad_validate_inputs(
+        _cls,
+        *,
+        preload_code_model,
+        cwd,
+        home_dir,
+        max_ace_contexts,
+        logger,
+        class_overrides,
+    ):
+        return {
+            "request": {
+                "preload_code_model": preload_code_model,
+                "home_dir": home_dir,
+                "max_ace_contexts": max_ace_contexts,
+                "logger": logger,
+            },
+            "validation": {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}},
+        }
+
+    def fake_dispatch(_cls, *, request, validation):
+        called["dispatch"] = True
+        return {"ok": True}
+
+    module.ServerFactoryService.validate_default_build_inputs = classmethod(bad_validate_inputs)
+    module.ServerFactoryService.build_default_from_validation = classmethod(fake_dispatch)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default(
+                preload_code_model=True,
+                cwd="C:/repo",
+                home_dir="C:/Users/test",
+                max_ace_contexts=3,
+                logger=Mock(),
+            )
+    finally:
+        module.ServerFactoryService.validate_default_build_inputs = original_validate_inputs
+        module.ServerFactoryService.build_default_from_validation = original_dispatch
+
+    assert "cwd" in str(exc_info.value)
     assert called["dispatch"] is False
