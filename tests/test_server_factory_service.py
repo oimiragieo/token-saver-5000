@@ -1924,3 +1924,102 @@ def test_build_default_rejects_default_build_inputs_nested_request_drift_before_
 
     assert "cwd" in str(exc_info.value)
     assert called["dispatch"] is False
+
+
+def test_validate_default_build_inputs_map_uses_class_dispatch_for_nested_validators():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+
+    class DerivedFactory(module.ServerFactoryService):
+        @staticmethod
+        def validate_build_default_request_map(request):
+            calls.append("validate_build_default_request_map")
+            return request
+
+        @staticmethod
+        def validate_factory_validation_result_map(validation):
+            calls.append("validate_factory_validation_result_map")
+            return validation
+
+    result = DerivedFactory.validate_default_build_inputs_map(
+        {
+            "request": {
+                "preload_code_model": True,
+                "cwd": "C:/repo",
+                "home_dir": "C:/Users/test",
+                "max_ace_contexts": 3,
+                "logger": Mock(),
+            },
+            "validation": {
+                "resolved_classes": {},
+                "build_kwargs": {
+                    "code_adapter_cls": object(),
+                    "blind_spot_cls": object(),
+                    "halo_cls": object(),
+                    "context_window_adapter_cls": object(),
+                    "multilevel_encoder_cls": object(),
+                    "afm_config_cls": object(),
+                    "focus_manager_cls": object(),
+                    "persistence_cls": object(),
+                    "resource_limits_cls": object(),
+                    "resource_manager_cls": object(),
+                    "file_sync_cls": object(),
+                    "version_manager_cls": object(),
+                    "path_validator_cls": object(),
+                    "ace_framework_cls": object(),
+                    "ace_context_manager_cls": object(),
+                    "tooling_gateway_cls": object(),
+                    "context_service_cls": object(),
+                    "lifecycle_service_cls": object(),
+                    "progress_service_cls": object(),
+                    "persistence_service_cls": object(),
+                    "tool_profile_service_cls": object(),
+                    "runtime_service_cls": object(),
+                    "server_service_adapter_cls": object(),
+                },
+            },
+        }
+    )
+
+    assert calls == [
+        "validate_build_default_request_map",
+        "validate_factory_validation_result_map",
+    ]
+    assert "request" in result
+    assert "validation" in result
+
+
+def test_build_default_from_validation_rejects_request_drift_before_validation_merge():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    bad_request = {
+        "preload_code_model": True,
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 3,
+        "logger": Mock(),
+    }
+    validation = {
+        "resolved_classes": {},
+        "build_kwargs": {"code_adapter_cls": object()},
+    }
+
+    original_merge = module.ServerFactoryService.build_request_from_default_validation
+    called = {"merge": False}
+
+    def fake_merge(_cls, *, request, validation):
+        called["merge"] = True
+        return {"preload_code_model": True, "cwd": "C:/repo", "code_adapter_cls": object()}
+
+    module.ServerFactoryService.build_request_from_default_validation = classmethod(fake_merge)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default_from_validation(
+                request=bad_request,
+                validation=validation,
+            )
+    finally:
+        module.ServerFactoryService.build_request_from_default_validation = original_merge
+
+    assert "cwd" in str(exc_info.value)
+    assert called["merge"] is False

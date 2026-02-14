@@ -516,8 +516,11 @@ class ServerFactoryService:
             validation=inputs["validation"],
         )
 
-    @staticmethod
-    def validate_default_build_inputs_map(inputs: dict[str, Any]) -> DefaultBuildInputs:
+    @classmethod
+    def validate_default_build_inputs_map(
+        cls,
+        inputs: dict[str, Any],
+    ) -> DefaultBuildInputs:
         """Fail fast when DefaultBuildInputs map drifts from contract."""
         expected_keys = set(DefaultBuildInputs.__annotations__.keys())
         actual_keys = set(inputs.keys())
@@ -527,10 +530,10 @@ class ServerFactoryService:
             raise ValueError(
                 f"default_build_inputs_map keys mismatch: missing={missing} extra={extra}"
             )
-        validated_request = ServerFactoryService.validate_build_default_request_map(
+        validated_request = cls.validate_build_default_request_map(
             cast(dict[str, Any], inputs["request"])
         )
-        validated_validation = ServerFactoryService.validate_factory_validation_result_map(
+        validated_validation = cls.validate_factory_validation_result_map(
             cast(dict[str, Any], inputs["validation"])
         )
         return {"request": validated_request, "validation": validated_validation}
@@ -566,9 +569,10 @@ class ServerFactoryService:
         validation: FactoryValidationResult,
     ) -> BuildArtifacts:
         """Build default runtime artifacts from pre-validated class wiring contracts."""
+        validated_request = cls.validate_build_default_request_map(request)
         validated_validation = cls.validate_factory_validation_result_map(validation)
         build_request = cls.build_request_from_default_validation(
-            request=request,
+            request=validated_request,
             validation=validated_validation,
         )
         return cls.build_from_request(request=build_request)
