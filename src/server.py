@@ -42,6 +42,7 @@ from .semantic_modulator.app.persistence_orchestration_service import (
     PersistenceOrchestrationService,
 )
 from .semantic_modulator.app.progress_service import ProgressRenderService
+from .semantic_modulator.app.server_factory_service import ServerFactoryService
 from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
@@ -131,102 +132,44 @@ class SemanticModulatorServer:
 
     def __init__(self):
         self.server = Server("semantic-modulator")
-        # CodeCompressionAdapter routes text files to SemanticCompressor
-        # and code files (Python, JS, TS, etc.) to CodeSemanticCompressor
-        # CodeBERT model (~400MB) loaded lazily on first code file
-        # Set PRELOAD_CODE_MODEL=true to prewarm for heavy code workflows
-        self.compressor = CodeCompressionAdapter(
-            text_model="all-MiniLM-L6-v2",
-            code_model="microsoft/codebert-base",
-            similarity_threshold=0.75,
-            skeleton_ratio=0.2,
-            preload_code_model=os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true",
-        )
-        self.blind_spot_detector = BlindSpotDetector(self.compressor)
-        self.halo_detector = HaloEffectDetector(self.compressor)
-
-        # JSCCM-inspired adaptive components
-        self.context_window_adapter = ContextWindowAdapter(self.compressor)
-        self.multilevel_encoder = MultiLevelSemanticEncoder(self.compressor)
-
-        # AFM (Adaptive Focus Memory) for dialogue management
-        afm_config = AFMConfig(
-            tau_high=0.45,
-            tau_mid=0.25,
-            half_life=12,
-            use_llm_importance=False,  # Use heuristic importance
-            use_llm_compression=False,  # Use heuristic compression
-        )
-        self.focus_manager = FocusManager(afm_config)
-
-        # Persistence layer (NEW!)
-        self.persistence = PersistenceManager()
-
-        # Resource management (NEW!)
-        self.resource_manager = ResourceManager(
-            ResourceLimits(
-                max_document_size_mb=100.0,
-                max_total_storage_mb=1024.0,
-                max_documents=1000,
-                max_memory_mb=2048.0,
-            )
-        )
-
-        # File sync and version management (NEW in v0.4.0!)
-        self.sync_manager = FileSyncManager()
-        self.version_manager = VersionManager()
-        logger.info("file_sync_initialized", status="enabled")
-
-        # Path validation for security (NEW in v0.6.1 - fixes CWE-22)
         from .path_validator import PathValidator
 
-        # Allow current directory and user's home directory
-        allowed_dirs = [
-            os.getcwd(),  # Current working directory
-            os.path.expanduser("~"),  # User's home directory
-        ]
-        self.path_validator = PathValidator(allowed_base_dirs=allowed_dirs)
-        logger.info(
-            "path_validator_initialized",
-            allowed_directories_count=len(allowed_dirs),
-            security_feature="CWE-22 path traversal prevention",
+        self.factory_service = ServerFactoryService()
+        components = self.factory_service.build(
+            preload_code_model=os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true",
+            cwd=os.getcwd(),
+            home_dir=os.path.expanduser("~"),
+            max_ace_contexts=MAX_ACE_CONTEXTS,
+            code_adapter_cls=CodeCompressionAdapter,
+            blind_spot_cls=BlindSpotDetector,
+            halo_cls=HaloEffectDetector,
+            context_window_adapter_cls=ContextWindowAdapter,
+            multilevel_encoder_cls=MultiLevelSemanticEncoder,
+            afm_config_cls=AFMConfig,
+            focus_manager_cls=FocusManager,
+            persistence_cls=PersistenceManager,
+            resource_limits_cls=ResourceLimits,
+            resource_manager_cls=ResourceManager,
+            file_sync_cls=FileSyncManager,
+            version_manager_cls=VersionManager,
+            path_validator_cls=PathValidator,
+            ace_framework_cls=ACEFramework,
+            ace_context_manager_cls=ACEContextManager,
+            tooling_gateway_cls=MCPToolingGateway,
+            context_service_cls=ServerContextService,
+            lifecycle_service_cls=ServerLifecycleService,
+            progress_service_cls=ProgressRenderService,
+            persistence_service_cls=PersistenceOrchestrationService,
+            tool_profile_service_cls=ToolProfileBootstrapService,
+            logger=logger,
         )
-
-        # ACE Framework for evolving contexts (NEW in v0.4.1!)
-        self.ace_framework = ACEFramework(
-            deduplication_threshold=0.85,
-            max_bullets=100,
-        )
-        # ACE contexts with LRU eviction (v0.4.2)
-        self.ace_contexts = ACEContextManager(max_contexts=MAX_ACE_CONTEXTS)
-        logger.info(
-            "ace_framework_initialized",
-            deduplication_threshold=0.85,
-            max_bullets=100,
-            max_contexts=MAX_ACE_CONTEXTS,
-        )
-
-        # Context window monitoring (like SNR in JSCCM)
-        self.context_window_monitor = {
-            "max_tokens": 100000,  # Typical context window size
-            "used_tokens": 0,
-            "history": [],
-        }
+        self.__dict__.update(components)
         configured_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
-        self.tooling = MCPToolingGateway()
-        self.context_service = ServerContextService()
-        self.lifecycle_service = ServerLifecycleService()
-        self.progress_service = ProgressRenderService()
-        self.persistence_service = PersistenceOrchestrationService()
-        self.tool_profile_service = ToolProfileBootstrapService()
         self.tool_profile, self.enabled_tool_names = self.tool_profile_service.bootstrap(
             configured_profile=configured_profile,
             tooling=self.tooling,
             logger=logger,
         )
-
-        # Track what the AI has retrieved (for blind spot detection)
-        self.retrieval_history: Dict[str, List[str]] = {}
 
         # NOTE: Auto-load moved to __aenter__ for proper lifespan management
         # This ensures clean startup/shutdown sequencing

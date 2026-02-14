@@ -1,0 +1,117 @@
+"""App-layer factory service for SemanticModulatorServer composition wiring."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+class ServerFactoryService:
+    """Builds server collaborators and shared runtime state in one place."""
+
+    @staticmethod
+    def build(
+        *,
+        preload_code_model: bool,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        code_adapter_cls,
+        blind_spot_cls,
+        halo_cls,
+        context_window_adapter_cls,
+        multilevel_encoder_cls,
+        afm_config_cls,
+        focus_manager_cls,
+        persistence_cls,
+        resource_limits_cls,
+        resource_manager_cls,
+        file_sync_cls,
+        version_manager_cls,
+        path_validator_cls,
+        ace_framework_cls,
+        ace_context_manager_cls,
+        tooling_gateway_cls,
+        context_service_cls,
+        lifecycle_service_cls,
+        progress_service_cls,
+        persistence_service_cls,
+        tool_profile_service_cls,
+        logger,
+    ) -> dict[str, Any]:
+        compressor = code_adapter_cls(
+            text_model="all-MiniLM-L6-v2",
+            code_model="microsoft/codebert-base",
+            similarity_threshold=0.75,
+            skeleton_ratio=0.2,
+            preload_code_model=preload_code_model,
+        )
+        blind_spot_detector = blind_spot_cls(compressor)
+        halo_detector = halo_cls(compressor)
+        context_window_adapter = context_window_adapter_cls(compressor)
+        multilevel_encoder = multilevel_encoder_cls(compressor)
+
+        afm_config = afm_config_cls(
+            tau_high=0.45,
+            tau_mid=0.25,
+            half_life=12,
+            use_llm_importance=False,
+            use_llm_compression=False,
+        )
+        focus_manager = focus_manager_cls(afm_config)
+
+        persistence = persistence_cls()
+        resource_manager = resource_manager_cls(
+            resource_limits_cls(
+                max_document_size_mb=100.0,
+                max_total_storage_mb=1024.0,
+                max_documents=1000,
+                max_memory_mb=2048.0,
+            )
+        )
+
+        sync_manager = file_sync_cls()
+        version_manager = version_manager_cls()
+        logger.info("file_sync_initialized", status="enabled")
+
+        path_validator = path_validator_cls(allowed_base_dirs=[cwd, home_dir])
+        logger.info(
+            "path_validator_initialized",
+            allowed_directories_count=2,
+            security_feature="CWE-22 path traversal prevention",
+        )
+
+        ace_framework = ace_framework_cls(
+            deduplication_threshold=0.85,
+            max_bullets=100,
+        )
+        ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
+        logger.info(
+            "ace_framework_initialized",
+            deduplication_threshold=0.85,
+            max_bullets=100,
+            max_contexts=max_ace_contexts,
+        )
+
+        return {
+            "compressor": compressor,
+            "blind_spot_detector": blind_spot_detector,
+            "halo_detector": halo_detector,
+            "context_window_adapter": context_window_adapter,
+            "multilevel_encoder": multilevel_encoder,
+            "focus_manager": focus_manager,
+            "persistence": persistence,
+            "resource_manager": resource_manager,
+            "sync_manager": sync_manager,
+            "version_manager": version_manager,
+            "path_validator": path_validator,
+            "ace_framework": ace_framework,
+            "ace_contexts": ace_contexts,
+            "tooling": tooling_gateway_cls(),
+            "context_service": context_service_cls(),
+            "lifecycle_service": lifecycle_service_cls(),
+            "progress_service": progress_service_cls(),
+            "persistence_service": persistence_service_cls(),
+            "tool_profile_service": tool_profile_service_cls(),
+            "context_window_monitor": {"max_tokens": 100000, "used_tokens": 0, "history": []},
+            "retrieval_history": {},
+        }
