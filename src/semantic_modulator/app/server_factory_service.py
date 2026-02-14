@@ -23,6 +23,20 @@ ALLOWED_OVERRIDE_KEYS: frozenset[str] = frozenset((*SERVER_ALIAS_KEYS, *APP_OVER
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
+    @staticmethod
+    def resolve_class_overrides(
+        *,
+        defaults: dict[str, Any],
+        overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Merge class overrides into defaults with strict unknown-key validation."""
+        active_overrides = overrides or {}
+        unknown_keys = sorted(set(active_overrides) - set(ALLOWED_OVERRIDE_KEYS))
+        if unknown_keys:
+            unknown_csv = ", ".join(unknown_keys)
+            raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
+        return {**defaults, **active_overrides}
+
     @classmethod
     def build_default(
         cls,
@@ -34,12 +48,6 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        overrides = class_overrides or {}
-        unknown_keys = sorted(set(overrides) - set(ALLOWED_OVERRIDE_KEYS))
-        if unknown_keys:
-            unknown_csv = ", ".join(unknown_keys)
-            raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
-
         from ...ace_framework import ACEFramework
         from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
         from ...afm import AFMConfig, FocusManager
@@ -60,40 +68,63 @@ class ServerFactoryService:
         from .tool_profile_service import ToolProfileBootstrapService
         from .tooling import MCPToolingGateway
 
+        resolved_classes = cls.resolve_class_overrides(
+            defaults={
+                "CodeCompressionAdapter": CodeCompressionAdapter,
+                "BlindSpotDetector": BlindSpotDetector,
+                "HaloEffectDetector": HaloEffectDetector,
+                "ContextWindowAdapter": ContextWindowAdapter,
+                "MultiLevelSemanticEncoder": MultiLevelSemanticEncoder,
+                "AFMConfig": AFMConfig,
+                "FocusManager": FocusManager,
+                "PersistenceManager": PersistenceManager,
+                "ResourceLimits": ResourceLimits,
+                "ResourceManager": ResourceManager,
+                "FileSyncManager": FileSyncManager,
+                "VersionManager": VersionManager,
+                "PathValidator": PathValidator,
+                "ACEFramework": ACEFramework,
+                "ACEContextManager": ACEContextManager,
+                "MCPToolingGateway": MCPToolingGateway,
+                "ServerContextService": ServerContextService,
+                "ServerLifecycleService": ServerLifecycleService,
+                "ProgressRenderService": ProgressRenderService,
+                "PersistenceOrchestrationService": PersistenceOrchestrationService,
+                "ToolProfileBootstrapService": ToolProfileBootstrapService,
+                "RuntimeService": RuntimeService,
+                "ServerServiceAdapter": ServerServiceAdapter,
+            },
+            overrides=class_overrides,
+        )
+
         return cls.build(
             preload_code_model=preload_code_model,
             cwd=cwd,
             home_dir=home_dir,
             max_ace_contexts=max_ace_contexts,
-            code_adapter_cls=overrides.get("CodeCompressionAdapter", CodeCompressionAdapter),
-            blind_spot_cls=overrides.get("BlindSpotDetector", BlindSpotDetector),
-            halo_cls=overrides.get("HaloEffectDetector", HaloEffectDetector),
-            context_window_adapter_cls=overrides.get("ContextWindowAdapter", ContextWindowAdapter),
-            multilevel_encoder_cls=overrides.get(
-                "MultiLevelSemanticEncoder", MultiLevelSemanticEncoder
-            ),
-            afm_config_cls=overrides.get("AFMConfig", AFMConfig),
-            focus_manager_cls=overrides.get("FocusManager", FocusManager),
-            persistence_cls=overrides.get("PersistenceManager", PersistenceManager),
-            resource_limits_cls=overrides.get("ResourceLimits", ResourceLimits),
-            resource_manager_cls=overrides.get("ResourceManager", ResourceManager),
-            file_sync_cls=overrides.get("FileSyncManager", FileSyncManager),
-            version_manager_cls=overrides.get("VersionManager", VersionManager),
-            path_validator_cls=overrides.get("PathValidator", PathValidator),
-            ace_framework_cls=overrides.get("ACEFramework", ACEFramework),
-            ace_context_manager_cls=overrides.get("ACEContextManager", ACEContextManager),
-            tooling_gateway_cls=overrides.get("MCPToolingGateway", MCPToolingGateway),
-            context_service_cls=overrides.get("ServerContextService", ServerContextService),
-            lifecycle_service_cls=overrides.get("ServerLifecycleService", ServerLifecycleService),
-            progress_service_cls=overrides.get("ProgressRenderService", ProgressRenderService),
-            persistence_service_cls=overrides.get(
-                "PersistenceOrchestrationService", PersistenceOrchestrationService
-            ),
-            tool_profile_service_cls=overrides.get(
-                "ToolProfileBootstrapService", ToolProfileBootstrapService
-            ),
-            runtime_service_cls=overrides.get("RuntimeService", RuntimeService),
-            server_service_adapter_cls=overrides.get("ServerServiceAdapter", ServerServiceAdapter),
+            code_adapter_cls=resolved_classes["CodeCompressionAdapter"],
+            blind_spot_cls=resolved_classes["BlindSpotDetector"],
+            halo_cls=resolved_classes["HaloEffectDetector"],
+            context_window_adapter_cls=resolved_classes["ContextWindowAdapter"],
+            multilevel_encoder_cls=resolved_classes["MultiLevelSemanticEncoder"],
+            afm_config_cls=resolved_classes["AFMConfig"],
+            focus_manager_cls=resolved_classes["FocusManager"],
+            persistence_cls=resolved_classes["PersistenceManager"],
+            resource_limits_cls=resolved_classes["ResourceLimits"],
+            resource_manager_cls=resolved_classes["ResourceManager"],
+            file_sync_cls=resolved_classes["FileSyncManager"],
+            version_manager_cls=resolved_classes["VersionManager"],
+            path_validator_cls=resolved_classes["PathValidator"],
+            ace_framework_cls=resolved_classes["ACEFramework"],
+            ace_context_manager_cls=resolved_classes["ACEContextManager"],
+            tooling_gateway_cls=resolved_classes["MCPToolingGateway"],
+            context_service_cls=resolved_classes["ServerContextService"],
+            lifecycle_service_cls=resolved_classes["ServerLifecycleService"],
+            progress_service_cls=resolved_classes["ProgressRenderService"],
+            persistence_service_cls=resolved_classes["PersistenceOrchestrationService"],
+            tool_profile_service_cls=resolved_classes["ToolProfileBootstrapService"],
+            runtime_service_cls=resolved_classes["RuntimeService"],
+            server_service_adapter_cls=resolved_classes["ServerServiceAdapter"],
             logger=logger,
         )
 

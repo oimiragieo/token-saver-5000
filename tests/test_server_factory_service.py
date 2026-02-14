@@ -154,3 +154,21 @@ def test_factory_build_default_rejects_unknown_override_keys():
         )
 
     assert "NotARealKey" in str(exc_info.value)
+
+
+def test_resolve_class_overrides_merges_known_keys_and_defaults():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    defaults = {
+        "CodeCompressionAdapter": object(),
+        "FocusManager": object(),
+    }
+    override_focus = object()
+
+    resolved = module.ServerFactoryService.resolve_class_overrides(
+        defaults=defaults,
+        overrides={"FocusManager": override_focus},
+    )
+
+    assert resolved["CodeCompressionAdapter"] is defaults["CodeCompressionAdapter"]
+    assert resolved["FocusManager"] is override_focus
