@@ -11,7 +11,6 @@ Architecture:
 - Blind spot detection for self-correction
 """
 
-import asyncio
 import os
 from collections import OrderedDict
 from typing import Any, Dict, List
@@ -47,6 +46,8 @@ from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapSer
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
+from .semantic_modulator.app.bootstrap import async_main as bootstrap_async_main
+from .semantic_modulator.app.bootstrap import main as bootstrap_main
 
 
 # Configure structured logging
@@ -328,15 +329,13 @@ class SemanticModulatorServer:
 
 
 async def async_main():
-    """Async entry point with lifespan management"""
-    server = SemanticModulatorServer()
-    async with server:
-        await server.run()
+    """Async entry point with lifespan management."""
+    await bootstrap_async_main()
 
 
 def main():
     """Entry point"""
-    asyncio.run(async_main())
+    bootstrap_main()
 
 
 if __name__ == "__main__":
