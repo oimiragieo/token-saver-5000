@@ -12,8 +12,7 @@ Architecture:
 """
 
 import os
-from collections import OrderedDict
-from typing import Any, Dict, List
+from typing import Any, List
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -47,6 +46,7 @@ from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapSer
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
+from .semantic_modulator.app.ace_context_manager import ACEContextManager
 from .semantic_modulator.app.bootstrap import async_main as bootstrap_async_main
 from .semantic_modulator.app.bootstrap import main as bootstrap_main
 
@@ -54,79 +54,6 @@ from .semantic_modulator.app.bootstrap import main as bootstrap_main
 # Configure structured logging
 configure_structlog(log_level="INFO")
 logger = get_logger("semantic-modulator")
-
-
-class ACEContextManager(OrderedDict):
-    """
-    LRU-enabled ACE context storage with automatic eviction (v0.4.2).
-
-    Wraps OrderedDict to provide transparent LRU eviction when max_contexts
-    limit is exceeded. Oldest contexts (by creation/access time) are evicted first.
-
-    Args:
-        max_contexts: Maximum contexts to retain (0 = unlimited, not recommended)
-                      Default: MAX_ACE_CONTEXTS (100 contexts)
-    """
-
-    def __init__(self, max_contexts: int = MAX_ACE_CONTEXTS):
-        super().__init__()
-        self.max_contexts = max_contexts
-        logger.info(
-            "ace_context_manager_initialized",
-            max_contexts=max_contexts if max_contexts > 0 else "unlimited",
-        )
-
-    def __setitem__(self, key, value):
-        """
-        Add or update context with automatic LRU eviction.
-
-        When adding a new context:
-        1. If key exists, move it to end (most recently used)
-        2. Add the new context
-        3. If limit exceeded, evict oldest context (first item)
-        """
-        # If key exists, move to end (mark as recently used)
-        if key in self:
-            super().move_to_end(key)
-
-        # Add/update the context
-        super().__setitem__(key, value)
-
-        # Automatic LRU eviction
-        if self.max_contexts > 0 and len(self) > self.max_contexts:
-            # Remove oldest (first) item
-            oldest_key = next(iter(self))
-            del self[oldest_key]
-            logger.info(
-                "ace_context_evicted", evicted_context=oldest_key, max_contexts=self.max_contexts
-            )
-
-    def __getitem__(self, key):
-        """
-        Get context and mark as recently used.
-
-        Moves accessed context to end of OrderedDict (LRU policy).
-        """
-        value = super().__getitem__(key)
-        # Move to end (mark as recently accessed)
-        super().move_to_end(key)
-        return value
-
-    def get_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about ACE context storage (v0.4.2).
-
-        Returns:
-            Dictionary with stats including max_contexts configuration
-        """
-        return {
-            "total_contexts": len(self),
-            "max_contexts_limit": self.max_contexts if self.max_contexts > 0 else "unlimited",
-            "context_ids": list(self.keys()),
-            "approaching_limit": (
-                len(self) / self.max_contexts > 0.9 if self.max_contexts > 0 else False
-            ),
-        }
 
 
 class SemanticModulatorServer:
