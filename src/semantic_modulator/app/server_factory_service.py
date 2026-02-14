@@ -24,6 +24,55 @@ class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
     @staticmethod
+    def default_class_map() -> dict[str, Any]:
+        """Build production default class wiring map for build_default()."""
+        from ...ace_framework import ACEFramework
+        from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
+        from ...afm import AFMConfig, FocusManager
+        from ...blind_spot_detector import BlindSpotDetector, HaloEffectDetector
+        from ...code_compression_adapter import CodeCompressionAdapter
+        from ...file_sync_manager import FileSyncManager
+        from ...path_validator import PathValidator
+        from ...persistence import PersistenceManager
+        from ...resource_manager import ResourceLimits, ResourceManager
+        from ...version_manager import VersionManager
+        from .ace_context_manager import ACEContextManager
+        from .context_service import ServerContextService
+        from .lifecycle_service import ServerLifecycleService
+        from .persistence_orchestration_service import PersistenceOrchestrationService
+        from .progress_service import ProgressRenderService
+        from .runtime_service import RuntimeService
+        from .server_service_adapter import ServerServiceAdapter
+        from .tool_profile_service import ToolProfileBootstrapService
+        from .tooling import MCPToolingGateway
+
+        return {
+            "CodeCompressionAdapter": CodeCompressionAdapter,
+            "BlindSpotDetector": BlindSpotDetector,
+            "HaloEffectDetector": HaloEffectDetector,
+            "ContextWindowAdapter": ContextWindowAdapter,
+            "MultiLevelSemanticEncoder": MultiLevelSemanticEncoder,
+            "AFMConfig": AFMConfig,
+            "FocusManager": FocusManager,
+            "PersistenceManager": PersistenceManager,
+            "ResourceLimits": ResourceLimits,
+            "ResourceManager": ResourceManager,
+            "FileSyncManager": FileSyncManager,
+            "VersionManager": VersionManager,
+            "PathValidator": PathValidator,
+            "ACEFramework": ACEFramework,
+            "ACEContextManager": ACEContextManager,
+            "MCPToolingGateway": MCPToolingGateway,
+            "ServerContextService": ServerContextService,
+            "ServerLifecycleService": ServerLifecycleService,
+            "ProgressRenderService": ProgressRenderService,
+            "PersistenceOrchestrationService": PersistenceOrchestrationService,
+            "ToolProfileBootstrapService": ToolProfileBootstrapService,
+            "RuntimeService": RuntimeService,
+            "ServerServiceAdapter": ServerServiceAdapter,
+        }
+
+    @staticmethod
     def resolve_class_overrides(
         *,
         defaults: dict[str, Any],
@@ -48,52 +97,8 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        from ...ace_framework import ACEFramework
-        from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
-        from ...afm import AFMConfig, FocusManager
-        from ...blind_spot_detector import BlindSpotDetector, HaloEffectDetector
-        from ...code_compression_adapter import CodeCompressionAdapter
-        from ...file_sync_manager import FileSyncManager
-        from ...path_validator import PathValidator
-        from ...persistence import PersistenceManager
-        from ...resource_manager import ResourceLimits, ResourceManager
-        from ...version_manager import VersionManager
-        from .ace_context_manager import ACEContextManager
-        from .context_service import ServerContextService
-        from .lifecycle_service import ServerLifecycleService
-        from .persistence_orchestration_service import PersistenceOrchestrationService
-        from .progress_service import ProgressRenderService
-        from .runtime_service import RuntimeService
-        from .server_service_adapter import ServerServiceAdapter
-        from .tool_profile_service import ToolProfileBootstrapService
-        from .tooling import MCPToolingGateway
-
         resolved_classes = cls.resolve_class_overrides(
-            defaults={
-                "CodeCompressionAdapter": CodeCompressionAdapter,
-                "BlindSpotDetector": BlindSpotDetector,
-                "HaloEffectDetector": HaloEffectDetector,
-                "ContextWindowAdapter": ContextWindowAdapter,
-                "MultiLevelSemanticEncoder": MultiLevelSemanticEncoder,
-                "AFMConfig": AFMConfig,
-                "FocusManager": FocusManager,
-                "PersistenceManager": PersistenceManager,
-                "ResourceLimits": ResourceLimits,
-                "ResourceManager": ResourceManager,
-                "FileSyncManager": FileSyncManager,
-                "VersionManager": VersionManager,
-                "PathValidator": PathValidator,
-                "ACEFramework": ACEFramework,
-                "ACEContextManager": ACEContextManager,
-                "MCPToolingGateway": MCPToolingGateway,
-                "ServerContextService": ServerContextService,
-                "ServerLifecycleService": ServerLifecycleService,
-                "ProgressRenderService": ProgressRenderService,
-                "PersistenceOrchestrationService": PersistenceOrchestrationService,
-                "ToolProfileBootstrapService": ToolProfileBootstrapService,
-                "RuntimeService": RuntimeService,
-                "ServerServiceAdapter": ServerServiceAdapter,
-            },
+            defaults=cls.default_class_map(),
             overrides=class_overrides,
         )
 

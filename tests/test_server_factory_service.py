@@ -172,3 +172,79 @@ def test_resolve_class_overrides_merges_known_keys_and_defaults():
 
     assert resolved["CodeCompressionAdapter"] is defaults["CodeCompressionAdapter"]
     assert resolved["FocusManager"] is override_focus
+
+
+def test_default_class_map_covers_allowed_override_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    default_map = module.ServerFactoryService.default_class_map()
+
+    assert set(default_map.keys()) == set(module.ALLOWED_OVERRIDE_KEYS)
+
+
+def test_build_default_uses_resolve_class_overrides_result_for_build_wiring():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+    service = module.ServerFactoryService()
+
+    sentinel_result = {"ok": True}
+    resolved = {
+        "CodeCompressionAdapter": object(),
+        "BlindSpotDetector": object(),
+        "HaloEffectDetector": object(),
+        "ContextWindowAdapter": object(),
+        "MultiLevelSemanticEncoder": object(),
+        "AFMConfig": object(),
+        "FocusManager": object(),
+        "PersistenceManager": object(),
+        "ResourceLimits": object(),
+        "ResourceManager": object(),
+        "FileSyncManager": object(),
+        "VersionManager": object(),
+        "PathValidator": object(),
+        "ACEFramework": object(),
+        "ACEContextManager": object(),
+        "MCPToolingGateway": object(),
+        "ServerContextService": object(),
+        "ServerLifecycleService": object(),
+        "ProgressRenderService": object(),
+        "PersistenceOrchestrationService": object(),
+        "ToolProfileBootstrapService": object(),
+        "RuntimeService": object(),
+        "ServerServiceAdapter": object(),
+    }
+
+    captured_resolve = {}
+    captured_build = {}
+
+    original_resolve = module.ServerFactoryService.resolve_class_overrides
+    original_build = module.ServerFactoryService.build
+
+    def fake_resolve(*, defaults, overrides):
+        captured_resolve["defaults"] = defaults
+        captured_resolve["overrides"] = overrides
+        return resolved
+
+    def fake_build(**kwargs):
+        captured_build.update(kwargs)
+        return sentinel_result
+
+    module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
+    module.ServerFactoryService.build = staticmethod(fake_build)
+    try:
+        result = service.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=11,
+            logger=Mock(),
+            class_overrides={"FocusManager": object()},
+        )
+    finally:
+        module.ServerFactoryService.resolve_class_overrides = original_resolve
+        module.ServerFactoryService.build = original_build
+
+    assert result is sentinel_result
+    assert set(captured_resolve["defaults"].keys()) == set(module.ALLOWED_OVERRIDE_KEYS)
+    assert "FocusManager" in captured_resolve["overrides"]
+    assert captured_build["focus_manager_cls"] is resolved["FocusManager"]
+    assert captured_build["server_service_adapter_cls"] is resolved["ServerServiceAdapter"]

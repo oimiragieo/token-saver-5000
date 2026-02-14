@@ -52,6 +52,9 @@ All notable changes to Token Saver 5000.
 - Refactored class override handling in ServerFactoryService through esolve_class_overrides(...) to centralize merge + unknown-key validation logic and reduce drift in build-default wiring.
 - Added merge-contract test coverage in 	ests/test_server_factory_service.py to ensure known overrides replace defaults while untouched defaults remain stable.
 
+- Added ServerFactoryService.default_class_map() as a dedicated source of production wiring defaults, and updated uild_default() to consume it through esolve_class_overrides(...) for cleaner composition semantics.
+- Added factory contracts in 	ests/test_server_factory_service.py to lock default-map coverage and enforce that uild_default() uses resolved override output for downstream build wiring.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**
