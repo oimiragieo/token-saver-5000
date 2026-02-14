@@ -168,6 +168,43 @@ class ServerFactoryService:
         }
 
     @classmethod
+    def build_service_layer(
+        cls,
+        *,
+        context_service_cls,
+        lifecycle_service_cls,
+        progress_service_cls,
+        persistence_service_cls,
+        tool_profile_service_cls,
+        runtime_service_cls,
+        server_service_adapter_cls,
+        logger,
+    ) -> dict[str, Any]:
+        """Build service-layer collaborators and wire the service adapter."""
+        context_service = context_service_cls()
+        lifecycle_service = lifecycle_service_cls()
+        progress_service = progress_service_cls()
+        persistence_service = persistence_service_cls()
+        tool_profile_service = tool_profile_service_cls()
+        runtime_service = runtime_service_cls()
+        service_adapter = server_service_adapter_cls(
+            persistence_service=persistence_service,
+            context_service=context_service,
+            progress_service=progress_service,
+            logger=logger,
+        )
+
+        return {
+            "context_service": context_service,
+            "lifecycle_service": lifecycle_service,
+            "progress_service": progress_service,
+            "persistence_service": persistence_service,
+            "tool_profile_service": tool_profile_service,
+            "runtime_service": runtime_service,
+            "service_adapter": service_adapter,
+        }
+
+    @classmethod
     def build_default(
         cls,
         *,
@@ -256,16 +293,14 @@ class ServerFactoryService:
             **cls.ace_framework_log_kwargs(max_ace_contexts=max_ace_contexts),
         )
 
-        context_service = context_service_cls()
-        lifecycle_service = lifecycle_service_cls()
-        progress_service = progress_service_cls()
-        persistence_service = persistence_service_cls()
-        tool_profile_service = tool_profile_service_cls()
-        runtime_service = runtime_service_cls()
-        service_adapter = server_service_adapter_cls(
-            persistence_service=persistence_service,
-            context_service=context_service,
-            progress_service=progress_service,
+        services = cls.build_service_layer(
+            context_service_cls=context_service_cls,
+            lifecycle_service_cls=lifecycle_service_cls,
+            progress_service_cls=progress_service_cls,
+            persistence_service_cls=persistence_service_cls,
+            tool_profile_service_cls=tool_profile_service_cls,
+            runtime_service_cls=runtime_service_cls,
+            server_service_adapter_cls=server_service_adapter_cls,
             logger=logger,
         )
 
@@ -284,13 +319,7 @@ class ServerFactoryService:
             "ace_framework": ace_framework,
             "ace_contexts": ace_contexts,
             "tooling": tooling_gateway_cls(),
-            "context_service": context_service,
-            "lifecycle_service": lifecycle_service,
-            "progress_service": progress_service,
-            "persistence_service": persistence_service,
-            "tool_profile_service": tool_profile_service,
-            "runtime_service": runtime_service,
-            "service_adapter": service_adapter,
+            **services,
             "context_window_monitor": cls.default_context_window_monitor(),
             "retrieval_history": {},
         }

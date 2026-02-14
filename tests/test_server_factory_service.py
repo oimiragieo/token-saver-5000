@@ -625,3 +625,158 @@ def test_build_class_dispatch_uses_subclass_logging_helper_overrides():
     assert events["path_validator_initialized"]["security_feature"] == "custom-policy"
     assert events["ace_framework_initialized"]["deduplication_threshold"] == 0.42
     assert events["ace_framework_initialized"]["max_contexts"] == 11
+
+
+def test_build_service_layer_wires_adapter_dependencies():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    captured = {}
+
+    class ContextService:
+        pass
+
+    class LifecycleService:
+        pass
+
+    class ProgressService:
+        pass
+
+    class PersistenceService:
+        pass
+
+    class ToolProfileService:
+        pass
+
+    class RuntimeService:
+        pass
+
+    def adapter_cls(*, persistence_service, context_service, progress_service, logger):
+        captured["persistence_service"] = persistence_service
+        captured["context_service"] = context_service
+        captured["progress_service"] = progress_service
+        captured["logger"] = logger
+        return {"adapter": True}
+
+    logger = Mock()
+
+    services = module.ServerFactoryService.build_service_layer(
+        context_service_cls=ContextService,
+        lifecycle_service_cls=LifecycleService,
+        progress_service_cls=ProgressService,
+        persistence_service_cls=PersistenceService,
+        tool_profile_service_cls=ToolProfileService,
+        runtime_service_cls=RuntimeService,
+        server_service_adapter_cls=adapter_cls,
+        logger=logger,
+    )
+
+    assert isinstance(services["context_service"], ContextService)
+    assert isinstance(services["lifecycle_service"], LifecycleService)
+    assert isinstance(services["progress_service"], ProgressService)
+    assert isinstance(services["persistence_service"], PersistenceService)
+    assert isinstance(services["tool_profile_service"], ToolProfileService)
+    assert isinstance(services["runtime_service"], RuntimeService)
+    assert services["service_adapter"] == {"adapter": True}
+    assert captured["persistence_service"] is services["persistence_service"]
+    assert captured["context_service"] is services["context_service"]
+    assert captured["progress_service"] is services["progress_service"]
+    assert captured["logger"] is logger
+
+
+def test_build_delegates_service_layer_construction_through_helper():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    sentinel_services = {
+        "context_service": object(),
+        "lifecycle_service": object(),
+        "progress_service": object(),
+        "persistence_service": object(),
+        "tool_profile_service": object(),
+        "runtime_service": object(),
+        "service_adapter": object(),
+    }
+    captured = {}
+
+    original = module.ServerFactoryService.__dict__.get("build_service_layer")
+
+    def fake_service_layer(
+        _cls,
+        *,
+        context_service_cls,
+        lifecycle_service_cls,
+        progress_service_cls,
+        persistence_service_cls,
+        tool_profile_service_cls,
+        runtime_service_cls,
+        server_service_adapter_cls,
+        logger,
+    ):
+        captured["context_service_cls"] = context_service_cls
+        captured["lifecycle_service_cls"] = lifecycle_service_cls
+        captured["progress_service_cls"] = progress_service_cls
+        captured["persistence_service_cls"] = persistence_service_cls
+        captured["tool_profile_service_cls"] = tool_profile_service_cls
+        captured["runtime_service_cls"] = runtime_service_cls
+        captured["server_service_adapter_cls"] = server_service_adapter_cls
+        captured["logger"] = logger
+        return sentinel_services
+
+    module.ServerFactoryService.build_service_layer = classmethod(fake_service_layer)
+    try:
+        logger = Mock()
+
+        def marker(*args, **kwargs):
+            return Mock()
+
+        components = module.ServerFactoryService.build(
+            preload_code_model=False,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=5,
+            code_adapter_cls=marker,
+            blind_spot_cls=marker,
+            halo_cls=marker,
+            context_window_adapter_cls=marker,
+            multilevel_encoder_cls=marker,
+            afm_config_cls=marker,
+            focus_manager_cls=marker,
+            persistence_cls=marker,
+            resource_limits_cls=marker,
+            resource_manager_cls=marker,
+            file_sync_cls=marker,
+            version_manager_cls=marker,
+            path_validator_cls=marker,
+            ace_framework_cls=marker,
+            ace_context_manager_cls=marker,
+            tooling_gateway_cls=marker,
+            context_service_cls=str,
+            lifecycle_service_cls=int,
+            progress_service_cls=float,
+            persistence_service_cls=list,
+            tool_profile_service_cls=dict,
+            runtime_service_cls=tuple,
+            server_service_adapter_cls=set,
+            logger=logger,
+        )
+    finally:
+        if original is None:
+            delattr(module.ServerFactoryService, "build_service_layer")
+        else:
+            module.ServerFactoryService.build_service_layer = original
+
+    assert captured["context_service_cls"] is str
+    assert captured["lifecycle_service_cls"] is int
+    assert captured["progress_service_cls"] is float
+    assert captured["persistence_service_cls"] is list
+    assert captured["tool_profile_service_cls"] is dict
+    assert captured["runtime_service_cls"] is tuple
+    assert captured["server_service_adapter_cls"] is set
+    assert captured["logger"] is logger
+
+    assert components["context_service"] is sentinel_services["context_service"]
+    assert components["lifecycle_service"] is sentinel_services["lifecycle_service"]
+    assert components["progress_service"] is sentinel_services["progress_service"]
+    assert components["persistence_service"] is sentinel_services["persistence_service"]
+    assert components["tool_profile_service"] is sentinel_services["tool_profile_service"]
+    assert components["runtime_service"] is sentinel_services["runtime_service"]
+    assert components["service_adapter"] is sentinel_services["service_adapter"]
