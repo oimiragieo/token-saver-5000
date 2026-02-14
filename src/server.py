@@ -42,6 +42,7 @@ from .semantic_modulator.app.persistence_orchestration_service import (
     PersistenceOrchestrationService,
 )
 from .semantic_modulator.app.progress_service import ProgressRenderService
+from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
 from .semantic_modulator.app.tooling import MCPToolingGateway
 from .constants import MAX_ACE_CONTEXTS
 from .structured_logging import get_logger, configure_structlog
@@ -217,22 +218,12 @@ class SemanticModulatorServer:
         self.lifecycle_service = ServerLifecycleService()
         self.progress_service = ProgressRenderService()
         self.persistence_service = PersistenceOrchestrationService()
-        self.tool_profile, enabled_tools, used_fallback = self.tooling.resolve_tools_for_profile(
-            configured_profile
+        self.tool_profile_service = ToolProfileBootstrapService()
+        self.tool_profile, self.enabled_tool_names = self.tool_profile_service.bootstrap(
+            configured_profile=configured_profile,
+            tooling=self.tooling,
+            logger=logger,
         )
-        if used_fallback:
-            logger.warning(
-                "invalid_tool_profile",
-                configured_profile=configured_profile,
-                fallback_profile="full",
-            )
-        logger.info(
-            "mcp_tool_profile_active",
-            profile=self.tool_profile,
-            enabled_tools=len(enabled_tools),
-            supported_profiles=sorted(self.tooling.supported_profiles),
-        )
-        self.enabled_tool_names = [tool.name for tool in enabled_tools]
 
         # Track what the AI has retrieved (for blind spot detection)
         self.retrieval_history: Dict[str, List[str]] = {}
