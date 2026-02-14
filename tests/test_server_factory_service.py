@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import pytest
 from unittest.mock import Mock
 
 
@@ -136,3 +137,20 @@ def test_factory_build_default_delegates_to_build_with_production_wiring():
     assert callable(call_kwargs["tooling_gateway_cls"])
     assert callable(call_kwargs["runtime_service_cls"])
     assert callable(call_kwargs["server_service_adapter_cls"])
+
+
+def test_factory_build_default_rejects_unknown_override_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+    service = module.ServerFactoryService()
+
+    with pytest.raises(ValueError) as exc_info:
+        service.build_default(
+            preload_code_model=False,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=5,
+            logger=Mock(),
+            class_overrides={"NotARealKey": object()},
+        )
+
+    assert "NotARealKey" in str(exc_info.value)

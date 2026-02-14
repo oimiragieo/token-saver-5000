@@ -46,6 +46,9 @@ All notable changes to Token Saver 5000.
 - src/server.py now builds factory override maps via uild_server_class_overrides(globals()), preserving patch-compatible module aliases while reducing constructor wiring logic in the server module.
 - Added alias contract tests in 	ests/test_server_aliases.py for required-key mapping and helpful missing-key failures.
 
+- Hardened ServerFactoryService.build_default(...) override handling with fail-fast validation for unknown class_overrides keys to prevent silent wiring typos.
+- Added factory contract coverage in 	ests/test_server_factory_service.py for unknown override-key rejection.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**

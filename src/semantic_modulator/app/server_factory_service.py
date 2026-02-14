@@ -4,6 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from .server_aliases import SERVER_ALIAS_KEYS
+
+APP_OVERRIDE_KEYS: tuple[str, ...] = (
+    "PathValidator",
+    "ServerContextService",
+    "ServerLifecycleService",
+    "ProgressRenderService",
+    "PersistenceOrchestrationService",
+    "ToolProfileBootstrapService",
+    "RuntimeService",
+    "ServerServiceAdapter",
+)
+
+ALLOWED_OVERRIDE_KEYS: frozenset[str] = frozenset((*SERVER_ALIAS_KEYS, *APP_OVERRIDE_KEYS))
+
 
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
@@ -19,6 +34,12 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        overrides = class_overrides or {}
+        unknown_keys = sorted(set(overrides) - set(ALLOWED_OVERRIDE_KEYS))
+        if unknown_keys:
+            unknown_csv = ", ".join(unknown_keys)
+            raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
+
         from ...ace_framework import ACEFramework
         from ...adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEncoder
         from ...afm import AFMConfig, FocusManager
@@ -38,8 +59,6 @@ class ServerFactoryService:
         from .server_service_adapter import ServerServiceAdapter
         from .tool_profile_service import ToolProfileBootstrapService
         from .tooling import MCPToolingGateway
-
-        overrides = class_overrides or {}
 
         return cls.build(
             preload_code_model=preload_code_model,
