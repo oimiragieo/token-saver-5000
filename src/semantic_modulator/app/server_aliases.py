@@ -23,6 +23,36 @@ SERVER_ALIAS_KEYS: tuple[str, ...] = (
     "MCPToolingGateway",
 )
 
+APP_FACTORY_ONLY_KEYS: tuple[str, ...] = (
+    "PathValidator",
+    "ServerContextService",
+    "ServerLifecycleService",
+    "ProgressRenderService",
+    "PersistenceOrchestrationService",
+    "ToolProfileBootstrapService",
+    "RuntimeService",
+    "ServerServiceAdapter",
+)
+
+ALLOWED_FACTORY_OVERRIDE_KEYS: frozenset[str] = frozenset(
+    (*SERVER_ALIAS_KEYS, *APP_FACTORY_ONLY_KEYS)
+)
+
+
+def validate_override_keys(
+    *,
+    overrides: Mapping[str, object] | None,
+    allowed_keys: frozenset[str],
+) -> None:
+    """Validate override keys and raise on unknown entries."""
+    if not overrides:
+        return
+
+    unknown_keys = sorted(set(overrides) - set(allowed_keys))
+    if unknown_keys:
+        unknown_csv = ", ".join(unknown_keys)
+        raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
+
 
 def build_server_class_overrides(namespace: Mapping[str, object]) -> dict[str, object]:
     """Build factory class overrides from a module namespace.

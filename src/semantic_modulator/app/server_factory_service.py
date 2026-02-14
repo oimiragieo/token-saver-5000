@@ -4,20 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .server_aliases import SERVER_ALIAS_KEYS
+from .server_aliases import ALLOWED_FACTORY_OVERRIDE_KEYS, validate_override_keys
 
-APP_OVERRIDE_KEYS: tuple[str, ...] = (
-    "PathValidator",
-    "ServerContextService",
-    "ServerLifecycleService",
-    "ProgressRenderService",
-    "PersistenceOrchestrationService",
-    "ToolProfileBootstrapService",
-    "RuntimeService",
-    "ServerServiceAdapter",
-)
-
-ALLOWED_OVERRIDE_KEYS: frozenset[str] = frozenset((*SERVER_ALIAS_KEYS, *APP_OVERRIDE_KEYS))
+ALLOWED_OVERRIDE_KEYS: frozenset[str] = ALLOWED_FACTORY_OVERRIDE_KEYS
 
 
 class ServerFactoryService:
@@ -79,11 +68,8 @@ class ServerFactoryService:
         overrides: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Merge class overrides into defaults with strict unknown-key validation."""
+        validate_override_keys(overrides=overrides, allowed_keys=ALLOWED_OVERRIDE_KEYS)
         active_overrides = overrides or {}
-        unknown_keys = sorted(set(active_overrides) - set(ALLOWED_OVERRIDE_KEYS))
-        if unknown_keys:
-            unknown_csv = ", ".join(unknown_keys)
-            raise ValueError(f"Unknown class_overrides keys: {unknown_csv}")
         return {**defaults, **active_overrides}
 
     @staticmethod

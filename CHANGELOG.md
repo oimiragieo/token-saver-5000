@@ -58,6 +58,10 @@ All notable changes to Token Saver 5000.
 - Added uild_kwargs_from_resolved_classes(...) in ServerFactoryService to centralize alias-to-build-argument translation and reduce mapping drift risk in uild_default().
 - Added factory contracts in 	ests/test_server_factory_service.py for build-kwargs mapping correctness and uild_default() delegation through the new helper path.
 
+- Centralized factory override-key policy in src/semantic_modulator/app/server_aliases.py via APP_FACTORY_ONLY_KEYS, ALLOWED_FACTORY_OVERRIDE_KEYS, and alidate_override_keys(...).
+- Updated ServerFactoryService.resolve_class_overrides(...) to delegate override-key validation to shared alias-policy helper, reducing duplicated validation logic.
+- Added alias-policy contract tests in 	ests/test_server_aliases.py for allowed-key coverage and unknown-key rejection behavior.
+
 ## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**
