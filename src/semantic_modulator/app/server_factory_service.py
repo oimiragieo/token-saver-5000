@@ -146,6 +146,27 @@ class ServerFactoryService:
         """Default context window monitor shape for session state."""
         return {"max_tokens": 100000, "used_tokens": 0, "history": []}
 
+    @staticmethod
+    def file_sync_log_kwargs() -> dict[str, Any]:
+        """Structured log fields for file-sync initialization."""
+        return {"status": "enabled"}
+
+    @staticmethod
+    def path_validator_log_kwargs(*, allowed_base_dirs: list[str]) -> dict[str, Any]:
+        """Structured log fields for path-validator initialization."""
+        return {
+            "allowed_directories_count": len(allowed_base_dirs),
+            "security_feature": "CWE-22 path traversal prevention",
+        }
+
+    @staticmethod
+    def ace_framework_log_kwargs(*, max_ace_contexts: int) -> dict[str, Any]:
+        """Structured log fields for ACE framework initialization."""
+        return {
+            **ServerFactoryService.ace_framework_kwargs(),
+            "max_contexts": max_ace_contexts,
+        }
+
     @classmethod
     def build_default(
         cls,
@@ -220,22 +241,19 @@ class ServerFactoryService:
 
         sync_manager = file_sync_cls()
         version_manager = version_manager_cls()
-        logger.info("file_sync_initialized", status="enabled")
+        logger.info("file_sync_initialized", **cls.file_sync_log_kwargs())
 
         path_validator = path_validator_cls(allowed_base_dirs=[cwd, home_dir])
         logger.info(
             "path_validator_initialized",
-            allowed_directories_count=2,
-            security_feature="CWE-22 path traversal prevention",
+            **cls.path_validator_log_kwargs(allowed_base_dirs=[cwd, home_dir]),
         )
 
         ace_framework = ace_framework_cls(**cls.ace_framework_kwargs())
         ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
         logger.info(
             "ace_framework_initialized",
-            deduplication_threshold=0.85,
-            max_bullets=100,
-            max_contexts=max_ace_contexts,
+            **cls.ace_framework_log_kwargs(max_ace_contexts=max_ace_contexts),
         )
 
         context_service = context_service_cls()

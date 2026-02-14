@@ -535,3 +535,93 @@ def test_build_class_dispatch_uses_subclass_helper_overrides():
     assert captured["resource"]["max_documents"] == 3
     assert captured["ace"]["max_bullets"] == 7
     assert components["context_window_monitor"]["max_tokens"] == 42
+
+
+def test_build_logging_helpers_expose_expected_payloads():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert module.ServerFactoryService.file_sync_log_kwargs() == {"status": "enabled"}
+    assert module.ServerFactoryService.path_validator_log_kwargs(
+        allowed_base_dirs=["C:/repo", "C:/Users/test"]
+    ) == {
+        "allowed_directories_count": 2,
+        "security_feature": "CWE-22 path traversal prevention",
+    }
+    assert module.ServerFactoryService.ace_framework_log_kwargs(max_ace_contexts=77) == {
+        "deduplication_threshold": 0.85,
+        "max_bullets": 100,
+        "max_contexts": 77,
+    }
+
+
+def test_build_class_dispatch_uses_subclass_logging_helper_overrides():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    class DerivedFactory(module.ServerFactoryService):
+        @staticmethod
+        def file_sync_log_kwargs() -> dict[str, object]:
+            return {"status": "custom-sync"}
+
+        @staticmethod
+        def path_validator_log_kwargs(*, allowed_base_dirs: list[str]) -> dict[str, object]:
+            return {
+                "allowed_directories_count": len(allowed_base_dirs),
+                "security_feature": "custom-policy",
+            }
+
+        @staticmethod
+        def ace_framework_log_kwargs(*, max_ace_contexts: int) -> dict[str, object]:
+            return {
+                "deduplication_threshold": 0.42,
+                "max_bullets": 9,
+                "max_contexts": max_ace_contexts,
+            }
+
+    class LoggerProbe:
+        def __init__(self):
+            self.calls = []
+
+        def info(self, event, **kwargs):
+            self.calls.append((event, kwargs))
+
+    logger = LoggerProbe()
+
+    def noop(*args, **kwargs):
+        return Mock()
+
+    DerivedFactory.build(
+        preload_code_model=False,
+        cwd="C:/repo",
+        home_dir="C:/Users/test",
+        max_ace_contexts=11,
+        code_adapter_cls=noop,
+        blind_spot_cls=noop,
+        halo_cls=noop,
+        context_window_adapter_cls=noop,
+        multilevel_encoder_cls=noop,
+        afm_config_cls=noop,
+        focus_manager_cls=noop,
+        persistence_cls=noop,
+        resource_limits_cls=noop,
+        resource_manager_cls=noop,
+        file_sync_cls=noop,
+        version_manager_cls=noop,
+        path_validator_cls=noop,
+        ace_framework_cls=noop,
+        ace_context_manager_cls=noop,
+        tooling_gateway_cls=noop,
+        context_service_cls=noop,
+        lifecycle_service_cls=noop,
+        progress_service_cls=noop,
+        persistence_service_cls=noop,
+        tool_profile_service_cls=noop,
+        runtime_service_cls=noop,
+        server_service_adapter_cls=noop,
+        logger=logger,
+    )
+
+    events = {name: payload for name, payload in logger.calls}
+    assert events["file_sync_initialized"]["status"] == "custom-sync"
+    assert events["path_validator_initialized"]["security_feature"] == "custom-policy"
+    assert events["ace_framework_initialized"]["deduplication_threshold"] == 0.42
+    assert events["ace_framework_initialized"]["max_contexts"] == 11

@@ -64,7 +64,7 @@ All notable changes to Token Saver 5000.
 
 - Refactored `ServerFactoryService.build(...)` to consume centralized helper configs for code adapter, AFM, resource limits, ACE defaults, and context-window monitor shape.
 - Added factory contract tests in `tests/test_server_factory_service.py` to lock helper default values and constructor-kwargs wiring behavior.
-- Converted `ServerFactoryService.build(...)` to class-dispatch (`@classmethod`) so helper config overrides are extensible for derived factories without altering default behavior.`r`n- Added subclass-dispatch contract coverage in `tests/test_server_factory_service.py` to verify `build()` uses helper overrides via `cls` dispatch.`r`n`r`n## [0.9.0] - 2025-11-29
+- Converted `ServerFactoryService.build(...)` to class-dispatch (`@classmethod`) so helper config overrides are extensible for derived factories without altering default behavior.`r`n- Added subclass-dispatch contract coverage in `tests/test_server_factory_service.py` to verify `build()` uses helper overrides via `cls` dispatch.`r`n`r`n- Added centralized factory logging payload helpers in `ServerFactoryService` (`file_sync_log_kwargs`, `path_validator_log_kwargs`, `ace_framework_log_kwargs`) and routed `build()` logging through class-dispatchable helper calls.`r`n- Added logging-helper contracts in `tests/test_server_factory_service.py`, including subclass override dispatch coverage for logger payloads.`r`n`r`n## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**
 
@@ -557,6 +557,7 @@ Goal: Achieve 95/100 production readiness through systematic hardening across re
 - SCAR (arXiv:2511.14063v1)
 - AFM (arXiv:2511.12712v1)
 - ACE (arXiv:2510.04618v1)
+
 
 
 
