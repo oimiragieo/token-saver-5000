@@ -2,11 +2,49 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 from .server_aliases import ALLOWED_FACTORY_OVERRIDE_KEYS, validate_override_keys
 
 ALLOWED_OVERRIDE_KEYS: frozenset[str] = ALLOWED_FACTORY_OVERRIDE_KEYS
+
+
+class CoreRuntimeArtifacts(TypedDict):
+    """Foundational runtime collaborators built outside the service layer."""
+
+    focus_manager: Any
+    persistence: Any
+    resource_manager: Any
+    sync_manager: Any
+    version_manager: Any
+    path_validator: Any
+    ace_framework: Any
+    ace_contexts: Any
+
+
+class ServiceLayerArtifacts(TypedDict):
+    """Service-layer collaborators and adapter wiring."""
+
+    context_service: Any
+    lifecycle_service: Any
+    progress_service: Any
+    persistence_service: Any
+    tool_profile_service: Any
+    runtime_service: Any
+    service_adapter: Any
+
+
+class BuildArtifacts(CoreRuntimeArtifacts, ServiceLayerArtifacts):
+    """Complete artifact map returned by factory build methods."""
+
+    compressor: Any
+    blind_spot_detector: Any
+    halo_detector: Any
+    context_window_adapter: Any
+    multilevel_encoder: Any
+    tooling: Any
+    context_window_monitor: dict[str, Any]
+    retrieval_history: dict[str, Any]
 
 
 class ServerFactoryService:
@@ -185,7 +223,7 @@ class ServerFactoryService:
         ace_framework_cls,
         ace_context_manager_cls,
         logger,
-    ) -> dict[str, Any]:
+    ) -> CoreRuntimeArtifacts:
         """Build foundational runtime collaborators outside the service layer."""
         focus_manager = focus_manager_cls(afm_config)
 
@@ -232,7 +270,7 @@ class ServerFactoryService:
         runtime_service_cls,
         server_service_adapter_cls,
         logger,
-    ) -> dict[str, Any]:
+    ) -> ServiceLayerArtifacts:
         """Build service-layer collaborators and wire the service adapter."""
         context_service = context_service_cls()
         lifecycle_service = lifecycle_service_cls()
@@ -267,7 +305,7 @@ class ServerFactoryService:
         max_ace_contexts: int,
         logger,
         class_overrides: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> BuildArtifacts:
         resolved_classes = cls.resolve_class_overrides(
             defaults=cls.default_class_map(),
             overrides=class_overrides,
@@ -314,7 +352,7 @@ class ServerFactoryService:
         runtime_service_cls,
         server_service_adapter_cls,
         logger,
-    ) -> dict[str, Any]:
+    ) -> BuildArtifacts:
         compressor = code_adapter_cls(
             **cls.code_adapter_config(preload_code_model=preload_code_model)
         )

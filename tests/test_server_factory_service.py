@@ -1004,3 +1004,46 @@ def test_build_delegates_core_runtime_construction_through_helper():
     assert components["path_validator"] is sentinel_core["path_validator"]
     assert components["ace_framework"] is sentinel_core["ace_framework"]
     assert components["ace_contexts"] is sentinel_core["ace_contexts"]
+
+
+def test_factory_typed_artifact_contracts_are_declared():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module, "CoreRuntimeArtifacts")
+    assert hasattr(module, "ServiceLayerArtifacts")
+    assert hasattr(module, "BuildArtifacts")
+
+    core_keys = set(module.CoreRuntimeArtifacts.__annotations__.keys())
+    service_keys = set(module.ServiceLayerArtifacts.__annotations__.keys())
+    build_keys = set(module.BuildArtifacts.__annotations__.keys())
+
+    assert core_keys == {
+        "focus_manager",
+        "persistence",
+        "resource_manager",
+        "sync_manager",
+        "version_manager",
+        "path_validator",
+        "ace_framework",
+        "ace_contexts",
+    }
+    assert service_keys == {
+        "context_service",
+        "lifecycle_service",
+        "progress_service",
+        "persistence_service",
+        "tool_profile_service",
+        "runtime_service",
+        "service_adapter",
+    }
+    assert build_keys.issuperset(core_keys | service_keys)
+    assert {
+        "compressor",
+        "blind_spot_detector",
+        "halo_detector",
+        "context_window_adapter",
+        "multilevel_encoder",
+        "tooling",
+        "context_window_monitor",
+        "retrieval_history",
+    }.issubset(build_keys)
