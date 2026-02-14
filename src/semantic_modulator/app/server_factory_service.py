@@ -168,6 +168,59 @@ class ServerFactoryService:
         }
 
     @classmethod
+    def build_core_runtime_layer(
+        cls,
+        *,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        afm_config,
+        focus_manager_cls,
+        persistence_cls,
+        resource_limits_cls,
+        resource_manager_cls,
+        file_sync_cls,
+        version_manager_cls,
+        path_validator_cls,
+        ace_framework_cls,
+        ace_context_manager_cls,
+        logger,
+    ) -> dict[str, Any]:
+        """Build foundational runtime collaborators outside the service layer."""
+        focus_manager = focus_manager_cls(afm_config)
+
+        persistence = persistence_cls()
+        resource_manager = resource_manager_cls(resource_limits_cls(**cls.resource_limits_kwargs()))
+
+        sync_manager = file_sync_cls()
+        version_manager = version_manager_cls()
+        logger.info("file_sync_initialized", **cls.file_sync_log_kwargs())
+
+        path_validator = path_validator_cls(allowed_base_dirs=[cwd, home_dir])
+        logger.info(
+            "path_validator_initialized",
+            **cls.path_validator_log_kwargs(allowed_base_dirs=[cwd, home_dir]),
+        )
+
+        ace_framework = ace_framework_cls(**cls.ace_framework_kwargs())
+        ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
+        logger.info(
+            "ace_framework_initialized",
+            **cls.ace_framework_log_kwargs(max_ace_contexts=max_ace_contexts),
+        )
+
+        return {
+            "focus_manager": focus_manager,
+            "persistence": persistence,
+            "resource_manager": resource_manager,
+            "sync_manager": sync_manager,
+            "version_manager": version_manager,
+            "path_validator": path_validator,
+            "ace_framework": ace_framework,
+            "ace_contexts": ace_contexts,
+        }
+
+    @classmethod
     def build_service_layer(
         cls,
         *,
@@ -271,26 +324,22 @@ class ServerFactoryService:
         multilevel_encoder = multilevel_encoder_cls(compressor)
 
         afm_config = afm_config_cls(**cls.afm_config_kwargs())
-        focus_manager = focus_manager_cls(afm_config)
 
-        persistence = persistence_cls()
-        resource_manager = resource_manager_cls(resource_limits_cls(**cls.resource_limits_kwargs()))
-
-        sync_manager = file_sync_cls()
-        version_manager = version_manager_cls()
-        logger.info("file_sync_initialized", **cls.file_sync_log_kwargs())
-
-        path_validator = path_validator_cls(allowed_base_dirs=[cwd, home_dir])
-        logger.info(
-            "path_validator_initialized",
-            **cls.path_validator_log_kwargs(allowed_base_dirs=[cwd, home_dir]),
-        )
-
-        ace_framework = ace_framework_cls(**cls.ace_framework_kwargs())
-        ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
-        logger.info(
-            "ace_framework_initialized",
-            **cls.ace_framework_log_kwargs(max_ace_contexts=max_ace_contexts),
+        core = cls.build_core_runtime_layer(
+            cwd=cwd,
+            home_dir=home_dir,
+            max_ace_contexts=max_ace_contexts,
+            afm_config=afm_config,
+            focus_manager_cls=focus_manager_cls,
+            persistence_cls=persistence_cls,
+            resource_limits_cls=resource_limits_cls,
+            resource_manager_cls=resource_manager_cls,
+            file_sync_cls=file_sync_cls,
+            version_manager_cls=version_manager_cls,
+            path_validator_cls=path_validator_cls,
+            ace_framework_cls=ace_framework_cls,
+            ace_context_manager_cls=ace_context_manager_cls,
+            logger=logger,
         )
 
         services = cls.build_service_layer(
@@ -310,14 +359,7 @@ class ServerFactoryService:
             "halo_detector": halo_detector,
             "context_window_adapter": context_window_adapter,
             "multilevel_encoder": multilevel_encoder,
-            "focus_manager": focus_manager,
-            "persistence": persistence,
-            "resource_manager": resource_manager,
-            "sync_manager": sync_manager,
-            "version_manager": version_manager,
-            "path_validator": path_validator,
-            "ace_framework": ace_framework,
-            "ace_contexts": ace_contexts,
+            **core,
             "tooling": tooling_gateway_cls(),
             **services,
             "context_window_monitor": cls.default_context_window_monitor(),

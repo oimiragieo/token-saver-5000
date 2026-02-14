@@ -780,3 +780,227 @@ def test_build_delegates_service_layer_construction_through_helper():
     assert components["tool_profile_service"] is sentinel_services["tool_profile_service"]
     assert components["runtime_service"] is sentinel_services["runtime_service"]
     assert components["service_adapter"] is sentinel_services["service_adapter"]
+
+
+def test_build_core_runtime_layer_wires_foundational_dependencies():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    captured = {}
+
+    class AFMConfig:
+        pass
+
+    class FocusManager:
+        def __init__(self, config):
+            captured["focus_config"] = config
+
+    class Persistence:
+        pass
+
+    class ResourceLimits:
+        def __init__(self, **kwargs):
+            captured["resource_limits_kwargs"] = kwargs
+
+    class ResourceManager:
+        def __init__(self, limits):
+            captured["resource_limits_obj"] = limits
+
+    class SyncManager:
+        pass
+
+    class VersionManager:
+        pass
+
+    class PathValidator:
+        def __init__(self, *, allowed_base_dirs):
+            captured["allowed_base_dirs"] = allowed_base_dirs
+
+    class ACEFramework:
+        def __init__(self, **kwargs):
+            captured["ace_kwargs"] = kwargs
+
+    class ACEContexts:
+        def __init__(self, *, max_contexts):
+            captured["max_contexts"] = max_contexts
+
+    logger = Mock()
+
+    core = module.ServerFactoryService.build_core_runtime_layer(
+        cwd="C:/repo",
+        home_dir="C:/Users/test",
+        max_ace_contexts=17,
+        afm_config=AFMConfig(),
+        focus_manager_cls=FocusManager,
+        persistence_cls=Persistence,
+        resource_limits_cls=ResourceLimits,
+        resource_manager_cls=ResourceManager,
+        file_sync_cls=SyncManager,
+        version_manager_cls=VersionManager,
+        path_validator_cls=PathValidator,
+        ace_framework_cls=ACEFramework,
+        ace_context_manager_cls=ACEContexts,
+        logger=logger,
+    )
+
+    assert isinstance(core["persistence"], Persistence)
+    assert isinstance(core["sync_manager"], SyncManager)
+    assert isinstance(core["version_manager"], VersionManager)
+    assert isinstance(core["path_validator"], PathValidator)
+    assert isinstance(core["ace_framework"], ACEFramework)
+    assert isinstance(core["ace_contexts"], ACEContexts)
+    assert isinstance(core["focus_manager"], FocusManager)
+
+    assert captured["allowed_base_dirs"] == ["C:/repo", "C:/Users/test"]
+    assert (
+        captured["resource_limits_kwargs"] == module.ServerFactoryService.resource_limits_kwargs()
+    )
+    assert captured["ace_kwargs"] == module.ServerFactoryService.ace_framework_kwargs()
+    assert captured["max_contexts"] == 17
+
+
+def test_build_delegates_core_runtime_construction_through_helper():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    sentinel_core = {
+        "focus_manager": object(),
+        "persistence": object(),
+        "resource_manager": object(),
+        "sync_manager": object(),
+        "version_manager": object(),
+        "path_validator": object(),
+        "ace_framework": object(),
+        "ace_contexts": object(),
+    }
+    captured = {}
+
+    original_core = module.ServerFactoryService.__dict__.get("build_core_runtime_layer")
+
+    def fake_core_layer(
+        _cls,
+        *,
+        cwd,
+        home_dir,
+        max_ace_contexts,
+        afm_config,
+        focus_manager_cls,
+        persistence_cls,
+        resource_limits_cls,
+        resource_manager_cls,
+        file_sync_cls,
+        version_manager_cls,
+        path_validator_cls,
+        ace_framework_cls,
+        ace_context_manager_cls,
+        logger,
+    ):
+        captured["cwd"] = cwd
+        captured["home_dir"] = home_dir
+        captured["max_ace_contexts"] = max_ace_contexts
+        captured["afm_config"] = afm_config
+        captured["focus_manager_cls"] = focus_manager_cls
+        captured["persistence_cls"] = persistence_cls
+        captured["resource_limits_cls"] = resource_limits_cls
+        captured["resource_manager_cls"] = resource_manager_cls
+        captured["file_sync_cls"] = file_sync_cls
+        captured["version_manager_cls"] = version_manager_cls
+        captured["path_validator_cls"] = path_validator_cls
+        captured["ace_framework_cls"] = ace_framework_cls
+        captured["ace_context_manager_cls"] = ace_context_manager_cls
+        captured["logger"] = logger
+        return sentinel_core
+
+    original_service = module.ServerFactoryService.__dict__.get("build_service_layer")
+
+    def fake_service_layer(
+        _cls,
+        *,
+        context_service_cls,
+        lifecycle_service_cls,
+        progress_service_cls,
+        persistence_service_cls,
+        tool_profile_service_cls,
+        runtime_service_cls,
+        server_service_adapter_cls,
+        logger,
+    ):
+        return {
+            "context_service": object(),
+            "lifecycle_service": object(),
+            "progress_service": object(),
+            "persistence_service": object(),
+            "tool_profile_service": object(),
+            "runtime_service": object(),
+            "service_adapter": object(),
+        }
+
+    module.ServerFactoryService.build_core_runtime_layer = classmethod(fake_core_layer)
+    module.ServerFactoryService.build_service_layer = classmethod(fake_service_layer)
+    try:
+        logger = Mock()
+
+        def marker(*args, **kwargs):
+            return Mock()
+
+        components = module.ServerFactoryService.build(
+            preload_code_model=False,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=19,
+            code_adapter_cls=marker,
+            blind_spot_cls=marker,
+            halo_cls=marker,
+            context_window_adapter_cls=marker,
+            multilevel_encoder_cls=marker,
+            afm_config_cls=marker,
+            focus_manager_cls=str,
+            persistence_cls=int,
+            resource_limits_cls=float,
+            resource_manager_cls=list,
+            file_sync_cls=dict,
+            version_manager_cls=tuple,
+            path_validator_cls=set,
+            ace_framework_cls=bytes,
+            ace_context_manager_cls=bytearray,
+            tooling_gateway_cls=marker,
+            context_service_cls=marker,
+            lifecycle_service_cls=marker,
+            progress_service_cls=marker,
+            persistence_service_cls=marker,
+            tool_profile_service_cls=marker,
+            runtime_service_cls=marker,
+            server_service_adapter_cls=marker,
+            logger=logger,
+        )
+    finally:
+        if original_core is None:
+            delattr(module.ServerFactoryService, "build_core_runtime_layer")
+        else:
+            module.ServerFactoryService.build_core_runtime_layer = original_core
+
+        if original_service is None:
+            delattr(module.ServerFactoryService, "build_service_layer")
+        else:
+            module.ServerFactoryService.build_service_layer = original_service
+
+    assert captured["cwd"] == "C:/repo"
+    assert captured["home_dir"] == "C:/Users/test"
+    assert captured["max_ace_contexts"] == 19
+    assert captured["focus_manager_cls"] is str
+    assert captured["persistence_cls"] is int
+    assert captured["resource_limits_cls"] is float
+    assert captured["resource_manager_cls"] is list
+    assert captured["file_sync_cls"] is dict
+    assert captured["version_manager_cls"] is tuple
+    assert captured["path_validator_cls"] is set
+    assert captured["ace_framework_cls"] is bytes
+    assert captured["ace_context_manager_cls"] is bytearray
+    assert captured["logger"] is logger
+
+    assert components["focus_manager"] is sentinel_core["focus_manager"]
+    assert components["persistence"] is sentinel_core["persistence"]
+    assert components["resource_manager"] is sentinel_core["resource_manager"]
+    assert components["sync_manager"] is sentinel_core["sync_manager"]
+    assert components["version_manager"] is sentinel_core["version_manager"]
+    assert components["path_validator"] is sentinel_core["path_validator"]
+    assert components["ace_framework"] is sentinel_core["ace_framework"]
+    assert components["ace_contexts"] is sentinel_core["ace_contexts"]
