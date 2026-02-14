@@ -120,6 +120,10 @@ class BuildDefaultRequest(TypedDict):
     logger: Any
 
 
+class BuildRequest(BuildKwargsMap, BuildDefaultRequest):
+    """Complete build request payload for ServerFactoryService.build(...)."""
+
+
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
@@ -467,14 +471,29 @@ class ServerFactoryService:
         validation: FactoryValidationResult,
     ) -> BuildArtifacts:
         """Build default runtime artifacts from pre-validated class wiring contracts."""
-        return cls.build(
-            preload_code_model=request["preload_code_model"],
-            cwd=request["cwd"],
-            home_dir=request["home_dir"],
-            max_ace_contexts=request["max_ace_contexts"],
-            logger=request["logger"],
-            **validation["build_kwargs"],
+        build_request = cls.build_request_from_default_validation(
+            request=request,
+            validation=validation,
         )
+        return cls.build_from_request(request=build_request)
+
+    @staticmethod
+    def build_request_from_default_validation(
+        *,
+        request: BuildDefaultRequest,
+        validation: FactoryValidationResult,
+    ) -> BuildRequest:
+        """Merge runtime request parameters and validated class wiring into one payload."""
+        return cast(BuildRequest, {**request, **validation["build_kwargs"]})
+
+    @classmethod
+    def build_from_request(
+        cls,
+        *,
+        request: BuildRequest,
+    ) -> BuildArtifacts:
+        """Dispatch full typed build request through the canonical build entrypoint."""
+        return cls.build(**request)
 
     @classmethod
     def build(

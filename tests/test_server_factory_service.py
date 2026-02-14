@@ -1399,3 +1399,90 @@ def test_factory_build_default_request_contract_declared():
         "max_ace_contexts",
         "logger",
     }
+
+
+def test_factory_build_request_contract_declared():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module, "BuildRequest")
+    expected_runtime = {
+        "preload_code_model",
+        "cwd",
+        "home_dir",
+        "max_ace_contexts",
+        "logger",
+    }
+    expected = expected_runtime | set(module.BuildKwargsMap.__annotations__.keys())
+    assert set(module.BuildRequest.__annotations__.keys()) == expected
+
+
+def test_build_request_from_default_validation_merges_runtime_and_wiring():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    request = {
+        "preload_code_model": True,
+        "cwd": "C:/repo",
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 9,
+        "logger": Mock(),
+    }
+    validation = {
+        "resolved_classes": {"CodeCompressionAdapter": object()},
+        "build_kwargs": {"code_adapter_cls": object()},
+    }
+
+    merged = module.ServerFactoryService.build_request_from_default_validation(
+        request=request,
+        validation=validation,
+    )
+
+    assert merged["cwd"] == "C:/repo"
+    assert merged["home_dir"] == "C:/Users/test"
+    assert merged["max_ace_contexts"] == 9
+    assert merged["logger"] is request["logger"]
+    assert merged["code_adapter_cls"] is validation["build_kwargs"]["code_adapter_cls"]
+
+
+def test_build_default_from_validation_delegates_to_build_from_request():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    request = {
+        "preload_code_model": False,
+        "cwd": "C:/repo",
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 2,
+        "logger": Mock(),
+    }
+    validation = {
+        "resolved_classes": {"CodeCompressionAdapter": object()},
+        "build_kwargs": {"code_adapter_cls": object()},
+    }
+    captured = {}
+
+    original_merge = module.ServerFactoryService.build_request_from_default_validation
+    original_build_from_request = module.ServerFactoryService.build_from_request
+
+    def fake_merge(_cls, *, request, validation):
+        captured["request"] = request
+        captured["validation"] = validation
+        return {"preload_code_model": True, "cwd": "X", "code_adapter_cls": object()}
+
+    def fake_build_from_request(_cls, *, request):
+        captured["build_request"] = request
+        return {"ok": True}
+
+    module.ServerFactoryService.build_request_from_default_validation = classmethod(fake_merge)
+    module.ServerFactoryService.build_from_request = classmethod(fake_build_from_request)
+    try:
+        result = module.ServerFactoryService.build_default_from_validation(
+            request=request,
+            validation=validation,
+        )
+    finally:
+        module.ServerFactoryService.build_request_from_default_validation = original_merge
+        module.ServerFactoryService.build_from_request = original_build_from_request
+
+    assert result == {"ok": True}
+    assert captured["request"] is request
+    assert captured["validation"] is validation
+    assert captured["build_request"]["cwd"] == "X"
