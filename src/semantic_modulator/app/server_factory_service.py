@@ -246,6 +246,20 @@ class ServerFactoryService:
         return cast(BuildKwargsMap, build_kwargs)
 
     @staticmethod
+    def validate_build_request_map(build_request: dict[str, Any]) -> BuildRequest:
+        """Fail fast on required runtime-key drift or unknown keys in build request."""
+        expected_keys = set(BuildRequest.__annotations__.keys())
+        required_runtime_keys = set(BuildDefaultRequest.__annotations__.keys())
+        actual_keys = set(build_request.keys())
+        missing = sorted(required_runtime_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+
+        if missing or extra:
+            raise ValueError(f"build_request_map keys mismatch: missing={missing} extra={extra}")
+
+        return cast(BuildRequest, build_request)
+
+    @staticmethod
     def code_adapter_config(*, preload_code_model: bool) -> dict[str, Any]:
         """Default constructor kwargs for the code compression adapter."""
         return {
@@ -493,7 +507,8 @@ class ServerFactoryService:
         request: BuildRequest,
     ) -> BuildArtifacts:
         """Dispatch full typed build request through the canonical build entrypoint."""
-        return cls.build(**request)
+        validated_request = cls.validate_build_request_map(request)
+        return cls.build(**validated_request)
 
     @classmethod
     def build(

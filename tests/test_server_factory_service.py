@@ -1486,3 +1486,55 @@ def test_build_default_from_validation_delegates_to_build_from_request():
     assert captured["request"] is request
     assert captured["validation"] is validation
     assert captured["build_request"]["cwd"] == "X"
+
+
+def test_validate_build_request_map_contract_declared_and_aligned():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module.ServerFactoryService, "validate_build_request_map")
+    expected_runtime = {
+        "preload_code_model",
+        "cwd",
+        "home_dir",
+        "max_ace_contexts",
+        "logger",
+    }
+    expected = expected_runtime | set(module.BuildKwargsMap.__annotations__.keys())
+    assert set(module.BuildRequest.__annotations__.keys()) == expected
+
+
+def test_build_from_request_rejects_request_drift_before_build_call():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    original_build = module.ServerFactoryService.__dict__["build"]
+
+    called = {"build": False}
+
+    def fake_build(_cls, **kwargs):
+        called["build"] = True
+        return {"ok": True}
+
+    module.ServerFactoryService.build = classmethod(fake_build)
+    try:
+        bad_request = dict(
+            module.ServerFactoryService.build_request_from_default_validation(
+                request=module.ServerFactoryService.build_default_request(
+                    preload_code_model=True,
+                    cwd="C:/repo",
+                    home_dir="C:/Users/test",
+                    max_ace_contexts=3,
+                    logger=Mock(),
+                ),
+                validation=module.ServerFactoryService.validate_factory_contracts(
+                    class_overrides=None
+                ),
+            )
+        )
+        bad_request.pop("cwd")
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_from_request(request=bad_request)
+    finally:
+        module.ServerFactoryService.build = original_build
+
+    assert "cwd" in str(exc_info.value)
+    assert called["build"] is False
