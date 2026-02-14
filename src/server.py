@@ -24,44 +24,25 @@ from .adaptive_rate_allocator import ContextWindowAdapter, MultiLevelSemanticEnc
 from .afm import AFMConfig, FocusManager  # noqa: F401
 from .blind_spot_detector import BlindSpotDetector, HaloEffectDetector  # noqa: F401
 from .code_compression_adapter import CodeCompressionAdapter  # noqa: F401
+from .constants import MAX_ACE_CONTEXTS
 from .file_sync_manager import FileSyncManager  # noqa: F401
 from .persistence import PersistenceManager  # noqa: F401
 from .resource_manager import ResourceLimits, ResourceManager  # noqa: F401
-from .semantic_modulator.app.ace_context_manager import ACEContextManager
+from .semantic_modulator.app.ace_context_manager import ACEContextManager  # noqa: F401
 from .semantic_modulator.app.bootstrap import async_main as bootstrap_async_main
 from .semantic_modulator.app.bootstrap import main as bootstrap_main
 from .semantic_modulator.app.router_binding import bind_mcp_handlers
+from .semantic_modulator.app.server_aliases import build_server_class_overrides
 from .semantic_modulator.app.server_factory_service import ServerFactoryService
 from .semantic_modulator.app.tooling import MCPToolingGateway  # noqa: F401
 from .structured_logging import configure_structlog, get_logger
 from .types import HandlerContext  # TypedDict for handler context
 from .version_manager import VersionManager  # noqa: F401
-from .constants import MAX_ACE_CONTEXTS
 
 
 # Configure structured logging
 configure_structlog(log_level="INFO")
 logger = get_logger("semantic-modulator")
-
-
-def _build_default_overrides() -> dict[str, object]:
-    return {
-        "CodeCompressionAdapter": CodeCompressionAdapter,
-        "BlindSpotDetector": BlindSpotDetector,
-        "HaloEffectDetector": HaloEffectDetector,
-        "ContextWindowAdapter": ContextWindowAdapter,
-        "MultiLevelSemanticEncoder": MultiLevelSemanticEncoder,
-        "AFMConfig": AFMConfig,
-        "FocusManager": FocusManager,
-        "PersistenceManager": PersistenceManager,
-        "ResourceLimits": ResourceLimits,
-        "ResourceManager": ResourceManager,
-        "FileSyncManager": FileSyncManager,
-        "VersionManager": VersionManager,
-        "ACEFramework": ACEFramework,
-        "ACEContextManager": ACEContextManager,
-        "MCPToolingGateway": MCPToolingGateway,
-    }
 
 
 class SemanticModulatorServer:
@@ -77,7 +58,7 @@ class SemanticModulatorServer:
             home_dir=os.path.expanduser("~"),
             max_ace_contexts=MAX_ACE_CONTEXTS,
             logger=logger,
-            class_overrides=_build_default_overrides(),
+            class_overrides=build_server_class_overrides(globals()),
         )
         self.__dict__.update(components)
         configured_profile = os.environ.get("MCP_TOOL_PROFILE", "full")
