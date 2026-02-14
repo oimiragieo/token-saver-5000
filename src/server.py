@@ -39,6 +39,7 @@ from .semantic_modulator.app.persistence_orchestration_service import (
 from .semantic_modulator.app.progress_service import ProgressRenderService
 from .semantic_modulator.app.server_factory_service import ServerFactoryService
 from .semantic_modulator.app.router_binding import bind_mcp_handlers
+from .semantic_modulator.app.runtime_service import RuntimeService
 from .semantic_modulator.app.server_service_adapter import ServerServiceAdapter
 from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
 from .semantic_modulator.app.tooling import MCPToolingGateway
@@ -103,6 +104,7 @@ class SemanticModulatorServer:
             progress_service=self.progress_service,
             logger=logger,
         )
+        self.runtime_service = RuntimeService()
 
         # NOTE: Auto-load moved to __aenter__ for proper lifespan management
         # This ensures clean startup/shutdown sequencing
@@ -233,18 +235,11 @@ class SemanticModulatorServer:
 
     async def run(self):
         """Run the MCP server"""
-        logger.info(
-            "mcp_server_starting",
-            server_name="Semantic Modulator",
-            features=["Semantic Communication", "Fidelity-Preserving Encoding"],
-            model="all-MiniLM-L6-v2",
-            mode="Adaptive Semantic Fidelity",
+        await self.runtime_service.run(
+            server=self.server,
+            logger=logger,
+            stdio_server_fn=stdio_server,
         )
-
-        async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(
-                read_stream, write_stream, self.server.create_initialization_options()
-            )
 
 
 async def async_main():
