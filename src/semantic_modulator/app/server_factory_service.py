@@ -419,7 +419,27 @@ class ServerFactoryService:
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
         validation = cls.validate_factory_contracts(class_overrides=class_overrides)
+        return cls.build_default_from_validation(
+            preload_code_model=preload_code_model,
+            cwd=cwd,
+            home_dir=home_dir,
+            max_ace_contexts=max_ace_contexts,
+            logger=logger,
+            validation=validation,
+        )
 
+    @classmethod
+    def build_default_from_validation(
+        cls,
+        *,
+        preload_code_model: bool,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        logger,
+        validation: FactoryValidationResult,
+    ) -> BuildArtifacts:
+        """Build default runtime artifacts from pre-validated class wiring contracts."""
         return cls.build(
             preload_code_model=preload_code_model,
             cwd=cwd,

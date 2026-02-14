@@ -1297,3 +1297,88 @@ def test_build_default_delegates_to_validate_factory_contracts():
     assert (
         captured["build_kwargs"]["code_adapter_cls"] is sentinel["build_kwargs"]["code_adapter_cls"]
     )
+
+
+def test_build_default_from_validation_delegates_to_build():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    captured = {}
+    sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+
+    original_build = module.ServerFactoryService.__dict__["build"]
+
+    def fake_build(_cls, **kwargs):
+        captured["kwargs"] = kwargs
+        return {"ok": True}
+
+    module.ServerFactoryService.build = classmethod(fake_build)
+    try:
+        result = module.ServerFactoryService.build_default_from_validation(
+            preload_code_model=False,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=3,
+            logger=Mock(),
+            validation=sentinel_validation,
+        )
+    finally:
+        module.ServerFactoryService.build = original_build
+
+    assert result == {"ok": True}
+    assert (
+        captured["kwargs"]["code_adapter_cls"]
+        is sentinel_validation["build_kwargs"]["code_adapter_cls"]
+    )
+
+
+def test_build_default_delegates_to_build_default_from_validation():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+    captured = {}
+
+    original_validate = module.ServerFactoryService.validate_factory_contracts
+    original_orchestrate = module.ServerFactoryService.build_default_from_validation
+
+    def fake_validate(_cls, *, class_overrides):
+        captured["class_overrides"] = class_overrides
+        return sentinel_validation
+
+    def fake_orchestrate(
+        _cls,
+        *,
+        preload_code_model,
+        cwd,
+        home_dir,
+        max_ace_contexts,
+        logger,
+        validation,
+    ):
+        captured["orchestration"] = {
+            "preload_code_model": preload_code_model,
+            "cwd": cwd,
+            "home_dir": home_dir,
+            "max_ace_contexts": max_ace_contexts,
+            "logger": logger,
+            "validation": validation,
+        }
+        return {"ok": True}
+
+    module.ServerFactoryService.validate_factory_contracts = classmethod(fake_validate)
+    module.ServerFactoryService.build_default_from_validation = classmethod(fake_orchestrate)
+    try:
+        result = module.ServerFactoryService.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=5,
+            logger=Mock(),
+            class_overrides={"FocusManager": object()},
+        )
+    finally:
+        module.ServerFactoryService.validate_factory_contracts = original_validate
+        module.ServerFactoryService.build_default_from_validation = original_orchestrate
+
+    assert result == {"ok": True}
+    assert "FocusManager" in captured["class_overrides"]
+    assert captured["orchestration"]["validation"] is sentinel_validation
