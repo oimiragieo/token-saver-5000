@@ -291,6 +291,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     original_default_map = module.ServerFactoryService.default_class_map
     original_validate = module.ServerFactoryService.validate_default_class_map
     original_resolve = module.ServerFactoryService.resolve_class_overrides
+    original_validate_build_kwargs = module.ServerFactoryService.validate_build_kwargs_map
     original_helper = module.ServerFactoryService.build_kwargs_from_resolved_classes
     original_build = module.ServerFactoryService.__dict__["build"]
 
@@ -311,6 +312,9 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
         captured["resolved"] = resolved
         return helper_kwargs
 
+    def fake_validate_build_kwargs(build_kwargs):
+        return build_kwargs
+
     def fake_build(_cls, **kwargs):
         captured["build_kwargs"] = kwargs
         return sentinel_result
@@ -319,6 +323,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     module.ServerFactoryService.validate_default_class_map = staticmethod(fake_validate)
     module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
     module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_helper)
+    module.ServerFactoryService.validate_build_kwargs_map = staticmethod(fake_validate_build_kwargs)
     module.ServerFactoryService.build = classmethod(fake_build)
     try:
         result = module.ServerFactoryService.build_default(
@@ -334,6 +339,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
         module.ServerFactoryService.validate_default_class_map = original_validate
         module.ServerFactoryService.resolve_class_overrides = original_resolve
         module.ServerFactoryService.build_kwargs_from_resolved_classes = original_helper
+        module.ServerFactoryService.validate_build_kwargs_map = original_validate_build_kwargs
         module.ServerFactoryService.build = original_build
 
     assert result is sentinel_result
@@ -1098,3 +1104,86 @@ def test_build_default_rejects_default_class_map_drift_before_override_merge():
 
     assert "FocusManager" in str(exc_info.value)
     assert called["resolve"] is False
+
+
+def test_factory_build_kwargs_contract_declared_and_aligned_with_helper_output():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module, "BuildKwargsMap")
+    expected = {
+        "code_adapter_cls",
+        "blind_spot_cls",
+        "halo_cls",
+        "context_window_adapter_cls",
+        "multilevel_encoder_cls",
+        "afm_config_cls",
+        "focus_manager_cls",
+        "persistence_cls",
+        "resource_limits_cls",
+        "resource_manager_cls",
+        "file_sync_cls",
+        "version_manager_cls",
+        "path_validator_cls",
+        "ace_framework_cls",
+        "ace_context_manager_cls",
+        "tooling_gateway_cls",
+        "context_service_cls",
+        "lifecycle_service_cls",
+        "progress_service_cls",
+        "persistence_service_cls",
+        "tool_profile_service_cls",
+        "runtime_service_cls",
+        "server_service_adapter_cls",
+    }
+
+    assert set(module.BuildKwargsMap.__annotations__.keys()) == expected
+
+
+def test_build_default_rejects_build_kwargs_drift_before_build_call():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    original_validate_default = module.ServerFactoryService.validate_default_class_map
+    original_resolve = module.ServerFactoryService.resolve_class_overrides
+    original_build_kwargs = module.ServerFactoryService.build_kwargs_from_resolved_classes
+    original_build = module.ServerFactoryService.__dict__["build"]
+
+    called = {"build": False}
+
+    resolved = module.ServerFactoryService.default_class_map()
+
+    def fake_validate_default(default_map):
+        return default_map
+
+    def fake_resolve(*, defaults, overrides):
+        return resolved
+
+    def bad_build_kwargs(resolved_classes):
+        kwargs = dict(original_build_kwargs(resolved_classes))
+        kwargs.pop("focus_manager_cls")
+        return kwargs
+
+    def fake_build(_cls, **kwargs):
+        called["build"] = True
+        return {}
+
+    module.ServerFactoryService.validate_default_class_map = staticmethod(fake_validate_default)
+    module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
+    module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(bad_build_kwargs)
+    module.ServerFactoryService.build = classmethod(fake_build)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default(
+                preload_code_model=False,
+                cwd="C:/repo",
+                home_dir="C:/Users/test",
+                max_ace_contexts=5,
+                logger=Mock(),
+            )
+    finally:
+        module.ServerFactoryService.validate_default_class_map = original_validate_default
+        module.ServerFactoryService.resolve_class_overrides = original_resolve
+        module.ServerFactoryService.build_kwargs_from_resolved_classes = original_build_kwargs
+        module.ServerFactoryService.build = original_build
+
+    assert "focus_manager_cls" in str(exc_info.value)
+    assert called["build"] is False

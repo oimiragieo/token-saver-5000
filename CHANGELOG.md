@@ -23,7 +23,19 @@ All notable changes to Token Saver 5000.
 - Fixed `AuditedSemanticGraph.get_node_with_history` to include the node creation bundle via provenance-linked `creation_bundle_id`.
 - Fixed compression postcondition contracts to allow empty `node_map` in `RAW` mode.
 - Added Phase 1 enterprise namespace scaffolding under `src/semantic_modulator/` (`app/bootstrap`, `api/mcp/registry`, `api/mcp/router`) as compatibility facades over existing server/router modules.
-- `src/server.py` now consumes MCP registry/router through `src.semantic_modulator.api.mcp` facades as the canonical import path (behavior unchanged).`r`n- Added app-layer MCP tooling gateway (`src/semantic_modulator/app/tooling.py`) and moved profile resolution/listing/routing orchestration behind it to further thin `src/server.py`.`r`n- Added app-layer context service (`src/semantic_modulator/app/context_service.py`) and moved handler-context assembly + validation logic behind it while preserving server method compatibility.`r`n- Added app-layer lifecycle service (`src/semantic_modulator/app/lifecycle_service.py`) and moved startup/shutdown sequencing behind it while preserving server lifecycle behavior.`r`n- Added app-layer progress rendering service (`src/semantic_modulator/app/progress_service.py`) and moved progress-bar formatting behind it while preserving server helper compatibility.`r`n- Added app-layer persistence orchestration service (`src/semantic_modulator/app/persistence_orchestration_service.py`) and moved persisted document + file-sync load/save flows behind it while preserving server wrapper compatibility.`r`n- Added app-layer tool profile bootstrap service (`src/semantic_modulator/app/tool_profile_service.py`) and moved profile fallback + startup diagnostics logging behind it while preserving server constructor behavior.`r`n- Added app-layer server factory service (`src/semantic_modulator/app/server_factory_service.py`) and moved server composition wiring behind it while preserving constructor-observable behavior.`r`n- Expanded app bootstrap (`src/semantic_modulator/app/bootstrap.py`) to own `async_main`/`main` runtime entrypoints, with `src/server.py` delegating through thin wrappers.`r`n- Added app-layer server service adapter (`src/semantic_modulator/app/server_service_adapter.py`) and routed server helper wrappers (`_load_*`, `_build_context`, `_validate_*`, `_create_progress_bar`) through it to further thin protocol wiring.`r`n- Extracted `ACEContextManager` to `src/semantic_modulator/app/ace_context_manager.py` and kept `src/server.py` re-export compatibility to reduce server module surface area.`r`n- Added app-layer router binding helper (`src/semantic_modulator/app/router_binding.py`) and routed `_setup_handlers` through it, further thinning server protocol wiring.`r`n- Added app-layer runtime execution service (`src/semantic_modulator/app/runtime_service.py`) and routed `SemanticModulatorServer.run()` through it as a thin delegation wrapper.
+- `src/server.py` now consumes MCP registry/router through `src.semantic_modulator.api.mcp` facades as the canonical import path (behavior unchanged).
+- Added app-layer MCP tooling gateway (`src/semantic_modulator/app/tooling.py`) and moved profile resolution/listing/routing orchestration behind it to further thin `src/server.py`.
+- Added app-layer context service (`src/semantic_modulator/app/context_service.py`) and moved handler-context assembly + validation logic behind it while preserving server method compatibility.
+- Added app-layer lifecycle service (`src/semantic_modulator/app/lifecycle_service.py`) and moved startup/shutdown sequencing behind it while preserving server lifecycle behavior.
+- Added app-layer progress rendering service (`src/semantic_modulator/app/progress_service.py`) and moved progress-bar formatting behind it while preserving server helper compatibility.
+- Added app-layer persistence orchestration service (`src/semantic_modulator/app/persistence_orchestration_service.py`) and moved persisted document + file-sync load/save flows behind it while preserving server wrapper compatibility.
+- Added app-layer tool profile bootstrap service (`src/semantic_modulator/app/tool_profile_service.py`) and moved profile fallback + startup diagnostics logging behind it while preserving server constructor behavior.
+- Added app-layer server factory service (`src/semantic_modulator/app/server_factory_service.py`) and moved server composition wiring behind it while preserving constructor-observable behavior.
+- Expanded app bootstrap (`src/semantic_modulator/app/bootstrap.py`) to own `async_main`/`main` runtime entrypoints, with `src/server.py` delegating through thin wrappers.
+- Added app-layer server service adapter (`src/semantic_modulator/app/server_service_adapter.py`) and routed server helper wrappers (`_load_*`, `_build_context`, `_validate_*`, `_create_progress_bar`) through it to further thin protocol wiring.
+- Extracted `ACEContextManager` to `src/semantic_modulator/app/ace_context_manager.py` and kept `src/server.py` re-export compatibility to reduce server module surface area.
+- Added app-layer router binding helper (`src/semantic_modulator/app/router_binding.py`) and routed `_setup_handlers` through it, further thinning server protocol wiring.
+- Added app-layer runtime execution service (`src/semantic_modulator/app/runtime_service.py`) and routed `SemanticModulatorServer.run()` through it as a thin delegation wrapper.
 - Synchronized `skills/token-saver-context-compression/` with the new self-contained `.claude` skill package, including TOON/JSON/auto output routing and local benchmark guard scripts.
 
 ### Added
@@ -33,7 +45,19 @@ All notable changes to Token Saver 5000.
 - Added profile contract tests in `tests/test_tool_profiles.py` and server profile env tests in `tests/test_server_unit.py`.
 - Added dedicated CI workflow `.github/workflows/mcp-profile-guard.yml` for MCP profile regression checks.
 - Added enterprise layout contract tests in `tests/test_enterprise_layout.py` to lock namespace/bootstrap/router wrapper behavior.
-- Added enterprise import-path contract coverage to ensure `SemanticModulatorServer` initializes tool setup via the new facade module.`r`n- Added gateway contract tests in `tests/test_mcp_tooling_gateway.py` for profile fallback/state and routing delegation.`r`n- Added context service contract tests in `tests/test_context_service.py` and kept server validation/context tests green via delegation wrappers.`r`n- Added lifecycle service contract tests in `tests/test_lifecycle_service.py` and kept server lifecycle/load/save tests green via delegation wrappers.`r`n- Added progress service contract tests in `tests/test_progress_service.py` and kept server progress helper tests green via delegation wrapper.`r`n- Added persistence orchestration service contract tests in `tests/test_persistence_orchestration_service.py` and kept server load/save lifecycle tests green via delegation wrappers.`r`n- Added tool profile service contract tests in `tests/test_tool_profile_service.py` and kept server profile initialization tests green via delegation wiring.`r`n- Added server factory service contract tests in `tests/test_server_factory_service.py` and kept server initialization/lifecycle/profile regressions green after composition extraction.`r`n- Added bootstrap contract tests in `tests/test_bootstrap.py` for server creation and runtime-entrypoint delegation semantics.`r`n- Added server service adapter contract tests in `tests/test_server_service_adapter.py` and kept helper-wrapper regression tests green via adapter delegation.`r`n- Added ACE context manager module contract tests in `tests/test_ace_context_manager_module.py` to enforce module export and server re-export compatibility.`r`n- Added router binding contract tests in `tests/test_router_binding.py` to enforce handler registration and result/error wrapping semantics.`r`n- Added runtime service and wrapper compatibility tests in `tests/test_runtime_service.py` and `tests/test_server_runtime_wrapper.py` to enforce stdio execution + delegation semantics.
+- Added enterprise import-path contract coverage to ensure `SemanticModulatorServer` initializes tool setup via the new facade module.
+- Added gateway contract tests in `tests/test_mcp_tooling_gateway.py` for profile fallback/state and routing delegation.
+- Added context service contract tests in `tests/test_context_service.py` and kept server validation/context tests green via delegation wrappers.
+- Added lifecycle service contract tests in `tests/test_lifecycle_service.py` and kept server lifecycle/load/save tests green via delegation wrappers.
+- Added progress service contract tests in `tests/test_progress_service.py` and kept server progress helper tests green via delegation wrapper.
+- Added persistence orchestration service contract tests in `tests/test_persistence_orchestration_service.py` and kept server load/save lifecycle tests green via delegation wrappers.
+- Added tool profile service contract tests in `tests/test_tool_profile_service.py` and kept server profile initialization tests green via delegation wiring.
+- Added server factory service contract tests in `tests/test_server_factory_service.py` and kept server initialization/lifecycle/profile regressions green after composition extraction.
+- Added bootstrap contract tests in `tests/test_bootstrap.py` for server creation and runtime-entrypoint delegation semantics.
+- Added server service adapter contract tests in `tests/test_server_service_adapter.py` and kept helper-wrapper regression tests green via adapter delegation.
+- Added ACE context manager module contract tests in `tests/test_ace_context_manager_module.py` to enforce module export and server re-export compatibility.
+- Added router binding contract tests in `tests/test_router_binding.py` to enforce handler registration and result/error wrapping semantics.
+- Added runtime service and wrapper compatibility tests in `tests/test_runtime_service.py` and `tests/test_server_runtime_wrapper.py` to enforce stdio execution + delegation semantics.
 
 - Updated factory composition wiring so ServerFactoryService.build(...) now constructs and returns runtime_service plus service_adapter, removing duplicate constructor wiring from src/server.py.
 - Added constructor wiring contract test tests/test_server_wiring_contract.py to lock factory ownership of runtime + adapter dependencies.
@@ -64,7 +88,30 @@ All notable changes to Token Saver 5000.
 
 - Refactored `ServerFactoryService.build(...)` to consume centralized helper configs for code adapter, AFM, resource limits, ACE defaults, and context-window monitor shape.
 - Added factory contract tests in `tests/test_server_factory_service.py` to lock helper default values and constructor-kwargs wiring behavior.
-- Converted `ServerFactoryService.build(...)` to class-dispatch (`@classmethod`) so helper config overrides are extensible for derived factories without altering default behavior.`r`n- Added subclass-dispatch contract coverage in `tests/test_server_factory_service.py` to verify `build()` uses helper overrides via `cls` dispatch.`r`n`r`n- Added centralized factory logging payload helpers in `ServerFactoryService` (`file_sync_log_kwargs`, `path_validator_log_kwargs`, `ace_framework_log_kwargs`) and routed `build()` logging through class-dispatchable helper calls.`r`n- Added logging-helper contracts in `tests/test_server_factory_service.py`, including subclass override dispatch coverage for logger payloads.`r`n`r`n- Added `ServerFactoryService.build_service_layer(...)` to centralize service-layer construction (context/lifecycle/progress/persistence/tool-profile/runtime + adapter wiring) and reduce constructor orchestration complexity.`r`n- Updated `build()` to delegate service assembly through the new helper and added factory contracts in `tests/test_server_factory_service.py` for helper wiring and delegation behavior.`r`n`r`n- Added `ServerFactoryService.build_core_runtime_layer(...)` to centralize foundational runtime assembly (focus/persistence/resource/file-sync/version/path-validator/ACE) and associated startup logging.`r`n- Updated `build()` to delegate foundational runtime construction through the new helper and added delegation+wiring contracts in `tests/test_server_factory_service.py` to lock behavior.`r`n`r`n- Declared typed factory artifact contracts in `server_factory_service` (`CoreRuntimeArtifacts`, `ServiceLayerArtifacts`, `BuildArtifacts`) and updated factory helper/build return annotations to use them.`r`n- Added artifact-contract coverage in `tests/test_server_factory_service.py` to lock typed key schemas and reduce dict-shape drift risk across helper boundaries.`r`n`r`n- Added typed class-alias contract `FactoryClassMap` in `server_factory_service` and tightened class-map-related method annotations to reduce override wiring drift risk.`r`n- Added `validate_default_class_map(...)` fail-fast guard and wired `build_default()` to validate class-map key parity with `ALLOWED_OVERRIDE_KEYS` before override resolution.`r`n- Added factory contract tests in `tests/test_server_factory_service.py` for class-map type/schema alignment and early drift rejection semantics.`r`n`r`n## [0.9.0] - 2025-11-29
+- Converted `ServerFactoryService.build(...)` to class-dispatch (`@classmethod`) so helper config overrides are extensible for derived factories without altering default behavior.
+- Added subclass-dispatch contract coverage in `tests/test_server_factory_service.py` to verify `build()` uses helper overrides via `cls` dispatch.
+
+- Added centralized factory logging payload helpers in `ServerFactoryService` (`file_sync_log_kwargs`, `path_validator_log_kwargs`, `ace_framework_log_kwargs`) and routed `build()` logging through class-dispatchable helper calls.
+- Added logging-helper contracts in `tests/test_server_factory_service.py`, including subclass override dispatch coverage for logger payloads.
+
+- Added `ServerFactoryService.build_service_layer(...)` to centralize service-layer construction (context/lifecycle/progress/persistence/tool-profile/runtime + adapter wiring) and reduce constructor orchestration complexity.
+- Updated `build()` to delegate service assembly through the new helper and added factory contracts in `tests/test_server_factory_service.py` for helper wiring and delegation behavior.
+
+- Added `ServerFactoryService.build_core_runtime_layer(...)` to centralize foundational runtime assembly (focus/persistence/resource/file-sync/version/path-validator/ACE) and associated startup logging.
+- Updated `build()` to delegate foundational runtime construction through the new helper and added delegation+wiring contracts in `tests/test_server_factory_service.py` to lock behavior.
+
+- Declared typed factory artifact contracts in `server_factory_service` (`CoreRuntimeArtifacts`, `ServiceLayerArtifacts`, `BuildArtifacts`) and updated factory helper/build return annotations to use them.
+- Added artifact-contract coverage in `tests/test_server_factory_service.py` to lock typed key schemas and reduce dict-shape drift risk across helper boundaries.
+
+- Added typed class-alias contract `FactoryClassMap` in `server_factory_service` and tightened class-map-related method annotations to reduce override wiring drift risk.
+- Added `validate_default_class_map(...)` fail-fast guard and wired `build_default()` to validate class-map key parity with `ALLOWED_OVERRIDE_KEYS` before override resolution.
+- Added factory contract tests in `tests/test_server_factory_service.py` for class-map type/schema alignment and early drift rejection semantics.
+
+- Added typed build-kwargs contract `BuildKwargsMap` and updated `build_kwargs_from_resolved_classes(...)` to return the typed mapping for stronger alias-to-constructor parity semantics.
+- Added `validate_build_kwargs_map(...)` and wired `build_default()` to fail fast when build-kwargs keys drift from the canonical constructor kwargs contract.
+- Added factory contract tests in `tests/test_server_factory_service.py` for build-kwargs schema declaration/alignment and early drift rejection before server build invocation.
+
+## [0.9.0] - 2025-11-29
 
 **Code Compression Adapter with Semantic Fidelity Encoding**
 
@@ -557,6 +604,8 @@ Goal: Achieve 95/100 production readiness through systematic hardening across re
 - SCAR (arXiv:2511.14063v1)
 - AFM (arXiv:2511.12712v1)
 - ACE (arXiv:2510.04618v1)
+
+
 
 
 

@@ -37,6 +37,34 @@ class FactoryClassMap(TypedDict):
     ServerServiceAdapter: Any
 
 
+class BuildKwargsMap(TypedDict):
+    """Keyword arguments required by ServerFactoryService.build()."""
+
+    code_adapter_cls: Any
+    blind_spot_cls: Any
+    halo_cls: Any
+    context_window_adapter_cls: Any
+    multilevel_encoder_cls: Any
+    afm_config_cls: Any
+    focus_manager_cls: Any
+    persistence_cls: Any
+    resource_limits_cls: Any
+    resource_manager_cls: Any
+    file_sync_cls: Any
+    version_manager_cls: Any
+    path_validator_cls: Any
+    ace_framework_cls: Any
+    ace_context_manager_cls: Any
+    tooling_gateway_cls: Any
+    context_service_cls: Any
+    lifecycle_service_cls: Any
+    progress_service_cls: Any
+    persistence_service_cls: Any
+    tool_profile_service_cls: Any
+    runtime_service_cls: Any
+    server_service_adapter_cls: Any
+
+
 class CoreRuntimeArtifacts(TypedDict):
     """Foundational runtime collaborators built outside the service layer."""
 
@@ -152,33 +180,49 @@ class ServerFactoryService:
         return cast(FactoryClassMap, {**defaults, **active_overrides})
 
     @staticmethod
-    def build_kwargs_from_resolved_classes(resolved_classes: FactoryClassMap) -> dict[str, Any]:
+    def build_kwargs_from_resolved_classes(resolved_classes: FactoryClassMap) -> BuildKwargsMap:
         """Translate resolved class alias map into build() keyword arguments."""
-        return {
-            "code_adapter_cls": resolved_classes["CodeCompressionAdapter"],
-            "blind_spot_cls": resolved_classes["BlindSpotDetector"],
-            "halo_cls": resolved_classes["HaloEffectDetector"],
-            "context_window_adapter_cls": resolved_classes["ContextWindowAdapter"],
-            "multilevel_encoder_cls": resolved_classes["MultiLevelSemanticEncoder"],
-            "afm_config_cls": resolved_classes["AFMConfig"],
-            "focus_manager_cls": resolved_classes["FocusManager"],
-            "persistence_cls": resolved_classes["PersistenceManager"],
-            "resource_limits_cls": resolved_classes["ResourceLimits"],
-            "resource_manager_cls": resolved_classes["ResourceManager"],
-            "file_sync_cls": resolved_classes["FileSyncManager"],
-            "version_manager_cls": resolved_classes["VersionManager"],
-            "path_validator_cls": resolved_classes["PathValidator"],
-            "ace_framework_cls": resolved_classes["ACEFramework"],
-            "ace_context_manager_cls": resolved_classes["ACEContextManager"],
-            "tooling_gateway_cls": resolved_classes["MCPToolingGateway"],
-            "context_service_cls": resolved_classes["ServerContextService"],
-            "lifecycle_service_cls": resolved_classes["ServerLifecycleService"],
-            "progress_service_cls": resolved_classes["ProgressRenderService"],
-            "persistence_service_cls": resolved_classes["PersistenceOrchestrationService"],
-            "tool_profile_service_cls": resolved_classes["ToolProfileBootstrapService"],
-            "runtime_service_cls": resolved_classes["RuntimeService"],
-            "server_service_adapter_cls": resolved_classes["ServerServiceAdapter"],
-        }
+        return cast(
+            BuildKwargsMap,
+            {
+                "code_adapter_cls": resolved_classes["CodeCompressionAdapter"],
+                "blind_spot_cls": resolved_classes["BlindSpotDetector"],
+                "halo_cls": resolved_classes["HaloEffectDetector"],
+                "context_window_adapter_cls": resolved_classes["ContextWindowAdapter"],
+                "multilevel_encoder_cls": resolved_classes["MultiLevelSemanticEncoder"],
+                "afm_config_cls": resolved_classes["AFMConfig"],
+                "focus_manager_cls": resolved_classes["FocusManager"],
+                "persistence_cls": resolved_classes["PersistenceManager"],
+                "resource_limits_cls": resolved_classes["ResourceLimits"],
+                "resource_manager_cls": resolved_classes["ResourceManager"],
+                "file_sync_cls": resolved_classes["FileSyncManager"],
+                "version_manager_cls": resolved_classes["VersionManager"],
+                "path_validator_cls": resolved_classes["PathValidator"],
+                "ace_framework_cls": resolved_classes["ACEFramework"],
+                "ace_context_manager_cls": resolved_classes["ACEContextManager"],
+                "tooling_gateway_cls": resolved_classes["MCPToolingGateway"],
+                "context_service_cls": resolved_classes["ServerContextService"],
+                "lifecycle_service_cls": resolved_classes["ServerLifecycleService"],
+                "progress_service_cls": resolved_classes["ProgressRenderService"],
+                "persistence_service_cls": resolved_classes["PersistenceOrchestrationService"],
+                "tool_profile_service_cls": resolved_classes["ToolProfileBootstrapService"],
+                "runtime_service_cls": resolved_classes["RuntimeService"],
+                "server_service_adapter_cls": resolved_classes["ServerServiceAdapter"],
+            },
+        )
+
+    @staticmethod
+    def validate_build_kwargs_map(build_kwargs: dict[str, Any]) -> BuildKwargsMap:
+        """Fail fast when build-kwargs map drifts from constructor kwargs contract."""
+        expected_keys = set(BuildKwargsMap.__annotations__.keys())
+        actual_keys = set(build_kwargs.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+
+        if missing or extra:
+            raise ValueError(f"build_kwargs_map keys mismatch: missing={missing} extra={extra}")
+
+        return cast(BuildKwargsMap, build_kwargs)
 
     @staticmethod
     def code_adapter_config(*, preload_code_model: bool) -> dict[str, Any]:
@@ -352,6 +396,9 @@ class ServerFactoryService:
             defaults=defaults,
             overrides=class_overrides,
         )
+        build_kwargs = cls.validate_build_kwargs_map(
+            cls.build_kwargs_from_resolved_classes(resolved_classes)
+        )
 
         return cls.build(
             preload_code_model=preload_code_model,
@@ -359,7 +406,7 @@ class ServerFactoryService:
             home_dir=home_dir,
             max_ace_contexts=max_ace_contexts,
             logger=logger,
-            **cls.build_kwargs_from_resolved_classes(resolved_classes),
+            **build_kwargs,
         )
 
     @classmethod
