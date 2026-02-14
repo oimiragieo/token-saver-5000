@@ -1304,6 +1304,13 @@ def test_build_default_from_validation_delegates_to_build():
 
     captured = {}
     sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
+    sentinel_request = {
+        "preload_code_model": False,
+        "cwd": "C:/repo",
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 3,
+        "logger": Mock(),
+    }
 
     original_build = module.ServerFactoryService.__dict__["build"]
 
@@ -1314,17 +1321,18 @@ def test_build_default_from_validation_delegates_to_build():
     module.ServerFactoryService.build = classmethod(fake_build)
     try:
         result = module.ServerFactoryService.build_default_from_validation(
-            preload_code_model=False,
-            cwd="C:/repo",
-            home_dir="C:/Users/test",
-            max_ace_contexts=3,
-            logger=Mock(),
+            request=sentinel_request,
             validation=sentinel_validation,
         )
     finally:
         module.ServerFactoryService.build = original_build
 
     assert result == {"ok": True}
+    assert captured["kwargs"]["preload_code_model"] is sentinel_request["preload_code_model"]
+    assert captured["kwargs"]["cwd"] == sentinel_request["cwd"]
+    assert captured["kwargs"]["home_dir"] == sentinel_request["home_dir"]
+    assert captured["kwargs"]["max_ace_contexts"] == sentinel_request["max_ace_contexts"]
+    assert captured["kwargs"]["logger"] is sentinel_request["logger"]
     assert (
         captured["kwargs"]["code_adapter_cls"]
         is sentinel_validation["build_kwargs"]["code_adapter_cls"]
@@ -1347,19 +1355,11 @@ def test_build_default_delegates_to_build_default_from_validation():
     def fake_orchestrate(
         _cls,
         *,
-        preload_code_model,
-        cwd,
-        home_dir,
-        max_ace_contexts,
-        logger,
+        request,
         validation,
     ):
         captured["orchestration"] = {
-            "preload_code_model": preload_code_model,
-            "cwd": cwd,
-            "home_dir": home_dir,
-            "max_ace_contexts": max_ace_contexts,
-            "logger": logger,
+            "request": request,
             "validation": validation,
         }
         return {"ok": True}
@@ -1382,3 +1382,20 @@ def test_build_default_delegates_to_build_default_from_validation():
     assert result == {"ok": True}
     assert "FocusManager" in captured["class_overrides"]
     assert captured["orchestration"]["validation"] is sentinel_validation
+    assert captured["orchestration"]["request"]["preload_code_model"] is True
+    assert captured["orchestration"]["request"]["cwd"] == "C:/repo"
+    assert captured["orchestration"]["request"]["home_dir"] == "C:/Users/test"
+    assert captured["orchestration"]["request"]["max_ace_contexts"] == 5
+
+
+def test_factory_build_default_request_contract_declared():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module, "BuildDefaultRequest")
+    assert set(module.BuildDefaultRequest.__annotations__.keys()) == {
+        "preload_code_model",
+        "cwd",
+        "home_dir",
+        "max_ace_contexts",
+        "logger",
+    }

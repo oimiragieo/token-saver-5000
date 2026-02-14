@@ -110,6 +110,16 @@ class FactoryValidationResult(TypedDict):
     build_kwargs: BuildKwargsMap
 
 
+class BuildDefaultRequest(TypedDict):
+    """Default-build runtime parameters that are independent from class wiring."""
+
+    preload_code_model: bool
+    cwd: str
+    home_dir: str
+    max_ace_contexts: int
+    logger: Any
+
+
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
 
@@ -407,6 +417,24 @@ class ServerFactoryService:
             "build_kwargs": build_kwargs,
         }
 
+    @staticmethod
+    def build_default_request(
+        *,
+        preload_code_model: bool,
+        cwd: str,
+        home_dir: str,
+        max_ace_contexts: int,
+        logger,
+    ) -> BuildDefaultRequest:
+        """Build a typed request payload for default factory orchestration."""
+        return {
+            "preload_code_model": preload_code_model,
+            "cwd": cwd,
+            "home_dir": home_dir,
+            "max_ace_contexts": max_ace_contexts,
+            "logger": logger,
+        }
+
     @classmethod
     def build_default(
         cls,
@@ -419,12 +447,15 @@ class ServerFactoryService:
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
         validation = cls.validate_factory_contracts(class_overrides=class_overrides)
-        return cls.build_default_from_validation(
+        request = cls.build_default_request(
             preload_code_model=preload_code_model,
             cwd=cwd,
             home_dir=home_dir,
             max_ace_contexts=max_ace_contexts,
             logger=logger,
+        )
+        return cls.build_default_from_validation(
+            request=request,
             validation=validation,
         )
 
@@ -432,20 +463,16 @@ class ServerFactoryService:
     def build_default_from_validation(
         cls,
         *,
-        preload_code_model: bool,
-        cwd: str,
-        home_dir: str,
-        max_ace_contexts: int,
-        logger,
+        request: BuildDefaultRequest,
         validation: FactoryValidationResult,
     ) -> BuildArtifacts:
         """Build default runtime artifacts from pre-validated class wiring contracts."""
         return cls.build(
-            preload_code_model=preload_code_model,
-            cwd=cwd,
-            home_dir=home_dir,
-            max_ace_contexts=max_ace_contexts,
-            logger=logger,
+            preload_code_model=request["preload_code_model"],
+            cwd=request["cwd"],
+            home_dir=request["home_dir"],
+            max_ace_contexts=request["max_ace_contexts"],
+            logger=request["logger"],
             **validation["build_kwargs"],
         )
 
