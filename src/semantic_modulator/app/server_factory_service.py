@@ -101,6 +101,51 @@ class ServerFactoryService:
             "server_service_adapter_cls": resolved_classes["ServerServiceAdapter"],
         }
 
+    @staticmethod
+    def code_adapter_config(*, preload_code_model: bool) -> dict[str, Any]:
+        """Default constructor kwargs for the code compression adapter."""
+        return {
+            "text_model": "all-MiniLM-L6-v2",
+            "code_model": "microsoft/codebert-base",
+            "similarity_threshold": 0.75,
+            "skeleton_ratio": 0.2,
+            "preload_code_model": preload_code_model,
+        }
+
+    @staticmethod
+    def afm_config_kwargs() -> dict[str, Any]:
+        """Default AFM configuration used by production wiring."""
+        return {
+            "tau_high": 0.45,
+            "tau_mid": 0.25,
+            "half_life": 12,
+            "use_llm_importance": False,
+            "use_llm_compression": False,
+        }
+
+    @staticmethod
+    def resource_limits_kwargs() -> dict[str, Any]:
+        """Default resource limits for server runtime."""
+        return {
+            "max_document_size_mb": 100.0,
+            "max_total_storage_mb": 1024.0,
+            "max_documents": 1000,
+            "max_memory_mb": 2048.0,
+        }
+
+    @staticmethod
+    def ace_framework_kwargs() -> dict[str, Any]:
+        """Default ACE framework configuration for bullet extraction."""
+        return {
+            "deduplication_threshold": 0.85,
+            "max_bullets": 100,
+        }
+
+    @staticmethod
+    def default_context_window_monitor() -> dict[str, Any]:
+        """Default context window monitor shape for session state."""
+        return {"max_tokens": 100000, "used_tokens": 0, "history": []}
+
     @classmethod
     def build_default(
         cls,
@@ -159,34 +204,19 @@ class ServerFactoryService:
         logger,
     ) -> dict[str, Any]:
         compressor = code_adapter_cls(
-            text_model="all-MiniLM-L6-v2",
-            code_model="microsoft/codebert-base",
-            similarity_threshold=0.75,
-            skeleton_ratio=0.2,
-            preload_code_model=preload_code_model,
+            **ServerFactoryService.code_adapter_config(preload_code_model=preload_code_model)
         )
         blind_spot_detector = blind_spot_cls(compressor)
         halo_detector = halo_cls(compressor)
         context_window_adapter = context_window_adapter_cls(compressor)
         multilevel_encoder = multilevel_encoder_cls(compressor)
 
-        afm_config = afm_config_cls(
-            tau_high=0.45,
-            tau_mid=0.25,
-            half_life=12,
-            use_llm_importance=False,
-            use_llm_compression=False,
-        )
+        afm_config = afm_config_cls(**ServerFactoryService.afm_config_kwargs())
         focus_manager = focus_manager_cls(afm_config)
 
         persistence = persistence_cls()
         resource_manager = resource_manager_cls(
-            resource_limits_cls(
-                max_document_size_mb=100.0,
-                max_total_storage_mb=1024.0,
-                max_documents=1000,
-                max_memory_mb=2048.0,
-            )
+            resource_limits_cls(**ServerFactoryService.resource_limits_kwargs())
         )
 
         sync_manager = file_sync_cls()
@@ -200,10 +230,7 @@ class ServerFactoryService:
             security_feature="CWE-22 path traversal prevention",
         )
 
-        ace_framework = ace_framework_cls(
-            deduplication_threshold=0.85,
-            max_bullets=100,
-        )
+        ace_framework = ace_framework_cls(**ServerFactoryService.ace_framework_kwargs())
         ace_contexts = ace_context_manager_cls(max_contexts=max_ace_contexts)
         logger.info(
             "ace_framework_initialized",
@@ -247,6 +274,6 @@ class ServerFactoryService:
             "tool_profile_service": tool_profile_service,
             "runtime_service": runtime_service,
             "service_adapter": service_adapter,
-            "context_window_monitor": {"max_tokens": 100000, "used_tokens": 0, "history": []},
+            "context_window_monitor": ServerFactoryService.default_context_window_monitor(),
             "retrieval_history": {},
         }

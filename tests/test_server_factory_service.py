@@ -9,7 +9,6 @@ from unittest.mock import Mock
 
 def test_factory_build_creates_core_components_and_services():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     def make(name):
         def _factory(*args, **kwargs):
@@ -17,7 +16,7 @@ def test_factory_build_creates_core_components_and_services():
 
         return _factory
 
-    components = service.build(
+    components = module.ServerFactoryService.build(
         preload_code_model=False,
         cwd="C:/repo",
         home_dir="C:/Users/test",
@@ -60,7 +59,6 @@ def test_factory_build_creates_core_components_and_services():
 
 def test_factory_build_uses_cwd_and_home_for_path_validator():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     captured = {}
 
@@ -71,7 +69,7 @@ def test_factory_build_uses_cwd_and_home_for_path_validator():
     def noop(*args, **kwargs):
         return Mock()
 
-    service.build(
+    module.ServerFactoryService.build(
         preload_code_model=True,
         cwd="C:/repo",
         home_dir="C:/Users/test",
@@ -107,7 +105,6 @@ def test_factory_build_uses_cwd_and_home_for_path_validator():
 
 def test_factory_build_default_delegates_to_build_with_production_wiring():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     sentinel = {"ok": True}
     original_build = module.ServerFactoryService.build
@@ -119,7 +116,7 @@ def test_factory_build_default_delegates_to_build_with_production_wiring():
 
     module.ServerFactoryService.build = staticmethod(fake_build)
     try:
-        result = service.build_default(
+        result = module.ServerFactoryService.build_default(
             preload_code_model=True,
             cwd="C:/repo",
             home_dir="C:/Users/test",
@@ -141,10 +138,9 @@ def test_factory_build_default_delegates_to_build_with_production_wiring():
 
 def test_factory_build_default_rejects_unknown_override_keys():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     with pytest.raises(ValueError) as exc_info:
-        service.build_default(
+        module.ServerFactoryService.build_default(
             preload_code_model=False,
             cwd="C:/repo",
             home_dir="C:/Users/test",
@@ -184,7 +180,6 @@ def test_default_class_map_covers_allowed_override_keys():
 
 def test_build_default_uses_resolve_class_overrides_result_for_build_wiring():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     sentinel_result = {"ok": True}
     resolved = {
@@ -231,7 +226,7 @@ def test_build_default_uses_resolve_class_overrides_result_for_build_wiring():
     module.ServerFactoryService.resolve_class_overrides = staticmethod(fake_resolve)
     module.ServerFactoryService.build = staticmethod(fake_build)
     try:
-        result = service.build_default(
+        result = module.ServerFactoryService.build_default(
             preload_code_model=True,
             cwd="C:/repo",
             home_dir="C:/Users/test",
@@ -289,7 +284,6 @@ def test_build_kwargs_from_resolved_classes_maps_expected_build_arguments():
 
 def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
-    service = module.ServerFactoryService()
 
     sentinel_result = {"ok": True}
     helper_kwargs = {"code_adapter_cls": object()}
@@ -322,7 +316,7 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     module.ServerFactoryService.build_kwargs_from_resolved_classes = staticmethod(fake_helper)
     module.ServerFactoryService.build = staticmethod(fake_build)
     try:
-        result = service.build_default(
+        result = module.ServerFactoryService.build_default(
             preload_code_model=True,
             cwd="C:/repo",
             home_dir="C:/Users/test",
@@ -342,3 +336,102 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     assert captured["build_kwargs"]["cwd"] == "C:/repo"
     assert captured["build_kwargs"]["home_dir"] == "C:/Users/test"
     assert captured["build_kwargs"]["max_ace_contexts"] == 9
+
+
+def test_build_helpers_expose_expected_default_configs():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    code_cfg = module.ServerFactoryService.code_adapter_config(preload_code_model=True)
+    afm_cfg = module.ServerFactoryService.afm_config_kwargs()
+    resource_cfg = module.ServerFactoryService.resource_limits_kwargs()
+    ace_cfg = module.ServerFactoryService.ace_framework_kwargs()
+    monitor = module.ServerFactoryService.default_context_window_monitor()
+
+    assert code_cfg == {
+        "text_model": "all-MiniLM-L6-v2",
+        "code_model": "microsoft/codebert-base",
+        "similarity_threshold": 0.75,
+        "skeleton_ratio": 0.2,
+        "preload_code_model": True,
+    }
+    assert afm_cfg == {
+        "tau_high": 0.45,
+        "tau_mid": 0.25,
+        "half_life": 12,
+        "use_llm_importance": False,
+        "use_llm_compression": False,
+    }
+    assert resource_cfg == {
+        "max_document_size_mb": 100.0,
+        "max_total_storage_mb": 1024.0,
+        "max_documents": 1000,
+        "max_memory_mb": 2048.0,
+    }
+    assert ace_cfg == {
+        "deduplication_threshold": 0.85,
+        "max_bullets": 100,
+    }
+    assert monitor == {"max_tokens": 100000, "used_tokens": 0, "history": []}
+
+
+def test_build_uses_helper_configs_for_constructor_kwargs():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    captured = {}
+
+    def code_adapter_cls(**kwargs):
+        captured["code_adapter_kwargs"] = kwargs
+        return Mock()
+
+    def afm_config_cls(**kwargs):
+        captured["afm_kwargs"] = kwargs
+        return Mock()
+
+    def resource_limits_cls(**kwargs):
+        captured["resource_kwargs"] = kwargs
+        return Mock()
+
+    def ace_framework_cls(**kwargs):
+        captured["ace_kwargs"] = kwargs
+        return Mock()
+
+    def noop(*args, **kwargs):
+        return Mock()
+
+    module.ServerFactoryService.build(
+        preload_code_model=False,
+        cwd="C:/repo",
+        home_dir="C:/Users/test",
+        max_ace_contexts=100,
+        code_adapter_cls=code_adapter_cls,
+        blind_spot_cls=noop,
+        halo_cls=noop,
+        context_window_adapter_cls=noop,
+        multilevel_encoder_cls=noop,
+        afm_config_cls=afm_config_cls,
+        focus_manager_cls=noop,
+        persistence_cls=noop,
+        resource_limits_cls=resource_limits_cls,
+        resource_manager_cls=noop,
+        file_sync_cls=noop,
+        version_manager_cls=noop,
+        path_validator_cls=noop,
+        ace_framework_cls=ace_framework_cls,
+        ace_context_manager_cls=noop,
+        tooling_gateway_cls=noop,
+        context_service_cls=noop,
+        lifecycle_service_cls=noop,
+        progress_service_cls=noop,
+        persistence_service_cls=noop,
+        tool_profile_service_cls=noop,
+        runtime_service_cls=noop,
+        server_service_adapter_cls=noop,
+        logger=Mock(),
+    )
+
+    assert captured["code_adapter_kwargs"] == module.ServerFactoryService.code_adapter_config(
+        preload_code_model=False
+    )
+    assert captured["afm_kwargs"] == module.ServerFactoryService.afm_config_kwargs()
+    assert captured["resource_kwargs"] == module.ServerFactoryService.resource_limits_kwargs()
+    assert captured["ace_kwargs"] == module.ServerFactoryService.ace_framework_kwargs()
