@@ -12,14 +12,11 @@ Architecture:
 """
 
 import os
-from typing import Any, List
+from typing import List
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import (
-    Tool,
-    TextContent,
-)
+from mcp.types import TextContent
 
 from .types import HandlerContext  # TypedDict for handler context
 from .code_compression_adapter import CodeCompressionAdapter
@@ -41,6 +38,7 @@ from .semantic_modulator.app.persistence_orchestration_service import (
 )
 from .semantic_modulator.app.progress_service import ProgressRenderService
 from .semantic_modulator.app.server_factory_service import ServerFactoryService
+from .semantic_modulator.app.router_binding import bind_mcp_handlers
 from .semantic_modulator.app.server_service_adapter import ServerServiceAdapter
 from .semantic_modulator.app.tool_profile_service import ToolProfileBootstrapService
 from .semantic_modulator.app.tooling import MCPToolingGateway
@@ -163,25 +161,15 @@ class SemanticModulatorServer:
         )
 
     def _setup_handlers(self):
-        """Register MCP tool handlers using centralized routing"""
-
-        @self.server.list_tools()
-        async def list_tools() -> List[Tool]:
-            """List available semantic modulation tools"""
-            return self.tooling.list_tools(profile=self.tool_profile)
-
-        @self.server.call_tool()
-        async def call_tool(name: str, arguments: Any) -> List[TextContent]:
-            """Handle tool calls via centralized router"""
-            try:
-                context = self._build_context()
-                result = await self.tooling.route_tool_call(
-                    name, arguments, context, tool_profile=self.tool_profile
-                )
-                return [TextContent(type="text", text=str(result))]
-            except Exception as e:
-                logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
+        """Register MCP tool handlers using centralized routing."""
+        bind_mcp_handlers(
+            server=self.server,
+            tooling=self.tooling,
+            tool_profile=self.tool_profile,
+            build_context=self._build_context,
+            logger=logger,
+            text_content_cls=TextContent,
+        )
 
     def _extract_file_id_from_node(self, node_id: str) -> str:
         """
