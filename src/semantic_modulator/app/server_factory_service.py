@@ -501,18 +501,33 @@ class ServerFactoryService:
         logger,
         class_overrides: dict[str, Any] | None = None,
     ) -> BuildArtifacts:
-        inputs = cls.validate_default_build_inputs(
-            preload_code_model=preload_code_model,
-            cwd=cwd,
-            home_dir=home_dir,
-            max_ace_contexts=max_ace_contexts,
-            logger=logger,
-            class_overrides=class_overrides,
+        inputs = cls.validate_default_build_inputs_map(
+            cls.validate_default_build_inputs(
+                preload_code_model=preload_code_model,
+                cwd=cwd,
+                home_dir=home_dir,
+                max_ace_contexts=max_ace_contexts,
+                logger=logger,
+                class_overrides=class_overrides,
+            )
         )
         return cls.build_default_from_validation(
             request=inputs["request"],
             validation=inputs["validation"],
         )
+
+    @staticmethod
+    def validate_default_build_inputs_map(inputs: dict[str, Any]) -> DefaultBuildInputs:
+        """Fail fast when DefaultBuildInputs map drifts from contract."""
+        expected_keys = set(DefaultBuildInputs.__annotations__.keys())
+        actual_keys = set(inputs.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                f"default_build_inputs_map keys mismatch: missing={missing} extra={extra}"
+            )
+        return cast(DefaultBuildInputs, inputs)
 
     @classmethod
     def validate_default_build_inputs(
