@@ -1590,3 +1590,47 @@ def test_build_default_rejects_default_request_drift_before_factory_validation()
 
     assert "cwd" in str(exc_info.value)
     assert called["validate_factory"] is False
+
+
+def test_validate_factory_validation_result_contract_declared_and_aligned():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert hasattr(module.ServerFactoryService, "validate_factory_validation_result_map")
+    assert set(module.FactoryValidationResult.__annotations__.keys()) == {
+        "resolved_classes",
+        "build_kwargs",
+    }
+
+
+def test_build_default_from_validation_rejects_validation_drift_before_request_merge():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    request = module.ServerFactoryService.build_default_request(
+        preload_code_model=True,
+        cwd="C:/repo",
+        home_dir="C:/Users/test",
+        max_ace_contexts=3,
+        logger=Mock(),
+    )
+    bad_validation = {"build_kwargs": {"code_adapter_cls": object()}}
+
+    original_merge = module.ServerFactoryService.build_request_from_default_validation
+
+    called = {"merge": False}
+
+    def fake_merge(_cls, *, request, validation):
+        called["merge"] = True
+        return {"preload_code_model": True, "cwd": "X", "code_adapter_cls": object()}
+
+    module.ServerFactoryService.build_request_from_default_validation = classmethod(fake_merge)
+    try:
+        with pytest.raises(ValueError) as exc_info:
+            module.ServerFactoryService.build_default_from_validation(
+                request=request,
+                validation=bad_validation,
+            )
+    finally:
+        module.ServerFactoryService.build_request_from_default_validation = original_merge
+
+    assert "resolved_classes" in str(exc_info.value)
+    assert called["merge"] is False

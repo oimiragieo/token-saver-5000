@@ -468,6 +468,21 @@ class ServerFactoryService:
             )
         return cast(BuildDefaultRequest, request)
 
+    @staticmethod
+    def validate_factory_validation_result_map(
+        validation: dict[str, Any],
+    ) -> FactoryValidationResult:
+        """Fail fast when factory validation payload drifts from contract."""
+        expected_keys = set(FactoryValidationResult.__annotations__.keys())
+        actual_keys = set(validation.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                f"factory_validation_result_map keys mismatch: missing={missing} extra={extra}"
+            )
+        return cast(FactoryValidationResult, validation)
+
     @classmethod
     def build_default(
         cls,
@@ -501,9 +516,10 @@ class ServerFactoryService:
         validation: FactoryValidationResult,
     ) -> BuildArtifacts:
         """Build default runtime artifacts from pre-validated class wiring contracts."""
+        validated_validation = cls.validate_factory_validation_result_map(validation)
         build_request = cls.build_request_from_default_validation(
             request=request,
-            validation=validation,
+            validation=validated_validation,
         )
         return cls.build_from_request(request=build_request)
 
