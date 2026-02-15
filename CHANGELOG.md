@@ -5,6 +5,7 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Extended benchmark harness quality reporting with query-aware overlap metrics (`precision_at_k`, `recall_at_k`, `f1_at_k`) and aggregate quality averages/counts in benchmark summaries.
 - Hardened ingest persistence path to safely await coroutine-returning persistence hooks (`save_document`, `save_file_sync_metadata`) in `src/handlers/compression_handlers.py`.
 - Extended skill TOON-vs-JSON benchmark output contract to include auto-format selection diagnostics and guard expectations for uniform vs mixed payloads.
 - Hardened remaining app-layer service boundaries with explicit request-envelope contract validation in `lifecycle_service`, `progress_service`, `persistence_orchestration_service`, `tool_profile_service`, and `router_binding`.
@@ -49,6 +50,8 @@ All notable changes to Token Saver 5000.
 - Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
+- Added competitor analysis report `docs/research/COMPETITOR_CODEBASE_COMPARISON_2026-02-15.md` and TDD execution roadmap `docs/guides/TDD_OUTPERFORM_PLAN_2026-02-15.md` for outperform strategy planning.
+- Added benchmark harness contracts for quality metric fields in `tests/test_benchmark_harness.py`.
 - Added skill portability contract tests to ensure self-contained skill scripts avoid project-root imports and path mutation bootstraps.
 - Added benchmark guard contract tests for TOON/JSON auto-format selection behavior and benchmark output schema.
 - Added ingest handler async-persistence regression test to enforce awaiting coroutine-based file-sync metadata save hooks.

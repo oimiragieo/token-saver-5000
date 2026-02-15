@@ -64,3 +64,34 @@ def test_summary_to_dict_and_write_output(tmp_path: Path):
     written = write_summary(summary, output_file)
     assert written.exists()
     assert written == output_file
+
+
+def test_run_benchmark_cases_includes_quality_metrics_when_query_present():
+    cases = load_benchmark_cases(default_corpus_path())
+    selected = filter_cases(cases, ["medium_architecture"])
+
+    summary = run_benchmark_cases(selected, mode="query_guided")
+    result = summary.results[0]
+
+    assert result.quality_metrics_available is True
+    assert 0.0 <= result.precision_at_k <= 1.0
+    assert 0.0 <= result.recall_at_k <= 1.0
+    assert 0.0 <= result.f1_at_k <= 1.0
+    assert 0.0 <= summary.avg_precision_at_k <= 1.0
+    assert 0.0 <= summary.avg_recall_at_k <= 1.0
+    assert 0.0 <= summary.avg_f1_at_k <= 1.0
+
+
+def test_summary_to_dict_contains_quality_metric_fields():
+    cases = load_benchmark_cases(default_corpus_path())
+    selected = filter_cases(cases, ["medium_architecture"])
+    summary = run_benchmark_cases(selected, mode="query_guided")
+    payload = summary_to_dict(summary)
+
+    assert "avg_precision_at_k" in payload
+    assert "avg_recall_at_k" in payload
+    assert "avg_f1_at_k" in payload
+    assert "quality_cases_count" in payload
+    assert "precision_at_k" in payload["results"][0]
+    assert "recall_at_k" in payload["results"][0]
+    assert "f1_at_k" in payload["results"][0]

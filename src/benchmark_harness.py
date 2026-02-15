@@ -44,6 +44,10 @@ class BenchmarkResult:
     token_savings_pct: float
     meets_ratio_target: bool
     meets_savings_target: bool
+    quality_metrics_available: bool = False
+    precision_at_k: float = 0.0
+    recall_at_k: float = 0.0
+    f1_at_k: float = 0.0
 
     @property
     def passed(self) -> bool:
@@ -60,6 +64,10 @@ class BenchmarkSummary:
     failed_cases: int
     avg_compression_ratio: float
     avg_token_savings_pct: float
+    avg_precision_at_k: float
+    avg_recall_at_k: float
+    avg_f1_at_k: float
+    quality_cases_count: int
     results: List[BenchmarkResult]
 
     @property
@@ -104,6 +112,36 @@ def _savings_pct(compression_ratio: float) -> float:
     return (1.0 - (1.0 / compression_ratio)) * 100.0
 
 
+def _f1(precision: float, recall: float) -> float:
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def _quality_overlap_metrics(
+    *,
+    compressor: SemanticCompressor,
+    file_id: str,
+    query: str,
+    selected_node_ids: set[str],
+    top_k: int = 5,
+) -> tuple[float, float, float]:
+    if not query.strip():
+        return 0.0, 0.0, 0.0
+    relevant = {
+        node_id
+        for node_id, _score in compressor.search_semantic_with_scores(
+            query, file_id=file_id, top_k=top_k
+        )
+    }
+    if not relevant:
+        return 0.0, 0.0, 0.0
+    overlap = selected_node_ids & relevant
+    precision = len(overlap) / max(len(selected_node_ids), 1)
+    recall = len(overlap) / max(len(relevant), 1)
+    return precision, recall, _f1(precision, recall)
+
+
 def run_benchmark_cases(
     cases: Iterable[BenchmarkCase],
     mode: str = "baseline",
@@ -117,6 +155,9 @@ def run_benchmark_cases(
     )
 
     results: List[BenchmarkResult] = []
+    precision_values: list[float] = []
+    recall_values: list[float] = []
+    f1_values: list[float] = []
     for case in cases:
         file_id = f"bench_{case.case_id}"
         response = compressor.ingest_file(case.text, file_id)
@@ -132,6 +173,26 @@ def run_benchmark_cases(
 
         ratio = float(response.compression_ratio)
         savings = _savings_pct(ratio)
+        selected_node_ids = {
+            node_id
+            for node_id, summary in response.node_map.items()
+            if isinstance(summary, str) and summary.startswith("ANCHOR:")
+        }
+        quality_available = bool(case.query and mode in {"query_guided", "evidence_aware"})
+        precision_at_k = 0.0
+        recall_at_k = 0.0
+        f1_at_k = 0.0
+        if quality_available:
+            precision_at_k, recall_at_k, f1_at_k = _quality_overlap_metrics(
+                compressor=compressor,
+                file_id=file_id,
+                query=case.query or "",
+                selected_node_ids=selected_node_ids,
+                top_k=5,
+            )
+            precision_values.append(precision_at_k)
+            recall_values.append(recall_at_k)
+            f1_values.append(f1_at_k)
 
         result = BenchmarkResult(
             case_id=case.case_id,
@@ -143,6 +204,10 @@ def run_benchmark_cases(
             token_savings_pct=savings,
             meets_ratio_target=ratio >= case.min_compression_ratio,
             meets_savings_target=savings >= case.min_token_savings_pct,
+            quality_metrics_available=quality_available,
+            precision_at_k=precision_at_k,
+            recall_at_k=recall_at_k,
+            f1_at_k=f1_at_k,
         )
         results.append(result)
 
@@ -155,6 +220,10 @@ def run_benchmark_cases(
         failed_cases=failed,
         avg_compression_ratio=mean(item.compression_ratio for item in results),
         avg_token_savings_pct=mean(item.token_savings_pct for item in results),
+        avg_precision_at_k=mean(precision_values) if precision_values else 0.0,
+        avg_recall_at_k=mean(recall_values) if recall_values else 0.0,
+        avg_f1_at_k=mean(f1_values) if f1_values else 0.0,
+        quality_cases_count=len(precision_values),
         results=results,
     )
 
