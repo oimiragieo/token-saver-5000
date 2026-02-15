@@ -223,10 +223,10 @@ class ServerFactoryService:
             "ServerServiceAdapter": ServerServiceAdapter,
         }
 
-    @staticmethod
-    def validate_default_class_map(default_map: dict[str, Any]) -> FactoryClassMap:
+    @classmethod
+    def validate_default_class_map(cls, default_map: dict[str, Any]) -> FactoryClassMap:
         """Fail fast when default class map keys drift from allowed override aliases."""
-        ServerFactoryService.validate_contract_keys(
+        cls.validate_contract_keys(
             contract_name="default_class_map",
             payload=default_map,
             expected_keys=ALLOWED_OVERRIDE_KEYS,
@@ -277,10 +277,10 @@ class ServerFactoryService:
             },
         )
 
-    @staticmethod
-    def validate_build_kwargs_map(build_kwargs: dict[str, Any]) -> BuildKwargsMap:
+    @classmethod
+    def validate_build_kwargs_map(cls, build_kwargs: dict[str, Any]) -> BuildKwargsMap:
         """Fail fast when build-kwargs map drifts from constructor kwargs contract."""
-        ServerFactoryService.validate_contract_keys(
+        cls.validate_contract_keys(
             contract_name="build_kwargs_map",
             payload=build_kwargs,
             expected_keys=BUILD_KWARGS_KEYS,
@@ -499,24 +499,26 @@ class ServerFactoryService:
             "logger": logger,
         }
 
-    @staticmethod
+    @classmethod
     def validate_build_default_request_map(
+        cls,
         request: dict[str, Any],
     ) -> BuildDefaultRequest:
         """Fail fast when default runtime request keys drift from contract."""
-        ServerFactoryService.validate_contract_keys(
+        cls.validate_contract_keys(
             contract_name="build_default_request_map",
             payload=request,
             expected_keys=BUILD_DEFAULT_REQUEST_KEYS,
         )
         return cast(BuildDefaultRequest, request)
 
-    @staticmethod
+    @classmethod
     def validate_factory_validation_result_map(
+        cls,
         validation: dict[str, Any],
     ) -> FactoryValidationResult:
         """Fail fast when factory validation payload drifts from contract."""
-        ServerFactoryService.validate_contract_keys(
+        cls.validate_contract_keys(
             contract_name="factory_validation_result_map",
             payload=validation,
             expected_keys=FACTORY_VALIDATION_RESULT_KEYS,

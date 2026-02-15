@@ -289,9 +289,11 @@ def test_build_default_uses_build_kwargs_helper_for_build_invocation():
     helper_kwargs = {"code_adapter_cls": object()}
 
     original_default_map = module.ServerFactoryService.default_class_map
-    original_validate = module.ServerFactoryService.validate_default_class_map
+    original_validate = module.ServerFactoryService.__dict__["validate_default_class_map"]
     original_resolve = module.ServerFactoryService.resolve_class_overrides
-    original_validate_build_kwargs = module.ServerFactoryService.validate_build_kwargs_map
+    original_validate_build_kwargs = module.ServerFactoryService.__dict__[
+        "validate_build_kwargs_map"
+    ]
     original_helper = module.ServerFactoryService.build_kwargs_from_resolved_classes
     original_build = module.ServerFactoryService.__dict__["build"]
 
@@ -1072,7 +1074,7 @@ def test_build_default_rejects_default_class_map_drift_before_override_merge():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
 
     original_default_map = module.ServerFactoryService.default_class_map
-    original_validate = module.ServerFactoryService.validate_default_class_map
+    original_validate = module.ServerFactoryService.__dict__["validate_default_class_map"]
     original_resolve = module.ServerFactoryService.resolve_class_overrides
 
     called = {"resolve": False}
@@ -1142,7 +1144,7 @@ def test_factory_build_kwargs_contract_declared_and_aligned_with_helper_output()
 def test_build_default_rejects_build_kwargs_drift_before_build_call():
     module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
 
-    original_validate_default = module.ServerFactoryService.validate_default_class_map
+    original_validate_default = module.ServerFactoryService.__dict__["validate_default_class_map"]
     original_resolve = module.ServerFactoryService.resolve_class_overrides
     original_build_kwargs = module.ServerFactoryService.build_kwargs_from_resolved_classes
     original_build = module.ServerFactoryService.__dict__["build"]
@@ -1198,10 +1200,10 @@ def test_validate_factory_contracts_runs_validation_pipeline_in_order():
     build_kwargs = {"code_adapter_cls": object()}
 
     original_default = module.ServerFactoryService.default_class_map
-    original_validate_default = module.ServerFactoryService.validate_default_class_map
+    original_validate_default = module.ServerFactoryService.__dict__["validate_default_class_map"]
     original_resolve = module.ServerFactoryService.resolve_class_overrides
     original_build_kwargs = module.ServerFactoryService.build_kwargs_from_resolved_classes
-    original_validate_build = module.ServerFactoryService.validate_build_kwargs_map
+    original_validate_build = module.ServerFactoryService.__dict__["validate_build_kwargs_map"]
 
     def fake_default_map():
         calls.append("default_class_map")
@@ -1644,7 +1646,9 @@ def test_validate_default_build_inputs_runs_request_then_factory_validation():
     sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
 
     original_request = module.ServerFactoryService.build_default_request
-    original_validate_request = module.ServerFactoryService.validate_build_default_request_map
+    original_validate_request = module.ServerFactoryService.__dict__[
+        "validate_build_default_request_map"
+    ]
     original_validate_factory = module.ServerFactoryService.validate_factory_contracts
 
     def fake_request(*, preload_code_model, cwd, home_dir, max_ace_contexts, logger):
@@ -1830,10 +1834,12 @@ def test_validate_default_build_inputs_map_validates_nested_payloads_in_order():
     sentinel_request = {"preload_code_model": True, "cwd": "C:/repo"}
     sentinel_validation = {"resolved_classes": {}, "build_kwargs": {"code_adapter_cls": object()}}
 
-    original_validate_request = module.ServerFactoryService.validate_build_default_request_map
-    original_validate_validation = (
-        module.ServerFactoryService.validate_factory_validation_result_map
-    )
+    original_validate_request = module.ServerFactoryService.__dict__[
+        "validate_build_default_request_map"
+    ]
+    original_validate_validation = module.ServerFactoryService.__dict__[
+        "validate_factory_validation_result_map"
+    ]
 
     def fake_validate_request(request):
         calls.append("validate_build_default_request_map")
@@ -2243,3 +2249,71 @@ def test_default_build_happy_path_runs_full_validated_chain():
     ]
     assert captured["kwargs"]["cwd"] == "C:/repo"
     assert "code_adapter_cls" in captured["kwargs"]
+
+
+def test_validate_default_class_map_uses_class_dispatch_for_contract_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+
+    class DerivedFactory(module.ServerFactoryService):
+        @classmethod
+        def validate_contract_keys(cls, *, contract_name, payload, expected_keys):
+            calls.append(contract_name)
+
+    bad_map = {"OnlyOneKey": object()}
+    result = DerivedFactory.validate_default_class_map(bad_map)
+
+    assert calls == ["default_class_map"]
+    assert result is bad_map
+
+
+def test_validate_build_kwargs_map_uses_class_dispatch_for_contract_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+
+    class DerivedFactory(module.ServerFactoryService):
+        @classmethod
+        def validate_contract_keys(cls, *, contract_name, payload, expected_keys):
+            calls.append(contract_name)
+
+    bad_kwargs = {"code_adapter_cls": object()}
+    result = DerivedFactory.validate_build_kwargs_map(bad_kwargs)
+
+    assert calls == ["build_kwargs_map"]
+    assert result is bad_kwargs
+
+
+def test_validate_build_default_request_map_uses_class_dispatch_for_contract_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+
+    class DerivedFactory(module.ServerFactoryService):
+        @classmethod
+        def validate_contract_keys(cls, *, contract_name, payload, expected_keys):
+            calls.append(contract_name)
+
+    bad_request = {"cwd": "C:/repo"}
+    result = DerivedFactory.validate_build_default_request_map(bad_request)
+
+    assert calls == ["build_default_request_map"]
+    assert result is bad_request
+
+
+def test_validate_factory_validation_result_map_uses_class_dispatch_for_contract_keys():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    calls = []
+
+    class DerivedFactory(module.ServerFactoryService):
+        @classmethod
+        def validate_contract_keys(cls, *, contract_name, payload, expected_keys):
+            calls.append(contract_name)
+
+    bad_validation = {"build_kwargs": {"code_adapter_cls": object()}}
+    result = DerivedFactory.validate_factory_validation_result_map(bad_validation)
+
+    assert calls == ["factory_validation_result_map"]
+    assert result is bad_validation
