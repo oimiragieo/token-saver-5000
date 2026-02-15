@@ -11,6 +11,71 @@ from src.types import HandlerContext
 class ServerContextService:
     """Builds handler context and performs server-side validation helpers."""
 
+    CONTEXT_MAP_KEYS: frozenset[str] = frozenset(
+        {
+            "compressor",
+            "blind_spot_detector",
+            "halo_detector",
+            "context_window_adapter",
+            "multilevel_encoder",
+            "focus_manager",
+            "persistence",
+            "resource_manager",
+            "sync_manager",
+            "version_manager",
+            "path_validator",
+            "ace_framework",
+            "ace_contexts",
+            "validate_file_id",
+            "validate_node_ids",
+            "validate_token_count",
+            "save_file_sync_metadata",
+            "tool_profile",
+            "enabled_tool_names",
+        }
+    )
+
+    @staticmethod
+    def contract_key_mismatch_message(
+        *,
+        contract_name: str,
+        missing: list[str],
+        extra: list[str],
+    ) -> str:
+        """Build canonical contract drift message for context payloads."""
+        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+
+    @classmethod
+    def validate_contract_keys(
+        cls,
+        *,
+        contract_name: str,
+        payload: dict[str, Any],
+        expected_keys: frozenset[str],
+    ) -> None:
+        """Fail fast when a context payload keyset drifts from expected contract."""
+        actual_keys = set(payload.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                cls.contract_key_mismatch_message(
+                    contract_name=contract_name,
+                    missing=missing,
+                    extra=extra,
+                )
+            )
+
+    @classmethod
+    def validate_context_map(cls, context: dict[str, Any]) -> HandlerContext:
+        """Fail fast when built handler context drifts from expected key contract."""
+        cls.validate_contract_keys(
+            contract_name="context_map",
+            payload=context,
+            expected_keys=cls.CONTEXT_MAP_KEYS,
+        )
+        return context
+
     @staticmethod
     def extract_file_id_from_node(node_id: str) -> str:
         return extract_file_id_from_node(node_id)
@@ -38,27 +103,29 @@ class ServerContextService:
         tool_profile: str,
         enabled_tool_names: list[str],
     ) -> HandlerContext:
-        return {
-            "compressor": compressor,
-            "blind_spot_detector": blind_spot_detector,
-            "halo_detector": halo_detector,
-            "context_window_adapter": context_window_adapter,
-            "multilevel_encoder": multilevel_encoder,
-            "focus_manager": focus_manager,
-            "persistence": persistence,
-            "resource_manager": resource_manager,
-            "sync_manager": sync_manager,
-            "version_manager": version_manager,
-            "path_validator": path_validator,
-            "ace_framework": ace_framework,
-            "ace_contexts": ace_contexts,
-            "validate_file_id": validate_file_id,
-            "validate_node_ids": validate_node_ids,
-            "validate_token_count": validate_token_count,
-            "save_file_sync_metadata": save_file_sync_metadata,
-            "tool_profile": tool_profile,
-            "enabled_tool_names": enabled_tool_names,
-        }
+        return self.validate_context_map(
+            {
+                "compressor": compressor,
+                "blind_spot_detector": blind_spot_detector,
+                "halo_detector": halo_detector,
+                "context_window_adapter": context_window_adapter,
+                "multilevel_encoder": multilevel_encoder,
+                "focus_manager": focus_manager,
+                "persistence": persistence,
+                "resource_manager": resource_manager,
+                "sync_manager": sync_manager,
+                "version_manager": version_manager,
+                "path_validator": path_validator,
+                "ace_framework": ace_framework,
+                "ace_contexts": ace_contexts,
+                "validate_file_id": validate_file_id,
+                "validate_node_ids": validate_node_ids,
+                "validate_token_count": validate_token_count,
+                "save_file_sync_metadata": save_file_sync_metadata,
+                "tool_profile": tool_profile,
+                "enabled_tool_names": enabled_tool_names,
+            }
+        )
 
     def validate_file_id(self, *, compressor: Any, file_id: str, must_exist: bool = True) -> None:
         if not file_id:
