@@ -37,6 +37,8 @@ All notable changes to Token Saver 5000.
 - Added app-layer router binding helper (`src/semantic_modulator/app/router_binding.py`) and routed `_setup_handlers` through it, further thinning server protocol wiring.
 - Added app-layer runtime execution service (`src/semantic_modulator/app/runtime_service.py`) and routed `SemanticModulatorServer.run()` through it as a thin delegation wrapper.
 - Synchronized `skills/token-saver-context-compression/` with the new self-contained `.claude` skill package, including TOON/JSON/auto output routing and local benchmark guard scripts.
+- Centralized server-factory contract key sources (`BUILD_DEFAULT_REQUEST_KEYS`, `FACTORY_VALIDATION_RESULT_KEYS`, `DEFAULT_BUILD_INPUTS_KEYS`, `BUILD_REQUEST_KEYS`, `BUILD_KWARGS_KEYS`) and reused them across validator paths.
+- Unified factory contract key-mismatch messaging via `contract_key_mismatch_message(...)`/`validate_contract_keys(...)`, and hardened default-build envelope validation with nested checks and subclass-dispatch-safe validator routing.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

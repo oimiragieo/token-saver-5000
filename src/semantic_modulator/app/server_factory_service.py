@@ -131,8 +131,48 @@ class BuildRequest(BuildKwargsMap, BuildDefaultRequest):
     """Complete build request payload for ServerFactoryService.build(...)."""
 
 
+BUILD_DEFAULT_REQUEST_KEYS: frozenset[str] = frozenset(BuildDefaultRequest.__annotations__.keys())
+FACTORY_VALIDATION_RESULT_KEYS: frozenset[str] = frozenset(
+    FactoryValidationResult.__annotations__.keys()
+)
+DEFAULT_BUILD_INPUTS_KEYS: frozenset[str] = frozenset(DefaultBuildInputs.__annotations__.keys())
+BUILD_REQUEST_KEYS: frozenset[str] = frozenset(BuildRequest.__annotations__.keys())
+BUILD_KWARGS_KEYS: frozenset[str] = frozenset(BuildKwargsMap.__annotations__.keys())
+
+
 class ServerFactoryService:
     """Builds server collaborators and shared runtime state in one place."""
+
+    @staticmethod
+    def contract_key_mismatch_message(
+        *,
+        contract_name: str,
+        missing: list[str],
+        extra: list[str],
+    ) -> str:
+        """Build a canonical contract-drift message for key mismatches."""
+        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+
+    @classmethod
+    def validate_contract_keys(
+        cls,
+        *,
+        contract_name: str,
+        payload: dict[str, Any],
+        expected_keys: frozenset[str],
+    ) -> None:
+        """Fail fast when a payload keyset drifts from the expected contract."""
+        actual_keys = set(payload.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                cls.contract_key_mismatch_message(
+                    contract_name=contract_name,
+                    missing=missing,
+                    extra=extra,
+                )
+            )
 
     @staticmethod
     def default_class_map() -> FactoryClassMap:
@@ -186,13 +226,11 @@ class ServerFactoryService:
     @staticmethod
     def validate_default_class_map(default_map: dict[str, Any]) -> FactoryClassMap:
         """Fail fast when default class map keys drift from allowed override aliases."""
-        expected_keys = set(ALLOWED_OVERRIDE_KEYS)
-        actual_keys = set(default_map.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-
-        if missing or extra:
-            raise ValueError(f"default_class_map keys mismatch: missing={missing} extra={extra}")
+        ServerFactoryService.validate_contract_keys(
+            contract_name="default_class_map",
+            payload=default_map,
+            expected_keys=ALLOWED_OVERRIDE_KEYS,
+        )
 
         return cast(FactoryClassMap, default_map)
 
@@ -242,27 +280,28 @@ class ServerFactoryService:
     @staticmethod
     def validate_build_kwargs_map(build_kwargs: dict[str, Any]) -> BuildKwargsMap:
         """Fail fast when build-kwargs map drifts from constructor kwargs contract."""
-        expected_keys = set(BuildKwargsMap.__annotations__.keys())
-        actual_keys = set(build_kwargs.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-
-        if missing or extra:
-            raise ValueError(f"build_kwargs_map keys mismatch: missing={missing} extra={extra}")
+        ServerFactoryService.validate_contract_keys(
+            contract_name="build_kwargs_map",
+            payload=build_kwargs,
+            expected_keys=BUILD_KWARGS_KEYS,
+        )
 
         return cast(BuildKwargsMap, build_kwargs)
 
     @staticmethod
     def validate_build_request_map(build_request: dict[str, Any]) -> BuildRequest:
         """Fail fast on required runtime-key drift or unknown keys in build request."""
-        expected_keys = set(BuildRequest.__annotations__.keys())
-        required_runtime_keys = set(BuildDefaultRequest.__annotations__.keys())
         actual_keys = set(build_request.keys())
-        missing = sorted(required_runtime_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-
+        missing = sorted(BUILD_DEFAULT_REQUEST_KEYS - actual_keys)
+        extra = sorted(actual_keys - BUILD_REQUEST_KEYS)
         if missing or extra:
-            raise ValueError(f"build_request_map keys mismatch: missing={missing} extra={extra}")
+            raise ValueError(
+                ServerFactoryService.contract_key_mismatch_message(
+                    contract_name="build_request_map",
+                    missing=missing,
+                    extra=extra,
+                )
+            )
 
         return cast(BuildRequest, build_request)
 
@@ -465,14 +504,11 @@ class ServerFactoryService:
         request: dict[str, Any],
     ) -> BuildDefaultRequest:
         """Fail fast when default runtime request keys drift from contract."""
-        expected_keys = set(BuildDefaultRequest.__annotations__.keys())
-        actual_keys = set(request.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                f"build_default_request_map keys mismatch: missing={missing} extra={extra}"
-            )
+        ServerFactoryService.validate_contract_keys(
+            contract_name="build_default_request_map",
+            payload=request,
+            expected_keys=BUILD_DEFAULT_REQUEST_KEYS,
+        )
         return cast(BuildDefaultRequest, request)
 
     @staticmethod
@@ -480,14 +516,11 @@ class ServerFactoryService:
         validation: dict[str, Any],
     ) -> FactoryValidationResult:
         """Fail fast when factory validation payload drifts from contract."""
-        expected_keys = set(FactoryValidationResult.__annotations__.keys())
-        actual_keys = set(validation.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                f"factory_validation_result_map keys mismatch: missing={missing} extra={extra}"
-            )
+        ServerFactoryService.validate_contract_keys(
+            contract_name="factory_validation_result_map",
+            payload=validation,
+            expected_keys=FACTORY_VALIDATION_RESULT_KEYS,
+        )
         return cast(FactoryValidationResult, validation)
 
     @classmethod
@@ -522,14 +555,11 @@ class ServerFactoryService:
         inputs: dict[str, Any],
     ) -> DefaultBuildInputs:
         """Fail fast when DefaultBuildInputs map drifts from contract."""
-        expected_keys = set(DefaultBuildInputs.__annotations__.keys())
-        actual_keys = set(inputs.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                f"default_build_inputs_map keys mismatch: missing={missing} extra={extra}"
-            )
+        cls.validate_contract_keys(
+            contract_name="default_build_inputs_map",
+            payload=inputs,
+            expected_keys=DEFAULT_BUILD_INPUTS_KEYS,
+        )
         validated_request = cls.validate_build_default_request_map(
             cast(dict[str, Any], inputs["request"])
         )

@@ -2023,3 +2023,223 @@ def test_build_default_from_validation_rejects_request_drift_before_validation_m
 
     assert "cwd" in str(exc_info.value)
     assert called["merge"] is False
+
+
+def _full_build_kwargs():
+    return {
+        "code_adapter_cls": object(),
+        "blind_spot_cls": object(),
+        "halo_cls": object(),
+        "context_window_adapter_cls": object(),
+        "multilevel_encoder_cls": object(),
+        "afm_config_cls": object(),
+        "focus_manager_cls": object(),
+        "persistence_cls": object(),
+        "resource_limits_cls": object(),
+        "resource_manager_cls": object(),
+        "file_sync_cls": object(),
+        "version_manager_cls": object(),
+        "path_validator_cls": object(),
+        "ace_framework_cls": object(),
+        "ace_context_manager_cls": object(),
+        "tooling_gateway_cls": object(),
+        "context_service_cls": object(),
+        "lifecycle_service_cls": object(),
+        "progress_service_cls": object(),
+        "persistence_service_cls": object(),
+        "tool_profile_service_cls": object(),
+        "runtime_service_cls": object(),
+        "server_service_adapter_cls": object(),
+    }
+
+
+def test_factory_contract_key_constants_align_with_typeddict_schemas():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    assert module.BUILD_DEFAULT_REQUEST_KEYS == frozenset(
+        module.BuildDefaultRequest.__annotations__.keys()
+    )
+    assert module.FACTORY_VALIDATION_RESULT_KEYS == frozenset(
+        module.FactoryValidationResult.__annotations__.keys()
+    )
+    assert module.DEFAULT_BUILD_INPUTS_KEYS == frozenset(
+        module.DefaultBuildInputs.__annotations__.keys()
+    )
+    assert module.BUILD_REQUEST_KEYS == frozenset(module.BuildRequest.__annotations__.keys())
+    assert module.BUILD_KWARGS_KEYS == frozenset(module.BuildKwargsMap.__annotations__.keys())
+
+
+def test_contract_key_mismatch_message_uses_canonical_format():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    message = module.ServerFactoryService.contract_key_mismatch_message(
+        contract_name="build_default_request_map",
+        missing=["cwd"],
+        extra=["unknown"],
+    )
+
+    assert message == "build_default_request_map keys mismatch: missing=['cwd'] extra=['unknown']"
+
+
+def test_validate_build_default_request_map_rejects_extra_keys_with_exact_message():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    bad_request = {
+        "preload_code_model": True,
+        "cwd": "C:/repo",
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 3,
+        "logger": Mock(),
+        "extra": "nope",
+    }
+
+    with pytest.raises(ValueError) as exc_info:
+        module.ServerFactoryService.validate_build_default_request_map(bad_request)
+
+    assert (
+        str(exc_info.value) == "build_default_request_map keys mismatch: missing=[] extra=['extra']"
+    )
+
+
+def test_validate_factory_validation_result_map_rejects_extra_keys_with_exact_message():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    bad_validation = {
+        "resolved_classes": {},
+        "build_kwargs": {"code_adapter_cls": object()},
+        "extra": True,
+    }
+
+    with pytest.raises(ValueError) as exc_info:
+        module.ServerFactoryService.validate_factory_validation_result_map(bad_validation)
+
+    assert (
+        str(exc_info.value)
+        == "factory_validation_result_map keys mismatch: missing=[] extra=['extra']"
+    )
+
+
+def test_validate_default_build_inputs_map_rejects_extra_keys_with_exact_message():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    bad_inputs = {
+        "request": {
+            "preload_code_model": True,
+            "cwd": "C:/repo",
+            "home_dir": "C:/Users/test",
+            "max_ace_contexts": 3,
+            "logger": Mock(),
+        },
+        "validation": {
+            "resolved_classes": {},
+            "build_kwargs": {"code_adapter_cls": object()},
+        },
+        "extra": 1,
+    }
+
+    with pytest.raises(ValueError) as exc_info:
+        module.ServerFactoryService.validate_default_build_inputs_map(bad_inputs)
+
+    assert (
+        str(exc_info.value) == "default_build_inputs_map keys mismatch: missing=[] extra=['extra']"
+    )
+
+
+def test_validate_build_request_map_rejects_extra_keys_with_exact_message():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    bad_request = {
+        "preload_code_model": True,
+        "cwd": "C:/repo",
+        "home_dir": "C:/Users/test",
+        "max_ace_contexts": 3,
+        "logger": Mock(),
+        "extra": "x",
+    }
+
+    with pytest.raises(ValueError) as exc_info:
+        module.ServerFactoryService.validate_build_request_map(bad_request)
+
+    assert str(exc_info.value) == "build_request_map keys mismatch: missing=[] extra=['extra']"
+
+
+def test_default_build_happy_path_runs_full_validated_chain():
+    module = importlib.import_module("src.semantic_modulator.app.server_factory_service")
+
+    order = []
+    captured = {}
+
+    original_validate_default_inputs = module.ServerFactoryService.validate_default_build_inputs
+    original_build_default_from_validation = (
+        module.ServerFactoryService.build_default_from_validation
+    )
+    original_build_from_request = module.ServerFactoryService.build_from_request
+    original_build = module.ServerFactoryService.__dict__["build"]
+
+    def wrapped_validate_default_inputs(
+        _cls,
+        *,
+        preload_code_model,
+        cwd,
+        home_dir,
+        max_ace_contexts,
+        logger,
+        class_overrides,
+    ):
+        order.append("validate_default_build_inputs")
+        return original_validate_default_inputs(
+            preload_code_model=preload_code_model,
+            cwd=cwd,
+            home_dir=home_dir,
+            max_ace_contexts=max_ace_contexts,
+            logger=logger,
+            class_overrides=class_overrides,
+        )
+
+    def wrapped_build_default_from_validation(_cls, *, request, validation):
+        order.append("build_default_from_validation")
+        return original_build_default_from_validation(request=request, validation=validation)
+
+    def wrapped_build_from_request(_cls, *, request):
+        order.append("build_from_request")
+        return original_build_from_request(request=request)
+
+    def fake_build(_cls, **kwargs):
+        order.append("build")
+        captured["kwargs"] = kwargs
+        return {"ok": True}
+
+    module.ServerFactoryService.validate_default_build_inputs = classmethod(
+        wrapped_validate_default_inputs
+    )
+    module.ServerFactoryService.build_default_from_validation = classmethod(
+        wrapped_build_default_from_validation
+    )
+    module.ServerFactoryService.build_from_request = classmethod(wrapped_build_from_request)
+    module.ServerFactoryService.build = classmethod(fake_build)
+    try:
+        result = module.ServerFactoryService.build_default(
+            preload_code_model=True,
+            cwd="C:/repo",
+            home_dir="C:/Users/test",
+            max_ace_contexts=3,
+            logger=Mock(),
+            class_overrides=None,
+        )
+    finally:
+        module.ServerFactoryService.validate_default_build_inputs = original_validate_default_inputs
+        module.ServerFactoryService.build_default_from_validation = (
+            original_build_default_from_validation
+        )
+        module.ServerFactoryService.build_from_request = original_build_from_request
+        module.ServerFactoryService.build = original_build
+
+    assert result == {"ok": True}
+    assert order == [
+        "validate_default_build_inputs",
+        "build_default_from_validation",
+        "build_from_request",
+        "build",
+    ]
+    assert captured["kwargs"]["cwd"] == "C:/repo"
+    assert "code_adapter_cls" in captured["kwargs"]
