@@ -8,12 +8,13 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from _pipeline import PipelineStage, run_pipeline
+from _pipeline import PipelineExecutionError, PipelineStage, run_pipeline
 from _token_utils import count_tokens
 
 
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 TOKEN_SPLIT = re.compile(r"[A-Za-z0-9_]+")
+LLMLINGUA_TAG = re.compile(r"<(/?)llmlingua([^>]*)>", re.IGNORECASE)
 
 
 def _tokenize(text: str) -> List[str]:
@@ -31,6 +32,109 @@ def _jaccard(a: str, b: str) -> float:
 def _split_segments(text: str) -> List[str]:
     segments = [s.strip() for s in SENTENCE_SPLIT.split(text) if s.strip()]
     return segments if segments else [text.strip()]
+
+
+def _parse_bool(value: str) -> bool:
+    lowered = value.strip().lower()
+    if lowered in {"true", "1", "yes"}:
+        return True
+    if lowered in {"false", "0", "no"}:
+        return False
+    raise ValueError(f"Invalid boolean value '{value}' for llmlingua tag attribute.")
+
+
+def _parse_llmlingua_attrs(raw: str) -> dict[str, Any]:
+    attrs: dict[str, Any] = {"compress": True, "rate": None}
+    normalized = raw.strip().lstrip(",").strip()
+    if not normalized:
+        return attrs
+    for item in [part.strip() for part in normalized.split(",") if part.strip()]:
+        if "=" not in item:
+            raise ValueError(f"Invalid llmlingua attribute syntax '{item}'.")
+        key, value = [x.strip() for x in item.split("=", 1)]
+        key = key.lower()
+        if key == "compress":
+            attrs["compress"] = _parse_bool(value)
+        elif key == "rate":
+            rate = float(value)
+            if not 0.0 <= rate <= 1.0:
+                raise ValueError("llmlingua rate must be between 0.0 and 1.0.")
+            attrs["rate"] = rate
+        else:
+            raise ValueError(f"Unsupported llmlingua attribute '{key}'.")
+    return attrs
+
+
+def _split_with_structured_policy(text: str) -> list[dict[str, Any]]:
+    if "<llmlingua" not in text.lower():
+        return [
+            {"text": seg, "force_keep": False, "local_rate": None, "group_id": None}
+            for seg in _split_segments(text)
+        ]
+
+    blocks: list[dict[str, Any]] = []
+    cursor = 0
+    open_policy: dict[str, Any] | None = None
+    open_content_start = 0
+    group_counter = 0
+
+    for match in LLMLINGUA_TAG.finditer(text):
+        is_closing = bool(match.group(1))
+        attrs_raw = match.group(2) or ""
+        start, end = match.span()
+
+        if is_closing:
+            if open_policy is None:
+                raise ValueError("Closing </llmlingua> tag found without matching opener.")
+            content = text[open_content_start:start]
+            if content.strip():
+                blocks.append({"text": content, **open_policy})
+            open_policy = None
+            cursor = end
+            continue
+
+        if open_policy is not None:
+            raise ValueError("Nested <llmlingua> tags are not supported.")
+
+        plain = text[cursor:start]
+        if plain.strip():
+            blocks.append(
+                {"text": plain, "force_keep": False, "local_rate": None, "group_id": None}
+            )
+
+        attrs = _parse_llmlingua_attrs(attrs_raw)
+        local_rate = attrs["rate"] if attrs["compress"] else None
+        group_id = None
+        if local_rate is not None:
+            group_counter += 1
+            group_id = f"group_{group_counter}"
+        open_policy = {
+            "force_keep": not attrs["compress"],
+            "local_rate": local_rate,
+            "group_id": group_id,
+        }
+        open_content_start = end
+        cursor = end
+
+    if open_policy is not None:
+        raise ValueError("Unclosed <llmlingua> tag.")
+
+    tail = text[cursor:]
+    if tail.strip():
+        blocks.append({"text": tail, "force_keep": False, "local_rate": None, "group_id": None})
+
+    segments: list[dict[str, Any]] = []
+    for block in blocks:
+        for segment in _split_segments(block["text"]):
+            segments.append(
+                {
+                    "text": segment,
+                    "force_keep": block["force_keep"],
+                    "local_rate": block["local_rate"],
+                    "group_id": block["group_id"],
+                }
+            )
+    return segments
 
 
 @dataclass
@@ -60,7 +164,7 @@ def compress_text(
     top_k: int = 5,
 ) -> CompressionResult:
     def stage_split(state: Dict[str, Any]) -> Dict[str, Any]:
-        segments = _split_segments(state["text"])
+        segments = _split_with_structured_policy(state["text"])
         state["segments"] = segments
         state["target_keep"] = max(
             1,
@@ -76,13 +180,16 @@ def compress_text(
         scored: List[Dict[str, Any]] = []
         effective_query = state["query"] if state["mode"] != "baseline" else ""
         for idx, seg in enumerate(state["segments"]):
-            score = _score_segment(seg, effective_query, idx)
+            score = _score_segment(seg["text"], effective_query, idx)
             scored.append(
                 {
                     "segment_id": idx,
                     "score": round(score, 4),
-                    "tokens": count_tokens(seg),
-                    "text": seg,
+                    "tokens": count_tokens(seg["text"]),
+                    "text": seg["text"],
+                    "force_keep": seg["force_keep"],
+                    "local_rate": seg["local_rate"],
+                    "group_id": seg["group_id"],
                 }
             )
         state["segment_rows"] = scored
@@ -96,33 +203,56 @@ def compress_text(
         )
         target_keep = state["target_keep"]
         if state["mode"] == "baseline":
-            chosen = ranked[:target_keep]
+            target = target_keep
         elif state["mode"] == "query_guided":
-            chosen = ranked[: max(target_keep, min(int(state["top_k"]), len(ranked)))]
+            target = max(target_keep, min(int(state["top_k"]), len(ranked)))
         else:
-            chosen = ranked[: max(target_keep, int(state["top_k"]))]
+            target = max(target_keep, int(state["top_k"]))
 
-        chosen_ids = {row["segment_id"] for row in chosen}
+        chosen_ids = {row["segment_id"] for row in ranked if row["force_keep"]}
+
+        grouped_rows: dict[str, list[Dict[str, Any]]] = {}
+        for row in ranked:
+            if row["group_id"] and row["local_rate"] is not None and not row["force_keep"]:
+                grouped_rows.setdefault(str(row["group_id"]), []).append(row)
+        for rows in grouped_rows.values():
+            local_rate = float(rows[0]["local_rate"])
+            required = max(1, int(math.ceil(len(rows) * local_rate)))
+            for row in sorted(rows, key=lambda r: (r["score"], -r["segment_id"]), reverse=True)[
+                :required
+            ]:
+                chosen_ids.add(row["segment_id"])
+
+        for row in ranked:
+            if len(chosen_ids) >= target:
+                break
+            chosen_ids.add(row["segment_id"])
+
         state["chosen_ids"] = chosen_ids
         state["ordered_selected_rows"] = [
             row for row in state["segment_rows"] if row["segment_id"] in chosen_ids
         ]
         return state
 
-    state = run_pipeline(
-        {
-            "text": text,
-            "mode": mode,
-            "query": query,
-            "skeleton_ratio": skeleton_ratio,
-            "top_k": top_k,
-        },
-        [
-            PipelineStage(name="split", fn=stage_split),
-            PipelineStage(name="score", fn=stage_score),
-            PipelineStage(name="select", fn=stage_select),
-        ],
-    )
+    try:
+        state = run_pipeline(
+            {
+                "text": text,
+                "mode": mode,
+                "query": query,
+                "skeleton_ratio": skeleton_ratio,
+                "top_k": top_k,
+            },
+            [
+                PipelineStage(name="split", fn=stage_split),
+                PipelineStage(name="score", fn=stage_score),
+                PipelineStage(name="select", fn=stage_select),
+            ],
+        )
+    except PipelineExecutionError as exc:
+        if exc.stage_name == "split" and isinstance(exc.cause, ValueError):
+            raise exc.cause
+        raise
 
     segment_rows = state["segment_rows"]
     chosen_ids = state["chosen_ids"]
