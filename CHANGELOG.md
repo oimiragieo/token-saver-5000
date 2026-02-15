@@ -5,6 +5,8 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Hardened ingest persistence path to safely await coroutine-returning persistence hooks (`save_document`, `save_file_sync_metadata`) in `src/handlers/compression_handlers.py`.
+- Extended skill TOON-vs-JSON benchmark output contract to include auto-format selection diagnostics and guard expectations for uniform vs mixed payloads.
 - Hardened remaining app-layer service boundaries with explicit request-envelope contract validation in `lifecycle_service`, `progress_service`, `persistence_orchestration_service`, `tool_profile_service`, and `router_binding`.
 - Added canonical contract key mismatch messaging and fail-fast keyset drift checks across those app services while preserving runtime behavior.
 - Normalized node identity parsing in `src/node_identity.py` to treat only `"_n<digits>"` as text-node suffixes.
@@ -47,6 +49,9 @@ All notable changes to Token Saver 5000.
 - Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
+- Added skill portability contract tests to ensure self-contained skill scripts avoid project-root imports and path mutation bootstraps.
+- Added benchmark guard contract tests for TOON/JSON auto-format selection behavior and benchmark output schema.
+- Added ingest handler async-persistence regression test to enforce awaiting coroutine-based file-sync metadata save hooks.
 - Added TDD execution specification `docs/guides/TDD_EXECUTION_SPEC_2026-02-15.md` with research-backed checkpoints, gates, and slice-level acceptance criteria.
 - Added app contract tests for lifecycle/progress/persistence/tool-profile/router-binding request-envelope schemas and validation failures.
 - Added targeted node identity tests in `tests/test_node_identity.py`.

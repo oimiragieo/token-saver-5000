@@ -19,6 +19,7 @@ import json
 import logging
 from typing import Any, Dict, List
 import hashlib
+import inspect
 
 from ..types import HandlerContext  # TypedDict for handler context
 from ..semantic_compressor import FidelityLevel
@@ -363,6 +364,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             graph_data=graph_data,
             metadata=context["compressor"].file_metadata.get(file_id, {}),
         )
+        if inspect.isawaitable(success):
+            success = await success
         if success:
             logger.info(f"[OK] Persisted document {file_id}")
         else:
@@ -395,6 +398,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     try:
         metadata_export = context["sync_manager"].export_metadata()
         success = context["persistence"].save_file_sync_metadata(metadata_export)
+        if inspect.isawaitable(success):
+            success = await success
         if success:
             logger.info(f"[OK] Saved file sync metadata for {len(metadata_export)} documents")
         else:

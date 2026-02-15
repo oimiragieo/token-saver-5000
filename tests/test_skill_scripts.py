@@ -8,11 +8,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "skill_context_sample.txt"
+SKILL_ROOT = ROOT / "skills" / "token-saver-context-compression"
+SKILL_SCRIPTS = SKILL_ROOT / "scripts"
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_skill(*script_and_args: str) -> subprocess.CompletedProcess[str]:
+    script = SKILL_SCRIPTS / script_and_args[0]
+    extra_args = list(script_and_args[1:])
+    return subprocess.run(
+        [sys.executable, str(script), *extra_args],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -128,3 +142,31 @@ def test_skill_workflow_end_to_end():
     assert "compressed" in data
     assert "evidence_validation" in data
     assert data["compressed"]["mode"] == "evidence_aware"
+
+
+def test_skill_benchmark_toon_vs_json_guard_contract():
+    result = _run_skill("benchmark_toon_vs_json.py")
+    assert result.returncode == 0
+
+    payload = json.loads(result.stdout)
+    assert "benchmarks" in payload
+    assert "guard" in payload
+    assert payload["guard"]["pass"] is True
+    assert payload["guard"]["uniform_auto_should_select"] == "toon"
+    assert payload["guard"]["mixed_auto_should_select"] == "json"
+
+    uniform = next(item for item in payload["benchmarks"] if item["dataset"] == "uniform_rows")
+    mixed = next(item for item in payload["benchmarks"] if item["dataset"] == "mixed_nested")
+    assert uniform["auto_selected_format"] == "toon"
+    assert mixed["auto_selected_format"] == "json"
+
+
+def test_skill_scripts_are_self_contained_without_project_src_imports():
+    script_files = sorted(SKILL_SCRIPTS.glob("*.py"))
+    assert script_files, "Expected skill scripts to exist"
+
+    for script_path in script_files:
+        text = script_path.read_text(encoding="utf-8")
+        assert "sys.path.insert(" not in text, f"Unexpected sys.path mutation in {script_path.name}"
+        assert "from src." not in text, f"Unexpected project import in {script_path.name}"
+        assert "import src." not in text, f"Unexpected project import in {script_path.name}"

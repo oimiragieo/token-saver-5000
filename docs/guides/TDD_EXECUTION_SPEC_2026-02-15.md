@@ -12,6 +12,9 @@ Primary references used:
 4. LLM4TDD (arXiv:2312.04687): https://arxiv.org/abs/2312.04687
 5. Tests as Prompt benchmark (arXiv:2505.09027): https://arxiv.org/abs/2505.09027
 6. Class-level test-driven generation study (arXiv:2602.03557): https://arxiv.org/abs/2602.03557
+7. Test-Driven Development for Code Generation (arXiv:2402.13521): https://arxiv.org/abs/2402.13521
+8. TDFlow agentic TDD workflows (arXiv:2510.23761): https://arxiv.org/abs/2510.23761
+9. SWE-Flow test-driven synthesis schedule (arXiv:2506.09003): https://arxiv.org/abs/2506.09003
 
 Practical interpretation for this repo:
 
@@ -80,6 +83,17 @@ Acceptance criteria:
 1. Benchmark report artifacts produced deterministically.
 2. Guard fails loudly when savings improve but correctness degrades.
 
+Implementation checkpoints:
+
+1. Add benchmark contract checks for:
+   - `auto_selected_format`
+   - TOON round-trip requirement
+   - retrieval accuracy threshold
+2. Ensure guard output declares expected auto routing:
+   - uniform rows -> `toon`
+   - mixed nested payloads -> `json`
+3. Add test assertions for guard schema and pass/fail behavior.
+
 ## Slice C: Skill parity and portability guard
 
 Goal:
@@ -99,6 +113,32 @@ Required tests:
 Acceptance criteria:
 
 1. Skill can be copied into another project and run without MCP.
+
+Implementation checkpoints:
+
+1. Add tests that reject project-root dependency patterns in skill scripts:
+   - no `sys.path.insert(...)` bootstrap hacks
+   - no `import src...` or `from src...`
+2. Keep benchmark and CLI scripts executable only through local skill modules.
+3. Require output-format contract coverage in tests.
+
+## Slice D: Async warning debt cleanup
+
+Goal:
+
+1. Remove runtime warnings from coroutine-returning persistence hooks in ingest paths.
+
+Scope:
+
+1. `src/handlers/compression_handlers.py` ingest persistence save paths.
+
+Required tests:
+
+1. Ingest handler awaits coroutine-returning `save_file_sync_metadata`.
+
+Acceptance criteria:
+
+1. No un-awaited coroutine warning for async persistence hook variants.
 
 ## Command Checkpoints
 

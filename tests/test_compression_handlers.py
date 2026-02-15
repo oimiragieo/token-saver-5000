@@ -178,6 +178,32 @@ class TestHandleIngest:
         assert "estimated_ratio" in data["estimate"]
         assert "accuracy" in data["estimate"]
 
+    @pytest.mark.asyncio
+    async def test_ingest_awaits_async_file_sync_metadata_save(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """Async persistence hooks should be awaited when provided as coroutines."""
+        self.mock_persistence.save_file_sync_metadata = AsyncMock(return_value=True)
+        args = {
+            "text": "This is a test document with enough content to be meaningful.",
+            "file_id": "test_doc_async_sync_save",
+        }
+
+        with patch("src.handlers.compression_handlers.CompressionAdvisor") as mock_advisor_cls:
+            mock_advisor = Mock()
+            mock_estimate = Mock()
+            mock_estimate.compression_ratio = 9.5
+            mock_estimate.original_tokens = 1000
+            mock_estimate.estimated_compressed = 105
+            mock_advisor.estimate_compression.return_value = mock_estimate
+            mock_advisor_cls.return_value = mock_advisor
+
+            result = await ch.handle_ingest(self.context, args)
+
+        payload = json.loads(result)
+        assert payload["status"] == "success"
+        self.mock_persistence.save_file_sync_metadata.assert_awaited_once()
+
 
 @patch("src.handlers.compression_handlers.validate_file_id")
 class TestHandleReadSkeleton:
