@@ -1,5 +1,10 @@
 # GitHub Configuration for Token Saver 5000
 
+> This is **not** the main product README.
+>
+> For what Token Saver 5000 is, how to run it locally, MCP vs non-MCP usage, and tool walkthroughs, read:
+> - [../README.md](../README.md)
+
 This directory contains GitHub-specific configuration including the complete CI/CD automation suite.
 
 ## Quick Navigation
