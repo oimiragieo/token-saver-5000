@@ -156,6 +156,17 @@ def _score_segment(segment: str, query: str | None, idx: int) -> float:
     return 0.75 * relevance + 0.25 * position
 
 
+def _score_components(segment: str, query: str | None, idx: int) -> dict[str, float]:
+    relevance = _jaccard(segment, query or "")
+    position = 1.0 / (1.0 + math.log2(idx + 2))
+    final = 0.75 * relevance + 0.25 * position
+    return {
+        "relevance": round(relevance, 4),
+        "position": round(position, 4),
+        "final": round(final, 4),
+    }
+
+
 def compress_text(
     text: str,
     mode: str = "baseline",
@@ -180,16 +191,17 @@ def compress_text(
         scored: List[Dict[str, Any]] = []
         effective_query = state["query"] if state["mode"] != "baseline" else ""
         for idx, seg in enumerate(state["segments"]):
-            score = _score_segment(seg["text"], effective_query, idx)
+            components = _score_components(seg["text"], effective_query, idx)
             scored.append(
                 {
                     "segment_id": idx,
-                    "score": round(score, 4),
+                    "score": components["final"],
                     "tokens": count_tokens(seg["text"]),
                     "text": seg["text"],
                     "force_keep": seg["force_keep"],
                     "local_rate": seg["local_rate"],
                     "group_id": seg["group_id"],
+                    "score_components": components,
                 }
             )
         state["segment_rows"] = scored
@@ -212,6 +224,7 @@ def compress_text(
         chosen_ids = {row["segment_id"] for row in ranked if row["force_keep"]}
 
         grouped_rows: dict[str, list[Dict[str, Any]]] = {}
+        local_rate_selected_ids: set[int] = set()
         for row in ranked:
             if row["group_id"] and row["local_rate"] is not None and not row["force_keep"]:
                 grouped_rows.setdefault(str(row["group_id"]), []).append(row)
@@ -222,6 +235,7 @@ def compress_text(
                 :required
             ]:
                 chosen_ids.add(row["segment_id"])
+                local_rate_selected_ids.add(row["segment_id"])
 
         for row in ranked:
             if len(chosen_ids) >= target:
@@ -229,6 +243,7 @@ def compress_text(
             chosen_ids.add(row["segment_id"])
 
         state["chosen_ids"] = chosen_ids
+        state["local_rate_selected_ids"] = local_rate_selected_ids
         state["ordered_selected_rows"] = [
             row for row in state["segment_rows"] if row["segment_id"] in chosen_ids
         ]
@@ -256,6 +271,7 @@ def compress_text(
 
     segment_rows = state["segment_rows"]
     chosen_ids = state["chosen_ids"]
+    local_rate_selected_ids = state["local_rate_selected_ids"]
     compressed_text = "\n".join(row["text"] for row in state["ordered_selected_rows"])
 
     original_tokens = count_tokens(text)
@@ -265,6 +281,15 @@ def compress_text(
 
     for row in segment_rows:
         row["selected"] = row["segment_id"] in chosen_ids
+        if row["segment_id"] in chosen_ids:
+            if row["force_keep"]:
+                row["selection_reason"] = "forced_by_tag"
+            elif row["segment_id"] in local_rate_selected_ids:
+                row["selection_reason"] = "local_rate_policy"
+            else:
+                row["selection_reason"] = "top_rank"
+        else:
+            row["selection_reason"] = "not_selected"
 
     return CompressionResult(
         mode=mode,

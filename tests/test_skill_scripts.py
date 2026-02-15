@@ -144,6 +144,53 @@ def test_skill_workflow_end_to_end():
     assert data["compressed"]["mode"] == "evidence_aware"
 
 
+def test_portable_skill_compress_context_includes_explainability_fields():
+    result = _run_skill(
+        "compress_context.py",
+        "--file",
+        str(FIXTURE),
+        "--file-id",
+        "sample_doc",
+        "--mode",
+        "evidence_aware",
+        "--query",
+        "error handling and retry behavior",
+        "--output-format",
+        "json",
+    )
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["segments"], "Expected selected segments in payload"
+    first = data["segments"][0]
+    assert "score_components" in first
+    assert "selection_reason" in first
+    assert "relevance" in first["score_components"]
+    assert "position" in first["score_components"]
+    assert "final" in first["score_components"]
+
+
+def test_portable_skill_workflow_includes_explainability_fields():
+    result = _run_skill(
+        "run_skill_workflow.py",
+        "--file",
+        str(FIXTURE),
+        "--file-id",
+        "sample_doc",
+        "--mode",
+        "evidence_aware",
+        "--query",
+        "retry behavior",
+        "--output-format",
+        "json",
+    )
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["compressed"]["segments"], "Expected selected segments in workflow payload"
+    first = data["compressed"]["segments"][0]
+    assert "score_components" in first
+    assert "selection_reason" in first
+
+
 def test_skill_benchmark_toon_vs_json_guard_contract():
     result = _run_skill("benchmark_toon_vs_json.py")
     assert result.returncode == 0
