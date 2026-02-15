@@ -15,6 +15,8 @@ Core outcomes:
 2. Faster context handling.
 3. Better control over what information is kept vs omitted.
 
+This is not tied to GitHub workflows. It works for any large context source (files, notes, transcripts, docs, code, or generated text).
+
 ## Who This Is For
 
 Use this if you:
@@ -22,6 +24,15 @@ Use this if you:
 1. Work with large prompts/documents.
 2. Need to cut token cost.
 3. Want retrieval-oriented compression (not just naive summarization).
+
+Common use cases:
+
+1. RAG context compression before answer generation.
+2. Long internal docs and wiki pages.
+3. Customer support transcripts and call notes.
+4. Legal/policy/contract text review prep.
+5. Large code and architecture context for agents.
+6. Multi-turn assistant memory compression.
 
 Do not use this if you only have short prompts and token cost is irrelevant.
 
@@ -49,10 +60,18 @@ Choose your runtime:
 
 ## First 10 Minutes (Recommended Path)
 
-1. Clone and install:
+1. Get the code and install:
 
 ```bash
 git clone https://github.com/oimiragieo/token-saver-5000.git
+cd token-saver-5000
+pip install -r requirements.txt
+python scripts/check_setup.py
+```
+
+If you already have the folder locally (zip/internal mirror/another VCS), just run:
+
+```bash
 cd token-saver-5000
 pip install -r requirements.txt
 python scripts/check_setup.py
@@ -117,6 +136,17 @@ Main scripts:
 5. `benchmark_toon_vs_json.py`: TOON/JSON token + quality guard checks.
 
 All support local execution with no dependency on external MCP wrappers.
+
+## Data Source Flexibility
+
+You can feed Token Saver from any source as long as you provide text input:
+
+1. Local files (`--file`).
+2. Pasted text (`--text`).
+3. Piped stdin from another command.
+4. Upstream connectors that export text payloads.
+
+The compressor itself is source-agnostic; GitHub is just one possible integration path, not a requirement.
 
 ## Output Formats (JSON vs TOON)
 
