@@ -217,3 +217,33 @@ def test_skill_scripts_are_self_contained_without_project_src_imports():
         assert "sys.path.insert(" not in text, f"Unexpected sys.path mutation in {script_path.name}"
         assert "from src." not in text, f"Unexpected project import in {script_path.name}"
         assert "import src." not in text, f"Unexpected project import in {script_path.name}"
+
+
+def test_portable_skill_compress_context_accepts_langchain_json_adapter():
+    payload = json.dumps(
+        [
+            {
+                "page_content": "Retry policy is exponential backoff.",
+                "metadata": {"source": "a.md"},
+            },
+            {"page_content": "Timeout defaults to 30 seconds.", "metadata": {"source": "b.md"}},
+        ]
+    )
+    result = _run_skill(
+        "compress_context.py",
+        "--json",
+        payload,
+        "--input-adapter",
+        "langchain_json",
+        "--mode",
+        "query_guided",
+        "--query",
+        "retry policy",
+        "--output-format",
+        "json",
+    )
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert "input_adapter" in data
+    assert data["input_adapter"]["adapter"] == "langchain_json"
+    assert data["input_adapter"]["document_count"] == 2

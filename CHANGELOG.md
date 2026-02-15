@@ -5,6 +5,7 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Added portable skill external input adapters (`raw_json`, `langchain_json`, `llamaindex_json`, `auto`) across profile/compress/evidence/workflow scripts with JSON input support and adapter diagnostics in output payloads.
 - Added explainability payloads to portable skill segment outputs with score decomposition (`relevance`, `position`, `final`) and `selection_reason` (`forced_by_tag`, `local_rate_policy`, `top_rank`, `not_selected`).
 - Added structured segment controls to skill compression via `<llmlingua ...>` tags, including `compress=False` preserve blocks and per-block `rate` overrides that can supersede global skeleton ratios for tagged sections.
 - Refactored skill compression engine to use a composable pipeline execution model (`split` -> `score` -> `select`) while preserving output contracts.
@@ -53,6 +54,7 @@ All notable changes to Token Saver 5000.
 - Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
+- Added portable skill adapter contract tests in `tests/test_skill_external_adapters.py` and CLI integration coverage for `compress_context.py --input-adapter langchain_json` in `tests/test_skill_scripts.py`.
 - Added portable-skill explainability contract coverage in `tests/test_skill_scripts.py` for both `compress_context.py` and `run_skill_workflow.py`.
 - Added structured-control tests in `tests/test_skill_structured_controls.py` covering preserve behavior, rate override behavior, and invalid-marker validation errors.
 - Added skill pipeline primitives in `skills/token-saver-context-compression/scripts/_pipeline.py` with named-stage sync/async execution and stage-local failure context.

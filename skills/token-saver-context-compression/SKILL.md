@@ -33,6 +33,13 @@ python "$CLAUDE_PROJECT_DIR/.claude/skills/token-saver-context-compression/scrip
 python "$CLAUDE_PROJECT_DIR/.claude/skills/token-saver-context-compression/scripts/compress_context.py" --file <path> --mode evidence_aware --query "<question>" --min-similarity 0.4 --output-format auto
 ```
 
+Optional external-payload adapters (for LangChain/LlamaIndex-style JSON):
+
+```bash
+python "$CLAUDE_PROJECT_DIR/.claude/skills/token-saver-context-compression/scripts/compress_context.py" --json '<json-array>' --input-adapter langchain_json --mode query_guided --query "<question>" --output-format auto
+python "$CLAUDE_PROJECT_DIR/.claude/skills/token-saver-context-compression/scripts/run_skill_workflow.py" --json-file <payload.json> --input-adapter auto --mode evidence_aware --query "<question>" --output-format auto
+```
+
 3. Validate evidence:
 
 ```bash
@@ -63,6 +70,7 @@ python "$CLAUDE_PROJECT_DIR/.claude/skills/token-saver-context-compression/scrip
 
 - Scripts emit JSON to stdout.
 - Scripts support `--output-format {json,toon,auto}`.
+- Scripts support `--json` / `--json-file` with `--input-adapter {raw_json,langchain_json,llamaindex_json,auto}` for framework payload normalization.
 - In `auto`, TOON is selected only when a uniform object-array shape crosses a row threshold.
 - Mixed or irregular structures automatically stay in JSON.
 - `validate_evidence.py` exits `1` when insufficient evidence is detected.
