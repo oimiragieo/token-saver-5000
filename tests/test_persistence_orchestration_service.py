@@ -6,6 +6,8 @@ import importlib
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 
 def test_load_persisted_documents_restores_graph_and_registers_resource():
     module = importlib.import_module("src.semantic_modulator.app.persistence_orchestration_service")
@@ -72,3 +74,22 @@ def test_save_file_sync_metadata_warns_when_not_saved():
     logger.warning.assert_called_once_with(
         "file_sync_save_warning", message="No file sync metadata to save"
     )
+
+
+def test_persistence_service_contract_keysets_declared():
+    module = importlib.import_module("src.semantic_modulator.app.persistence_orchestration_service")
+    service = module.PersistenceOrchestrationService
+    assert service.LOAD_PERSISTED_REQUEST_KEYS == frozenset(
+        {"compressor", "persistence", "resource_manager", "logger"}
+    )
+    assert service.LOAD_SYNC_REQUEST_KEYS == frozenset({"persistence", "sync_manager", "logger"})
+    assert service.SAVE_SYNC_REQUEST_KEYS == frozenset({"sync_manager", "persistence", "logger"})
+
+
+def test_persistence_service_validate_load_sync_request_map_rejects_extra_key():
+    module = importlib.import_module("src.semantic_modulator.app.persistence_orchestration_service")
+    service = module.PersistenceOrchestrationService
+    with pytest.raises(ValueError, match="load_sync_request_map keys mismatch"):
+        service.validate_load_sync_request_map(
+            {"persistence": Mock(), "sync_manager": Mock(), "logger": Mock(), "extra": True}
+        )

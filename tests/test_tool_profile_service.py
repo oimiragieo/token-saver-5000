@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 from unittest.mock import Mock
 
+import pytest
+
 
 def test_profile_bootstrap_returns_active_profile_and_names():
     module = importlib.import_module("src.semantic_modulator.app.tool_profile_service")
@@ -50,3 +52,23 @@ def test_profile_bootstrap_logs_fallback_warning():
         configured_profile="bad_profile",
         fallback_profile="full",
     )
+
+
+def test_profile_bootstrap_request_contract_declared():
+    module = importlib.import_module("src.semantic_modulator.app.tool_profile_service")
+    service = module.ToolProfileBootstrapService
+    assert service.BOOTSTRAP_REQUEST_KEYS == frozenset({"configured_profile", "tooling", "logger"})
+
+
+def test_profile_bootstrap_validate_request_map_rejects_extra_key():
+    module = importlib.import_module("src.semantic_modulator.app.tool_profile_service")
+    service = module.ToolProfileBootstrapService
+    with pytest.raises(ValueError, match="bootstrap_request_map keys mismatch"):
+        service.validate_bootstrap_request_map(
+            {
+                "configured_profile": "full",
+                "tooling": Mock(),
+                "logger": Mock(),
+                "extra": True,
+            }
+        )

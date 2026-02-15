@@ -5,6 +5,8 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Hardened remaining app-layer service boundaries with explicit request-envelope contract validation in `lifecycle_service`, `progress_service`, `persistence_orchestration_service`, `tool_profile_service`, and `router_binding`.
+- Added canonical contract key mismatch messaging and fail-fast keyset drift checks across those app services while preserving runtime behavior.
 - Normalized node identity parsing in `src/node_identity.py` to treat only `"_n<digits>"` as text-node suffixes.
 - Updated `validate_node_ids` in `src/handlers/compression_handlers.py` to use shared node-ID parsing and file-id matching logic.
 - `src/handlers/mcp_core.py` now supports profile-aware tool listing and routing gates.
@@ -45,6 +47,8 @@ All notable changes to Token Saver 5000.
 - Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
+- Added TDD execution specification `docs/guides/TDD_EXECUTION_SPEC_2026-02-15.md` with research-backed checkpoints, gates, and slice-level acceptance criteria.
+- Added app contract tests for lifecycle/progress/persistence/tool-profile/router-binding request-envelope schemas and validation failures.
 - Added targeted node identity tests in `tests/test_node_identity.py`.
 - Added a validation regression test for non-index `_n` segments in `tests/test_compression_handlers.py`.
 - Added MCP tool profile support (`full`, `core_stable`) for gradual surface simplification.

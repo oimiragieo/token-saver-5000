@@ -85,3 +85,26 @@ async def test_router_binding_call_handler_wraps_result_and_errors():
     assert ok[0]["text"].startswith("{'ok': True")
     assert "Error: kaboom" in err[0]["text"]
     assert events["error_logged"] is True
+
+
+def test_router_binding_request_contract_declared():
+    module = importlib.import_module("src.semantic_modulator.app.router_binding")
+    assert module.BIND_REQUEST_KEYS == frozenset(
+        {"server", "tooling", "tool_profile", "build_context", "logger", "text_content_cls"}
+    )
+
+
+def test_router_binding_validate_bind_request_map_rejects_extra_key():
+    module = importlib.import_module("src.semantic_modulator.app.router_binding")
+    with pytest.raises(ValueError, match="bind_request_map keys mismatch"):
+        module.validate_bind_request_map(
+            {
+                "server": FakeServer(),
+                "tooling": object(),
+                "tool_profile": "full",
+                "build_context": lambda: {},
+                "logger": None,
+                "text_content_cls": lambda **kwargs: kwargs,
+                "extra": True,
+            }
+        )
