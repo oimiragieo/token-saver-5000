@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from _pipeline import PipelineStage, run_pipeline
 from _token_utils import count_tokens
 
 
@@ -58,32 +59,74 @@ def compress_text(
     skeleton_ratio: float = 0.2,
     top_k: int = 5,
 ) -> CompressionResult:
-    segments = _split_segments(text)
-    target_keep = max(1, int(round(len(segments) * max(0.05, min(0.95, skeleton_ratio)))))
-
-    segment_rows: List[Dict[str, Any]] = []
-    for idx, seg in enumerate(segments):
-        score = _score_segment(seg, query if mode != "baseline" else "", idx)
-        segment_rows.append(
-            {
-                "segment_id": idx,
-                "score": round(score, 4),
-                "tokens": count_tokens(seg),
-                "text": seg,
-            }
+    def stage_split(state: Dict[str, Any]) -> Dict[str, Any]:
+        segments = _split_segments(state["text"])
+        state["segments"] = segments
+        state["target_keep"] = max(
+            1,
+            int(
+                round(
+                    len(segments) * max(0.05, min(0.95, float(state["skeleton_ratio"]))),
+                )
+            ),
         )
+        return state
 
-    ranked = sorted(segment_rows, key=lambda r: (r["score"], -r["segment_id"]), reverse=True)
-    if mode == "baseline":
-        chosen = ranked[:target_keep]
-    elif mode == "query_guided":
-        chosen = ranked[: max(target_keep, min(top_k, len(ranked)))]
-    else:  # evidence_aware
-        chosen = ranked[: max(target_keep, top_k)]
+    def stage_score(state: Dict[str, Any]) -> Dict[str, Any]:
+        scored: List[Dict[str, Any]] = []
+        effective_query = state["query"] if state["mode"] != "baseline" else ""
+        for idx, seg in enumerate(state["segments"]):
+            score = _score_segment(seg, effective_query, idx)
+            scored.append(
+                {
+                    "segment_id": idx,
+                    "score": round(score, 4),
+                    "tokens": count_tokens(seg),
+                    "text": seg,
+                }
+            )
+        state["segment_rows"] = scored
+        return state
 
-    chosen_ids = {row["segment_id"] for row in chosen}
-    ordered = [row for row in segment_rows if row["segment_id"] in chosen_ids]
-    compressed_text = "\n".join(row["text"] for row in ordered)
+    def stage_select(state: Dict[str, Any]) -> Dict[str, Any]:
+        ranked = sorted(
+            state["segment_rows"],
+            key=lambda r: (r["score"], -r["segment_id"]),
+            reverse=True,
+        )
+        target_keep = state["target_keep"]
+        if state["mode"] == "baseline":
+            chosen = ranked[:target_keep]
+        elif state["mode"] == "query_guided":
+            chosen = ranked[: max(target_keep, min(int(state["top_k"]), len(ranked)))]
+        else:
+            chosen = ranked[: max(target_keep, int(state["top_k"]))]
+
+        chosen_ids = {row["segment_id"] for row in chosen}
+        state["chosen_ids"] = chosen_ids
+        state["ordered_selected_rows"] = [
+            row for row in state["segment_rows"] if row["segment_id"] in chosen_ids
+        ]
+        return state
+
+    state = run_pipeline(
+        {
+            "text": text,
+            "mode": mode,
+            "query": query,
+            "skeleton_ratio": skeleton_ratio,
+            "top_k": top_k,
+        },
+        [
+            PipelineStage(name="split", fn=stage_split),
+            PipelineStage(name="score", fn=stage_score),
+            PipelineStage(name="select", fn=stage_select),
+        ],
+    )
+
+    segment_rows = state["segment_rows"]
+    chosen_ids = state["chosen_ids"]
+    compressed_text = "\n".join(row["text"] for row in state["ordered_selected_rows"])
 
     original_tokens = count_tokens(text)
     compressed_tokens = count_tokens(compressed_text)

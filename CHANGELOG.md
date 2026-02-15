@@ -5,6 +5,7 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Refactored skill compression engine to use a composable pipeline execution model (`split` -> `score` -> `select`) while preserving output contracts.
 - Extended benchmark harness quality reporting with query-aware overlap metrics (`precision_at_k`, `recall_at_k`, `f1_at_k`) and aggregate quality averages/counts in benchmark summaries.
 - Hardened ingest persistence path to safely await coroutine-returning persistence hooks (`save_document`, `save_file_sync_metadata`) in `src/handlers/compression_handlers.py`.
 - Extended skill TOON-vs-JSON benchmark output contract to include auto-format selection diagnostics and guard expectations for uniform vs mixed payloads.
@@ -50,6 +51,8 @@ All notable changes to Token Saver 5000.
 - Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
+- Added skill pipeline primitives in `skills/token-saver-context-compression/scripts/_pipeline.py` with named-stage sync/async execution and stage-local failure context.
+- Added pipeline contract tests in `tests/test_skill_pipeline.py` for stage ordering, mixed sync/async execution, and error attribution.
 - Added competitor analysis report `docs/research/COMPETITOR_CODEBASE_COMPARISON_2026-02-15.md` and TDD execution roadmap `docs/guides/TDD_OUTPERFORM_PLAN_2026-02-15.md` for outperform strategy planning.
 - Added benchmark harness contracts for quality metric fields in `tests/test_benchmark_harness.py`.
 - Added skill portability contract tests to ensure self-contained skill scripts avoid project-root imports and path mutation bootstraps.
