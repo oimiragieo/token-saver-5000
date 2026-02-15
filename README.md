@@ -1,63 +1,153 @@
 # Token Saver 5000
 
-Semantic compression for AI context.  
-This project helps you keep useful meaning while spending fewer tokens.
+Token Saver 5000 is a local semantic compression system for AI context.
 
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1500%2B_passing-brightgreen)]()
+In plain terms: it takes large text/code context, keeps the important parts, and gives you a smaller context that is cheaper to send to models.
 
-## What This Is
+## What This Project Actually Does
 
-Token Saver 5000 is a local-first system that:
+You give it a long document or codebase context.  
+It builds a semantic graph, ranks importance, and outputs a compressed "skeleton" you can query and expand.
 
-1. Ingests big text/code context.
-2. Builds a semantic graph of the content.
-3. Produces a compact "skeleton" view.
-4. Lets you pull back detail only where needed.
+Core outcomes:
 
-You can use it as:
+1. Lower token usage.
+2. Faster context handling.
+3. Better control over what information is kept vs omitted.
 
-1. An MCP server (`python -m src.server`) for Claude/Desktop workflows.
-2. A self-contained skill package (`skills/token-saver-context-compression/`) with local scripts and no MCP requirement.
+## Who This Is For
 
-## How It Works (Plain English)
+Use this if you:
 
-Think of it like turning a long book into:
+1. Work with large prompts/documents.
+2. Need to cut token cost.
+3. Want retrieval-oriented compression (not just naive summarization).
 
-1. A table of contents.
-2. A map of important ideas.
-3. A way to instantly open the exact page you need.
+Do not use this if you only have short prompts and token cost is irrelevant.
 
-Flow:
+## Two Ways To Use It
 
-1. `ingest_context`: split text into chunks and embed semantics.
-2. Build a graph: chunks become nodes, semantic links become edges.
-3. Rank importance (PageRank + relevance signals).
-4. Return a compressed skeleton (high-value nodes only).
-5. If you ask a specific question, query-guided/evidence-aware modes keep only likely answer-supporting spans.
+There are two product surfaces in this repo:
 
-Result: smaller prompt payloads with controlled quality risk.
+1. MCP server (`src.server`) for Claude/Desktop and agent workflows.
+2. Self-contained skill scripts (`skills/token-saver-context-compression`) that run locally without MCP.
 
-## Quick Start
+## Local vs Docker
+
+You do not need Docker. Docker is optional.
+
+Choose your runtime:
+
+1. Local Python:
+   - Best for development and quick usage.
+   - Direct access to scripts and source.
+   - Command: `python -m src.server`
+2. Docker:
+   - Best for reproducible deployment/team environments.
+   - Avoids local dependency drift.
+   - Command: `docker-compose up -d`
+
+## First 10 Minutes (Recommended Path)
+
+1. Clone and install:
 
 ```bash
 git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
 pip install -r requirements.txt
 python scripts/check_setup.py
+```
+
+2. Run a local example:
+
+```bash
 python examples/example_usage.py
 ```
 
-## Run Modes
+3. Try the self-contained skill scripts:
 
-## 1) MCP Server Mode
+```bash
+python skills/token-saver-context-compression/scripts/profile_tokens.py --file tests/fixtures/skill_context_sample.txt --output-format auto
+python skills/token-saver-context-compression/scripts/compress_context.py --file tests/fixtures/skill_context_sample.txt --mode query_guided --query "what are the retry rules?" --output-format auto
+python skills/token-saver-context-compression/scripts/validate_evidence.py --file tests/fixtures/skill_context_sample.txt --query "what are the retry rules?" --min-similarity 0.4
+```
+
+## How The Compression Flow Works
+
+At a high level:
+
+1. Ingest text (`ingest_context`).
+2. Chunk + embed text.
+3. Build semantic graph (nodes=chunks, edges=semantic similarity).
+4. Rank nodes by importance.
+5. Return compressed skeleton (`read_skeleton`).
+6. Search/extract relevant regions (`search_semantic`, `modulate_region`).
+
+If query-aware mode is used, scoring is biased toward the query.  
+If evidence-aware mode is used, it checks whether selected context likely contains enough answer-supporting evidence.
+
+## Core MCP Tools (The Ones Most Users Need)
+
+If you are new, start with these 7:
+
+1. `ingest_context`: add a document.
+2. `read_skeleton`: view compressed structure.
+3. `search_semantic`: find relevant nodes by query.
+4. `modulate_region`: expand selected nodes at chosen fidelity.
+5. `get_stats`: view compression stats.
+6. `list_documents`: list ingested docs.
+7. `delete_document`: remove a doc.
+
+You can force this minimal surface with:
+
+```bash
+MCP_TOOL_PROFILE=core_stable python -m src.server
+```
+
+## Skill Scripts (No MCP Required)
+
+Path: `skills/token-saver-context-compression/scripts/`
+
+Main scripts:
+
+1. `profile_tokens.py`: raw vs compressed token profile.
+2. `compress_context.py`: baseline/query-guided/evidence-aware compression.
+3. `validate_evidence.py`: checks if compressed output has enough evidence.
+4. `run_skill_workflow.py`: profile + compress + evidence in one command.
+5. `benchmark_toon_vs_json.py`: TOON/JSON token + quality guard checks.
+
+All support local execution with no dependency on external MCP wrappers.
+
+## Output Formats (JSON vs TOON)
+
+Skill scripts support:
+
+1. `--output-format json`
+2. `--output-format toon`
+3. `--output-format auto`
+
+`auto` behavior:
+
+1. Select TOON only when data shape is TOON-friendly (uniform object arrays) and token-efficient.
+2. Fall back to JSON otherwise.
+
+## Repo Structure (Practical Map)
+
+1. `src/` - core implementation.
+2. `src/handlers/` - MCP tool handlers.
+3. `src/semantic_modulator/` - app/api/service-layer architecture.
+4. `skills/` - portable no-MCP skill package.
+5. `scripts/` - benchmark/setup/dev scripts.
+6. `tests/` - unit/integration/regression tests.
+7. `docs/` - detailed guides and reference docs.
+
+## Run The Server (MCP Mode)
 
 ```bash
 python -m src.server
 ```
 
-Claude Desktop config:
+Claude Desktop config example:
 
 ```json
 {
@@ -71,131 +161,49 @@ Claude Desktop config:
 }
 ```
 
-### MCP Tool Profiles
+## Test and Quality Commands
 
-Use `MCP_TOOL_PROFILE` to control exposed tools:
-
-1. `full` (default): all tools.
-2. `core_stable`: stable core tools only:
-   - `ingest_context`
-   - `read_skeleton`
-   - `search_semantic`
-   - `modulate_region`
-   - `get_stats`
-   - `list_documents`
-   - `delete_document`
-
-Example:
-
-```bash
-MCP_TOOL_PROFILE=core_stable python -m src.server
-```
-
-## 2) Self-Contained Skill Mode (No MCP Needed)
-
-Portable skill folder:
-
-- `skills/token-saver-context-compression/`
-
-Core commands:
-
-```bash
-python skills/token-saver-context-compression/scripts/profile_tokens.py --file <path> --output-format auto
-python skills/token-saver-context-compression/scripts/compress_context.py --file <path> --mode query_guided --query "<question>" --output-format auto
-python skills/token-saver-context-compression/scripts/validate_evidence.py --file <path> --query "<question>" --min-similarity 0.4 --output-format json
-python skills/token-saver-context-compression/scripts/run_skill_workflow.py --file <path> --mode evidence_aware --query "<question>" --output-format auto
-python skills/token-saver-context-compression/scripts/benchmark_toon_vs_json.py
-```
-
-The skill scripts support:
-
-1. `--output-format {json,toon,auto}`
-2. Guarded TOON auto-selection (uniform tabular payloads only)
-3. JSON fallback when TOON is not a win
-
-## Project Layout
-
-High-level map:
-
-1. `src/`: core runtime and server implementation.
-2. `src/handlers/`: MCP tool handlers.
-3. `src/semantic_modulator/`: enterprise-style app/api layering and wiring.
-4. `skills/`: portable skill package.
-5. `scripts/`: utilities, benchmark runners, setup helpers.
-6. `tests/`: unit/integration/regression suites.
-7. `docs/`: guides, references, deployment, research notes.
-
-## Architecture Snapshot
-
-Core pipeline:
-
-1. Chunk -> Embed -> Graph -> Rank -> Skeleton.
-2. Query-guided and evidence-aware selection for tighter context targeting.
-3. Tool routing via MCP registry/router + app-layer service adapters.
-4. Persistence, sync, versioning, and resource controls as support services.
-
-Design goal: keep a stable core path while allowing advanced/experimental capabilities.
-
-## Testing and Quality
-
-Run all tests:
+Run tests:
 
 ```bash
 pytest tests/ -v
 ```
 
-Run benchmark guard workflow:
+Run benchmark guard:
 
 ```bash
 python scripts/benchmarks/run_benchmarks.py --compare baseline,query_guided,evidence_aware
 python scripts/benchmarks/check_benchmark_guard.py --strict-case-set --summary-file artifacts/benchmarks/guard_summary.md
 ```
 
-Formatting/lint:
+Lint/format:
 
 ```bash
-python -m black src tests scripts skills
 python -m ruff check src tests scripts skills
+python -m black src tests scripts skills
 ```
 
-## Documentation Index
+## Version and Requirements
 
-Getting started:
+1. Version: `0.10.0`
+2. Python: `3.10+`
+3. Suggested RAM: `~4GB` for embedding workloads
+
+Version source-of-truth:
+
+1. `pyproject.toml`
+2. `src/__init__.py`
+
+## Documentation
+
+Start here:
 
 1. `docs/getting-started/GETTING_STARTED.md`
-2. `docs/getting-started/CONTRIBUTING.md`
-
-Guides:
-
-1. `docs/guides/HOW_IT_WORKS.md`
-2. `docs/guides/MCP_TOOLS_GUIDE.md`
-3. `docs/guides/CLAUDE_CODE_SETUP.md`
-4. `docs/guides/CLAUDE_SKILL_PACKAGING.md`
-5. `docs/guides/TDD_MODERNIZATION_PLAN.md`
-6. `docs/guides/TDD_EXECUTION_SPEC_2026-02-15.md`
-
-Reference:
-
-1. `docs/reference/ARCHITECTURE.md`
-2. `docs/reference/API_REFERENCE.md`
-
-Deployment:
-
-1. `docs/deployment/DEPLOYMENT.md`
-2. `docs/deployment/DOCKER.md`
-3. `docs/deployment/SECURITY.md`
-
-## Requirements
-
-1. Python 3.10+
-2. ~4GB RAM recommended (embedding model workloads)
-3. Local disk for cache/persistence
-
-## Version
-
-Current version: `0.10.0`  
-Source of truth: `pyproject.toml`, `src/__init__.py`
+2. `docs/guides/HOW_IT_WORKS.md`
+3. `docs/reference/ARCHITECTURE.md`
+4. `docs/guides/MCP_TOOLS_GUIDE.md`
+5. `CHANGELOG.md`
 
 ## License
 
-MIT. See `LICENSE`.
+MIT (`LICENSE`).
