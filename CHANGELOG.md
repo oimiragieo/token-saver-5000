@@ -41,6 +41,8 @@ All notable changes to Token Saver 5000.
 - Unified factory contract key-mismatch messaging via `contract_key_mismatch_message(...)`/`validate_contract_keys(...)`, and hardened default-build envelope validation with nested checks and subclass-dispatch-safe validator routing.
 - Updated remaining factory contract validators to class-dispatch (`validate_default_class_map`, `validate_build_kwargs_map`, `validate_build_default_request_map`, `validate_factory_validation_result_map`) so derived factories can override shared validation policy consistently.
 - Hardened `ServerContextService` with canonical context-key contract validation (`CONTEXT_MAP_KEYS`, `validate_context_map(...)`) and unified key-mismatch messaging; `build_context(...)` now validates output envelope before returning.
+- Hardened `RuntimeService` with contract-validated run envelope (`RunRequest`, `validate_run_request_map(...)`) and class-dispatch-safe validator routing in `run(...)`.
+- Hardened `MCPToolingGateway` with contract-validated profile state envelope (`ProfileState`, `validate_profile_state_map(...)`) and centralized `set_profile_state(...)` orchestration used by profile resolution and listing paths.
 
 ### Added
 - Added targeted node identity tests in `tests/test_node_identity.py`.

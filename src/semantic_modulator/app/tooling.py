@@ -6,7 +6,7 @@ Provides a stable app-facing abstraction over MCP registry and router modules.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypedDict
 
 from mcp.types import Tool
 
@@ -14,13 +14,71 @@ from src.semantic_modulator.api.mcp import registry as mcp_registry
 from src.semantic_modulator.api.mcp import router as mcp_router
 
 
+class ProfileState(TypedDict):
+    """Gateway profile state envelope."""
+
+    profile: str
+    enabled_tool_names: list[str]
+
+
 class MCPToolingGateway:
     """App-layer facade for tool-profile setup and MCP routing."""
+
+    PROFILE_STATE_KEYS: frozenset[str] = frozenset(ProfileState.__annotations__.keys())
 
     def __init__(self) -> None:
         self.supported_profiles = mcp_registry.SUPPORTED_TOOL_PROFILES
         self.profile = "full"
         self.enabled_tool_names: list[str] = []
+
+    @staticmethod
+    def contract_key_mismatch_message(
+        *,
+        contract_name: str,
+        missing: list[str],
+        extra: list[str],
+    ) -> str:
+        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+
+    @classmethod
+    def validate_contract_keys(
+        cls,
+        *,
+        contract_name: str,
+        payload: dict[str, Any],
+        expected_keys: frozenset[str],
+    ) -> None:
+        actual_keys = set(payload.keys())
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        if missing or extra:
+            raise ValueError(
+                cls.contract_key_mismatch_message(
+                    contract_name=contract_name,
+                    missing=missing,
+                    extra=extra,
+                )
+            )
+
+    @classmethod
+    def validate_profile_state_map(cls, state: dict[str, Any]) -> ProfileState:
+        cls.validate_contract_keys(
+            contract_name="profile_state_map",
+            payload=state,
+            expected_keys=cls.PROFILE_STATE_KEYS,
+        )
+        return state
+
+    def set_profile_state(self, *, profile: str, tools: list[Tool]) -> ProfileState:
+        state = self.validate_profile_state_map(
+            {
+                "profile": profile,
+                "enabled_tool_names": [tool.name for tool in tools],
+            }
+        )
+        self.profile = state["profile"]
+        self.enabled_tool_names = state["enabled_tool_names"]
+        return state
 
     def resolve_tools_for_profile(
         self,
@@ -38,16 +96,14 @@ class MCPToolingGateway:
             tools = setup(active_profile)
             used_fallback = True
 
-        self.profile = active_profile
-        self.enabled_tool_names = [tool.name for tool in tools]
+        self.set_profile_state(profile=active_profile, tools=tools)
         return active_profile, tools, used_fallback
 
     def list_tools(self, profile: str | None = None) -> list[Tool]:
         """List tools for active or explicitly provided profile."""
         selected_profile = profile or self.profile
         tools = mcp_registry.setup_mcp_tools(selected_profile)
-        self.profile = selected_profile
-        self.enabled_tool_names = [tool.name for tool in tools]
+        self.set_profile_state(profile=selected_profile, tools=tools)
         return tools
 
     async def route_tool_call(

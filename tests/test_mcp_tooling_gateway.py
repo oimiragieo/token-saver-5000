@@ -61,3 +61,47 @@ async def test_gateway_route_tool_call_delegates():
     assert result["name"] == "x"
     assert result["arguments"] == {"k": 1}
     assert result["tool_profile"] == "full"
+
+
+def test_gateway_profile_state_contract_declared():
+    module = importlib.import_module("src.semantic_modulator.app.tooling")
+    assert hasattr(module, "ProfileState")
+    assert set(module.ProfileState.__annotations__.keys()) == {
+        "profile",
+        "enabled_tool_names",
+    }
+
+
+def test_gateway_validate_profile_state_map_rejects_extra_key():
+    module = importlib.import_module("src.semantic_modulator.app.tooling")
+    gateway = module.MCPToolingGateway()
+    with pytest.raises(ValueError) as exc_info:
+        gateway.validate_profile_state_map(
+            {
+                "profile": "full",
+                "enabled_tool_names": ["ingest_context"],
+                "extra": True,
+            }
+        )
+    assert str(exc_info.value) == "profile_state_map keys mismatch: missing=[] extra=['extra']"
+
+
+def test_gateway_set_profile_state_uses_validate_profile_state_map_class_dispatch():
+    module = importlib.import_module("src.semantic_modulator.app.tooling")
+
+    calls = []
+
+    class DerivedGateway(module.MCPToolingGateway):
+        @classmethod
+        def validate_profile_state_map(cls, state):
+            calls.append("validate_profile_state_map")
+            return state
+
+    gateway = DerivedGateway()
+    tool = Mock(name="ingest_context")
+    tool.name = "ingest_context"
+    gateway.set_profile_state(profile="full", tools=[tool])
+
+    assert calls == ["validate_profile_state_map"]
+    assert gateway.profile == "full"
+    assert gateway.enabled_tool_names == ["ingest_context"]
