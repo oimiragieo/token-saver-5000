@@ -130,6 +130,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                             },
                         },
                     },
+                    "skeleton_ratio": {
+                        "type": ["number", "string"],
+                        "description": "Skeleton ratio (0.0-1.0) or 'auto' for adaptive sizing based on corpus size. Default: 0.2",
+                        "default": 0.2,
+                    },
                 },
                 "required": ["text", "file_id"],
             },

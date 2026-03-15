@@ -84,6 +84,17 @@ class EvidenceResult:
     message: str
 
 
+@dataclass
+class DiffReingestionResult:
+    """Result of incremental diff-based re-ingestion."""
+
+    file_id: str
+    chunks_unchanged: int
+    chunks_updated: int
+    chunks_added: int
+    chunks_removed: int
+
+
 def compute_adaptive_ratio(total_tokens: int) -> float:
     """Compute skeleton ratio based on corpus size.
 
@@ -698,7 +709,7 @@ class SemanticCompressor:
                 summary = self._generate_summary(node.text, max_length=150)
                 entities = ", ".join(node.metadata["entities"][:3])
 
-                line = f"[{node_id}] [ANCHOR] (importance: {node.importance:.3f})\n"
+                line = f"[{node_id}] [rag:{node_id}] [ANCHOR] (importance: {node.importance:.3f})\n"
                 line += f"  Summary: {summary}\n"
                 if entities:
                     line += f"  Key entities: {entities}\n"
@@ -1011,3 +1022,144 @@ class SemanticCompressor:
     def get_statistics(self, file_id: Optional[str] = None) -> Dict:
         """Alias for get_stats() - provided for API compatibility."""
         return self.get_stats(file_id)
+
+    async def stream_skeleton(self, file_id: str, query: str = None):
+        """Async generator that yields skeleton text in chunks.
+
+        Args:
+            file_id: Document file ID
+            query: Optional query for guided selection
+
+        Yields:
+            Text chunks of the skeleton output
+        """
+        skeleton = self._generate_skeleton(file_id, query=query)
+        lines = skeleton.skeleton_text.split("\n")
+        for i, line in enumerate(lines):
+            if i < len(lines) - 1:
+                yield line + "\n"
+            else:
+                yield line
+
+    def diff_reingest(self, file_id: str, new_text: str) -> "DiffReingestionResult":
+        """Re-ingest a document, preserving unchanged chunks.
+
+        Compares new text against existing chunks and only recomputes
+        embeddings for changed sections.
+
+        Args:
+            file_id: Existing document file ID
+            new_text: Updated document text
+
+        Returns:
+            DiffReingestionResult with change statistics
+        """
+        if file_id not in self.graphs:
+            raise ValueError(f"File {file_id} not found for diff re-ingestion")
+
+        diff_stats = self._compute_diff_stats(file_id, new_text)
+
+        # Re-ingest with embedding preservation
+        self.ingest_file(new_text, file_id)
+        self._restore_preserved_embeddings(file_id, diff_stats["preserved"])
+
+        return DiffReingestionResult(file_id=file_id, **diff_stats["counts"])
+
+    async def diff_reingest_async(self, file_id: str, new_text: str) -> "DiffReingestionResult":
+        """Async version of diff_reingest."""
+        if file_id not in self.graphs:
+            raise ValueError(f"File {file_id} not found for diff re-ingestion")
+
+        diff_stats = self._compute_diff_stats(file_id, new_text)
+
+        await self.ingest_file_async(new_text, file_id)
+        self._restore_preserved_embeddings(file_id, diff_stats["preserved"])
+
+        return DiffReingestionResult(file_id=file_id, **diff_stats["counts"])
+
+    def _compute_diff_stats(self, file_id: str, new_text: str) -> Dict:
+        """Compute diff statistics and preserve unchanged embeddings."""
+        old_chunks = {
+            nid: node for nid, node in self.chunks.items()
+            if nid.startswith(file_id)
+        }
+        old_texts = {nid: node.text for nid, node in old_chunks.items()}
+
+        new_chunk_texts = self._chunk_text(new_text)
+
+        old_text_set = set(old_texts.values())
+        new_text_set = set(new_chunk_texts)
+
+        unchanged_texts = old_text_set & new_text_set
+        removed_texts = old_text_set - new_text_set
+        added_texts = new_text_set - old_text_set
+
+        chunks_updated = min(len(removed_texts), len(added_texts))
+
+        preserved = {}
+        for nid, node in old_chunks.items():
+            if node.text in unchanged_texts:
+                preserved[node.text] = node.embedding.copy()
+
+        return {
+            "preserved": preserved,
+            "counts": {
+                "chunks_unchanged": len(unchanged_texts),
+                "chunks_updated": chunks_updated,
+                "chunks_added": max(0, len(added_texts) - chunks_updated),
+                "chunks_removed": max(0, len(removed_texts) - chunks_updated),
+            }
+        }
+
+    def _restore_preserved_embeddings(self, file_id: str, preserved: Dict) -> None:
+        """Restore preserved embeddings after re-ingestion."""
+        for nid, node in self.chunks.items():
+            if nid.startswith(file_id) and node.text in preserved:
+                node.embedding = preserved[node.text]
+
+    def find_duplicates(
+        self, threshold: float = 0.95
+    ) -> List[Dict]:
+        """Find semantically duplicate chunks across all documents.
+
+        Args:
+            threshold: Minimum cosine similarity to consider duplicate
+
+        Returns:
+            List of dicts with node_a, node_b, similarity
+        """
+        import numpy as np
+
+        all_nodes = list(self.chunks.items())
+        if len(all_nodes) < 2:
+            return []
+
+        duplicates = []
+        for i in range(len(all_nodes)):
+            nid_a, node_a = all_nodes[i]
+            file_a = nid_a.rsplit("_", 1)[0] if "_" in nid_a else nid_a
+
+            for j in range(i + 1, len(all_nodes)):
+                nid_b, node_b = all_nodes[j]
+                file_b = nid_b.rsplit("_", 1)[0] if "_" in nid_b else nid_b
+
+                # Only compare across different files
+                if file_a == file_b:
+                    continue
+
+                # Cosine similarity
+                dot = np.dot(node_a.embedding, node_b.embedding)
+                norm_a = np.linalg.norm(node_a.embedding)
+                norm_b = np.linalg.norm(node_b.embedding)
+                if norm_a == 0 or norm_b == 0:
+                    continue
+                similarity = dot / (norm_a * norm_b)
+
+                if similarity >= threshold:
+                    duplicates.append({
+                        "node_a": nid_a,
+                        "node_b": nid_b,
+                        "similarity": round(float(similarity), 4),
+                    })
+
+        return duplicates
