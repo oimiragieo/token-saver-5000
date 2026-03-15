@@ -28,7 +28,7 @@ from ..error_helpers import SmartError
 from ..compression_advisor import CompressionAdvisor
 from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
-from ..metrics import compute_cost_savings
+from ..metrics import compute_cost_savings, get_metrics
 from ..constants import MAX_TEXT_LENGTH_BYTES
 from ..node_identity import collect_file_ids, extract_file_id_from_node
 
@@ -442,6 +442,16 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         ).to_dict()
     except Exception:
         response["cost_savings"] = None
+
+    # Record Prometheus metrics for observability
+    try:
+        metrics = get_metrics()
+        fidelity_label = args.get("fidelity_level", "BALANCED")
+        metrics.record_compression_ratio(skeleton.compression_ratio, fidelity_label)
+        metrics.increment_documents_processed("ingest", fidelity_label, "success")
+        metrics.set_active_documents(len(context["compressor"].graphs))
+    except Exception:
+        pass  # Metrics are best-effort, never block ingestion
 
     if file_path:
         response["file_sync_enabled"] = True
@@ -1613,10 +1623,11 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
 async def handle_find_duplicates(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Find near-duplicate chunks across different documents."""
     threshold = args.get("threshold", 0.9)
+    timeout_seconds = args.get("timeout_seconds", 30.0)
 
     try:
         compressor = context["compressor"]
-        duplicates = compressor.find_duplicates(threshold=threshold)
+        duplicates = compressor.find_duplicates(threshold=threshold, timeout_seconds=timeout_seconds)
         return json.dumps({
             "status": "success",
             "duplicate_count": len(duplicates),

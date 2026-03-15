@@ -1031,6 +1031,10 @@ class SemanticCompressor:
     async def stream_skeleton(self, file_id: str, query: str = None):
         """Async generator that yields skeleton text in chunks.
 
+        Note: Not exposed as MCP tool because MCP protocol requires single
+        JSON responses (no streaming support). Available for direct use
+        via HTTP API or programmatic access.
+
         Args:
             file_id: Document file ID
             query: Optional query for guided selection
@@ -1123,28 +1127,41 @@ class SemanticCompressor:
                 node.embedding = preserved[node.text]
 
     def find_duplicates(
-        self, threshold: float = 0.95
+        self, threshold: float = 0.95, timeout_seconds: float = 30.0
     ) -> List[Dict]:
         """Find semantically duplicate chunks across all documents.
 
         Args:
             threshold: Minimum cosine similarity to consider duplicate
+            timeout_seconds: Maximum time in seconds before aborting (default 30s)
 
         Returns:
             List of dicts with node_a, node_b, similarity
         """
         import numpy as np
+        import time
 
         all_nodes = list(self.chunks.items())
         if len(all_nodes) < 2:
             return []
 
         duplicates = []
+        start_time = time.monotonic()
         for i in range(len(all_nodes)):
             nid_a, node_a = all_nodes[i]
             file_a = nid_a.rsplit("_", 1)[0] if "_" in nid_a else nid_a
 
             for j in range(i + 1, len(all_nodes)):
+                # Check timeout every 1000 comparisons
+                if j % 1000 == 0 and time.monotonic() - start_time > timeout_seconds:
+                    duplicates.append({
+                        "node_a": "__timeout__",
+                        "node_b": "__timeout__",
+                        "similarity": 0.0,
+                        "warning": f"Search timed out after {timeout_seconds}s. Partial results returned.",
+                    })
+                    return duplicates
+
                 nid_b, node_b = all_nodes[j]
                 file_b = nid_b.rsplit("_", 1)[0] if "_" in nid_b else nid_b
 

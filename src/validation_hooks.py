@@ -67,3 +67,23 @@ def _validate_modulate(args: Dict[str, Any]) -> List[str]:
     if not node_ids:
         errors.append("node_ids must not be empty")
     return errors
+
+
+@_register("delete_document")
+def _validate_delete(args: Dict[str, Any]) -> List[str]:
+    errors = []
+    file_id = args.get("file_id", "")
+    if not file_id or len(file_id.strip()) == 0:
+        errors.append("file_id is required for deletion")
+    return errors
+
+
+@_register("batch_ingest")
+def _validate_batch_ingest(args: Dict[str, Any]) -> List[str]:
+    errors = []
+    documents = args.get("documents", [])
+    if not documents:
+        errors.append("documents list cannot be empty")
+    if len(documents) > 100:
+        errors.append("batch size must not exceed 100 documents")
+    return errors

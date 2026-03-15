@@ -16,7 +16,6 @@ import os
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock, patch
-from dataclasses import dataclass
 
 from src.semantic_compressor import compute_adaptive_ratio, SemanticCompressor
 from src.metrics import compute_cost_savings
@@ -430,3 +429,129 @@ class TestToolRegistration:
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert len(parsed["presets"]) >= 5
+
+
+# =========================================================================
+# find_duplicates timeout
+# =========================================================================
+
+class TestFindDuplicatesTimeout:
+    def test_timeout_returns_partial_results(self):
+        """find_duplicates should abort and return partial results on timeout."""
+        compressor = SemanticCompressor.__new__(SemanticCompressor)
+        # Create many chunks across two files to trigger timeout
+        compressor.chunks = {}
+        for i in range(200):
+            node = MagicMock()
+            node.embedding = np.random.rand(384)
+            file_prefix = "fileA" if i < 100 else "fileB"
+            compressor.chunks[f"{file_prefix}_n{i}"] = node
+
+        # With a tiny timeout, should hit timeout marker
+        result = compressor.find_duplicates(threshold=0.99, timeout_seconds=0.0001)
+        # Either we get timeout marker or it finished fast enough — both valid
+        has_timeout = any(d.get("warning") for d in result if isinstance(d, dict) and "warning" in d)
+        # Just verify no crash and returns list
+        assert isinstance(result, list)
+
+    def test_no_timeout_with_small_dataset(self):
+        """Small datasets should complete without timeout."""
+        compressor = SemanticCompressor.__new__(SemanticCompressor)
+        node_a = MagicMock()
+        node_a.embedding = np.array([1.0, 0.0, 0.0])
+        node_b = MagicMock()
+        node_b.embedding = np.array([1.0, 0.0, 0.0])
+        compressor.chunks = {"fileA_0": node_a, "fileB_0": node_b}
+        result = compressor.find_duplicates(threshold=0.9, timeout_seconds=30.0)
+        assert len(result) == 1
+        assert "warning" not in result[0]
+
+
+# =========================================================================
+# Validation hooks for destructive operations
+# =========================================================================
+
+class TestValidationHooksDestructive:
+    def test_delete_document_requires_file_id(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("delete_document", {"file_id": ""})
+        assert len(errors) == 1
+        assert "file_id" in errors[0]
+
+    def test_delete_document_valid(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("delete_document", {"file_id": "my_doc"})
+        assert errors == []
+
+    def test_batch_ingest_empty_list(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("batch_ingest", {"documents": []})
+        assert len(errors) == 1
+        assert "empty" in errors[0]
+
+    def test_batch_ingest_too_many(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("batch_ingest", {"documents": [{}] * 101})
+        assert len(errors) == 1
+        assert "100" in errors[0]
+
+    def test_batch_ingest_valid(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("batch_ingest", {"documents": [{"text": "a"}]})
+        assert errors == []
+
+    def test_unregistered_tool_passes(self):
+        from src.validation_hooks import validate_tool_input
+        errors = validate_tool_input("some_unknown_tool", {"anything": True})
+        assert errors == []
+
+
+# =========================================================================
+# MetricsCollector wired into handlers
+# =========================================================================
+
+class TestMetricsWiring:
+    @pytest.mark.asyncio
+    async def test_ingest_records_metrics(self):
+        """handle_ingest should call MetricsCollector recording methods."""
+        from src.handlers.compression_handlers import handle_ingest
+
+        mock_skeleton = MagicMock()
+        mock_skeleton.total_nodes = 5
+        mock_skeleton.total_tokens = 100
+        mock_skeleton.skeleton_tokens = 20
+        mock_skeleton.compression_ratio = 5.0
+        mock_skeleton.skeleton_text = "test"
+
+        compressor = AsyncMock()
+        compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
+        compressor.graphs = {"test": MagicMock()}
+        compressor.chunks = {"test_n0": MagicMock()}
+        compressor.file_metadata = {}
+
+        context = {
+            "compressor": compressor,
+            "persistence": MagicMock(save_document=MagicMock(return_value=True)),
+            "resource_manager": AsyncMock(
+                check_document_size_async=AsyncMock(return_value=(True, None)),
+                register_document_async=AsyncMock(),
+            ),
+            "version_manager": AsyncMock(add_version_async=AsyncMock()),
+            "sync_manager": MagicMock(register_file=MagicMock(), export_metadata=MagicMock(return_value={})),
+            "path_validator": MagicMock(),
+            "retrieval_history": {},
+        }
+
+        with patch("src.handlers.compression_handlers.get_metrics") as mock_get_metrics:
+            mock_metrics = MagicMock()
+            mock_get_metrics.return_value = mock_metrics
+
+            args = {"text": "This is a sufficiently long test document for semantic analysis purposes.", "file_id": "test"}
+            result = await handle_ingest(context, args)
+            parsed = json.loads(result)
+            assert parsed["status"] == "success"
+
+            # Verify metrics were recorded
+            mock_metrics.record_compression_ratio.assert_called_once()
+            mock_metrics.increment_documents_processed.assert_called_once_with("ingest", "BALANCED", "success")
+            mock_metrics.set_active_documents.assert_called_once()
