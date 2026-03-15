@@ -96,6 +96,18 @@ class TestFindDuplicatesNullGuard:
         result = compressor.find_duplicates(threshold=0.9)
         assert len(result) == 1
 
+    def test_skips_dimension_mismatch(self):
+        """Embeddings with different dimensions (e.g. MiniLM 384 vs CodeBERT 768) should be skipped."""
+        compressor = SemanticCompressor.__new__(SemanticCompressor)
+        node_a = MagicMock()
+        node_a.embedding = np.array([1.0, 0.0, 0.0])  # 3-dim
+        node_b = MagicMock()
+        node_b.embedding = np.array([1.0, 0.0, 0.0, 0.0, 0.0])  # 5-dim
+        compressor.chunks = {"fileA_0": node_a, "fileB_0": node_b}
+        # Should not crash, should skip mismatched pairs
+        result = compressor.find_duplicates(threshold=0.5)
+        assert result == []
+
 
 # =========================================================================
 # diff_reingest null embedding guard
@@ -262,7 +274,7 @@ class TestNewMCPHandlers:
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(side_effect=ValueError("not found"))
         result = await handle_diff_reingest(
-            {"compressor": compressor},
+            {"compressor": compressor, "persistence": MagicMock(), "version_manager": AsyncMock()},
             {"file_id": "missing", "text": "hello"}
         )
         parsed = json.loads(result)
@@ -279,13 +291,79 @@ class TestNewMCPHandlers:
         )
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
+        compressor.graphs = {"test": MagicMock()}
+        compressor.chunks = {"test_n0": MagicMock(), "test_n1": MagicMock()}
+        compressor.file_metadata = {"test": {"source": "test"}}
+        context = {
+            "compressor": compressor,
+            "persistence": MagicMock(save_document=MagicMock(return_value=True)),
+            "version_manager": AsyncMock(add_version_async=AsyncMock()),
+        }
         result = await handle_diff_reingest(
-            {"compressor": compressor},
+            context,
             {"file_id": "test", "text": "new content"}
         )
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["chunks_unchanged"] == 3
+
+    @pytest.mark.asyncio
+    async def test_handle_diff_reingest_persists_to_disk(self):
+        """Verify diff_reingest calls persistence.save_document."""
+        from src.handlers.compression_handlers import handle_diff_reingest
+        from src.semantic_compressor import DiffReingestionResult
+        mock_result = DiffReingestionResult(
+            file_id="doc1", chunks_unchanged=2, chunks_updated=1,
+            chunks_added=0, chunks_removed=0
+        )
+        compressor = AsyncMock()
+        compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
+        compressor.graphs = {"doc1": MagicMock()}
+        compressor.chunks = {"doc1_n0": MagicMock()}
+        compressor.file_metadata = {"doc1": {}}
+        mock_persistence = MagicMock(save_document=MagicMock(return_value=True))
+        mock_version_mgr = AsyncMock(add_version_async=AsyncMock())
+        context = {
+            "compressor": compressor,
+            "persistence": mock_persistence,
+            "version_manager": mock_version_mgr,
+        }
+        result = await handle_diff_reingest(context, {"file_id": "doc1", "text": "updated"})
+        parsed = json.loads(result)
+        assert parsed["status"] == "success"
+        # Verify persistence was called
+        mock_persistence.save_document.assert_called_once()
+        call_kwargs = mock_persistence.save_document.call_args
+        assert call_kwargs[1]["file_id"] == "doc1" or call_kwargs.kwargs["file_id"] == "doc1"
+
+    @pytest.mark.asyncio
+    async def test_handle_diff_reingest_saves_version(self):
+        """Verify diff_reingest calls version_manager.add_version_async."""
+        from src.handlers.compression_handlers import handle_diff_reingest
+        from src.semantic_compressor import DiffReingestionResult
+        mock_result = DiffReingestionResult(
+            file_id="doc1", chunks_unchanged=2, chunks_updated=1,
+            chunks_added=0, chunks_removed=0
+        )
+        compressor = AsyncMock()
+        compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
+        compressor.graphs = {"doc1": MagicMock()}
+        compressor.chunks = {"doc1_n0": MagicMock()}
+        compressor.file_metadata = {"doc1": {}}
+        mock_version_mgr = AsyncMock(add_version_async=AsyncMock())
+        context = {
+            "compressor": compressor,
+            "persistence": MagicMock(save_document=MagicMock(return_value=True)),
+            "version_manager": mock_version_mgr,
+        }
+        result = await handle_diff_reingest(context, {"file_id": "doc1", "text": "updated text"})
+        parsed = json.loads(result)
+        assert parsed["status"] == "success"
+        # Verify version manager was called
+        mock_version_mgr.add_version_async.assert_called_once()
+        call_kwargs = mock_version_mgr.add_version_async.call_args
+        assert call_kwargs.kwargs["doc_id"] == "doc1"
+        assert call_kwargs.kwargs["checksum"] is not None
 
     @pytest.mark.asyncio
     async def test_handle_find_duplicates_success(self):

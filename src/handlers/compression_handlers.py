@@ -1551,6 +1551,45 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
     try:
         compressor = context["compressor"]
         result = await compressor.diff_reingest_async(file_id, text)
+
+        # Persist updated document to disk (same as handle_ingest)
+        try:
+            import networkx as nx
+            graph_data = nx.node_link_data(compressor.graphs[file_id])
+            success = context["persistence"].save_document(
+                file_id=file_id,
+                chunks={k: v for k, v in compressor.chunks.items() if k.startswith(file_id)},
+                graph_data=graph_data,
+                metadata=compressor.file_metadata.get(file_id, {}),
+            )
+            if inspect.isawaitable(success):
+                success = await success
+            if success:
+                logger.info(f"[OK] Persisted diff-reingested document {file_id}")
+            else:
+                logger.warning(f"[WARN] Failed to persist diff-reingested {file_id}")
+        except Exception as e:
+            logger.error(f"Failed to persist diff-reingested {file_id}: {e}")
+
+        # Save version history
+        try:
+            checksum = hashlib.md5(text.encode()).hexdigest()
+            await context["version_manager"].add_version_async(
+                doc_id=file_id,
+                content=text,
+                checksum=checksum,
+                metadata={},
+                compression_stats={
+                    "chunks_unchanged": result.chunks_unchanged,
+                    "chunks_updated": result.chunks_updated,
+                    "chunks_added": result.chunks_added,
+                    "chunks_removed": result.chunks_removed,
+                },
+            )
+            logger.info(f"[OK] Registered version for diff-reingested {file_id}")
+        except Exception as e:
+            logger.warning(f"[WARN] Failed to save version for diff-reingested {file_id}: {e}")
+
         return json.dumps({
             "status": "success",
             "file_id": result.file_id,

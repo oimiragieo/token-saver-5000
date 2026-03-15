@@ -1155,6 +1155,9 @@ class SemanticCompressor:
                 # Cosine similarity — skip nodes with missing embeddings
                 if node_a.embedding is None or node_b.embedding is None:
                     continue
+                # Guard against dimension mismatch (e.g. MiniLM 384 vs CodeBERT 768)
+                if node_a.embedding.shape[0] != node_b.embedding.shape[0]:
+                    continue
                 dot = np.dot(node_a.embedding, node_b.embedding)
                 norm_a = np.linalg.norm(node_a.embedding)
                 norm_b = np.linalg.norm(node_b.embedding)
