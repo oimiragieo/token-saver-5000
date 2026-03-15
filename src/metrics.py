@@ -59,6 +59,7 @@ Usage Examples:
 """
 
 import logging
+from dataclasses import dataclass, asdict
 from typing import Optional
 
 # Try to import prometheus_client, fall back to NoOp if not available
@@ -75,6 +76,67 @@ logger = logging.getLogger(__name__)
 ALLOWED_FIDELITY_LEVELS = {"LOW", "BALANCED", "HIGH", "EXTREME", "NONE"}
 ALLOWED_OPERATIONS = {"ingest", "compress", "expand", "batch_ingest", "refresh"}
 ALLOWED_STATUSES = {"success", "failure"}
+
+# Model pricing: cost per million input tokens (USD)
+MODEL_PRICING = {
+    "claude-opus-4": 15.0,
+    "claude-opus-4.5": 15.0,
+    "claude-opus-4.6": 15.0,
+    "claude-sonnet-4": 3.0,
+    "claude-sonnet-4.5": 3.0,
+    "claude-sonnet-4.6": 3.0,
+    "claude-haiku-3.5": 0.80,
+    "claude-haiku-4": 0.80,
+}
+DEFAULT_COST_PER_MILLION = 3.0  # Default to Sonnet pricing
+
+
+@dataclass
+class TokenSavingsTelemetry:
+    """Telemetry data for a single compression operation's cost savings."""
+
+    original_tokens: int
+    compressed_tokens: int
+    saved_tokens: int
+    model: str
+    cost_per_million: float
+    cost_savings_usd: float
+    savings_percent: float
+
+    def to_dict(self) -> dict:
+        """Serialize to dict for JSON responses."""
+        return asdict(self)
+
+
+def compute_cost_savings(
+    original_tokens: int,
+    compressed_tokens: int,
+    model: str = None,
+) -> TokenSavingsTelemetry:
+    """Calculate dollar savings from compression for a given model.
+
+    Args:
+        original_tokens: Token count before compression
+        compressed_tokens: Token count after compression
+        model: Model identifier (e.g. "claude-sonnet-4"). Defaults to Sonnet pricing.
+
+    Returns:
+        TokenSavingsTelemetry with cost savings breakdown
+    """
+    saved = max(0, original_tokens - compressed_tokens)
+    cost_per_million = MODEL_PRICING.get(model, DEFAULT_COST_PER_MILLION) if model else DEFAULT_COST_PER_MILLION
+    cost_savings = (saved / 1_000_000) * cost_per_million
+    savings_pct = (saved / original_tokens * 100) if original_tokens > 0 else 0.0
+
+    return TokenSavingsTelemetry(
+        original_tokens=original_tokens,
+        compressed_tokens=compressed_tokens,
+        saved_tokens=saved,
+        model=model or "default",
+        cost_per_million=cost_per_million,
+        cost_savings_usd=round(cost_savings, 6),
+        savings_percent=round(savings_pct, 1),
+    )
 
 
 class MetricsCollector:

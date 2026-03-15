@@ -84,6 +84,28 @@ class EvidenceResult:
     message: str
 
 
+def compute_adaptive_ratio(total_tokens: int) -> float:
+    """Compute skeleton ratio based on corpus size.
+
+    Smaller documents need less compression (keep more),
+    larger documents need more aggressive compression.
+
+    Args:
+        total_tokens: Total token count of the corpus
+
+    Returns:
+        Skeleton ratio (fraction of nodes to keep)
+    """
+    if total_tokens < 8000:
+        return 0.8
+    elif total_tokens < 32000:
+        return 0.5
+    elif total_tokens < 100000:
+        return 0.2
+    else:
+        return 0.1
+
+
 class SemanticCompressor:
     """
     Core compressor implementing adaptive semantic fidelity.
@@ -98,7 +120,7 @@ class SemanticCompressor:
         self,
         model_name: str = "all-MiniLM-L6-v2",
         similarity_threshold: float = 0.75,
-        skeleton_ratio: float = 0.2,
+        skeleton_ratio: float | str = 0.2,
     ):
         """
         Initialize the semantic compressor.
@@ -106,7 +128,8 @@ class SemanticCompressor:
         Args:
             model_name: Local embedding model (lightweight recommended)
             similarity_threshold: Minimum similarity to create graph edges
-            skeleton_ratio: Fraction of nodes to include in skeleton (top N%)
+            skeleton_ratio: Fraction of nodes to include in skeleton (top N%),
+                or "auto" to adapt based on corpus size
         """
         # Use EmbeddingManager for shared model caching
         embedding_manager = EmbeddingManager()
@@ -640,7 +663,15 @@ class SemanticCompressor:
         file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
 
         # Determine skeleton nodes (top N%)
-        num_skeleton = max(1, int(len(file_nodes) * self.skeleton_ratio))
+        # Use adaptive ratio if skeleton_ratio is "auto"
+        effective_ratio = self.skeleton_ratio
+        if effective_ratio == "auto":
+            total_tokens_estimate = sum(
+                len(node.text.split()) for _, node in file_nodes
+            )
+            effective_ratio = compute_adaptive_ratio(total_tokens_estimate)
+
+        num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
         if anchor_node_ids:
             skeleton_nodes = set(anchor_node_ids)
             if len(skeleton_nodes) < num_skeleton:
@@ -653,7 +684,7 @@ class SemanticCompressor:
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
         skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
-        skeleton_lines.append(f"Compression: {self.skeleton_ratio:.0%} of content shown\n")
+        skeleton_lines.append(f"Compression: {effective_ratio:.0%} of content shown\n")
 
         node_map = {}
         total_tokens = 0

@@ -28,6 +28,7 @@ from ..error_helpers import SmartError
 from ..compression_advisor import CompressionAdvisor
 from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
+from ..metrics import compute_cost_savings
 from ..constants import MAX_TEXT_LENGTH_BYTES
 from ..node_identity import collect_file_ids, extract_file_id_from_node
 
@@ -432,6 +433,10 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         ),
         "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
         "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
+        "cost_savings": compute_cost_savings(
+            original_tokens=skeleton.total_tokens,
+            compressed_tokens=skeleton.skeleton_tokens,
+        ).to_dict(),
     }
 
     if file_path:
