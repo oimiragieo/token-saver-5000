@@ -615,8 +615,8 @@ class TestErrorHandlingAndRecovery:
         """Test save_document with permission error."""
         persistence_manager.use_chromadb = False
 
-        # Mock file open to raise PermissionError
-        with patch("builtins.open", side_effect=PermissionError("Permission denied")):
+        # Mock tempfile.mkstemp to raise PermissionError (atomic writes use mkstemp, not open)
+        with patch("tempfile.mkstemp", side_effect=PermissionError("Permission denied")):
             success = persistence_manager.save_document(
                 "test_doc",
                 sample_document_data["chunks"],

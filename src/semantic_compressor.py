@@ -106,7 +106,12 @@ def compute_adaptive_ratio(total_tokens: int) -> float:
 
     Returns:
         Skeleton ratio (fraction of nodes to keep)
+
+    Raises:
+        ValueError: If total_tokens is negative
     """
+    if total_tokens < 0:
+        raise ValueError(f"total_tokens must be non-negative, got {total_tokens}")
     if total_tokens < 8000:
         return 0.8
     elif total_tokens < 32000:
@@ -1098,7 +1103,7 @@ class SemanticCompressor:
 
         preserved = {}
         for nid, node in old_chunks.items():
-            if node.text in unchanged_texts:
+            if node.text in unchanged_texts and node.embedding is not None:
                 preserved[node.text] = node.embedding.copy()
 
         return {
@@ -1147,7 +1152,9 @@ class SemanticCompressor:
                 if file_a == file_b:
                     continue
 
-                # Cosine similarity
+                # Cosine similarity — skip nodes with missing embeddings
+                if node_a.embedding is None or node_b.embedding is None:
+                    continue
                 dot = np.dot(node_a.embedding, node_b.embedding)
                 norm_a = np.linalg.norm(node_a.embedding)
                 norm_b = np.linalg.norm(node_b.embedding)

@@ -21,10 +21,13 @@ Security Notes (v0.8.0):
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 import numpy as np
+import tempfile
+import shutil
 
 # File format version for migration tracking
 PERSISTENCE_FORMAT_VERSION = 2  # v1 = pickle, v2 = JSON + numpy
@@ -85,6 +88,39 @@ class PersistenceManager:
         self.afm_dir.mkdir(exist_ok=True)
 
         logger.info(f"Persistence manager initialized (ChromaDB: {self.use_chromadb})")
+
+    @staticmethod
+    def _atomic_write_json(filepath: Path, data: dict) -> None:
+        """Write JSON atomically via temp file + rename to prevent corruption."""
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=filepath.parent, suffix=".tmp", prefix=filepath.stem
+        )
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+            shutil.move(tmp_path, filepath)
+        except BaseException:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
+
+    @staticmethod
+    def _atomic_write_npz(filepath: Path, **arrays) -> None:
+        """Write numpy arrays atomically via temp file + rename."""
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=filepath.parent, suffix=".tmp", prefix=filepath.stem
+        )
+        os.close(tmp_fd)
+        try:
+            np.savez(tmp_path, **arrays)
+            shutil.move(tmp_path + ".npz" if os.path.exists(tmp_path + ".npz") else tmp_path, filepath)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except BaseException:
+            for p in (tmp_path, tmp_path + ".npz"):
+                if os.path.exists(p):
+                    os.remove(p)
+            raise
 
     # =========================================================================
     # Safe Serialization Helpers (v0.8.0 - CWE-502 fix)
@@ -418,21 +454,16 @@ class PersistenceManager:
                 "metadata": metadata,
             }
 
-            # Save JSON structure
-            with open(doc_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, default=str)
+            # Atomic save: JSON structure
+            self._atomic_write_json(doc_file, data)
 
-            # Save embeddings separately as numpy (v0.8.0 audit fix - Issue 2)
-            # SECURITY: IDs saved as JSON to avoid pickle/object arrays (CWE-502)
+            # Atomic save: embeddings + IDs
             if embeddings_dict:
                 ids = list(embeddings_dict.keys())
                 embeddings = np.array([embeddings_dict[id_] for id_ in ids])
-                # Save embeddings only (no object arrays)
-                np.savez(embeddings_file, embeddings=embeddings)
-                # Save IDs as JSON (secure, no pickle needed)
+                self._atomic_write_npz(embeddings_file, embeddings=embeddings)
                 ids_file = embeddings_file.with_suffix(".ids.json")
-                with open(ids_file, "w", encoding="utf-8") as f:
-                    json.dump(ids, f)
+                self._atomic_write_json(ids_file, ids)
 
             logger.info(f"[OK] Saved document {file_id} to JSON ({len(chunks)} nodes)")
             return True
@@ -832,15 +863,14 @@ class PersistenceManager:
                 "metadata": metadata or {},
             }
 
-            # Save JSON structure
-            with open(history_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, default=str)
+            # Atomic save: JSON structure
+            self._atomic_write_json(history_file, data)
 
-            # Save embeddings separately as numpy
+            # Atomic save: embeddings
             if embeddings_list:
                 indices = np.array([e[0] for e in embeddings_list])
                 embeddings = np.array([e[1] for e in embeddings_list])
-                np.savez(embeddings_file, indices=indices, embeddings=embeddings)
+                self._atomic_write_npz(embeddings_file, indices=indices, embeddings=embeddings)
 
             logger.info(f"[OK] Saved AFM history {session_id} ({len(messages)} messages)")
             return True

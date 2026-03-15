@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 48 MCP tool schemas
+- setup_mcp_tools: Returns list of all 51 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -1425,6 +1425,59 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # --- New tools: diff re-ingestion, dedup, presets ---
+        Tool(
+            name="diff_reingest",
+            description=(
+                "Re-ingest a previously ingested document, preserving embeddings for "
+                "unchanged chunks. Only recomputes embeddings for changed sections, "
+                "saving significant computation time on iterative document updates."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "The existing document identifier to update",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The updated document text",
+                    },
+                },
+                "required": ["file_id", "text"],
+            },
+        ),
+        Tool(
+            name="find_duplicates",
+            description=(
+                "Detect near-duplicate content across different ingested documents. "
+                "Uses cosine similarity on chunk embeddings to find redundant content "
+                "that could be deduplicated to save tokens."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "threshold": {
+                        "type": "number",
+                        "description": "Similarity threshold (0.0-1.0). Default: 0.9",
+                        "default": 0.9,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="get_compression_presets",
+            description=(
+                "List available compression presets (code-review, chat, research, "
+                "aggressive, balanced). Each preset maps to optimal skeleton_ratio "
+                "and fidelity settings for common use cases."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
     return _tools_for_profile(all_tools, profile)
 
@@ -1531,6 +1584,10 @@ async def route_tool_call(
         "calculate_reward": exp.handle_calculate_reward,
         "get_evidence_stats": exp.handle_get_evidence_stats,
         "generate_synthetic_tests": exp.handle_generate_synthetic_tests,
+        # New tools: diff re-ingestion, cross-doc dedup, presets
+        "diff_reingest": ch.handle_diff_reingest,
+        "find_duplicates": ch.handle_find_duplicates,
+        "get_compression_presets": ch.handle_get_presets,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

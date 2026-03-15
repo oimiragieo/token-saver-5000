@@ -430,14 +430,18 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         "token_savings": skeleton.total_tokens - skeleton.skeleton_tokens,
         "token_savings_percent": round(
             (1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1
-        ),
+        ) if skeleton.total_tokens > 0 else 0.0,
         "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
         "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
-        "cost_savings": compute_cost_savings(
+    }
+
+    try:
+        response["cost_savings"] = compute_cost_savings(
             original_tokens=skeleton.total_tokens,
             compressed_tokens=skeleton.skeleton_tokens,
-        ).to_dict(),
-    }
+        ).to_dict()
+    except Exception:
+        response["cost_savings"] = None
 
     if file_path:
         response["file_sync_enabled"] = True
@@ -1529,3 +1533,69 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
     logger.info(response["summary"])
 
     return json.dumps(response, indent=2)
+
+
+# =========================================================================
+# Diff Re-ingestion, Cross-doc Dedup, Preset Tools
+# =========================================================================
+
+
+async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Re-ingest a document preserving unchanged chunk embeddings."""
+    file_id = args.get("file_id")
+    text = args.get("text")
+
+    if not file_id or not text:
+        return json.dumps({"error": "Both 'file_id' and 'text' are required"}, indent=2)
+
+    try:
+        compressor = context["compressor"]
+        result = await compressor.diff_reingest_async(file_id, text)
+        return json.dumps({
+            "status": "success",
+            "file_id": result.file_id,
+            "chunks_unchanged": result.chunks_unchanged,
+            "chunks_updated": result.chunks_updated,
+            "chunks_added": result.chunks_added,
+            "chunks_removed": result.chunks_removed,
+            "message": (
+                f"Diff re-ingestion complete: {result.chunks_unchanged} unchanged, "
+                f"{result.chunks_updated} updated, {result.chunks_added} added, "
+                f"{result.chunks_removed} removed"
+            ),
+        }, indent=2)
+    except ValueError as e:
+        return json.dumps({"error": str(e)}, indent=2)
+    except Exception as e:
+        logger.error(f"Diff re-ingestion failed: {e}")
+        return json.dumps({"error": f"Diff re-ingestion failed: {e}"}, indent=2)
+
+
+async def handle_find_duplicates(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Find near-duplicate chunks across different documents."""
+    threshold = args.get("threshold", 0.9)
+
+    try:
+        compressor = context["compressor"]
+        duplicates = compressor.find_duplicates(threshold=threshold)
+        return json.dumps({
+            "status": "success",
+            "duplicate_count": len(duplicates),
+            "threshold": threshold,
+            "duplicates": duplicates[:50],
+            "message": f"Found {len(duplicates)} duplicate pairs above {threshold} similarity",
+        }, indent=2)
+    except Exception as e:
+        logger.error(f"Duplicate detection failed: {e}")
+        return json.dumps({"error": f"Duplicate detection failed: {e}"}, indent=2)
+
+
+async def handle_get_presets(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """List available compression presets."""
+    from ..compression_presets import list_presets
+    presets = list_presets()
+    return json.dumps({
+        "status": "success",
+        "presets": [p.to_dict() for p in presets],
+        "message": f"{len(presets)} compression presets available",
+    }, indent=2)

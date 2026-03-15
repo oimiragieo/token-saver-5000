@@ -123,7 +123,7 @@ def compute_cost_savings(
     Returns:
         TokenSavingsTelemetry with cost savings breakdown
     """
-    saved = max(0, original_tokens - compressed_tokens)
+    saved = original_tokens - compressed_tokens
     cost_per_million = MODEL_PRICING.get(model, DEFAULT_COST_PER_MILLION) if model else DEFAULT_COST_PER_MILLION
     cost_savings = (saved / 1_000_000) * cost_per_million
     savings_pct = (saved / original_tokens * 100) if original_tokens > 0 else 0.0
