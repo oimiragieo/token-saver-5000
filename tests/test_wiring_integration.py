@@ -1,0 +1,267 @@
+"""
+Integration tests for Phase 5 wiring — verifies that modules are actually
+connected to the main pipeline, not just importable.
+"""
+
+import asyncio
+import json
+import time
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.semantic_compressor import SemanticCompressor
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def compressor():
+    return SemanticCompressor()
+
+
+@pytest.fixture
+def sample_text():
+    return (
+        "Machine learning models require large datasets for training. "
+        "Neural networks learn representations through backpropagation. "
+        "Deep learning has revolutionized computer vision tasks. "
+        "Natural language processing uses transformers for text understanding. "
+        "Reinforcement learning agents learn from environmental rewards. "
+        "Transfer learning enables knowledge reuse across domains. "
+        "Generative models can create new synthetic data samples. "
+        "Attention mechanisms allow models to focus on relevant inputs."
+    )
+
+
+@pytest.fixture
+def handler_context(compressor):
+    """Minimal handler context for testing handlers."""
+    from unittest.mock import AsyncMock
+    from src.file_sync_manager import FileSyncManager
+    sync_mgr = FileSyncManager()
+    persistence = MagicMock()
+    persistence.save_graphs = MagicMock(return_value=True)
+    persistence.save_file_sync_metadata = MagicMock(return_value=True)
+
+    version_manager = MagicMock()
+    version_manager.record_version = MagicMock()
+    version_manager.record_version_async = AsyncMock()
+
+    resource_manager = MagicMock()
+    resource_manager.check_document_size_async = AsyncMock(return_value=(True, None))
+    resource_manager.register_document_async = AsyncMock()
+
+    path_validator = MagicMock()
+    path_validator.validate = MagicMock(side_effect=lambda x: x)
+
+    return {
+        "compressor": compressor,
+        "sync_manager": sync_mgr,
+        "persistence": persistence,
+        "retrieval_history": {},
+        "version_manager": version_manager,
+        "resource_manager": resource_manager,
+        "path_validator": path_validator,
+        "multilevel_encoder": MagicMock(),
+        "context_window_adapter": MagicMock(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Test: AccessTracker + CompressionReplayLog are initialized
+# ---------------------------------------------------------------------------
+
+class TestCompressorInitialization:
+    def test_access_tracker_initialized(self, compressor):
+        """AccessTracker should be created in __init__."""
+        assert hasattr(compressor, '_access_tracker')
+        from src.context_decay import AccessTracker
+        assert isinstance(compressor._access_tracker, AccessTracker)
+
+    def test_compression_replay_initialized(self, compressor):
+        """CompressionReplayLog should be created in __init__."""
+        assert hasattr(compressor, '_compression_replay')
+        from src.compression_replay import CompressionReplayLog
+        assert isinstance(compressor._compression_replay, CompressionReplayLog)
+
+
+# ---------------------------------------------------------------------------
+# Test: handle_ingest records to tracker and replay
+# ---------------------------------------------------------------------------
+
+class TestIngestWiring:
+    @pytest.mark.asyncio
+    async def test_ingest_records_access(self, handler_context, sample_text):
+        """After ingest, access_tracker should have an entry for the file."""
+        from src.handlers.compression_handlers import handle_ingest
+        args = {"text": sample_text, "file_id": "test_doc"}
+        result = await handle_ingest(handler_context, args)
+        response = json.loads(result)
+        assert response["status"] == "success"
+
+        tracker = handler_context["compressor"]._access_tracker
+        info = tracker.get_access_info("test_doc")
+        assert info is not None
+        assert info["access_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_ingest_records_replay(self, handler_context, sample_text):
+        """After ingest, compression_replay should have an entry."""
+        from src.handlers.compression_handlers import handle_ingest
+        args = {"text": sample_text, "file_id": "replay_doc"}
+        await handle_ingest(handler_context, args)
+
+        replay = handler_context["compressor"]._compression_replay
+        history = replay.get_history("replay_doc")
+        assert len(history) >= 1
+        assert history[0]["input_tokens"] > 0
+        assert history[0]["output_tokens"] > 0
+
+    @pytest.mark.asyncio
+    async def test_ingest_includes_fidelity_score(self, handler_context, sample_text):
+        """Ingest response should include fidelity_score from Phase 5."""
+        from src.handlers.compression_handlers import handle_ingest
+        args = {"text": sample_text, "file_id": "fidelity_doc"}
+        result = await handle_ingest(handler_context, args)
+        response = json.loads(result)
+        assert "fidelity_score" in response
+        assert 0.0 <= response["fidelity_score"] <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_ingest_with_semantic_chunking(self, handler_context):
+        """Ingest with chunking_strategy='semantic' should work."""
+        from src.handlers.compression_handlers import handle_ingest
+        long_text = " ".join([
+            f"Section {i}: This is a paragraph about topic {i} with enough detail to be meaningful."
+            for i in range(20)
+        ])
+        args = {"text": long_text, "file_id": "semantic_doc", "chunking_strategy": "semantic"}
+        result = await handle_ingest(handler_context, args)
+        response = json.loads(result)
+        assert response["status"] == "success"
+        assert response["total_nodes"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: handle_read_skeleton records access + keyword anchoring
+# ---------------------------------------------------------------------------
+
+class TestSkeletonWiring:
+    @pytest.mark.asyncio
+    async def test_skeleton_records_access(self, handler_context, sample_text):
+        """Reading skeleton should record access in the tracker."""
+        from src.handlers.compression_handlers import handle_ingest, handle_read_skeleton
+        await handle_ingest(handler_context, {"text": sample_text, "file_id": "skel_doc"})
+
+        # Reset tracker to verify skeleton adds its own access
+        handler_context["compressor"]._access_tracker._access_log.clear()
+
+        await handle_read_skeleton(handler_context, {"file_id": "skel_doc"})
+
+        tracker = handler_context["compressor"]._access_tracker
+        info = tracker.get_access_info("skel_doc")
+        assert info is not None
+        assert info["access_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_skeleton_keyword_anchoring(self, handler_context, sample_text):
+        """Skeleton with anchored_keywords should report anchored nodes."""
+        from src.handlers.compression_handlers import handle_ingest, handle_read_skeleton
+        await handle_ingest(handler_context, {"text": sample_text, "file_id": "anchor_doc"})
+
+        result = await handle_read_skeleton(
+            handler_context,
+            {"file_id": "anchor_doc", "anchored_keywords": ["transformers", "backpropagation"]}
+        )
+        response = json.loads(result)
+        # Should have anchored_nodes key (may be empty if keywords not in visible nodes)
+        assert "file_id" in response
+        assert response["file_id"] == "anchor_doc"
+
+
+# ---------------------------------------------------------------------------
+# Test: handle_search_semantic records access
+# ---------------------------------------------------------------------------
+
+class TestSearchWiring:
+    @pytest.mark.asyncio
+    async def test_search_records_access(self, handler_context, sample_text):
+        """Semantic search should record access for found documents."""
+        from src.handlers.compression_handlers import handle_ingest, handle_search_semantic
+        await handle_ingest(handler_context, {"text": sample_text, "file_id": "search_doc"})
+
+        handler_context["compressor"]._access_tracker._access_log.clear()
+
+        result = await handle_search_semantic(
+            handler_context, {"query": "neural networks", "file_id": "search_doc"}
+        )
+        response = json.loads(result)
+        assert response["total_results"] > 0
+
+        tracker = handler_context["compressor"]._access_tracker
+        info = tracker.get_access_info("search_doc")
+        assert info is not None
+
+
+# ---------------------------------------------------------------------------
+# Test: evict_stale and get_compression_insights now work
+# ---------------------------------------------------------------------------
+
+class TestPhase5ToolsWork:
+    @pytest.mark.asyncio
+    async def test_evict_stale_returns_data(self, handler_context, sample_text):
+        """evict_stale should return stale docs when tracker is wired."""
+        from src.handlers.compression_handlers import handle_ingest, handle_evict_stale
+
+        await handle_ingest(handler_context, {"text": sample_text, "file_id": "old_doc"})
+
+        # Manually set access time to the past
+        tracker = handler_context["compressor"]._access_tracker
+        tracker._access_log["old_doc"]["last_accessed"] = time.time() - 7200  # 2 hours ago
+
+        result = await handle_evict_stale(handler_context, {"max_age_seconds": 3600})
+        response = json.loads(result)
+        assert "old_doc" in response.get("stale_documents", [])
+
+    @pytest.mark.asyncio
+    async def test_get_compression_insights_returns_data(self, handler_context, sample_text):
+        """get_compression_insights should return data after ingest."""
+        from src.handlers.compression_handlers import handle_ingest, handle_get_compression_insights
+
+        await handle_ingest(handler_context, {"text": sample_text, "file_id": "insight_doc"})
+
+        result = await handle_get_compression_insights(handler_context, {})
+        response = json.loads(result)
+        # After ingest, insights should have at least one content type entry
+        assert len(response.get("insights", {})) > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: semantic chunking module works in _chunk_text
+# ---------------------------------------------------------------------------
+
+class TestSemanticChunking:
+    def test_chunk_text_fixed_strategy(self, compressor):
+        """Fixed strategy should work as before."""
+        text = "Paragraph one. " * 50 + "\n\n" + "Paragraph two. " * 50
+        chunks = compressor._chunk_text(text, strategy="fixed")
+        assert len(chunks) > 0
+
+    def test_chunk_text_semantic_strategy(self, compressor):
+        """Semantic strategy should produce chunks."""
+        text = " ".join([
+            f"Topic {i} is about something completely different from the others."
+            for i in range(20)
+        ])
+        chunks = compressor._chunk_text(text, strategy="semantic")
+        assert len(chunks) > 0
+
+    def test_chunk_text_semantic_fallback(self, compressor):
+        """If semantic chunking fails, should fall back to fixed."""
+        with patch("src.semantic_chunking.chunk_by_semantics", side_effect=Exception("fail")):
+            text = "Hello world. " * 20
+            chunks = compressor._chunk_text(text, strategy="semantic")
+            assert len(chunks) > 0

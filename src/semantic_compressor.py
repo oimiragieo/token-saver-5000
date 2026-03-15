@@ -189,6 +189,12 @@ class SemanticCompressor:
             self.tokenizer = None
             self.use_tiktoken = False
 
+        # Phase 5: Access tracking and compression replay
+        from .context_decay import AccessTracker
+        from .compression_replay import CompressionReplayLog
+        self._access_tracker = AccessTracker()
+        self._compression_replay = CompressionReplayLog()
+
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text using tiktoken, with fallback to word count"""
         if self.use_tiktoken and self.tokenizer:
@@ -292,15 +298,29 @@ class SemanticCompressor:
 
         return pagerank
 
-    def _chunk_text(self, text: str, max_chunk_size: int = 512) -> List[str]:
+    def _chunk_text(self, text: str, max_chunk_size: int = 512, strategy: str = "fixed") -> List[str]:
         """
         Intelligent text chunking that preserves semantic boundaries.
+
+        Args:
+            text: Input text to chunk
+            max_chunk_size: Maximum tokens per chunk
+            strategy: "fixed" (paragraph/sentence boundaries) or "semantic" (embedding-based)
 
         Prioritizes:
         1. Paragraph boundaries (\n\n)
         2. Sentence boundaries (. ! ?)
         3. Fixed size fallback
         """
+        if strategy == "semantic":
+            try:
+                from .semantic_chunking import chunk_by_semantics
+                return chunk_by_semantics(
+                    text, max_chunk_tokens=max_chunk_size,
+                    embed_fn=lambda texts: self.model.encode(texts)
+                )
+            except Exception:
+                pass  # Fall through to fixed chunking
         # Split by double newlines first (paragraphs)
         paragraphs = text.split("\n\n")
         chunks = []
@@ -397,13 +417,14 @@ class SemanticCompressor:
         return embeddings
 
     async def ingest_file_async(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None
+        self, text: str, file_id: str, metadata: Optional[Dict] = None,
+        chunking_strategy: str = "fixed"
     ) -> SkeletonResponse:
         """
         Async version of ingest_file for MCP server use.
         See ingest_file() for full documentation.
         """
-        return await self._ingest_file_impl(text, file_id, metadata)
+        return await self._ingest_file_impl(text, file_id, metadata, chunking_strategy=chunking_strategy)
 
     def ingest_file(
         self, text: str, file_id: str, metadata: Optional[Dict] = None
@@ -440,7 +461,8 @@ class SemanticCompressor:
             )
 
     async def _ingest_file_impl(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None, use_async_lock: bool = True
+        self, text: str, file_id: str, metadata: Optional[Dict] = None,
+        use_async_lock: bool = True, chunking_strategy: str = "fixed"
     ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
@@ -502,7 +524,7 @@ class SemanticCompressor:
             logger.info(f"  Original tokens: {total_tokens}")
 
             # 1. Chunk the text semantically
-            raw_chunks = self._chunk_text(text)
+            raw_chunks = self._chunk_text(text, strategy=chunking_strategy)
             logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 
             # 2. Generate embeddings (async to prevent MCP timeout)
