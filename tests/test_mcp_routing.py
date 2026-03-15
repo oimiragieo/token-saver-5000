@@ -46,7 +46,7 @@ class TestSetupMCPTools:
         # - Experimental: 9 (v0.11.0) - TOON, SCAR, Multimodal, ASG-SI suite
         # - New: 3 (diff_reingest, find_duplicates, get_compression_presets)
         # - New: 1 (check_context_budget)
-        assert len(tools) == 52, f"Expected 52 tools, got {len(tools)}"
+        assert len(tools) == 58, f"Expected 58 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""
@@ -280,7 +280,7 @@ class TestRouteToolCall:
         except ValueError as e:
             error_msg = str(e)
             # Should mention count of available tools
-            assert "52" in error_msg or "(52)" in error_msg or "52)" in error_msg
+            assert "58" in error_msg or "(58)" in error_msg or "58)" in error_msg
             # Should list some tool names
             assert "ingest_context" in error_msg or "afm_add_message" in error_msg
 

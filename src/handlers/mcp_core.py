@@ -1501,6 +1501,93 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["current_tokens"],
             },
         ),
+        # Phase 5: Research-based features (2025 papers)
+        Tool(
+            name="prune_by_relevance",
+            description=(
+                "Prune document nodes by query relevance using attention-guided scoring. "
+                "Keeps only the most relevant nodes for a given query, achieving up to 6x "
+                "compression with better quality than blind ratio-based pruning."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {"type": "string", "description": "Document ID to prune"},
+                    "query": {"type": "string", "description": "Query to score relevance against"},
+                    "keep_ratio": {"type": "number", "description": "Fraction of nodes to keep (0.0-1.0)", "default": 0.5},
+                },
+                "required": ["doc_id", "query"],
+            },
+        ),
+        Tool(
+            name="get_multi_level_skeleton",
+            description=(
+                "Generate 3-tier skeleton output: headline (top 10%), summary (top 30%), "
+                "and full (100%). Client picks the depth needed for their context budget."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {"type": "string", "description": "Document ID"},
+                },
+                "required": ["doc_id"],
+            },
+        ),
+        Tool(
+            name="evict_stale",
+            description=(
+                "Find and list stale documents that haven't been accessed recently. "
+                "Helps keep context budget tight by identifying candidates for eviction."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "max_age_hours": {"type": "number", "description": "Max hours since last access", "default": 1.0},
+                },
+            },
+        ),
+        Tool(
+            name="advise_context",
+            description=(
+                "Analyze all ingested documents and recommend optimal context strategy. "
+                "Returns model recommendations, pruning priorities, and compression advice."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="get_compression_insights",
+            description=(
+                "Get insights from compression history: best ratios per content type, "
+                "average fidelity scores, and data-driven strategy recommendations."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="generate_rewrite_prompt",
+            description=(
+                "Generate a structured rewrite prompt for client-side LLM compression. "
+                "Returns system instructions and user prompt optimized for generative compression."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {"type": "string", "description": "Document ID (optional if text provided)"},
+                    "text": {"type": "string", "description": "Text to compress (optional if doc_id provided)"},
+                    "target_ratio": {"type": "number", "description": "Target compression ratio", "default": 0.5},
+                    "preserve_keywords": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Keywords to preserve in rewrite",
+                    },
+                },
+            },
+        ),
     ]
     return _tools_for_profile(all_tools, profile)
 
@@ -1612,6 +1699,13 @@ async def route_tool_call(
         "find_duplicates": ch.handle_find_duplicates,
         "get_compression_presets": ch.handle_get_presets,
         "check_context_budget": ch.handle_check_context_budget,
+        # Phase 5: Research-based features (2025 papers)
+        "prune_by_relevance": ch.handle_prune_by_relevance,
+        "get_multi_level_skeleton": ch.handle_multi_level_skeleton,
+        "evict_stale": ch.handle_evict_stale,
+        "advise_context": ch.handle_advise_context,
+        "get_compression_insights": ch.handle_get_compression_insights,
+        "generate_rewrite_prompt": ch.handle_generate_rewrite_prompt,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

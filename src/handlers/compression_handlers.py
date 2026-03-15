@@ -1661,3 +1661,165 @@ async def handle_check_context_budget(context: HandlerContext, args: Dict[str, A
     from ..token_threshold import check_context_budget
     result = check_context_budget(current_tokens, context_limit)
     return json.dumps(result.to_dict(), indent=2)
+
+
+# =============================================================================
+# Phase 5 Handlers — Research-based features (2025 papers)
+# =============================================================================
+
+
+async def handle_prune_by_relevance(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Prune document nodes by query relevance (AttentionRAG)."""
+    from ..attention_pruning import prune_by_relevance
+
+    doc_id = args.get("doc_id", "")
+    query = args.get("query", "")
+    keep_ratio = args.get("keep_ratio", 0.5)
+
+    compressor = context["compressor"]
+    if doc_id not in compressor.graphs:
+        return json.dumps({"error": f"Document '{doc_id}' not found"})
+
+    # Collect node embeddings for this doc
+    node_embeddings = {}
+    for nid, node in compressor.chunks.items():
+        if nid.startswith(doc_id):
+            node_embeddings[nid] = node.embedding
+
+    if not node_embeddings:
+        return json.dumps({"error": "No nodes found for document"})
+
+    # Encode query
+    from ..embeddings import EmbeddingManager
+    emb_mgr = EmbeddingManager()
+    query_emb = emb_mgr.encode([query])[0]
+
+    kept_ids = prune_by_relevance(node_embeddings, query_emb, keep_ratio)
+
+    return json.dumps({
+        "doc_id": doc_id,
+        "total_nodes": len(node_embeddings),
+        "kept_nodes": len(kept_ids),
+        "kept_node_ids": kept_ids,
+        "compression_ratio": round(len(kept_ids) / len(node_embeddings), 3),
+    }, indent=2)
+
+
+async def handle_multi_level_skeleton(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Generate 3-tier skeleton: headline, summary, full (Squeezed Attention)."""
+    from ..multi_level_skeleton import generate_multi_level_skeleton
+
+    doc_id = args.get("doc_id", "")
+    compressor = context["compressor"]
+
+    if doc_id not in compressor.graphs:
+        return json.dumps({"error": f"Document '{doc_id}' not found"})
+
+    # Build node list with importance scores
+    nodes = []
+    for nid, node in compressor.chunks.items():
+        if nid.startswith(doc_id):
+            nodes.append({
+                "node_id": nid,
+                "text": node.text,
+                "importance": node.importance,
+            })
+
+    result = generate_multi_level_skeleton(nodes)
+    return json.dumps({
+        "doc_id": doc_id,
+        "levels": result,
+    }, indent=2)
+
+
+async def handle_evict_stale(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Evict stale documents based on access recency (DynamicKV/ACON)."""
+    max_age_hours = args.get("max_age_hours", 1.0)
+    max_age_seconds = max_age_hours * 3600
+
+    compressor = context["compressor"]
+    tracker = getattr(compressor, '_access_tracker', None)
+
+    if tracker is None:
+        return json.dumps({
+            "evicted": [],
+            "message": "Access tracking not enabled. Access documents first.",
+        })
+
+    stale_ids = tracker.find_stale(max_age_seconds=max_age_seconds)
+
+    evicted = []
+    for doc_id in stale_ids:
+        if doc_id in compressor.graphs:
+            evicted.append(doc_id)
+
+    return json.dumps({
+        "stale_documents": stale_ids,
+        "evictable": evicted,
+        "max_age_hours": max_age_hours,
+    }, indent=2)
+
+
+async def handle_advise_context(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Analyze context and recommend optimal strategy (MCP Best Practices)."""
+    from ..context_advisor import advise_context
+
+    compressor = context["compressor"]
+
+    doc_stats = []
+    for file_id, graph in compressor.graphs.items():
+        total_tokens = sum(
+            compressor.chunks[nid].metadata.get("tokens", 0)
+            for nid in graph.nodes
+            if nid in compressor.chunks
+        )
+        avg_importance = 0.0
+        if graph.nodes:
+            avg_importance = sum(
+                compressor.chunks[nid].importance
+                for nid in graph.nodes
+                if nid in compressor.chunks
+            ) / len(graph.nodes)
+
+        doc_stats.append({
+            "doc_id": file_id,
+            "tokens": total_tokens,
+            "importance": round(avg_importance, 3),
+        })
+
+    advice = advise_context(doc_stats)
+    return json.dumps(advice, indent=2)
+
+
+async def handle_get_compression_insights(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Get compression replay insights (ACON)."""
+    compressor = context["compressor"]
+    replay_log = getattr(compressor, '_compression_replay', None)
+
+    if replay_log is None:
+        return json.dumps({"insights": {}, "message": "No compression history recorded yet."})
+
+    insights = replay_log.get_insights()
+    return json.dumps({"insights": insights}, indent=2)
+
+
+async def handle_generate_rewrite_prompt(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Generate rewrite prompt for client-side LLM compression (SCOPE)."""
+    from ..generative_rewrite import generate_rewrite_prompt
+
+    text = args.get("text", "")
+    target_ratio = args.get("target_ratio", 0.5)
+    preserve_keywords = args.get("preserve_keywords", [])
+
+    if not text:
+        doc_id = args.get("doc_id", "")
+        compressor = context["compressor"]
+        if doc_id in compressor.graphs:
+            text = " ".join(
+                compressor.chunks[nid].text
+                for nid in compressor.graphs[doc_id].nodes
+                if nid in compressor.chunks
+            )
+
+    prompt = generate_rewrite_prompt(text, target_ratio, preserve_keywords or None)
+    return json.dumps(prompt, indent=2)
