@@ -1599,3 +1599,15 @@ async def handle_get_presets(context: HandlerContext, args: Dict[str, Any]) -> s
         "presets": [p.to_dict() for p in presets],
         "message": f"{len(presets)} compression presets available",
     }, indent=2)
+
+
+async def handle_check_context_budget(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Check context budget usage and recommend compression action."""
+    current_tokens = args.get("current_tokens")
+    if current_tokens is None:
+        return json.dumps({"error": "'current_tokens' is required"}, indent=2)
+    context_limit = args.get("context_limit", 200_000)
+
+    from ..token_threshold import check_context_budget
+    result = check_context_budget(current_tokens, context_limit)
+    return json.dumps(result.to_dict(), indent=2)

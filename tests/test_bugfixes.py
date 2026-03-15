@@ -334,6 +334,7 @@ class TestToolRegistration:
         assert "diff_reingest" in tool_names
         assert "find_duplicates" in tool_names
         assert "get_compression_presets" in tool_names
+        assert "check_context_budget" in tool_names
 
     @pytest.mark.asyncio
     async def test_router_dispatches_new_tools(self):

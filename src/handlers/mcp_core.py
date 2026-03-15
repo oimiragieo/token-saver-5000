@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 51 MCP tool schemas
+- setup_mcp_tools: Returns list of all 52 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -1478,6 +1478,29 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "properties": {},
             },
         ),
+        Tool(
+            name="check_context_budget",
+            description=(
+                "Check how much of your LLM context window is being used and get "
+                "proactive compression recommendations. Returns usage percentage "
+                "and suggests action at 40%/60%/75% thresholds."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "current_tokens": {
+                        "type": "integer",
+                        "description": "Current token count in context",
+                    },
+                    "context_limit": {
+                        "type": "integer",
+                        "description": "Maximum context window size (default: 200000)",
+                        "default": 200000,
+                    },
+                },
+                "required": ["current_tokens"],
+            },
+        ),
     ]
     return _tools_for_profile(all_tools, profile)
 
@@ -1588,6 +1611,7 @@ async def route_tool_call(
         "diff_reingest": ch.handle_diff_reingest,
         "find_duplicates": ch.handle_find_duplicates,
         "get_compression_presets": ch.handle_get_presets,
+        "check_context_budget": ch.handle_check_context_budget,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)
@@ -1607,6 +1631,16 @@ async def route_tool_call(
             f"Available tools ({len(enabled_tools)}):\n{available_tools}\n\n"
             f"[TIP] Tip: Use profile 'full' to enable advanced tools"
         )
+
+    # Pre-execute input validation
+    from ..validation_hooks import validate_tool_input
+    validation_errors = validate_tool_input(name, args)
+    if validation_errors:
+        import json
+        return json.dumps({
+            "error": "Input validation failed",
+            "validation_errors": validation_errors,
+        }, indent=2)
 
     # Route to handler (async)
     handler = router[name]
