@@ -654,9 +654,6 @@ class SemanticCompressor:
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
         skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
         skeleton_lines.append(f"Compression: {self.skeleton_ratio:.0%} of content shown\n")
-        if query and query.strip():
-            skeleton_lines.append("Selection mode: QUERY_GUIDED")
-            skeleton_lines.append(f"Query: {query}\n")
 
         node_map = {}
         total_tokens = 0
@@ -686,6 +683,12 @@ class SemanticCompressor:
                 skeleton_lines.append(line)
                 node_map[node_id] = f"Hidden: {summary[:30]}..."
                 skeleton_tokens += self._count_tokens(line)
+
+        # Query metadata placed at END for cache-friendly ordering:
+        # Static node content forms a stable prefix; volatile query goes last.
+        if query and query.strip():
+            skeleton_lines.append("Selection mode: QUERY_GUIDED")
+            skeleton_lines.append(f"Query: {query}")
 
         skeleton_text = "\n".join(skeleton_lines)
         compression_ratio = total_tokens / max(skeleton_tokens, 1)

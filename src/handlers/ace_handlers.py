@@ -198,11 +198,11 @@ def _filter_and_serialize_bullets(
         if bullet_type_filter and bullet.bullet_type.value != bullet_type_filter:
             continue
 
-        bullet_dict = bullet.to_dict()
+        bullet_dict = bullet.to_display_dict()
 
-        # Remove embedding if not requested (large data)
-        if not include_embeddings:
-            bullet_dict.pop("embedding", None)
+        # Add embedding only when explicitly requested
+        if include_embeddings and hasattr(bullet, "embedding"):
+            bullet_dict["embedding"] = bullet.embedding.tolist()
 
         bullets.append(bullet_dict)
 
@@ -562,6 +562,15 @@ async def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any])
             ace_context, include_embeddings, min_confidence, bullet_type_filter
         )
 
+        # Strip volatile fields (timestamps, UUIDs) from delta history for cache-friendly output
+        clean_deltas = []
+        for delta in ace_context.delta_history[-5:]:
+            if isinstance(delta, dict):
+                clean = {k: v for k, v in delta.items() if k not in ("timestamp", "bullet_id")}
+                clean_deltas.append(clean)
+            else:
+                clean_deltas.append(delta)
+
         return _build_success_response(
             {
                 "context_id": context_id,
@@ -570,7 +579,7 @@ async def handle_ace_get_playbook(context: HandlerContext, args: Dict[str, Any])
                 "filtered_bullets": len(bullets),
                 "bullets": bullets,
                 "stats": ace_context.get_performance_stats(),
-                "delta_history": ace_context.delta_history[-5:],  # Last 5 deltas
+                "delta_history": clean_deltas,
             }
         )
 

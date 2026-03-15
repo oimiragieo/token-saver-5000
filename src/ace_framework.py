@@ -122,7 +122,7 @@ class ACEBullet:
         return self.success_count + self.failure_count
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize bullet to dictionary"""
+        """Serialize bullet to dictionary (includes all fields for persistence)."""
         return {
             "bullet_id": self.bullet_id,
             "text": self.text,
@@ -134,6 +134,24 @@ class ACEBullet:
             "total_usage": self.total_usage,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "source": self.source,
+            "metadata": self.metadata,
+        }
+
+    def to_display_dict(self) -> Dict[str, Any]:
+        """Serialize bullet for display, excluding volatile fields that break prompt caching.
+
+        Omits bullet_id (UUID), created_at, updated_at (timestamps), and embedding
+        (large array) to ensure stable, cache-friendly output for LLM consumers.
+        """
+        return {
+            "text": self.text,
+            "bullet_type": self.bullet_type.value,
+            "confidence": self.confidence,
+            "success_count": self.success_count,
+            "failure_count": self.failure_count,
+            "success_rate": self.success_rate,
+            "total_usage": self.total_usage,
             "source": self.source,
             "metadata": self.metadata,
         }
@@ -286,7 +304,7 @@ class ACEContext:
         }
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize context to dictionary"""
+        """Serialize context to dictionary (includes all fields for persistence)."""
         return {
             "context_id": self.context_id,
             "version": self.version,
@@ -294,6 +312,28 @@ class ACEContext:
             "delta_history": self.delta_history[-10:],  # Last 10 deltas only
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "metadata": self.metadata,
+            "stats": self.get_performance_stats(),
+        }
+
+    def to_display_dict(self) -> Dict[str, Any]:
+        """Serialize context for display, excluding volatile fields that break prompt caching.
+
+        Omits context_id (UUID), created_at, updated_at (timestamps), and strips
+        timestamps/bullet_ids from delta_history entries.
+        """
+        clean_deltas = []
+        for delta in self.delta_history[-10:]:
+            if isinstance(delta, dict):
+                clean = {k: v for k, v in delta.items() if k not in ("timestamp", "bullet_id")}
+                clean_deltas.append(clean)
+            else:
+                clean_deltas.append(delta)
+
+        return {
+            "version": self.version,
+            "bullets": {bid: bullet.to_display_dict() for bid, bullet in self.bullets.items()},
+            "delta_history": clean_deltas,
             "metadata": self.metadata,
             "stats": self.get_performance_stats(),
         }

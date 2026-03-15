@@ -251,12 +251,12 @@ class TestHelperFunctions:
         bullet1 = Mock()
         bullet1.confidence = 0.7
         bullet1.bullet_type = BulletType.STRATEGY
-        bullet1.to_dict = Mock(return_value={"text": "Test 1", "embedding": [0.1, 0.2]})
+        bullet1.to_display_dict = Mock(return_value={"text": "Test 1"})
 
         bullet2 = Mock()
         bullet2.confidence = 0.5
         bullet2.bullet_type = BulletType.PRINCIPLE
-        bullet2.to_dict = Mock(return_value={"text": "Test 2", "embedding": [0.3, 0.4]})
+        bullet2.to_display_dict = Mock(return_value={"text": "Test 2"})
 
         mock_ace_context.bullets = {"b1": bullet1, "b2": bullet2}
 
@@ -265,7 +265,7 @@ class TestHelperFunctions:
         )
 
         assert len(result) == 2
-        # Embeddings should be removed when include_embeddings=False
+        # Embeddings should not be present when include_embeddings=False
         assert "embedding" not in result[0]
         assert "embedding" not in result[1]
 
@@ -274,12 +274,12 @@ class TestHelperFunctions:
         bullet1 = Mock()
         bullet1.confidence = 0.8
         bullet1.bullet_type = BulletType.STRATEGY
-        bullet1.to_dict = Mock(return_value={"text": "High conf"})
+        bullet1.to_display_dict = Mock(return_value={"text": "High conf"})
 
         bullet2 = Mock()
         bullet2.confidence = 0.4
         bullet2.bullet_type = BulletType.TACTIC
-        bullet2.to_dict = Mock(return_value={"text": "Low conf"})
+        bullet2.to_display_dict = Mock(return_value={"text": "Low conf"})
 
         mock_ace_context.bullets = {"b1": bullet1, "b2": bullet2}
 
@@ -295,12 +295,12 @@ class TestHelperFunctions:
         bullet1 = Mock()
         bullet1.confidence = 0.7
         bullet1.bullet_type = BulletType.STRATEGY
-        bullet1.to_dict = Mock(return_value={"text": "Strategy"})
+        bullet1.to_display_dict = Mock(return_value={"text": "Strategy"})
 
         bullet2 = Mock()
         bullet2.confidence = 0.6
         bullet2.bullet_type = BulletType.PRINCIPLE
-        bullet2.to_dict = Mock(return_value={"text": "Principle"})
+        bullet2.to_display_dict = Mock(return_value={"text": "Principle"})
 
         mock_ace_context.bullets = {"b1": bullet1, "b2": bullet2}
 
@@ -319,7 +319,9 @@ class TestHelperFunctions:
         bullet1 = Mock()
         bullet1.confidence = 0.7
         bullet1.bullet_type = BulletType.STRATEGY
-        bullet1.to_dict = Mock(return_value={"text": "Test", "embedding": [0.1, 0.2]})
+        bullet1.to_display_dict = Mock(return_value={"text": "Test"})
+        bullet1.embedding = Mock()
+        bullet1.embedding.tolist = Mock(return_value=[0.1, 0.2])
 
         mock_ace_context.bullets = {"b1": bullet1}
 
@@ -639,7 +641,7 @@ class TestHandleAceGetPlaybook:
         bullet1 = Mock()
         bullet1.confidence = 0.8
         bullet1.bullet_type = BulletType.STRATEGY
-        bullet1.to_dict = Mock(return_value={"text": "Test strategy"})
+        bullet1.to_display_dict = Mock(return_value={"text": "Test strategy"})
 
         mock_context["ace_contexts"]["existing_context"].bullets = {"b1": bullet1}
         mock_context["ace_contexts"]["existing_context"].delta_history = [
@@ -674,7 +676,9 @@ class TestHandleAceGetPlaybook:
         bullet1 = Mock()
         bullet1.confidence = 0.8
         bullet1.bullet_type = BulletType.PRINCIPLE
-        bullet1.to_dict = Mock(return_value={"text": "Test", "embedding": [0.1, 0.2]})
+        bullet1.to_display_dict = Mock(return_value={"text": "Test"})
+        bullet1.embedding = Mock()
+        bullet1.embedding.tolist = Mock(return_value=[0.1, 0.2])
 
         mock_context["ace_contexts"]["existing_context"].bullets = {"b1": bullet1}
 
