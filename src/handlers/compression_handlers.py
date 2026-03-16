@@ -443,7 +443,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             original_tokens=skeleton.total_tokens,
             compressed_tokens=skeleton.skeleton_tokens,
         ).to_dict()
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Cost savings calculation failed for '{file_id}': {exc}")
         response["cost_savings"] = None
 
     # Record Prometheus metrics for observability
@@ -453,8 +454,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         metrics.record_compression_ratio(skeleton.compression_ratio, fidelity_label)
         metrics.increment_documents_processed("ingest", fidelity_label, "success")
         metrics.set_active_documents(len(context["compressor"].graphs))
-    except Exception:
-        pass  # Metrics are best-effort, never block ingestion
+    except Exception as exc:
+        logger.warning(f"Metrics recording failed for '{file_id}': {exc}")
 
     # Phase 5: Record access and compression replay for optimization
     try:
@@ -472,8 +473,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
                         original_text, skeleton.skeleton_text,
                         lambda texts: emb_mgr.encode(texts)
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"Fidelity scoring failed for '{file_id}': {exc}")
             content_type = args.get("content_type", "general")
             compressor._compression_replay.record(
                 doc_id=file_id,
@@ -484,8 +485,8 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
                 fidelity_score=fidelity,
             )
             response["fidelity_score"] = round(fidelity, 4)
-    except Exception:
-        pass  # Phase 5 features are best-effort
+    except Exception as exc:
+        logger.warning(f"Phase 5 replay/tracking failed for '{file_id}': {exc}")
 
     if file_path:
         response["file_sync_enabled"] = True
@@ -547,9 +548,23 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         evidence_info = None
         compressor = context["compressor"]
         anchored_keywords = args.get("anchored_keywords", [])
+        anchored_node_ids = set()
+        if anchored_keywords:
+            keywords_lower = [kw.lower() for kw in anchored_keywords if kw]
+            anchored_node_ids = {
+                node_id
+                for node_id, node in compressor.chunks.items()
+                if node_id.startswith(file_id)
+                and any(kw in node.text.lower() for kw in keywords_lower)
+            }
+        anchor_kwargs = {"anchor_node_ids": anchored_node_ids} if anchored_node_ids else {}
 
         if selection_mode == "query_guided":
-            skeleton_response = compressor._generate_skeleton(file_id, query=query)
+            skeleton_response = compressor._generate_skeleton(
+                file_id,
+                query=query,
+                **anchor_kwargs,
+            )
         elif selection_mode == "evidence_aware":
             evidence = compressor.retrieve_evidence(
                 query=query,
@@ -560,7 +575,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             skeleton_response = compressor._generate_skeleton(
                 file_id,
                 query=query,
-                anchor_node_ids=set(evidence.node_ids),
+                anchor_node_ids=set(evidence.node_ids).union(anchored_node_ids),
             )
             evidence_info = {
                 "sufficient": evidence.sufficient,
@@ -571,14 +586,17 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
                 "node_ids": evidence.node_ids,
             }
         else:
-            skeleton_response = compressor._generate_skeleton(file_id)
+            skeleton_response = compressor._generate_skeleton(
+                file_id,
+                **anchor_kwargs,
+            )
 
         # Phase 5: Record access for decay tracking
         try:
             if hasattr(compressor, '_access_tracker'):
                 compressor._access_tracker.record_access(file_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Access tracking failed for '{file_id}': {exc}")
 
         # Build JSON response
         response = {
@@ -592,26 +610,8 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "selection_mode": selection_mode,
         }
 
-        # Phase 5: Apply keyword anchoring if specified
-        if anchored_keywords and skeleton_response.node_map:
-            try:
-                from ..keyword_anchoring import apply_keyword_anchoring
-                nodes_for_anchoring = [
-                    {"node_id": nid, "text": compressor.chunks[nid].text,
-                     "importance": compressor.chunks[nid].importance}
-                    for nid in skeleton_response.node_map
-                    if nid in compressor.chunks
-                ]
-                if nodes_for_anchoring:
-                    kept = apply_keyword_anchoring(
-                        nodes_for_anchoring, anchored_keywords, keep_ratio=1.0
-                    )
-                    response["anchored_nodes"] = [
-                        n["node_id"] for n in kept
-                        if any(kw.lower() in n["text"].lower() for kw in anchored_keywords)
-                    ]
-            except Exception:
-                pass
+        if anchored_keywords:
+            response["anchored_nodes"] = sorted(anchored_node_ids)
         if query:
             response["query"] = query
         if evidence_info:

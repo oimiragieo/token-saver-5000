@@ -107,11 +107,11 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
         "examples": [
             {
                 "description": "Get detailed content",
-                "args": {"node_ids": ["doc_n0", "doc_n1"], "fidelity": "DETAILED"},
+                "args": {"node_ids": ["doc_n0", "doc_n1"], "fidelity_level": "DETAILED"},
             },
             {
                 "description": "Quick summary",
-                "args": {"node_ids": ["doc_n0"], "fidelity": "ABSTRACT"},
+                "args": {"node_ids": ["doc_n0"], "fidelity_level": "ABSTRACT"},
             },
         ],
         "tips": [
@@ -431,7 +431,7 @@ async def handle_tool_help(context: HandlerContext, args: Dict[str, Any]) -> str
                 },
                 "tool_profiles": {
                     "core_stable": {
-                        "tools": ["ingest_context", "read_skeleton", "modulate_region", "search_semantic", "get_stats", "delete_context", "should_compress"],
+                        "tools": ["ingest_context", "read_skeleton", "modulate_region", "search_semantic", "get_stats", "list_documents", "delete_document"],
                         "description": "7 essential tools (~3K tokens). Best for prompt-cache-friendly setups.",
                     },
                     "full": {

@@ -8,9 +8,11 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import networkx as nx
+import numpy as np
 import pytest
 
-from src.semantic_compressor import SemanticCompressor
+from src.semantic_compressor import SemanticCompressor, SemanticNode
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +170,7 @@ class TestSkeletonWiring:
 
     @pytest.mark.asyncio
     async def test_skeleton_keyword_anchoring(self, handler_context, sample_text):
-        """Skeleton with anchored_keywords should report anchored nodes."""
+        """Skeleton with anchored_keywords should force matching nodes into anchors."""
         from src.handlers.compression_handlers import handle_ingest, handle_read_skeleton
         await handle_ingest(handler_context, {"text": sample_text, "file_id": "anchor_doc"})
 
@@ -177,9 +179,11 @@ class TestSkeletonWiring:
             {"file_id": "anchor_doc", "anchored_keywords": ["transformers", "backpropagation"]}
         )
         response = json.loads(result)
-        # Should have anchored_nodes key (may be empty if keywords not in visible nodes)
         assert "file_id" in response
         assert response["file_id"] == "anchor_doc"
+        assert response["anchored_nodes"]
+        for node_id in response["anchored_nodes"]:
+            assert f"[{node_id}] [rag:{node_id}] [ANCHOR]" in response["skeleton_text"]
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +285,42 @@ class TestIntraDocDedup:
         # Should have fewer nodes than 6 (some collapsed)
         assert result.total_nodes <= 6
 
+    def test_ingest_dedup_preserves_order_and_reuses_embeddings(self, compressor):
+        """Dedup should keep original chunk order and avoid re-encoding retained chunks."""
+        compressor._chunk_text = lambda text, max_chunk_size=512, strategy="fixed": [
+            "first chunk",
+            "duplicate chunk",
+            "last chunk",
+        ]
+
+        encode_calls = []
+
+        async def fake_encode(chunks):
+            encode_calls.append(list(chunks))
+            if len(encode_calls) > 1:
+                raise AssertionError("Embeddings should be reused after dedup")
+            return np.array([
+                [1.0, 0.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+            ])
+
+        compressor._encode_async = fake_encode
+
+        def fake_collapse(nodes_map, threshold=0.92):
+            return {
+                "tmp_2": {"text": "last chunk", "embedding": np.array([0.0, 1.0])},
+                "tmp_0": {"text": "first chunk", "embedding": np.array([1.0, 0.0])},
+            }
+
+        with patch("src.intra_doc_dedup.collapse_redundant_nodes", side_effect=fake_collapse):
+            result = compressor.ingest_file("ignored", "dedup_order_doc")
+
+        assert result.total_nodes == 2
+        assert compressor.chunks["dedup_order_doc_n0"].text == "first chunk"
+        assert compressor.chunks["dedup_order_doc_n1"].text == "last chunk"
+        assert len(encode_calls) == 1
+
 
 # ---------------------------------------------------------------------------
 # Test: query-adaptive ratios affect skeleton
@@ -288,20 +328,62 @@ class TestIntraDocDedup:
 
 class TestQueryAdaptive:
     def test_skeleton_with_query_uses_adaptive_ratios(self, compressor):
-        """When query is provided, query-adaptive ratios should influence node selection."""
-        text = (
-            "Machine learning requires large datasets. "
-            "Cooking recipes use fresh ingredients. "
-            "Neural networks learn from backpropagation. "
-            "Gardening improves with proper soil composition. "
-            "Deep learning excels at image recognition. "
-            "Poetry analysis reveals metaphorical structures."
-        )
-        compressor.ingest_file(text, "adaptive_doc")
+        """When query is provided, adaptive ratios should be passed into selection."""
+        doc_id = "adaptive_doc"
+        graph = nx.Graph()
+        nodes = {
+            f"{doc_id}_n0": SemanticNode(
+                node_id=f"{doc_id}_n0",
+                text="Machine learning requires large datasets.",
+                embedding=np.array([1.0, 0.0]),
+                importance=0.4,
+                metadata={"tokens": 8, "entities": ["Machine"], "position": 0},
+            ),
+            f"{doc_id}_n1": SemanticNode(
+                node_id=f"{doc_id}_n1",
+                text="Cooking recipes use fresh ingredients.",
+                embedding=np.array([0.0, 1.0]),
+                importance=0.3,
+                metadata={"tokens": 6, "entities": ["Cooking"], "position": 1},
+            ),
+            f"{doc_id}_n2": SemanticNode(
+                node_id=f"{doc_id}_n2",
+                text="Neural networks learn from backpropagation.",
+                embedding=np.array([0.9, 0.1]),
+                importance=0.5,
+                metadata={"tokens": 7, "entities": ["Neural"], "position": 2},
+            ),
+        }
+        for node_id, node in nodes.items():
+            compressor.chunks[node_id] = node
+            graph.add_node(node_id, **node.metadata)
+        compressor.graphs[doc_id] = graph
+        captured = {}
+        original = compressor._select_skeleton_nodes
 
-        # With ML-related query, ML nodes should be favored
-        result_ml = compressor._generate_skeleton("adaptive_doc", query="machine learning neural networks")
+        def wrapped(file_nodes, num_skeleton, query=None, redundancy_penalty=0.2, priority_scores=None):
+            captured["priority_scores"] = priority_scores
+            return original(
+                file_nodes,
+                num_skeleton,
+                query=query,
+                redundancy_penalty=redundancy_penalty,
+                priority_scores=priority_scores,
+            )
+
+        compressor._select_skeleton_nodes = wrapped
+        try:
+            with patch.object(compressor.model, "encode", return_value=np.array([[1.0, 0.0]])):
+                result_ml = compressor._generate_skeleton(
+                    doc_id,
+                    query="machine learning neural networks",
+                )
+        finally:
+            compressor._select_skeleton_nodes = original
+
         assert result_ml.total_nodes > 0
+        assert captured["priority_scores"] is not None
+        assert any(score > 0 for score in captured["priority_scores"].values())
 
     def test_skeleton_without_query_uses_uniform_ratios(self, compressor):
         """Without query, all sections get equal treatment."""
@@ -334,3 +416,29 @@ class TestWorkflowGuidance:
         assert "tool_profiles" in response
         assert "core_stable" in response["tool_profiles"]
         assert "full" in response["tool_profiles"]
+
+    @pytest.mark.asyncio
+    async def test_tool_help_core_stable_matches_actual_tools(self):
+        """Workflow guidance should list the real core_stable profile tools."""
+        from src.handlers.help_handlers import handle_tool_help
+        result = await handle_tool_help({}, {})
+        response = json.loads(result)
+        assert response["tool_profiles"]["core_stable"]["tools"] == [
+            "ingest_context",
+            "read_skeleton",
+            "modulate_region",
+            "search_semantic",
+            "get_stats",
+            "list_documents",
+            "delete_document",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_modulate_region_help_uses_fidelity_level_param(self):
+        """Help examples should use the real fidelity_level argument name."""
+        from src.handlers.help_handlers import handle_tool_help
+        result = await handle_tool_help({}, {"tool_name": "modulate_region", "verbose": True})
+        response = json.loads(result)
+        example_args = response["examples"][0]["args"]
+        assert "fidelity_level" in example_args
+        assert "fidelity" not in example_args

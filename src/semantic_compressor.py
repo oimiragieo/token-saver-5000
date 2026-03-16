@@ -319,8 +319,8 @@ class SemanticCompressor:
                     text, max_chunk_tokens=max_chunk_size,
                     embed_fn=lambda texts: self.model.encode(texts)
                 )
-            except Exception:
-                pass  # Fall through to fixed chunking
+            except Exception as exc:
+                logger.warning(f"Semantic chunking failed; falling back to fixed chunking: {exc}")
         # Split by double newlines first (paragraphs)
         paragraphs = text.split("\n\n")
         chunks = []
@@ -542,10 +542,14 @@ class SemanticCompressor:
                     collapsed = collapse_redundant_nodes(nodes_map, threshold=0.92)
                     if len(collapsed) < len(raw_chunks):
                         logger.info(f"  Intra-doc dedup: {len(raw_chunks)} → {len(collapsed)} chunks")
-                        raw_chunks = [collapsed[k]["text"] for k in collapsed]
-                        embeddings = await self._encode_async(raw_chunks)
-                except Exception:
-                    pass  # Dedup is best-effort
+                        collapsed_keys = sorted(
+                            collapsed.keys(),
+                            key=lambda key: int(key.split("_")[1]),
+                        )
+                        raw_chunks = [collapsed[k]["text"] for k in collapsed_keys]
+                        embeddings = np.stack([collapsed[k]["embedding"] for k in collapsed_keys])
+                except Exception as exc:
+                    logger.warning(f"Intra-doc deduplication failed for '{file_id}': {exc}")
 
             # 3. Build similarity graph (preserves global structure)
             logger.info("  Building semantic graph...")
@@ -620,6 +624,7 @@ class SemanticCompressor:
         num_skeleton: int,
         query: Optional[str] = None,
         redundancy_penalty: float = 0.2,
+        priority_scores: Optional[Dict[str, float]] = None,
     ) -> Set[str]:
         """
         Select skeleton nodes.
@@ -648,11 +653,19 @@ class SemanticCompressor:
 
         importance_norm = self._normalize_scores(importance_scores)
         relevance_norm = self._normalize_scores(relevance_scores)
+        priority_norm = (
+            self._normalize_scores(priority_scores)
+            if priority_scores
+            else {node_id: 0.0 for node_id, _ in file_nodes}
+        )
 
-        # Weighted hybrid score: prioritize query relevance while preserving global structure.
+        # Weighted hybrid score: prioritize query relevance while preserving
+        # global structure. Query-adaptive ratio scores can additionally boost
+        # sections that should retain more detail.
         hybrid_scores = {
-            node_id: 0.35 * importance_norm.get(node_id, 0.0)
-            + 0.65 * relevance_norm.get(node_id, 0.0)
+            node_id: 0.25 * importance_norm.get(node_id, 0.0)
+            + 0.55 * relevance_norm.get(node_id, 0.0)
+            + 0.20 * priority_norm.get(node_id, 0.0)
             for node_id, _ in file_nodes
         }
 
@@ -728,7 +741,7 @@ class SemanticCompressor:
         num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
 
         # Phase 5: Query-adaptive per-section ratios (KVzip/LazyLLM)
-        per_node_ratios = None
+        adaptive_priority_scores = None
         if query and len(file_nodes) > 1:
             try:
                 from .query_adaptive import compute_section_ratios
@@ -737,19 +750,34 @@ class SemanticCompressor:
                 per_node_ratios = compute_section_ratios(
                     sections, query_emb, base_ratio=effective_ratio
                 )
-                # Use ratios to determine which nodes to show
-                num_skeleton = sum(1 for r in per_node_ratios if r >= effective_ratio * 0.5)
+                adaptive_priority_scores = {
+                    node_id: ratio
+                    for (node_id, _), ratio in zip(file_nodes, per_node_ratios)
+                }
+                # Use adaptive ratios to tune overall budget as well as
+                # per-node selection priority.
+                num_skeleton = sum(1 for r in per_node_ratios if r >= effective_ratio)
                 num_skeleton = max(1, num_skeleton)
-            except Exception:
-                per_node_ratios = None
+            except Exception as exc:
+                logger.warning(f"Query-adaptive ratio computation failed for '{file_id}': {exc}")
 
         if anchor_node_ids:
             skeleton_nodes = set(anchor_node_ids)
             if len(skeleton_nodes) < num_skeleton:
-                selected = self._select_skeleton_nodes(file_nodes, num_skeleton, query=query)
+                selected = self._select_skeleton_nodes(
+                    file_nodes,
+                    num_skeleton,
+                    query=query,
+                    priority_scores=adaptive_priority_scores,
+                )
                 skeleton_nodes.update(selected)
         else:
-            skeleton_nodes = self._select_skeleton_nodes(file_nodes, num_skeleton, query=query)
+            skeleton_nodes = self._select_skeleton_nodes(
+                file_nodes,
+                num_skeleton,
+                query=query,
+                priority_scores=adaptive_priority_scores,
+            )
 
         # Build skeleton text
         skeleton_lines = []
