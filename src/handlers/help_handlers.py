@@ -33,6 +33,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "file_id": "Unique identifier for this document (required)",
             "file_path": "Optional path to source file for sync tracking",
             "metadata": "Optional metadata dict (author, date, source, tags)",
+            "chunking_strategy": "Optional: auto (default), fixed, or semantic chunking",
         },
         "output_fields": get_ingest_context_output_fields(),
         "examples": [
@@ -52,6 +53,7 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
         "tips": [
             "Use meaningful file_ids (e.g., 'auth_service.py' not 'doc1')",
             "Provide file_path to enable staleness detection",
+            "Default chunking_strategy=auto upgrades larger structured docs to semantic chunking",
             "Metadata is preserved and returned in read_skeleton",
         ],
         "related_tools": ["read_skeleton", "search_semantic", "modulate_region"],
@@ -187,6 +189,85 @@ TOOL_HELP_REGISTRY: Dict[str, Dict[str, Any]] = {
             "file_id is derived from relative path (e.g., 'src/main.py')",
         ],
         "related_tools": ["ingest_context", "batch_ingest_documents", "list_documents"],
+    },
+    "should_compress": {
+        "category": "Resource Management",
+        "description": "Estimate file size/token cost before ingestion and recommend whether to compress, read directly, or convert first.",
+        "parameters": {
+            "file_path": "Absolute or validated file path to inspect (required)",
+            "content_type": "Optional hint: auto, prose, or code",
+        },
+        "examples": [
+            {"description": "Preflight a file", "args": {"file_path": "C:\\project\\README.md"}},
+            {"description": "Hint code-like content", "args": {"file_path": "C:\\project\\main.py", "content_type": "code"}},
+        ],
+        "tips": [
+            "Use this before ingest_context when reading from disk",
+            "Binary files may return CONVERT_THEN_COMPRESS with a suggested conversion workflow",
+        ],
+        "related_tools": ["ingest_context", "check_environment", "check_context_budget"],
+    },
+    "check_context_budget": {
+        "category": "Context Budget",
+        "description": "Check current context window usage and get threshold-based recommendations before you overflow the model window.",
+        "parameters": {
+            "current_tokens": "Current tokens already in prompt/context (required)",
+            "context_limit": "Optional max context window size (default: 200000)",
+        },
+        "examples": [
+            {"description": "Check budget health", "args": {"current_tokens": 120000}},
+            {"description": "Check against smaller window", "args": {"current_tokens": 28000, "context_limit": 32000}},
+        ],
+        "tips": [
+            "Use after ingesting several documents or before adding more context",
+            "Pair with advise_context for cross-document strategy decisions",
+        ],
+        "related_tools": ["adapt_to_context_window", "advise_context", "should_compress"],
+    },
+    "prune_by_relevance": {
+        "category": "Document Compression",
+        "description": "Keep only the most query-relevant nodes from an ingested document for aggressive task-focused compression.",
+        "parameters": {
+            "doc_id": "Document ID to prune (required)",
+            "query": "Query used to score relevance (required)",
+            "keep_ratio": "Fraction of nodes to keep (default: 0.5)",
+        },
+        "examples": [
+            {"description": "Prune to most relevant half", "args": {"doc_id": "auth_doc", "query": "token refresh flow"}},
+        ],
+        "tips": [
+            "Use when you need a task-specific subset instead of a general skeleton",
+            "Follow with modulate_region on kept_node_ids for detailed retrieval",
+        ],
+        "related_tools": ["read_skeleton", "search_semantic", "modulate_region"],
+    },
+    "get_multi_level_skeleton": {
+        "category": "Document Compression",
+        "description": "Return 3 fixed-depth skeleton tiers so the client can choose how much detail to consume.",
+        "parameters": {
+            "doc_id": "Document ID to summarize at multiple levels (required)",
+        },
+        "examples": [
+            {"description": "Get headline/summary/full tiers", "args": {"doc_id": "system_design_doc"}},
+        ],
+        "tips": [
+            "Use when you want deterministic depth tiers instead of query-guided selection",
+            "Prefer read_skeleton for task-aware selection modes",
+        ],
+        "related_tools": ["read_skeleton", "modulate_region", "advise_context"],
+    },
+    "advise_context": {
+        "category": "Context Budget",
+        "description": "Analyze all ingested documents and recommend which models, budgets, and compression actions fit the current workload.",
+        "parameters": {},
+        "examples": [
+            {"description": "Get global context strategy", "args": {}},
+        ],
+        "tips": [
+            "Use after multiple documents are ingested to prioritize what should stay in context",
+            "Combine with check_context_budget for real-time token pressure monitoring",
+        ],
+        "related_tools": ["check_context_budget", "adapt_to_context_window", "list_documents"],
     },
     # === AFM Dialogue Tools ===
     "afm_add_message": {

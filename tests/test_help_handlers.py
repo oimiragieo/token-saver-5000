@@ -245,3 +245,35 @@ async def test_recommend_fidelity_help_output_fields_cover_runtime_keys():
     assert "alternatives" in documented_fields
     assert "usage_tip" in documented_fields
     assert "recommended_level" in runtime_data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "expected_params"),
+    [
+        ("should_compress", {"file_path", "content_type"}),
+        ("check_context_budget", {"current_tokens", "context_limit"}),
+        ("prune_by_relevance", {"doc_id", "query", "keep_ratio"}),
+        ("get_multi_level_skeleton", {"doc_id"}),
+        ("advise_context", set()),
+    ],
+)
+async def test_high_value_tools_have_help_entries(tool_name, expected_params):
+    result = await handle_tool_help({}, {"tool_name": tool_name, "verbose": True})
+    data = json.loads(result)
+
+    assert data["tool"] == tool_name
+    assert "description" in data
+    assert "related_tools" in data
+    assert expected_params.issubset(set(data.get("parameters", {}).keys()))
+
+
+@pytest.mark.asyncio
+async def test_tool_list_response_mentions_real_workflow_tools():
+    result = await handle_tool_help({}, {})
+    data = json.loads(result)
+
+    workflow_tools = [step["tool"] for step in data["recommended_workflow"]["steps"]]
+    assert "should_compress" in workflow_tools
+    assert "advise_context" in workflow_tools
+    assert "ingest_context" in workflow_tools

@@ -95,6 +95,7 @@ READ_SKELETON_RESPONSE_TEMPLATE: Dict[str, Any] = {
     "skeleton_tokens": 0,
     "compression_ratio": 0.0,
     "skeleton_text": "",
+    "cache_stable_prefix": "",
     "node_map": {},
     "selection_mode": "baseline",
     "query": "",
@@ -599,6 +600,15 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             logger.warning(f"Access tracking failed for '{file_id}': {exc}")
 
         # Build JSON response
+        cache_stable_prefix = skeleton_response.skeleton_text
+        if selection_mode != "baseline":
+            baseline_cache = getattr(compressor, "_baseline_skeleton_cache", None)
+            if isinstance(baseline_cache, dict):
+                cache_stable_prefix = baseline_cache.get(
+                    file_id,
+                    skeleton_response.skeleton_text,
+                )
+
         response = {
             "file_id": skeleton_response.file_id,
             "total_nodes": skeleton_response.total_nodes,
@@ -606,6 +616,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "skeleton_tokens": skeleton_response.skeleton_tokens,
             "compression_ratio": skeleton_response.compression_ratio,
             "skeleton_text": skeleton_response.skeleton_text,
+            "cache_stable_prefix": cache_stable_prefix,
             "node_map": skeleton_response.node_map,
             "selection_mode": selection_mode,
         }

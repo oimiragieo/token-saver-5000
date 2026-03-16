@@ -12,6 +12,7 @@ TDD: Written BEFORE implementation (Red phase).
 
 import json
 import time
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -233,3 +234,40 @@ class TestSkeletonQueryPlacement:
         skeleton = compressor._generate_skeleton("test_doc2")
         assert "Query:" not in skeleton.skeleton_text
         assert "QUERY_GUIDED" not in skeleton.skeleton_text
+
+    @pytest.mark.asyncio
+    async def test_cache_stable_prefix_remains_identical_across_queries(self):
+        """read_skeleton should expose a stable cacheable baseline across queries."""
+        from src.handlers.compression_handlers import handle_read_skeleton
+        from src.semantic_compressor import SemanticCompressor
+
+        compressor = SemanticCompressor()
+        text = "\n\n".join(
+            [
+                "Authentication services validate access tokens and rotate refresh credentials.",
+                "Billing services calculate invoices, credits, and payment retries.",
+                "Session management tracks device activity and expiration windows.",
+                "Audit logging stores privileged actions for compliance review.",
+            ]
+        )
+        await compressor.ingest_file_async(text, "cache_doc")
+
+        context = {"compressor": compressor, "sync_manager": SimpleNamespace(file_metadata={})}
+
+        baseline = json.loads(await handle_read_skeleton(context, {"file_id": "cache_doc"}))
+        query_one = json.loads(
+            await handle_read_skeleton(
+                context,
+                {"file_id": "cache_doc", "selection_mode": "query_guided", "query": "refresh token rotation"},
+            )
+        )
+        query_two = json.loads(
+            await handle_read_skeleton(
+                context,
+                {"file_id": "cache_doc", "selection_mode": "query_guided", "query": "audit compliance actions"},
+            )
+        )
+
+        assert baseline["cache_stable_prefix"] == baseline["skeleton_text"]
+        assert query_one["cache_stable_prefix"] == baseline["skeleton_text"]
+        assert query_two["cache_stable_prefix"] == baseline["skeleton_text"]

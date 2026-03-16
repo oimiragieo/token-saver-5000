@@ -248,6 +248,27 @@ class TestPhase5ToolsWork:
 # ---------------------------------------------------------------------------
 
 class TestSemanticChunking:
+    def test_chunk_text_auto_uses_semantic_for_large_structured_docs(self, compressor):
+        """Auto mode should upgrade larger structured documents to semantic chunking."""
+        text = "\n\n".join(
+            [
+                "Paragraph one discusses authentication, authorization, and token rotation. " * 16,
+                "Paragraph two discusses billing retries, invoices, and payment recovery. " * 16,
+                "Paragraph three discusses audit logs, compliance review, and admin actions. " * 16,
+            ]
+        )
+        with patch("src.semantic_chunking.chunk_by_semantics", return_value=["semantic-a", "semantic-b"]) as mocked:
+            chunks = compressor._chunk_text(text, strategy="auto")
+        assert chunks == ["semantic-a", "semantic-b"]
+        mocked.assert_called_once()
+
+    def test_chunk_text_auto_keeps_fixed_for_small_docs(self, compressor):
+        """Auto mode should avoid semantic chunking for small/simple docs."""
+        text = "Short doc. " * 20
+        with patch("src.semantic_chunking.chunk_by_semantics", side_effect=AssertionError("should not be called")):
+            chunks = compressor._chunk_text(text, strategy="auto")
+        assert len(chunks) > 0
+
     def test_chunk_text_fixed_strategy(self, compressor):
         """Fixed strategy should work as before."""
         text = "Paragraph one. " * 50 + "\n\n" + "Paragraph two. " * 50

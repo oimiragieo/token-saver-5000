@@ -137,9 +137,9 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     },
                     "chunking_strategy": {
                         "type": "string",
-                        "enum": ["fixed", "semantic"],
-                        "description": "Chunking strategy: 'fixed' (paragraph/sentence boundaries) or 'semantic' (embedding-based boundaries). Default: fixed",
-                        "default": "fixed",
+                        "enum": ["auto", "fixed", "semantic"],
+                        "description": "Chunking strategy: 'auto' (semantic for larger structured docs), 'fixed' (paragraph/sentence boundaries), or 'semantic' (embedding-based boundaries). Default: auto",
+                        "default": "auto",
                     },
                 },
                 "required": ["text", "file_id"],
