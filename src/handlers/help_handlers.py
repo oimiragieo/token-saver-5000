@@ -418,6 +418,27 @@ async def handle_tool_help(context: HandlerContext, args: Dict[str, Any]) -> str
                 "message": "Specify tool_name to get detailed help",
                 "available_tools": categories,
                 "total_tools": len(TOOL_HELP_REGISTRY),
+                "recommended_workflow": {
+                    "description": "Optimal tool sequence for maximum token savings",
+                    "steps": [
+                        {"step": 1, "tool": "should_compress", "purpose": "Check if compression is worthwhile for your content size"},
+                        {"step": 2, "tool": "ingest_context", "purpose": "Ingest document into semantic graph (use chunking_strategy='semantic' for best results)"},
+                        {"step": 3, "tool": "read_skeleton", "purpose": "Get compressed view (80-95% token reduction). Use anchored_keywords to preserve critical terms"},
+                        {"step": 4, "tool": "search_semantic", "purpose": "Find specific information within compressed docs"},
+                        {"step": 5, "tool": "modulate_region", "purpose": "Zoom into specific nodes at chosen fidelity level"},
+                        {"step": 6, "tool": "advise_context", "purpose": "Get model-specific optimization recommendations"},
+                    ],
+                },
+                "tool_profiles": {
+                    "core_stable": {
+                        "tools": ["ingest_context", "read_skeleton", "modulate_region", "search_semantic", "get_stats", "delete_context", "should_compress"],
+                        "description": "7 essential tools (~3K tokens). Best for prompt-cache-friendly setups.",
+                    },
+                    "full": {
+                        "tools": "All 58 tools",
+                        "description": "Complete toolkit (~16K tokens). Use when context budget allows.",
+                    },
+                },
             },
             indent=2,
         )

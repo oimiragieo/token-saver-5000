@@ -531,6 +531,22 @@ class SemanticCompressor:
             logger.info("  Generating embeddings...")
             embeddings = await self._encode_async(raw_chunks)
 
+            # 2b. Optional intra-document deduplication (Phase 5: R-KV)
+            if len(raw_chunks) > 2:
+                try:
+                    from .intra_doc_dedup import collapse_redundant_nodes
+                    nodes_map = {
+                        f"tmp_{i}": {"text": raw_chunks[i], "embedding": embeddings[i]}
+                        for i in range(len(raw_chunks))
+                    }
+                    collapsed = collapse_redundant_nodes(nodes_map, threshold=0.92)
+                    if len(collapsed) < len(raw_chunks):
+                        logger.info(f"  Intra-doc dedup: {len(raw_chunks)} → {len(collapsed)} chunks")
+                        raw_chunks = [collapsed[k]["text"] for k in collapsed]
+                        embeddings = await self._encode_async(raw_chunks)
+                except Exception:
+                    pass  # Dedup is best-effort
+
             # 3. Build similarity graph (preserves global structure)
             logger.info("  Building semantic graph...")
             graph = nx.Graph()
@@ -710,6 +726,23 @@ class SemanticCompressor:
             effective_ratio = compute_adaptive_ratio(total_tokens_estimate)
 
         num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
+
+        # Phase 5: Query-adaptive per-section ratios (KVzip/LazyLLM)
+        per_node_ratios = None
+        if query and len(file_nodes) > 1:
+            try:
+                from .query_adaptive import compute_section_ratios
+                query_emb = self.model.encode([query])[0]
+                sections = [{"embedding": node.embedding} for _, node in file_nodes]
+                per_node_ratios = compute_section_ratios(
+                    sections, query_emb, base_ratio=effective_ratio
+                )
+                # Use ratios to determine which nodes to show
+                num_skeleton = sum(1 for r in per_node_ratios if r >= effective_ratio * 0.5)
+                num_skeleton = max(1, num_skeleton)
+            except Exception:
+                per_node_ratios = None
+
         if anchor_node_ids:
             skeleton_nodes = set(anchor_node_ids)
             if len(skeleton_nodes) < num_skeleton:

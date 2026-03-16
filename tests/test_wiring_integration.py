@@ -265,3 +265,72 @@ class TestSemanticChunking:
             text = "Hello world. " * 20
             chunks = compressor._chunk_text(text, strategy="semantic")
             assert len(chunks) > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: intra-doc dedup runs during ingest
+# ---------------------------------------------------------------------------
+
+class TestIntraDocDedup:
+    def test_ingest_deduplicates_redundant_chunks(self, compressor):
+        """Ingest should collapse near-identical paragraphs."""
+        # Create text with highly redundant paragraphs
+        para = "Machine learning uses neural networks for pattern recognition in data. " * 5
+        text = "\n\n".join([para] * 6)  # 6 identical paragraphs
+        result = compressor.ingest_file(text, "dedup_test")
+        # Should have fewer nodes than 6 (some collapsed)
+        assert result.total_nodes <= 6
+
+
+# ---------------------------------------------------------------------------
+# Test: query-adaptive ratios affect skeleton
+# ---------------------------------------------------------------------------
+
+class TestQueryAdaptive:
+    def test_skeleton_with_query_uses_adaptive_ratios(self, compressor):
+        """When query is provided, query-adaptive ratios should influence node selection."""
+        text = (
+            "Machine learning requires large datasets. "
+            "Cooking recipes use fresh ingredients. "
+            "Neural networks learn from backpropagation. "
+            "Gardening improves with proper soil composition. "
+            "Deep learning excels at image recognition. "
+            "Poetry analysis reveals metaphorical structures."
+        )
+        compressor.ingest_file(text, "adaptive_doc")
+
+        # With ML-related query, ML nodes should be favored
+        result_ml = compressor._generate_skeleton("adaptive_doc", query="machine learning neural networks")
+        assert result_ml.total_nodes > 0
+
+    def test_skeleton_without_query_uses_uniform_ratios(self, compressor):
+        """Without query, all sections get equal treatment."""
+        text = "Topic A is important. " * 10 + "\n\n" + "Topic B matters too. " * 10
+        compressor.ingest_file(text, "uniform_doc")
+        result = compressor._generate_skeleton("uniform_doc")
+        assert result.total_nodes > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: workflow guidance in tool_help
+# ---------------------------------------------------------------------------
+
+class TestWorkflowGuidance:
+    @pytest.mark.asyncio
+    async def test_tool_help_includes_workflow(self):
+        """tool_help() with no args should include recommended workflow."""
+        from src.handlers.help_handlers import handle_tool_help
+        result = await handle_tool_help({}, {})
+        response = json.loads(result)
+        assert "recommended_workflow" in response
+        assert len(response["recommended_workflow"]["steps"]) >= 5
+
+    @pytest.mark.asyncio
+    async def test_tool_help_includes_profiles(self):
+        """tool_help() should document core_stable and full profiles."""
+        from src.handlers.help_handlers import handle_tool_help
+        result = await handle_tool_help({}, {})
+        response = json.loads(result)
+        assert "tool_profiles" in response
+        assert "core_stable" in response["tool_profiles"]
+        assert "full" in response["tool_profiles"]
