@@ -73,8 +73,9 @@ faiss_index/
 # MCP specific
 .mcp/
 
-# Claude Code (development only)
-.claude/
+# Claude Code workspace (local-only except shared overview)
+.claude/*
+!.claude/CLAUDE.md
 
 # Persistence layer (v0.2.0+)
 .semantic_modulator_data/

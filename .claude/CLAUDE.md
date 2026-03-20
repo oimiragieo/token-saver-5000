@@ -52,22 +52,22 @@ src/                              # 71 modules, ~25,000 lines
 | Multimodal | multimodal_compressor.py | ✅ v0.10.0 | ⚠️ Needs benchmarks |
 | Training Utils | training_utils.py | ❌ Not exposed | ❌ Reference only |
 
-### Claude Code Infrastructure (Implemented)
-The following Claude Code integrations are active in this repository:
-- `.claude/hooks/` - Lifecycle hooks (PreToolUse, PostToolUse, UserPromptSubmit)
-- `.claude/commands/` - Custom slash commands (/review, /fix-issue)
-- `.claude/subagents/` - 10 specialized agent definitions (analyst, pm, architect, developer, qa, ux-expert, product-owner, scrum-master, bmad-orchestrator, bmad-master)
-- `.claude/agents/` - 9 alternate agent role definitions (legacy format, see subagents/ for authoritative routing)
-- `.claude/workflows/` - 2 workflow definitions (greenfield-fullstack, brownfield-fullstack) — **declarative only**: Claude reads these as orchestration prompts; there is no automatic workflow runtime. The BMAD orchestrator subagent coordinates execution step-by-step.
-- `.claude/config.yaml` - BMAD agent routing and model assignments
-- `.claude/settings.json` - Tool permissions and hook configuration
-- `.claude/.mcp.json` - 6 MCP server registrations (repo, artifacts, github, linear, slack, chrome-devtools)
-- `.claude/schemas/` - 10 JSON validation schemas
-- `.claude/templates/` - 9 reusable artifact templates
-- `.claude/instructions/` - 12 guidance documents
-- `.claude/context/` - Runtime artifacts, gate results, and session state
-- `.claude/tools/gates/` - Quality gate validation script (gate.mjs)
-- `skills/token-saver-context-compression/` - Python compression skill with 12 scripts
+### Claude Code Workspace Notes (Local-Only by Default)
+This repository only guarantees the checked-in `.claude/CLAUDE.md` overview. Most other
+`.claude/` files are intentionally local workspace material and are ignored from version control,
+so fresh clones and source distributions must not depend on them being present.
+
+If you maintain a local Claude Code workspace, you may create or reuse:
+- `.claude/hooks/` - Local lifecycle hooks (PreToolUse, PostToolUse, UserPromptSubmit)
+- `.claude/commands/` - Local slash commands such as `/review` and `/fix-issue`
+- `.claude/subagents/` / `.claude/agents/` - Local agent role definitions
+- `.claude/workflows/` - Declarative orchestration prompts for local use
+- `.claude/config.yaml`, `.claude/settings.json`, `.claude/.mcp.json` - Local routing and tool configuration
+- `.claude/schemas/`, `.claude/templates/`, `.claude/instructions/` - Local reference material
+- `.claude/context/` and `.claude/tools/` - Runtime artifacts, gates, and scratch state
+
+For repository-shipped guidance, use `docs/guides/CLAUDE_CODE_SETUP.md`, `templates/`, and
+`skills/token-saver-context-compression/`.
 
 ### Tech Debt Identified
 1. **Documentation Tool Counts**: Some docs still reference old counts (HOW_IT_WORKS.md, API_REFERENCE.md)

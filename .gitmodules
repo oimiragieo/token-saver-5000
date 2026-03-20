@@ -1,0 +1,12 @@
+[submodule "artifacts/competitor-analysis/Contextual-Compression"]
+	path = artifacts/competitor-analysis/Contextual-Compression
+	url = https://github.com/SrGrace/Contextual-Compression.git
+[submodule "artifacts/competitor-analysis/LLMLingua"]
+	path = artifacts/competitor-analysis/LLMLingua
+	url = https://github.com/microsoft/LLMLingua.git
+[submodule "artifacts/competitor-analysis/Selective_Context"]
+	path = artifacts/competitor-analysis/Selective_Context
+	url = https://github.com/liyucheng09/Selective_Context.git
+[submodule "artifacts/competitor-analysis/langchain"]
+	path = artifacts/competitor-analysis/langchain
+	url = https://github.com/langchain-ai/langchain.git
