@@ -49,6 +49,10 @@ logs/
 .coverage
 htmlcov/
 .tox/
+.hypothesis/
+
+# Local temp work
+.tmp/
 
 # ChromaDB / Vector stores
 chroma_db/
