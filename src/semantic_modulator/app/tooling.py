@@ -8,10 +8,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
-from mcp.types import Tool
+from mcp.types import GetPromptResult, Prompt, Resource, ResourceTemplate, Tool
 
 from src.semantic_modulator.api.mcp import registry as mcp_registry
 from src.semantic_modulator.api.mcp import router as mcp_router
+from src.semantic_modulator.app import mcp_context_surfaces
 
 
 class ProfileState(TypedDict):
@@ -105,6 +106,28 @@ class MCPToolingGateway:
         tools = mcp_registry.setup_mcp_tools(selected_profile)
         self.set_profile_state(profile=selected_profile, tools=tools)
         return tools
+
+    def list_prompts(self) -> list[Prompt]:
+        return mcp_context_surfaces.list_prompts()
+
+    def get_prompt(self, name: str, arguments: Any) -> GetPromptResult:
+        return mcp_context_surfaces.get_prompt(name, arguments)
+
+    def list_resources(self, profile: str | None = None) -> list[Resource]:
+        selected_profile = profile or self.profile
+        return mcp_context_surfaces.list_resources(self, selected_profile)
+
+    def list_resource_templates(self) -> list[ResourceTemplate]:
+        return mcp_context_surfaces.list_resource_templates()
+
+    async def read_resource(self, uri: str, context: Any, profile: str | None = None) -> Any:
+        selected_profile = profile or self.profile
+        return await mcp_context_surfaces.read_resource(
+            uri,
+            tooling=self,
+            profile=selected_profile,
+            context=context,
+        )
 
     async def route_tool_call(
         self,

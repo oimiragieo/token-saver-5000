@@ -25,10 +25,12 @@ Author: Token Saver 5000 Team
 """
 
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 import tiktoken
+
+from .metrics import compute_cost_savings
 
 
 @dataclass
@@ -43,6 +45,7 @@ class CompressionEstimate:
     reasoning: str
     best_case: Dict[str, Any]
     worst_case: Dict[str, Any]
+    cost_telemetry: Optional[Dict[str, Any]] = None
 
 
 class CompressionAdvisor:
@@ -69,7 +72,9 @@ class CompressionAdvisor:
         """
         self.encoder = tiktoken.get_encoding(encoding_name)
 
-    def estimate_compression(self, text: str, skeleton_ratio: float = 0.2) -> CompressionEstimate:
+    def estimate_compression(
+        self, text: str, skeleton_ratio: float = 0.2, model: Optional[str] = None
+    ) -> CompressionEstimate:
         """
         Estimate compression results for document.
 
@@ -178,6 +183,15 @@ class CompressionAdvisor:
             reasoning=reasoning,
             best_case=best_case,
             worst_case=worst_case,
+            cost_telemetry=(
+                compute_cost_savings(
+                    original_tokens=original_tokens,
+                    compressed_tokens=estimated_compressed,
+                    model=model,
+                ).to_dict()
+                if model
+                else None
+            ),
         )
 
     def _average_word_length(self, text: str) -> float:

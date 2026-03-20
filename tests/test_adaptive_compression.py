@@ -111,7 +111,9 @@ class TestAdaptiveRatioIntegration:
         """With 'auto', a large document should use more aggressive compression."""
         compressor = SemanticCompressor(skeleton_ratio="auto")
         # A large document (~many tokens)
-        text = ("This is a detailed paragraph about software engineering best practices. " * 50 + "\n") * 20
+        text = (
+            "This is a detailed paragraph about software engineering best practices. " * 50 + "\n"
+        ) * 20
         compressor.ingest_file(text, "large_doc")
         skeleton = compressor._generate_skeleton("large_doc")
         # Should have generated a skeleton (verify it ran without error)
@@ -138,9 +140,7 @@ class TestComputeCostSavings:
         from src.metrics import compute_cost_savings
 
         result = compute_cost_savings(
-            original_tokens=100_000,
-            compressed_tokens=20_000,
-            model="claude-sonnet-4"
+            original_tokens=100_000, compressed_tokens=20_000, model="claude-sonnet-4"
         )
         # Saved 80K tokens at $3/M = $0.24
         assert result.saved_tokens == 80_000
@@ -151,9 +151,7 @@ class TestComputeCostSavings:
         from src.metrics import compute_cost_savings
 
         result = compute_cost_savings(
-            original_tokens=100_000,
-            compressed_tokens=20_000,
-            model="claude-opus-4"
+            original_tokens=100_000, compressed_tokens=20_000, model="claude-opus-4"
         )
         # Saved 80K tokens at $15/M = $1.20
         assert result.saved_tokens == 80_000
@@ -164,9 +162,7 @@ class TestComputeCostSavings:
         from src.metrics import compute_cost_savings
 
         result = compute_cost_savings(
-            original_tokens=100_000,
-            compressed_tokens=20_000,
-            model="claude-haiku-3.5"
+            original_tokens=100_000, compressed_tokens=20_000, model="claude-haiku-3.5"
         )
         # Saved 80K tokens at $0.80/M = $0.064
         assert result.saved_tokens == 80_000
@@ -199,9 +195,7 @@ class TestComputeCostSavings:
         from src.metrics import compute_cost_savings
 
         result = compute_cost_savings(
-            original_tokens=50_000,
-            compressed_tokens=10_000,
-            model="claude-sonnet-4"
+            original_tokens=50_000, compressed_tokens=10_000, model="claude-sonnet-4"
         )
         assert hasattr(result, "original_tokens")
         assert hasattr(result, "compressed_tokens")
@@ -302,6 +296,7 @@ class TestHandlerCostSavingsIntegration:
         mock_path_validator = Mock()
 
         import networkx as nx
+
         mock_compressor.graphs["test_doc"] = nx.Graph()
 
         return {

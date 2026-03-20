@@ -254,6 +254,17 @@ class EvidenceBundle:
         expected = self._compute_hash()
         return self.bundle_hash == expected
 
+    def audit_summary(self) -> Dict[str, Any]:
+        """Return a compact audit reference for user-facing bundle metadata."""
+        return {
+            "bundle_id": self.bundle_id,
+            "operation": self.operation,
+            "timestamp": self.timestamp,
+            "bundle_hash": self.bundle_hash,
+            "contracts_satisfied": self.contracts_satisfied,
+            "compression_achieved": round(self.compression_achieved, 3),
+        }
+
     @property
     def compression_achieved(self) -> float:
         """Calculate compression ratio"""
@@ -480,6 +491,13 @@ class EvidenceStore:
     def get_failed_contracts(self) -> List[EvidenceBundle]:
         """Get all bundles with failed contracts"""
         return [b for b in self._bundles if not b.contracts_satisfied]
+
+    def get_bundle(self, bundle_id: str) -> EvidenceBundle:
+        """Return one bundle by evidence identifier."""
+        for bundle in self._bundles:
+            if bundle.bundle_id == bundle_id:
+                return bundle
+        raise ValueError(f"Evidence bundle '{bundle_id}' not found")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get summary statistics"""

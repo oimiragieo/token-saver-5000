@@ -6,6 +6,7 @@ from src.benchmark_harness import (
     default_corpus_path,
     filter_cases,
     load_benchmark_cases,
+    run_method_comparison,
     run_benchmark_cases,
     summary_to_dict,
     write_summary,
@@ -95,3 +96,15 @@ def test_summary_to_dict_contains_quality_metric_fields():
     assert "precision_at_k" in payload["results"][0]
     assert "recall_at_k" in payload["results"][0]
     assert "f1_at_k" in payload["results"][0]
+
+
+def test_run_method_comparison_includes_extractive_baseline():
+    cases = load_benchmark_cases(default_corpus_path())
+    selected = filter_cases(cases, ["medium_architecture"])
+
+    comparison = run_method_comparison(selected)
+
+    assert comparison["total_cases"] == 1
+    assert "semantic_baseline" in comparison["methods"]
+    assert "extractive_baseline" in comparison["methods"]
+    assert comparison["methods"]["extractive_baseline"]["avg_token_savings_pct"] > 0

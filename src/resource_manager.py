@@ -36,6 +36,10 @@ class ResourceLimits:
     max_total_storage_mb: float = 1024.0  # Max total storage (1GB)
     max_documents: int = 1000  # Max number of documents
     max_memory_mb: float = 2048.0  # Max RAM usage (2GB)
+    max_connector_documents_per_feed: int = 100
+    max_connector_payload_mb: float = 250.0
+    max_multimodal_assets_per_document: int = 128
+    max_multimodal_payload_mb: float = 100.0
     warn_threshold: float = 0.8  # Warn at 80% of limit
 
 
@@ -315,6 +319,60 @@ class ResourceManager:
         """
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(self._executor, lambda: self.unregister_document(file_id))
+
+    def check_connector_batch(
+        self, feed_name: str, document_count: int, total_size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        """Validate connector sync batch size against feed-level quotas."""
+        total_size_mb = total_size_bytes / (1024 * 1024)
+        if document_count <= 0:
+            return False, f"Connector feed '{feed_name}' produced no documents to ingest"
+        if document_count > self.limits.max_connector_documents_per_feed:
+            return False, (
+                f"Connector feed '{feed_name}' exceeds document limit: "
+                f"{document_count} > {self.limits.max_connector_documents_per_feed}"
+            )
+        if total_size_mb > self.limits.max_connector_payload_mb:
+            return False, (
+                f"Connector feed '{feed_name}' exceeds payload limit: "
+                f"{total_size_mb:.1f}MB > {self.limits.max_connector_payload_mb:.1f}MB"
+            )
+        return True, None
+
+    def check_multimodal_batch(
+        self, doc_id: str, asset_count: int, total_size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        total_size_mb = total_size_bytes / (1024 * 1024)
+        if asset_count > self.limits.max_multimodal_assets_per_document:
+            return False, (
+                f"Multimodal asset limit exceeded for {doc_id}: "
+                f"{asset_count} > {self.limits.max_multimodal_assets_per_document}"
+            )
+        if total_size_mb > self.limits.max_multimodal_payload_mb:
+            return False, (
+                f"Multimodal payload too large for {doc_id}: "
+                f"{total_size_mb:.1f}MB > {self.limits.max_multimodal_payload_mb:.1f}MB"
+            )
+        return True, None
+
+    async def check_connector_batch_async(
+        self, feed_name: str, document_count: int, total_size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        """Async wrapper for connector batch quota checks."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            lambda: self.check_connector_batch(feed_name, document_count, total_size_bytes),
+        )
+
+    async def check_multimodal_batch_async(
+        self, doc_id: str, asset_count: int, total_size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            lambda: self.check_multimodal_batch(doc_id, asset_count, total_size_bytes),
+        )
 
     def get_usage_summary(self) -> str:
         """

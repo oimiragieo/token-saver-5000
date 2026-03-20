@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "The response uses the JSON adapter flow.",
+      "passed": true,
+      "evidence": "Adapter resolved to langchain_json"
+    },
+    {
+      "text": "The response mentions cache-friendly prompt structure or stable-prefix concerns.",
+      "passed": true,
+      "evidence": "Assistant response references placing compressed context before dynamic metadata and the user query."
+    },
+    {
+      "text": "The response explains TOON, JSON, or auto output behavior.",
+      "passed": true,
+      "evidence": "Assistant response explains auto output-format policy."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "PythonScript": 1
+    },
+    "total_tool_calls": 1,
+    "total_steps": 1,
+    "errors_encountered": 0,
+    "output_chars": 605,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 0.447
+  },
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": [
+      "Use --output-format json explicitly when downstream consumers require rigid JSON."
+    ]
+  }
+}

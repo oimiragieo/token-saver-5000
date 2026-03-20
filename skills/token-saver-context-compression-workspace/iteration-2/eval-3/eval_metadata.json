@@ -1,0 +1,6 @@
+{
+  "eval_id": 3,
+  "eval_name": "exact-langchain-json-command",
+  "prompt": "You are evaluating a local Claude skill. Give a concise answer only. I need the exact command pattern in this repo for a LangChain-style JSON payload compressed for a specific question, plus the output-format policy and one cache-friendly prompt-structure note. Do not modify files.",
+  "assertions": []
+}

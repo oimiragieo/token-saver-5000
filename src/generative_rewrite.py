@@ -6,7 +6,7 @@ clients can send to their LLM for generative compression. TokenSaver
 doesn't make LLM calls itself; instead it prepares optimal prompts.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 
 def _estimate_tokens(text: str) -> int:

@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 39403,
+  "duration_api_ms": 38906,
+  "num_turns": 9,
+  "result": "I apologize for the tool issues. Let me check what tools are actually available to me for file operations.\n\nIt appears I don't have standard file-reading tools available in this session. Let me answer based on the extensive CLAUDE.md context provided, which documents this project thoroughly.\n\n---\n\nHere's what the repo documents:\n\n### Command Pattern for Compressing a LangChain-style JSON Payload\n\nUse the **`ingest_context`** MCP tool (one of the 9 document compression tools). The call pattern via the MCP server:\n\n```bash\npython -m src.server  # start stdio MCP server\n```\n\nThen invoke the `ingest_context` tool with the JSON payload as the `text` parameter and a `doc_id`. For a question-specific compression, pair it with `modulate_region` (to set fidelity for a specific section) or `search_semantic` (to retrieve only question-relevant nodes from the graph):\n\n```\ningest_context  \u00e2\u2020\u2019  search_semantic (with your question as query)  \u00e2\u2020\u2019  read_context\n```\n\nThis ingests the full JSON, then retrieves only semantically-relevant compressed nodes for your specific question.\n\n### Output-Format Policy\n\nAll experimental tool responses include `\"experimental\": true` in every response. All MCP tools return **structured JSON output** \u00e2\u20ac\u201d there is no raw-text mode. Compression handlers return JSON with fields like `compressed_text`, `compression_ratio`, `token_count`, and metadata.\n\n### Cache-Friendly Prompt Structure Note\n\nThe project uses a **3-tier embedding cache** (SBERT \u00e2\u2020\u2019 ONNX \u00e2\u2020\u2019 TF-IDF) with an **LRU eviction cache** (default 10k entries, 60-80% hit rate). For cache-friendly prompts: **keep your `doc_id` stable across calls** \u00e2\u20ac\u201d the system caches embeddings keyed by content hash, so re-ingesting the same document with the same `doc_id` will hit the LRU cache rather than recomputing embeddings. Changing the `doc_id` for identical content defeats the cache.",
+  "stop_reason": "end_turn",
+  "session_id": "0fe344e9-e821-4e5c-8b7a-f89f3ca89ed3",
+  "total_cost_usd": 0.25404499999999997,
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 18748,
+    "cache_read_input_tokens": 212990,
+    "output_tokens": 1213,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18748,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 10,
+      "outputTokens": 1213,
+      "cacheReadInputTokens": 212990,
+      "cacheCreationInputTokens": 18748,
+      "webSearchRequests": 0,
+      "costUSD": 0.25404499999999997,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "e1811ace-2362-4a78-8feb-8eccba3c80b3",
+  "_wall_seconds": 42.868
+}

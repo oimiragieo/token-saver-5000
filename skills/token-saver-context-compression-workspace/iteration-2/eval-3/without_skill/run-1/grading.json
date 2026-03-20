@@ -1,0 +1,43 @@
+{
+  "expectations": [
+    {
+      "text": "The answer gives the exact JSON-adapter command for this repo.",
+      "passed": false,
+      "evidence": "No exact JSON adapter command was provided."
+    },
+    {
+      "text": "The answer explains output-format policy.",
+      "passed": false,
+      "evidence": "Output-format policy explanation is incomplete."
+    },
+    {
+      "text": "The answer includes a cache-friendly prompt-structure note.",
+      "passed": false,
+      "evidence": "No cache-friendly prompt-structure note found."
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 3,
+    "total": 3,
+    "pass_rate": 0.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 3,
+    "errors_encountered": 0,
+    "output_chars": 535,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 16.522
+  },
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": [
+      "Baseline lacked project-specific skill guidance and missed one or more exact workflow details."
+    ]
+  }
+}

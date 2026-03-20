@@ -250,10 +250,19 @@ class ObservabilityManager:
         self.service_version = service_version or __version__
         self.environment = environment
         self.sampling_rate = sampling_rate
-        self.otlp_endpoint = otlp_endpoint or os.getenv(
-            "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"
-        )
+        explicit_otlp_endpoint = otlp_endpoint or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        self.otlp_endpoint = explicit_otlp_endpoint or "http://localhost:4317"
         self.enable_console_export = enable_console_export
+        otlp_env_flag = os.getenv("OTEL_ENABLE_OTLP")
+        if otlp_env_flag is not None:
+            self.enable_otlp_export = otlp_env_flag.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+        else:
+            self.enable_otlp_export = bool(explicit_otlp_endpoint) or environment == "production"
 
         # Check if OpenTelemetry is available
         if not OPENTELEMETRY_AVAILABLE:
@@ -311,11 +320,8 @@ class ObservabilityManager:
         # Create tracer provider
         provider = TracerProvider(resource=resource, sampler=sampler)
 
-        # Configure exporters
-        exporters_configured = False
-
         # Try to configure OTLP exporter
-        if OTLP_AVAILABLE:
+        if OTLP_AVAILABLE and self.enable_otlp_export:
             try:
                 otlp_exporter = OTLPSpanExporter(
                     endpoint=self.otlp_endpoint,
@@ -323,13 +329,12 @@ class ObservabilityManager:
                 )
                 processor = BatchSpanProcessor(otlp_exporter)
                 provider.add_span_processor(processor)
-                exporters_configured = True
                 logger.info(f"OTLP span exporter configured: {self.otlp_endpoint}")
             except Exception as e:
                 logger.warning(f"Failed to configure OTLP exporter: {e}. Falling back to console.")
 
-        # Fallback to console exporter if OTLP unavailable or failed
-        if not exporters_configured or self.enable_console_export:
+        # Console export is opt-in to avoid background writes to closed stdout/stderr
+        if self.enable_console_export:
             console_exporter = ConsoleSpanExporter()
             processor = BatchSpanProcessor(console_exporter)
             provider.add_span_processor(processor)
@@ -537,6 +542,14 @@ class ObservabilityManager:
         if span and span.is_recording():
             span.add_event(name, attributes=attributes)
 
+    def record_cache_telemetry(self, telemetry: Dict[str, Any]) -> None:
+        """Attach normalized cache telemetry to the current span."""
+        if not self._enabled:
+            return
+        attributes = {f"llm.cache.{key}": value for key, value in telemetry.items()}
+        self.set_attributes(attributes)
+        self.add_event("provider_cache_telemetry", attributes=attributes)
+
     def get_current_trace_context(self) -> Dict[str, str]:
         """
         Get trace context for current span.
@@ -686,6 +699,7 @@ def configure_observability(
     Environment Variables:
         - ENVIRONMENT: Deployment environment (development/production)
         - OTEL_EXPORTER_OTLP_ENDPOINT: OTLP endpoint URL
+        - OTEL_ENABLE_OTLP: Force OTLP export on/off (true/false)
         - OTEL_SAMPLING_RATE: Trace sampling rate (0.0-1.0)
 
     Auto-Detection:

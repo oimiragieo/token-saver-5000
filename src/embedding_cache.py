@@ -23,6 +23,7 @@ Cache Warming Strategy:
 - Configurable TTL for stale entry eviction
 """
 
+import atexit
 import hashlib
 import logging
 import time
@@ -30,11 +31,21 @@ from collections import OrderedDict
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
+import weakref
 
 import msgpack
 import numpy as np
 
 logger = logging.getLogger(__name__)
+_OPEN = open
+
+
+def _persist_cache_at_exit(cache_ref: "weakref.ReferenceType[LRUEmbeddingCache]") -> None:
+    """Persist cache during interpreter shutdown without relying on logging."""
+    cache = cache_ref()
+    if cache is None:
+        return
+    cache._save_to_disk(silent=True)
 
 
 class LRUEmbeddingCache:
@@ -77,6 +88,11 @@ class LRUEmbeddingCache:
         # Load persisted cache if available
         if self.persist_path and self.persist_path.exists():
             self._load_from_disk()
+
+        self._atexit_registered = False
+        if self.persist_path:
+            atexit.register(_persist_cache_at_exit, weakref.ref(self))
+            self._atexit_registered = True
 
     def _make_key(self, text: str) -> str:
         """
@@ -283,7 +299,7 @@ class LRUEmbeddingCache:
                 "utilization": len(self._cache) / self.max_entries,
             }
 
-    def _save_to_disk(self):
+    def _save_to_disk(self, silent: bool = False):
         """Save cache to disk using msgpack serialization."""
         if not self.persist_path:
             return
@@ -306,13 +322,15 @@ class LRUEmbeddingCache:
                     )
 
             # Write to disk
-            with open(self.persist_path, "wb") as f:
+            with _OPEN(self.persist_path, "wb") as f:
                 msgpack.pack(entries, f, use_bin_type=True)
 
-            logger.info(f"Saved {len(entries)} cache entries to {self.persist_path}")
+            if not silent:
+                logger.info(f"Saved {len(entries)} cache entries to {self.persist_path}")
 
         except Exception as e:
-            logger.error(f"Failed to save cache to disk: {e}")
+            if not silent:
+                logger.error(f"Failed to save cache to disk: {e}")
 
     def _load_from_disk(self):
         """Load cache from disk."""
@@ -320,7 +338,7 @@ class LRUEmbeddingCache:
             return
 
         try:
-            with open(self.persist_path, "rb") as f:
+            with _OPEN(self.persist_path, "rb") as f:
                 entries = msgpack.unpack(f, raw=False)
 
             with self._lock:
@@ -344,7 +362,10 @@ class LRUEmbeddingCache:
     def __del__(self):
         """Save cache to disk on destruction (if persistence enabled)."""
         if self.persist_path:
-            self._save_to_disk()
+            try:
+                self._save_to_disk(silent=True)
+            except BaseException:
+                pass
 
 
 # Singleton instance for global access

@@ -7,7 +7,7 @@ quality than blind ratio-based pruning.
 """
 
 import math
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 

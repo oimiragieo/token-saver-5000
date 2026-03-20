@@ -6,7 +6,7 @@ results per content type, enabling data-driven strategy optimization.
 """
 
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class CompressionReplayLog:
@@ -23,6 +23,9 @@ class CompressionReplayLog:
         output_tokens: int,
         ratio: float,
         fidelity_score: float,
+        *,
+        timestamp: float | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Record a compression event.
 
@@ -34,15 +37,19 @@ class CompressionReplayLog:
             ratio: Compression ratio used
             fidelity_score: Measured fidelity score (0-1)
         """
-        self._log.append({
-            "doc_id": doc_id,
-            "content_type": content_type,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "ratio": ratio,
-            "fidelity_score": fidelity_score,
-            "timestamp": time.time(),
-        })
+        self._log.append(
+            {
+                "doc_id": doc_id,
+                "content_type": content_type,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "ratio": ratio,
+                "fidelity_score": fidelity_score,
+                "timestamp": time.time() if timestamp is None else float(timestamp),
+                "event_type": "compression_record",
+                "metadata": dict(metadata or {}),
+            }
+        )
 
     def get_history(self, doc_id: str) -> List[dict]:
         """Get compression history for a specific document."""
@@ -105,3 +112,28 @@ class CompressionReplayLog:
         # Best = highest fidelity among qualifying
         best = max(qualifying, key=lambda e: e["fidelity_score"])
         return best["ratio"]
+
+    def get_timeline(
+        self,
+        doc_id: str | None = None,
+        *,
+        since: float | None = None,
+        until: float | None = None,
+        content_type: str | None = None,
+        limit: int = 50,
+    ) -> List[dict[str, Any]]:
+        """Return replay records as timeline events."""
+        events: List[dict[str, Any]] = []
+        for entry in reversed(self._log):
+            if doc_id is not None and entry["doc_id"] != doc_id:
+                continue
+            if content_type is not None and entry["content_type"] != content_type:
+                continue
+            if since is not None and entry["timestamp"] < since:
+                continue
+            if until is not None and entry["timestamp"] > until:
+                continue
+            events.append(dict(entry))
+            if len(events) >= limit:
+                break
+        return events

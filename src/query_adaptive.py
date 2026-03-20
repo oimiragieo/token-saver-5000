@@ -6,7 +6,7 @@ compression ratio per section based on query relevance. Sections matching
 the query get lighter compression; irrelevant sections get compressed harder.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 

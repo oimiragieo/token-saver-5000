@@ -14,9 +14,11 @@ _VALIDATORS = {}
 
 def _register(tool_name: str):
     """Decorator to register a validator for a tool."""
+
     def decorator(func):
         _VALIDATORS[tool_name] = func
         return func
+
     return decorator
 
 
@@ -55,7 +57,7 @@ def _validate_ingest(args: Dict[str, Any]) -> List[str]:
     if not text or len(text.strip()) == 0:
         errors.append("text cannot be empty or whitespace-only")
     file_id = args.get("file_id", "")
-    if file_id and not re.match(r'^[a-zA-Z0-9_]+$', file_id):
+    if file_id and not re.match(r"^[a-zA-Z0-9_]+$", file_id):
         errors.append("file_id must contain only alphanumeric characters and underscores")
     return errors
 

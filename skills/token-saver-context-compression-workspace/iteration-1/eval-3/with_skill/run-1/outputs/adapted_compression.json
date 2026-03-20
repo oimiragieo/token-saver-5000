@@ -1,0 +1,48 @@
+{
+  "file_id": "skill_context_doc",
+  "mode": "query_guided",
+  "query": "retry policy",
+  "original_tokens": 30,
+  "compressed_tokens": 30,
+  "compression_ratio": 1.0,
+  "token_savings_pct": 0.0,
+  "compressed_text": "Retry policy uses exponential backoff with bounded retries before dead-letter handling.\nPrompt caching works best when stable context comes before dynamic metadata and the user question.",
+  "segments": [
+    {
+      "segment_id": 0,
+      "score": 0.25,
+      "tokens": 14,
+      "text": "Retry policy uses exponential backoff with bounded retries before dead-letter handling.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.1667,
+        "position": 0.5,
+        "final": 0.25
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    },
+    {
+      "segment_id": 1,
+      "score": 0.0967,
+      "tokens": 16,
+      "text": "Prompt caching works best when stable context comes before dynamic metadata and the user question.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0,
+        "position": 0.3869,
+        "final": 0.0967
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    }
+  ],
+  "input_adapter": {
+    "adapter": "langchain_json",
+    "document_count": 2
+  }
+}

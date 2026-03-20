@@ -1,0 +1,6 @@
+{
+  "eval_id": 1,
+  "eval_name": "retry-rules-query-guided",
+  "prompt": "Compress this document for a question-answering workflow and tell me what the retry rules are. Use a mode that prioritizes query relevance and mention whether the result still looks safe to answer from.",
+  "assertions": []
+}

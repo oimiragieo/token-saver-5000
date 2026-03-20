@@ -1,0 +1,442 @@
+================================================================================
+TOKEN-SAVER-5000: MCP TOOL ANALYSIS REPORT
+================================================================================
+
+EXECUTIVE SUMMARY
+================================================================================
+✗ CRITICAL: 58 tools with POOR guidance for AI usage
+- Only 14 tools (24%) have help registry entries
+- 44 tools (76%) have NO documented workflow guidance
+- Tool descriptions are scattered with implicit ordering clues but NO centralized 
+  workflow documented
+- AI using this system will face cognitive overload and ordering confusion
+
+================================================================================
+1. TOOL DESCRIPTIONS CLARITY ANALYSIS
+================================================================================
+
+TOTAL TOOLS: 58 (distributed across mcp_core.py and router)
+
+HELP REGISTRY COVERAGE: ONLY 14/58 (24%)
+✓ Tools WITH documentation: ingest_context, read_skeleton, modulate_region,
+  search_semantic, afm_add_message, afm_build_context, ace_generate,
+  check_file_sync, refresh_document, check_blind_spots, check_resource_health,
+  check_environment, recommend_fidelity, ingest_directory
+
+✗ Tools WITHOUT help (44 missing - 76% gap):
+  - multilevel_encode, detect_hallucination, batch_ingest_documents
+  - adapt_to_context_window, diff_cached_file, get_version_history
+  - diff_reingest, find_duplicates, get_compression_presets
+  - check_context_budget, prune_by_relevance, get_multi_level_skeleton
+  - evict_stale, advise_context, get_compression_insights
+  - generate_rewrite_prompt, and 28 more tools
+
+CLARITY ISSUE: While individual tool descriptions exist, they LACK:
+  • Explicit prerequisites and dependencies
+  • Recommended call order/sequence
+  • Decision logic: "use THIS tool vs. THAT tool"
+  • "Call this AFTER tool_X" guidance (only scattered implicit hints)
+
+================================================================================
+2. RECOMMENDED WORKFLOW TOOL
+================================================================================
+
+tool_help [line 682-705] Handler in help_handlers.py
+STATUS: ✗ INCOMPLETE FOR WORKFLOW GUIDANCE
+What it provides:
+  ✓ Shows tool categories and full list
+  ✓ Shows parameters and examples
+  ✓ Shows "related_tools" (good cross-reference)
+  
+What it LACKS:
+  ✗ No workflow orchestration or call sequences
+  ✗ No "start here, then do this" guidance
+  ✗ No "correct usage order" documentation
+  ✗ Doesn't explain 4-way overlapping context budget tools
+
+MISSING FEATURES:
+  - No workflow type like: run_workflow("standard_ingest")
+  - No "prerequisites" or "requires_state" documentation
+  - No tool dependency graph or topology
+
+================================================================================
+3. ORDERING GUIDANCE (SCATTERED)
+================================================================================
+
+SCATTERED REFERENCES IN 58 TOOL DESCRIPTIONS:
+✓ read_skeleton [line 148]: "Use this FIRST before requesting specific details"
+✓ modulate_region [line 186]: "Use this to 'zoom in' AFTER reading skeleton"
+✓ check_blind_spots [line 379]: "Use AFTER generating a response"
+✓ check_file_sync [line 549]: "Use this BEFORE long operations"
+✓ refresh_document [line 589]: "Use when check_file_sync detects staleness"
+✓ should_compress [line 658]: "CRITICAL: Call this BEFORE reading/ingesting"
+✓ recommend_fidelity [line 1051]: "Use this BEFORE modulate_region"
+✓ afm_add_message [line 434]: "Use BEFORE calling afm_build_context"
+
+PROBLEM: These 50+ orderings are IMPLICIT and SCATTERED
+- AI must read all 58 descriptions to infer workflow
+- No centralized "workflow" document exists
+- No tool explicitly coordinates sequencing
+- help_handlers only covers 14/58 tools
+
+================================================================================
+4. DUPLICATE & OVERLAPPING TOOLS (DANGEROUS CONFUSION)
+================================================================================
+
+GROUP A: SKELETON VARIANTS (3 similar tools)
+┌──────────────────────────────────────────────────────────────────┐
+│ read_skeleton [line 143-181]                                      │
+│   Returns: skeleton_text with ~20% important nodes                │
+│   Modes: baseline, query_guided, evidence_aware                   │
+│   Compression: 80-95% reduction                                   │
+│                                                                   │
+│ get_multi_level_skeleton [line 1523-1535]                         │
+│   Returns: 3 tiers (headline 10%, summary 30%, full 100%)         │
+│   Client picks depth based on budget                              │
+│   Inspired by: "Squeezed Attention"                               │
+│                                                                   │
+│ multilevel_encode [line 348-372]                                  │
+│   Returns: 3 priority branches (main 15%, aux 25%, detail %)      │
+│   Progressively adds based on available tokens                    │
+│   Inspired by: JSCCM parallel encoder architecture                │
+│                                                                   │
+│ ⚠️ SEVERITY: HIGH CONFUSION                                      │
+│ When should AI use which? Tool descriptions DON'T SAY!           │
+│ - Use read_skeleton for query-aware selection?                   │
+│ - Use multi_level for strict % tiers?                            │
+│ - Use multilevel_encode for JSCCM rate allocation?                │
+│ None of this is explicitly documented!                            │
+└──────────────────────────────────────────────────────────────────┘
+
+GROUP B: CONTEXT BUDGET MANAGEMENT (4 overlapping tools)
+┌──────────────────────────────────────────────────────────────────┐
+│ should_compress [line 654-680]                                    │
+│   Purpose: PRE-CHECK before ingesting file                        │
+│   Input: file_path, content_type                                  │
+│   Output: token estimate + recommendation                         │
+│   Detects binary files (PDF, DOCX) needing conversion             │
+│                                                                   │
+│ check_context_budget [line 1654-1663]                             │
+│   Purpose: GLOBAL budget monitor                                  │
+│   Input: current_tokens, context_limit                            │
+│   Output: usage %, recommendations at 40/60/75% thresholds        │
+│                                                                   │
+│ adapt_to_context_window [line 313-346]                            │
+│   Purpose: DOCUMENT-ADAPTIVE compression                          │
+│   Input: file_id, available_tokens, max_tokens                    │
+│   Output: adjusted skeleton for ONE document                      │
+│   Uses: "learned rate allocator" (JSCCM-inspired)                │
+│                                                                   │
+│ advise_context [line 1550-1559]                                   │
+│   Purpose: ALL-DOCUMENTS strategy advisor                         │
+│   Input: (none - analyzes all ingested documents)                 │
+│   Output: pruning priorities, compression advice                  │
+│                                                                   │
+│ ⚠️ SEVERITY: CRITICAL (4-WAY CONFUSION)                          │
+│ Correct order is NOT documented:                                  │
+│   Step 1: should_compress(file)         ← Pre-check file         │
+│   Step 2: ingest_context()              ← Ingest                  │
+│   Step 3: check_context_budget()        ← Monitor global budget  │
+│   Step 4: adapt_to_context_window()     ← Adjust ONE doc         │
+│   Step 5: advise_context()              ← Strategize ALL docs    │
+│                                                                   │
+│ But tool descriptions DON'T mention this sequence!               │
+│ AI will likely call them in wrong order or miss some entirely!   │
+└──────────────────────────────────────────────────────────────────┘
+
+GROUP C: DUPLICATE DETECTION
+┌──────────────────────────────────────────────────────────────────┐
+│ find_duplicates [line 1452-1468]                                  │
+│   Input: threshold (0.0-1.0, default 0.9)                        │
+│   Purpose: Find near-duplicate CHUNKS across DIFFERENT documents │
+│   Uses: cosine_similarity on chunk embeddings                     │
+│                                                                   │
+│ Note: This is the ONLY dedup tool. No intra-document dedup.      │
+│ Name could be confused with general "deduplication"              │
+└──────────────────────────────────────────────────────────────────┘
+
+================================================================================
+5. DEAD TOOLS (Depend on Uninitialized State)
+================================================================================
+
+TOOL 1: evict_stale [line 1735-1761]
+┌──────────────────────────────────────────────────────────────────┐
+│ Handler code (line 1741-1747):                                    │
+│    tracker = getattr(compressor, '_access_tracker', None)        │
+│    if tracker is None:                                            │
+│        return json.dumps({                                        │
+│            "evicted": [],                                         │
+│            "message": "Access tracking not enabled."              │
+│        })                                                         │
+│                                                                   │
+│ ROOT CAUSE: AccessTracker is NEVER INITIALIZED                   │
+│  - Class defined in context_decay.py [line 14]                   │
+│  - NEVER assigned to: compressor._access_tracker = AccessTracker()│
+│  - Always returns empty response                                  │
+│                                                                   │
+│ IMPACT: ❌ COMPLETELY DEAD - Always says "not enabled"           │
+│  - AI will call this, get no data                                 │
+│  - No error thrown (graceful degradation)                         │
+│  - But tool is useless without initialization                    │
+└──────────────────────────────────────────────────────────────────┘
+
+TOOL 2: get_compression_insights [line 1794-1803]
+┌──────────────────────────────────────────────────────────────────┐
+│ Handler code (line 1797-1800):                                    │
+│    replay_log = getattr(compressor, '_compression_replay', None) │
+│    if replay_log is None:                                         │
+│        return json.dumps(                                         │
+│            {"insights": {}, "message": "No compression history"}  │
+│        )                                                          │
+│                                                                   │
+│ ROOT CAUSE: _compression_replay is NEVER INITIALIZED             │
+│  - Never assigned in SemanticCompressor.__init__()               │
+│  - Always returns empty response                                  │
+│                                                                   │
+│ IMPACT: ❌ COMPLETELY DEAD - Always says "no history"            │
+│  - AI will call this expecting compression analytics             │
+│  - Gets empty response instead                                   │
+│  - Tool is unusable without initialization                       │
+└──────────────────────────────────────────────────────────────────┘
+
+ASSESSMENT:
+✗ 2 confirmed dead tools
+✗ Both degrade gracefully (don't crash)
+✗ But they're documented as working tools in help/mcp_core
+✗ AI has no way to know they're non-functional
+✗ No error logs or warnings when called
+
+================================================================================
+6. TOKEN OVERHEAD ANALYSIS
+================================================================================
+
+Tool definitions consume: ~16,632 tokens per context
+  - Calculated from 73,530 characters ÷ 4.4 chars/token
+  - Spans lines 94-1591 in mcp_core.py
+  - Includes 58 Tool() objects with full schemas
+
+COST ANALYSIS:
+  - Single request: 16,632 tokens
+  - 10-turn conversation: 166,320 tokens
+  - 100 conversations/day: 1.66M+ tokens wasted just on tool definitions
+
+BREAKDOWN BY CATEGORY:
+  Document Compression (9 tools):      ~2,500 tokens (15%)
+  AFM Dialogue (6 tools):              ~1,200 tokens (7%)
+  ACE Framework (7 tools):             ~1,800 tokens (11%)
+  Phase 5 Research (7 tools):          ~1,200 tokens (7%)
+  ASG-SI Framework (4 tools):          ~700 tokens (4%)
+  Other categories (18 tools):         ~8,632 tokens (52%)
+
+OPPORTUNITY:
+✓ Tool profiles already exist [line 47]:
+  - "full": all 58 tools
+  - "core_stable": 7 essential tools only (ingest, read, search, modulate, 
+                   stats, list, delete)
+
+✗ BUT: Profiles are NOT documented in tool_help()
+✗ AI doesn't know to request "core_stable" profile
+✗ Every request loads unnecessary 51 tools
+
+================================================================================
+7. CRITICAL FINDINGS SUMMARY
+================================================================================
+
+FINDING                                SEVERITY IMPACT
+───────────────────────────────────────────────────────────────────
+No centralized workflow document       CRITICAL AI must reverse-engineer
+(50+ scattered ordering hints)                  usage order from descriptions
+
+76% of tools lack help registry        CRITICAL 44 tools completely missing
+entries (44 of 58 missing)                     from documented interface
+
+3 skeleton tools overlap                HIGH    Confusing: read_skeleton vs.
+without clear "when to use" guidance          multi_level vs. multilevel_encode
+
+4 context budget tools                CRITICAL should_compress + check_context_
+dangerously overlap                            budget + adapt_to_context_window +
+                                             advise_context (no documented flow)
+
+2 dead tools always return              MEDIUM  evict_stale & get_compression_
+empty responses                               insights (never initialized)
+
+16,632 token overhead per request      MEDIUM  Could use "core_stable" profile
+(full profile not needed)                    instead of 58 tools
+
+No "prerequisites" or "requires"       HIGH    Tools don't state dependencies
+state in tool descriptions                  or prerequisite operations
+
+Tool profiles exist but are hidden     MEDIUM  core_stable (7 tools) exists
+from tool_help() documentation             but AI can't discover it
+
+================================================================================
+8. RECOMMENDED AI WORKFLOW (NOT DOCUMENTED ANYWHERE)
+================================================================================
+
+PHASE 1: PRE-INGEST CHECK
+  1. should_compress(file_path)     ← Check file size + binary status
+  2. check_resource_health()        ← Monitor available resources
+
+PHASE 2: INGESTION & SKELETON
+  3. ingest_context(text, file_id)  ← Compress 80-95%
+  4. read_skeleton(file_id)         ← Get compressed view
+  5. recommend_fidelity(use_case)   ← Decide fidelity level
+
+PHASE 3: SEARCH & RETRIEVAL
+  6. search_semantic(query)         ← Find relevant nodes
+  7. modulate_region(node_ids)      ← Get detailed content
+
+PHASE 4: VALIDATION
+  8. check_blind_spots(response)    ← Verify retrieval
+  9. detect_hallucination(response) ← Check grounding
+
+PHASE 5: CONTEXT BUDGET
+  10. check_context_budget()        ← Monitor usage
+  11. adapt_to_context_window()     ← Compress one doc
+  12. advise_context()              ← Strategize all docs
+
+PHASE 6: MULTI-TURN (AFM)
+  13. afm_add_message()             ← Add to dialogue
+  14. afm_build_context()           ← Get compressed context
+  15. afm_get_stats()               ← Monitor state
+  16. afm_export/import_history()   ← Save/resume
+
+PHASE 7: FILE TRACKING
+  17. check_file_sync()             ← Detect changes
+  18. diff_cached_file()            ← View changes
+  19. get_version_history()         ← Browse versions
+  20. refresh_document()            ← Update cache
+
+THIS WORKFLOW IS COMPLETELY UNDOCUMENTED!
+It's scattered across 58 tool descriptions.
+AI must reverse-engineer it or guess blindly.
+
+================================================================================
+9. RECOMMENDATIONS
+================================================================================
+
+IMMEDIATE (Critical - Fix now):
+1. Create WORKFLOW.md showing phases 1-7 above
+2. Add "prerequisites" field to all tool descriptions
+3. Mark evict_stale & get_compression_insights as [DISABLED]
+4. Document which tools are in core_stable profile
+5. Add workflow guidance to tool_help() handler
+
+SHORT-TERM (High priority):
+6. Add all 44 missing tools to TOOL_HELP_REGISTRY
+7. Document when to use each skeleton variant
+8. Explain the 4-way context budget tool order
+9. Initialize AccessTracker in SemanticCompressor.__init__()
+10. Initialize _compression_replay in SemanticCompressor.__init__()
+
+MEDIUM-TERM (Important):
+11. Add "related_tools" field to all 58 tool schemas
+12. Consider merging overlapping skeleton tools
+13. Consolidate context budget tools (4 → 2)
+14. Provide tool composition/chaining helpers
+
+LONG-TERM (Architecture):
+15. Implement tool dependency graph
+16. Provide workflow orchestration tool
+17. Add "state requirements" to tool schemas
+18. Document tool topology and phases
+
+================================================================================
+═══════════════════════════════════════════════════════════════════════════════
+QUICK REFERENCE: TOKEN-SAVER-5000 MCP TOOL ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. TOOL DESCRIPTIONS CLARITY
+   Total Tools:                          58
+   Tools With Help Registry:             14 (24%) ✓
+   Tools Missing From Help:              44 (76%) ✗
+   Verdict:                              POOR - Only 1 in 4 documented
+
+2. RECOMMENDED WORKFLOW TOOL?
+   Tool Name:                            tool_help()
+   Has Workflow Guidance?                NO ✗
+   Has Call Sequence Docs?               NO ✗
+   Explains Tool Interaction?            NO ✗
+   Verdict:                              INCOMPLETE - No workflow support
+
+3. TOOL REFERENCES & ORDERING GUIDANCE
+   Explicit "Call BEFORE X":             ~12 found scattered in descriptions
+   Centralized Workflow Doc:             NONE ✗
+   Tool Dependency Graph:                NONE ✗
+   Verdict:                              SCATTERED - Must infer from 58 descriptions
+
+4. DUPLICATE/OVERLAPPING TOOLS
+   Skeleton Tool Variants:               3 (read_skeleton, multi_level, multilevel_encode)
+   Context Budget Tools:                 4 (should_compress, check_context_budget,
+                                           adapt_to_context_window, advise_context)
+   Severity of Overlap:                  HIGH for both groups
+   When-To-Use Guidance:                 MISSING ✗
+   Verdict:                              DANGEROUS CONFUSION
+
+5. DEAD TOOLS (Never Initialized)
+   evict_stale:                          ✗ DEAD - AccessTracker never created
+   get_compression_insights:             ✗ DEAD - _compression_replay never created
+   Impact:                               Tools return empty responses always
+   Verdict:                              2 confirmed non-functional tools
+
+6. TOKEN OVERHEAD
+   Tool Definitions Size:                ~16,632 tokens per request
+   Available Profile (core_stable):      7 tools only (~1,000 tokens)
+   Current Waste:                        ~15,600 tokens per request
+   Documented in Help?                   NO ✗
+   Verdict:                              SIGNIFICANT WASTE - Profile hidden
+
+7. SUMMARY TABLE
+   ┌────────────────────────────────────┬──────┬──────────────────────┐
+   │ Question                           │Answer│ Grade                │
+   ├────────────────────────────────────┼──────┼──────────────────────┤
+   │ Clear descriptions for all tools?  │  NO  │ 24% only             │
+   │ Recommended workflow tool?         │  NO  │ tool_help incomplete │
+   │ Tool ordering guidance?            │  NO  │ Scattered & implicit │
+   │ Overlap resolution guidance?       │  NO  │ 2 confusing groups   │
+   │ Dead tools marked?                 │  NO  │ 2 non-functional     │
+   │ Token overhead documented?         │  NO  │ ~16.6K wasted        │
+   ├────────────────────────────────────┼──────┼──────────────────────┤
+   │ OVERALL SCORE                      │ 3/10 │ POOR                 │
+   └────────────────────────────────────┴──────┴──────────────────────┘
+
+8. CRITICAL RECOMMENDATIONS
+
+   Priority 1 (DO IMMEDIATELY):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ □ Create WORKFLOW.md with 7 phases (ingest→search→budget)   │
+   │ □ Mark 2 dead tools [DISABLED] - evict_stale, get_insights  │
+   │ □ Add "prerequisites" field to all 58 tool descriptions     │
+   │ □ Initialize AccessTracker in SemanticCompressor.__init__() │
+   └──────────────────────────────────────────────────────────────┘
+
+   Priority 2 (DO SOON):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ □ Add all 44 missing tools to TOOL_HELP_REGISTRY            │
+   │ □ Document 3 skeleton variants: "use read for queries,      │
+   │   multi_level for strict tiers, multilevel for JSCCM"       │
+   │ □ Explain 4 context budget tools with flowchart/sequence    │
+   │ □ Mention core_stable profile in tool_help() output         │
+   └──────────────────────────────────────────────────────────────┘
+
+   Priority 3 (LONG-TERM):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ □ Consider merging overlapping skeleton tools (3 → 1-2)     │
+   │ □ Implement tool dependency graph                            │
+   │ □ Provide workflow orchestration tool/API                    │
+   │ □ Add "state requirements" metadata to all tools             │
+   └──────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Files saved:
+• C:\dev\projects\token-saver-5000\docs\archive\audits\ANALYSIS_REPORT.txt (full 30KB report)
+• This summary (console output)
+
+Next Steps:
+1. Review ANALYSIS_REPORT.txt for detailed findings
+2. Implement Priority 1 recommendations
+3. Schedule Priority 2 within next sprint
+4. Plan Priority 3 for architectural improvements
+
+═══════════════════════════════════════════════════════════════════════════════

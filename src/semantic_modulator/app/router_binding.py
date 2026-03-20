@@ -88,6 +88,27 @@ def bind_mcp_handlers(
     async def list_tools():
         return tooling.list_tools(profile=tool_profile)
 
+    @server.list_prompts()
+    async def list_prompts():
+        return tooling.list_prompts()
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: Any | None = None):
+        return tooling.get_prompt(name, arguments)
+
+    @server.list_resources()
+    async def list_resources():
+        return tooling.list_resources(profile=tool_profile)
+
+    @server.list_resource_templates()
+    async def list_resource_templates():
+        return tooling.list_resource_templates()
+
+    @server.read_resource()
+    async def read_resource(uri: str):
+        context = build_context()
+        return await tooling.read_resource(uri, context, profile=tool_profile)
+
     @server.call_tool()
     async def call_tool(name: str, arguments: Any):
         try:

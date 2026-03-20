@@ -193,8 +193,11 @@ class SemanticCompressor:
         # Phase 5: Access tracking and compression replay
         from .context_decay import AccessTracker
         from .compression_replay import CompressionReplayLog
+        from .temporal_graph import TemporalGraph
+
         self._access_tracker = AccessTracker()
         self._compression_replay = CompressionReplayLog()
+        self._temporal_graph = TemporalGraph()
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text using tiktoken, with fallback to word count"""
@@ -299,7 +302,9 @@ class SemanticCompressor:
 
         return pagerank
 
-    def _chunk_text(self, text: str, max_chunk_size: int = 512, strategy: str = "auto") -> List[str]:
+    def _chunk_text(
+        self, text: str, max_chunk_size: int = 512, strategy: str = "auto"
+    ) -> List[str]:
         """
         Intelligent text chunking that preserves semantic boundaries.
 
@@ -317,19 +322,41 @@ class SemanticCompressor:
         if strategy == "auto":
             total_tokens = self._count_tokens(text)
             paragraph_count = len([p for p in text.split("\n\n") if p.strip()])
-            strategy = (
-                "semantic"
-                if total_tokens >= 400 and paragraph_count >= 3
-                else "fixed"
-            )
+            strategy = "semantic" if total_tokens >= 400 and paragraph_count >= 3 else "fixed"
 
         if strategy == "semantic":
             try:
                 from .semantic_chunking import chunk_by_semantics
-                return chunk_by_semantics(
-                    text, max_chunk_tokens=max_chunk_size,
-                    embed_fn=lambda texts: self.model.encode(texts)
+
+                paragraphs = [
+                    paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()
+                ]
+                semantic_units = paragraphs
+                if len(semantic_units) < 3:
+                    semantic_units = [
+                        sentence.strip()
+                        for sentence in re.split(r"(?<=[.!?])\s+", text)
+                        if sentence.strip()
+                    ]
+
+                semantic_chunks = chunk_by_semantics(
+                    semantic_units,
+                    encode_fn=lambda texts: self.model.encode(texts),
+                    max_chunk_size=max_chunk_size,
                 )
+                if semantic_chunks and isinstance(semantic_chunks[0], str):
+                    rendered_semantic_chunks = semantic_chunks
+                else:
+                    rendered_semantic_chunks = [
+                        " ".join(chunk).strip() for chunk in semantic_chunks if chunk
+                    ]
+
+                fixed_chunks = self._chunk_text(
+                    text, max_chunk_size=max_chunk_size, strategy="fixed"
+                )
+                if len(rendered_semantic_chunks) > len(fixed_chunks):
+                    return fixed_chunks
+                return rendered_semantic_chunks
             except Exception as exc:
                 logger.warning(f"Semantic chunking failed; falling back to fixed chunking: {exc}")
         # Split by double newlines first (paragraphs)
@@ -428,14 +455,19 @@ class SemanticCompressor:
         return embeddings
 
     async def ingest_file_async(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None,
-        chunking_strategy: str = "auto"
+        self,
+        text: str,
+        file_id: str,
+        metadata: Optional[Dict] = None,
+        chunking_strategy: str = "auto",
     ) -> SkeletonResponse:
         """
         Async version of ingest_file for MCP server use.
         See ingest_file() for full documentation.
         """
-        return await self._ingest_file_impl(text, file_id, metadata, chunking_strategy=chunking_strategy)
+        return await self._ingest_file_impl(
+            text, file_id, metadata, chunking_strategy=chunking_strategy
+        )
 
     def ingest_file(
         self, text: str, file_id: str, metadata: Optional[Dict] = None
@@ -472,8 +504,12 @@ class SemanticCompressor:
             )
 
     async def _ingest_file_impl(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None,
-        use_async_lock: bool = True, chunking_strategy: str = "auto"
+        self,
+        text: str,
+        file_id: str,
+        metadata: Optional[Dict] = None,
+        use_async_lock: bool = True,
+        chunking_strategy: str = "auto",
     ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
@@ -546,13 +582,16 @@ class SemanticCompressor:
             if len(raw_chunks) > 2:
                 try:
                     from .intra_doc_dedup import collapse_redundant_nodes
+
                     nodes_map = {
                         f"tmp_{i}": {"text": raw_chunks[i], "embedding": embeddings[i]}
                         for i in range(len(raw_chunks))
                     }
                     collapsed = collapse_redundant_nodes(nodes_map, threshold=0.92)
                     if len(collapsed) < len(raw_chunks):
-                        logger.info(f"  Intra-doc dedup: {len(raw_chunks)} → {len(collapsed)} chunks")
+                        logger.info(
+                            f"  Intra-doc dedup: {len(raw_chunks)} → {len(collapsed)} chunks"
+                        )
                         collapsed_keys = sorted(
                             collapsed.keys(),
                             key=lambda key: int(key.split("_")[1]),
@@ -722,6 +761,7 @@ class SemanticCompressor:
         file_id: str,
         query: Optional[str] = None,
         anchor_node_ids: Optional[Set[str]] = None,
+        exclude_node_ids: Optional[Set[str]] = None,
     ) -> SkeletonResponse:
         """
         Step 2: Rate Allocation (JSCCM)
@@ -736,7 +776,30 @@ class SemanticCompressor:
             raise ValueError(f"File {file_id} not found")
 
         # Get all nodes for this file
-        file_nodes = [(nid, self.chunks[nid]) for nid in graph.nodes() if nid.startswith(file_id)]
+        excluded = exclude_node_ids or set()
+        file_nodes = [
+            (nid, self.chunks[nid])
+            for nid in graph.nodes()
+            if nid.startswith(file_id) and nid not in excluded
+        ]
+
+        if not file_nodes:
+            skeleton_text = "\n".join(
+                [
+                    f"=== SEMANTIC SKELETON: {file_id} ===",
+                    "Total nodes: 0 | Skeleton nodes: 0",
+                    "Compression: 0% of content shown",
+                ]
+            )
+            return SkeletonResponse(
+                file_id=file_id,
+                total_nodes=0,
+                total_tokens=0,
+                skeleton_tokens=0,
+                compression_ratio=0.0,
+                skeleton_text=skeleton_text,
+                node_map={},
+            )
 
         # Sort by importance for stable iteration order and deterministic output
         file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
@@ -745,9 +808,7 @@ class SemanticCompressor:
         # Use adaptive ratio if skeleton_ratio is "auto"
         effective_ratio = self.skeleton_ratio
         if effective_ratio == "auto":
-            total_tokens_estimate = sum(
-                len(node.text.split()) for _, node in file_nodes
-            )
+            total_tokens_estimate = sum(len(node.text.split()) for _, node in file_nodes)
             effective_ratio = compute_adaptive_ratio(total_tokens_estimate)
 
         num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
@@ -757,14 +818,14 @@ class SemanticCompressor:
         if query and len(file_nodes) > 1:
             try:
                 from .query_adaptive import compute_section_ratios
+
                 query_emb = self.model.encode([query])[0]
                 sections = [{"embedding": node.embedding} for _, node in file_nodes]
                 per_node_ratios = compute_section_ratios(
                     sections, query_emb, base_ratio=effective_ratio
                 )
                 adaptive_priority_scores = {
-                    node_id: ratio
-                    for (node_id, _), ratio in zip(file_nodes, per_node_ratios)
+                    node_id: ratio for (node_id, _), ratio in zip(file_nodes, per_node_ratios)
                 }
                 # Use adaptive ratios to tune overall budget as well as
                 # per-node selection priority.
@@ -1183,10 +1244,7 @@ class SemanticCompressor:
 
     def _compute_diff_stats(self, file_id: str, new_text: str) -> Dict:
         """Compute diff statistics and preserve unchanged embeddings."""
-        old_chunks = {
-            nid: node for nid, node in self.chunks.items()
-            if nid.startswith(file_id)
-        }
+        old_chunks = {nid: node for nid, node in self.chunks.items() if nid.startswith(file_id)}
         old_texts = {nid: node.text for nid, node in old_chunks.items()}
 
         new_chunk_texts = self._chunk_text(new_text)
@@ -1212,7 +1270,7 @@ class SemanticCompressor:
                 "chunks_updated": chunks_updated,
                 "chunks_added": max(0, len(added_texts) - chunks_updated),
                 "chunks_removed": max(0, len(removed_texts) - chunks_updated),
-            }
+            },
         }
 
     def _restore_preserved_embeddings(self, file_id: str, preserved: Dict) -> None:
@@ -1221,9 +1279,7 @@ class SemanticCompressor:
             if nid.startswith(file_id) and node.text in preserved:
                 node.embedding = preserved[node.text]
 
-    def find_duplicates(
-        self, threshold: float = 0.95, timeout_seconds: float = 30.0
-    ) -> List[Dict]:
+    def find_duplicates(self, threshold: float = 0.95, timeout_seconds: float = 30.0) -> List[Dict]:
         """Find semantically duplicate chunks across all documents.
 
         Args:
@@ -1249,12 +1305,14 @@ class SemanticCompressor:
             for j in range(i + 1, len(all_nodes)):
                 # Check timeout every 1000 comparisons
                 if j % 1000 == 0 and time.monotonic() - start_time > timeout_seconds:
-                    duplicates.append({
-                        "node_a": "__timeout__",
-                        "node_b": "__timeout__",
-                        "similarity": 0.0,
-                        "warning": f"Search timed out after {timeout_seconds}s. Partial results returned.",
-                    })
+                    duplicates.append(
+                        {
+                            "node_a": "__timeout__",
+                            "node_b": "__timeout__",
+                            "similarity": 0.0,
+                            "warning": f"Search timed out after {timeout_seconds}s. Partial results returned.",
+                        }
+                    )
                     return duplicates
 
                 nid_b, node_b = all_nodes[j]
@@ -1278,10 +1336,12 @@ class SemanticCompressor:
                 similarity = dot / (norm_a * norm_b)
 
                 if similarity >= threshold:
-                    duplicates.append({
-                        "node_a": nid_a,
-                        "node_b": nid_b,
-                        "similarity": round(float(similarity), 4),
-                    })
+                    duplicates.append(
+                        {
+                            "node_a": nid_a,
+                            "node_b": nid_b,
+                            "similarity": round(float(similarity), 4),
+                        }
+                    )
 
         return duplicates

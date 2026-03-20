@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 34283,
+  "duration_api_ms": 33842,
+  "num_turns": 9,
+  "result": "I don't have file read/write/bash tools available in this session, only LSP and Hugging Face tools. Based on the CLAUDE.md context provided, here's what I can tell you:\n\n---\n\n**Exact command** (query-targeted mode via MCP tool):\n\n```bash\npython -m src.server\n```\n\nThen call the MCP tool `ingest_context` with the file, followed by `read_context` with `query=\"what are the retry rules?\"`. The query-adaptive mode is handled by `src/query_adaptive.py` which automatically adjusts compression ratios based on the query.\n\nAlternatively, if you want to use the skill scripts directly:\n\n```bash\npython skills/token-saver-context-compression/scripts/compress.py \\\n  --file tests/fixtures/skill_context_sample.txt \\\n  --query \"what are the retry rules?\"\n```\n\nHowever, I **cannot verify the exact script name or arguments** without reading the files \u00e2\u20ac\u201d I don't have file read tools available in this session. The fixture file `tests/fixtures/skill_context_sample.txt` also needs to exist (it's not listed in git status as tracked or untracked).\n\n**Safety assessment:** Compressed output from semantic compression should be treated as **not safe to answer from directly** without caveats. The compression is lossy (87.4% token reduction means ~87% of content is discarded). Query-adaptive mode improves relevance to the specific question, but:\n- Nodes below the similarity threshold are pruned entirely\n- Semantic relationships may be lost\n- The \"retry rules\" answer could be incomplete or missing edge cases\n\nYou should treat compressed results as a **summary/pointer** \u00e2\u20ac\u201d useful for identifying which sections are relevant, but verify against the original document before giving a definitive answer.",
+  "stop_reason": "end_turn",
+  "session_id": "ac13dfbe-eb9b-450c-af80-cb4fcfb349b4",
+  "total_cost_usd": 0.287427,
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 29792,
+    "cache_read_input_tokens": 144024,
+    "output_tokens": 1167,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 29792,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 8,
+      "outputTokens": 1167,
+      "cacheReadInputTokens": 144024,
+      "cacheCreationInputTokens": 29792,
+      "webSearchRequests": 0,
+      "costUSD": 0.287427,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "d706506b-fbbe-4b83-a785-92b1df8004ae",
+  "_wall_seconds": 38.497
+}

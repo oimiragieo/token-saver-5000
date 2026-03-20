@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 39760,
+  "duration_api_ms": 38974,
+  "num_turns": 5,
+  "result": "I don't have access to the filesystem tools (Bash, Glob, Read, ListDirectory, etc.) needed to explore the local repo, read the source code, and determine the exact CLI command. These tools appear to be unavailable in this session.\n\nWithout being able to read the codebase, I cannot give you the **exact command** \u00e2\u20ac\u201d I'd be guessing. Could you either:\n\n1. Grant filesystem/shell access so I can inspect the repo, or\n2. Tell me which tool/CLI this repo provides (e.g., is this the `claude` CLI itself, a context-compression library, etc.)?\n\nThat said, based on general knowledge of Claude Code's context compression:\n\n- The **best query-targeted mode** is typically `query-targeted` (as opposed to `summarize` or `trim`), which compresses content while preserving information relevant to a specific question.\n- A command would look something like:\n  ```\n  npx ts-node src/compress.ts --mode query-targeted --query \"what are the retry rules?\" tests/fixtures/skill_context_sample.txt\n  ```\n  But this is a **guess** \u00e2\u20ac\u201d I need to read the actual source to confirm.\n\n- **Safety**: Query-targeted compression output should generally **not** be treated as safe to answer from directly, because compression is lossy \u00e2\u20ac\u201d it may omit nuances, caveats, or conditions from the original text. The compressed result is suitable as *context* for generating an answer, but the answer should be validated against the original source when accuracy matters.\n\nPlease enable file access so I can give you the precise command.",
+  "stop_reason": "end_turn",
+  "session_id": "2fc08e3f-d662-48d0-aa92-80790069fba7",
+  "total_cost_usd": 0.05156425,
+  "usage": {
+    "input_tokens": 7,
+    "cache_creation_input_tokens": 1423,
+    "cache_read_input_tokens": 45571,
+    "output_tokens": 794,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1423,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 7,
+      "outputTokens": 794,
+      "cacheReadInputTokens": 45571,
+      "cacheCreationInputTokens": 1423,
+      "webSearchRequests": 0,
+      "costUSD": 0.05156425,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "889f3e95-1f14-4fe1-95f5-3f4c586cc90a",
+  "_wall_seconds": 43.89
+}

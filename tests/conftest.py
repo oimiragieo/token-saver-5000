@@ -13,6 +13,7 @@ Added in v0.7.0 Week 3-4 (Comprehensive Testing Suite).
 """
 
 import asyncio
+import json
 import tempfile
 from pathlib import Path
 from typing import Dict, Any
@@ -37,7 +38,7 @@ from src.path_validator import PathValidator
 @pytest.fixture(autouse=True)
 def _reset_shared_state():
     """Reset global shared state before/after each test.
-    
+
     Fixes cross-test contamination:
     1. Rate limiter token exhaustion across tests
     2. Monkey-patched acquire methods (test_coverage_boost4)
@@ -45,29 +46,31 @@ def _reset_shared_state():
     """
     from src.rate_limiter import RATE_LIMITERS, RateLimiter
     from src.embeddings import EmbeddingManager
-    
+
     # Save originals
     orig_keys = set(RATE_LIMITERS.keys())
     orig_acquire = {name: RateLimiter.acquire for name in orig_keys}
     # Save EmbeddingManager singleton state (not the instance — avoid model reloads)
     orig_emb = EmbeddingManager._instance
-    orig_tier = getattr(orig_emb, '_tier', None) if orig_emb else None
-    orig_cache = getattr(orig_emb, '_enable_cache', None) if orig_emb else None
-    
+    orig_tier = getattr(orig_emb, "_tier", None) if orig_emb else None
+    orig_cache = getattr(orig_emb, "_enable_cache", None) if orig_emb else None
+
     # Reset rate limiters before test
     for limiter in RATE_LIMITERS.values():
         limiter.reset()
-    
+
     yield
-    
+
     # After test: restore rate limiter acquire methods for original keys
     for name in list(RATE_LIMITERS.keys()):
         if name in orig_keys:
-            RATE_LIMITERS[name].acquire = orig_acquire[name].__get__(RATE_LIMITERS[name], RateLimiter)
+            RATE_LIMITERS[name].acquire = orig_acquire[name].__get__(
+                RATE_LIMITERS[name], RateLimiter
+            )
             RATE_LIMITERS[name].reset()
         else:
             del RATE_LIMITERS[name]
-    
+
     # Restore EmbeddingManager: if test replaced singleton with mock, restore original
     current = EmbeddingManager._instance
     if current is not orig_emb and orig_emb is not None:
@@ -434,6 +437,39 @@ def mock_model_crash(monkeypatch):
         raise RuntimeError("Model crashed: CUDA out of memory")
 
     yield failing_encode
+
+
+@pytest.fixture
+def parity_corpus():
+    """Load the parity fixture corpus used by characterization and contract tests."""
+    fixture_path = Path(__file__).parent / "fixtures" / "parity" / "parity_corpus.json"
+    return json.loads(fixture_path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def characterization_context_factory(tmp_path):
+    """Create an isolated real handler context for end-to-end characterization tests."""
+
+    def _make():
+        storage_root = tmp_path / "phase0_state"
+        storage_root.mkdir(parents=True, exist_ok=True)
+
+        return {
+            "compressor": SemanticCompressor(),
+            "resource_manager": ResourceManager(),
+            "sync_manager": FileSyncManager(),
+            "version_manager": VersionManager(storage_dir=str(storage_root / "versions")),
+            "persistence": PersistenceManager(str(storage_root / "persistence")),
+            "retrieval_history": {},
+            "path_validator": PathValidator(
+                allowed_base_dirs=[
+                    str(storage_root),
+                    tempfile.gettempdir(),
+                ]
+            ),
+        }
+
+    return _make
 
 
 # ===========================

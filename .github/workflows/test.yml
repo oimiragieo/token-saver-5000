@@ -1,139 +1,27 @@
-name: Test
+name: Legacy Test (Deprecated)
 
-# Trigger on push to main/develop/feature branches and pull requests
 on:
-  push:
-    branches: [main, develop, claude/**]
-  pull_request:
-    branches: [main, develop]
+  workflow_dispatch:
 
-# Environment variables
-env:
-  COVERAGE_THRESHOLD: 70
+concurrency:
+  group: legacy-test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    name: Test Python ${{ matrix.python-version }}
+  legacy-test-notice:
+    name: Deprecated compatibility workflow
     runs-on: ubuntu-latest
 
-    # Matrix strategy to test multiple Python versions in parallel
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-      fail-fast: false  # Continue testing other versions even if one fails
-
-    # Permissions needed for GitHub API interactions
-    permissions:
-      contents: read
-      statuses: write
-
     steps:
-    # Checkout repository code
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Full history for better diff analysis
-
-    # Set up Python with pip caching
-    # Cache is based on requirements.txt hash for reproducibility
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip'
-        cache-dependency-path: '**/requirements.txt'
-
-    # Upgrade pip to latest version for better dependency resolution
-    - name: Upgrade pip and install build tools
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-
-    # Install project dependencies from requirements.txt
-    # Pip cache saves 2-5 minutes per workflow run
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-
-    # Verify the development environment setup
-    - name: Run setup verification
-      run: |
-        python scripts/check_setup.py
-
-    # Check code formatting with Black (PEP 8 compliance)
-    # Black is non-negotiable for code consistency
-    - name: Check code formatting with Black
-      run: |
-        pip install black
-        black --check src/ tests/ examples/
-
-    # Lint code with Ruff (fast, comprehensive Python linter)
-    # Ruff is 10-100x faster than traditional linters
-    - name: Lint code with Ruff
-      run: |
-        pip install ruff
-        ruff check src/ tests/ examples/
-
-    # Optional: Type checking with mypy for static type safety
-    # Helps catch type-related bugs before runtime
-    - name: Type check with mypy
-      run: |
-        pip install mypy
-        mypy src/ --ignore-missing-imports || true
-      continue-on-error: true  # Don't fail workflow if type check fails (optional)
-
-    # Run pytest with coverage reporting
-    # Coverage report ensures minimum 70% code coverage maintained
-    - name: Run tests with pytest and coverage
-      run: |
-        pip install pytest pytest-cov pytest-asyncio
-        pytest tests/ -v --cov=src --cov-report=xml --cov-report=term --cov-report=html
-
-    # Check coverage threshold (fail if below minimum)
-    - name: Check coverage threshold
-      run: |
-        pip install coverage
-        coverage report --fail-under=${{ env.COVERAGE_THRESHOLD }}
-
-    # Upload coverage reports to GitHub artifacts
-    # Available for all Python versions tested
-    - name: Upload coverage artifacts
-      if: always()  # Upload even if tests fail
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report-py${{ matrix.python-version }}
-        path: htmlcov/
-        retention-days: 7
-
-    # Upload coverage to Codecov for tracking over time
-    # Provides historical coverage trends and badge data
-    - name: Upload coverage to Codecov
-      if: always()  # Upload even if tests fail
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: unittests-py${{ matrix.python-version }}
-        name: codecov-py${{ matrix.python-version }}
-        fail_ci_if_error: false
-        verbose: true
-
-    # Generate test summary comment for PRs
-    - name: Generate test summary
-      if: always()
-      run: |
-        echo "## Test Results for Python ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
-        echo "Coverage report available in artifacts" >> $GITHUB_STEP_SUMMARY
-
-  # Summary job to ensure all test matrix jobs passed
-  test-matrix-complete:
-    name: Test Matrix Complete
-    runs-on: ubuntu-latest
-    needs: test
-    if: always()
-    steps:
-      - name: Check test matrix status
+      - name: Explain deprecation
         run: |
-          if [ "${{ needs.test.result }}" == "failure" ]; then
-            echo "Test matrix failed"
-            exit 1
-          fi
-          echo "All test matrix jobs passed!"
+          echo "This deprecated compatibility workflow has been replaced by ci.yml."
+          echo "Use ci.yml for the canonical full-product validation pipeline."
+          echo "Legacy test.yml is manual-only to avoid duplicate CI runs."
+          echo "## Legacy Workflow Notice" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`test.yml\` is deprecated and manual-only." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Use \`ci.yml\` for required repository validation." >> "$GITHUB_STEP_SUMMARY"

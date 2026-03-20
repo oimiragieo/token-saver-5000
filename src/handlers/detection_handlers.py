@@ -14,11 +14,23 @@ Version: 0.7.0 - Added file_id validation and rate limiting
 import logging
 import re
 from typing import Any, Dict
+
+from ..identity_scope import compose_scoped_file_id
 from ..types import HandlerContext  # TypedDict for handler context
 from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
 
 logger = logging.getLogger("semantic-modulator")
+
+
+def _scoped_file_id(args: Dict[str, Any]) -> str:
+    return compose_scoped_file_id(
+        args["file_id"],
+        workspace_id=args.get("workspace_id"),
+        user_id=args.get("user_id"),
+        agent_id=args.get("agent_id"),
+        session_id=args.get("session_id"),
+    )
 
 
 def _validate_file_id(file_id: str, compressor: Any) -> None:
@@ -101,17 +113,17 @@ async def handle_check_blind_spots(context: HandlerContext, args: Dict[str, Any]
         )
 
     ai_response = args["ai_response"]
-    file_id = args["file_id"]
+    scoped_file_id = _scoped_file_id(args)
     retrieved_nodes = args["retrieved_nodes"]
     blind_spot_detector = context["blind_spot_detector"]
     compressor = context["compressor"]
 
     # Validate file_id (v0.7.0 security hardening)
-    _validate_file_id(file_id, compressor)
+    _validate_file_id(scoped_file_id, compressor)
 
-    logger.info(f"Checking blind spots for response about {file_id}")
+    logger.info(f"Checking blind spots for response about {scoped_file_id}")
 
-    report = blind_spot_detector.analyze_response(ai_response, file_id, retrieved_nodes)
+    report = blind_spot_detector.analyze_response(ai_response, scoped_file_id, retrieved_nodes)
 
     result = blind_spot_detector.format_report(report)
 
@@ -152,16 +164,16 @@ async def handle_detect_hallucination(context: HandlerContext, args: Dict[str, A
         )
 
     ai_response = args["ai_response"]
-    file_id = args["file_id"]
+    scoped_file_id = _scoped_file_id(args)
     halo_detector = context["halo_detector"]
     compressor = context["compressor"]
 
     # Validate file_id (v0.7.0 security hardening)
-    _validate_file_id(file_id, compressor)
+    _validate_file_id(scoped_file_id, compressor)
 
-    logger.info(f"Checking for hallucination in response about {file_id}")
+    logger.info(f"Checking for hallucination in response about {scoped_file_id}")
 
-    is_hallucinating, warnings = halo_detector.detect_hallucination(ai_response, file_id)
+    is_hallucinating, warnings = halo_detector.detect_hallucination(ai_response, scoped_file_id)
 
     if is_hallucinating:
         result = "[ALERT] HALLUCINATION ALERT [ALERT]\n\n"

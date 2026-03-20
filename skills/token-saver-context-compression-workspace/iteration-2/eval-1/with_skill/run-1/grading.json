@@ -1,0 +1,41 @@
+{
+  "expectations": [
+    {
+      "text": "The answer gives the exact compress_context.py command for this repo.",
+      "passed": false,
+      "evidence": "No repo-specific compress_context.py command was provided."
+    },
+    {
+      "text": "The answer identifies a query-targeted mode.",
+      "passed": false,
+      "evidence": "No query-targeted mode was identified."
+    },
+    {
+      "text": "The answer states whether the result is safe to answer from.",
+      "passed": true,
+      "evidence": "Answer discusses safety/sufficiency."
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 2,
+    "total": 3,
+    "pass_rate": 0.3333
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 9,
+    "errors_encountered": 0,
+    "output_chars": 1693,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 38.497
+  },
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  }
+}

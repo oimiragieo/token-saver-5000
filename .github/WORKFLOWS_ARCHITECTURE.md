@@ -1,41 +1,37 @@
 # GitHub Actions Workflows - Architecture & Flow Diagrams
 
-This document visualizes the CI/CD workflow architecture, trigger events, and execution flow.
+This document visualizes the current CI/CD workflow architecture, trigger events, and execution flow.
+
+`ci.yml` is the canonical broad validation workflow. `test.yml` and `lint.yml` are retained only as manual-only deprecated compatibility shims.
 
 ---
 
 ## Overall CI/CD Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Git Repository Events                         │
-└───────────────────┬──────────────────┬──────────────────────────┘
-                    │                  │
-         ┌──────────▼────────┐   ┌─────▼────────────┐
-         │ Push to main/      │   │  Create Tag v*   │
-         │ develop/claude/**  │   │  (Semantic Ver)  │
-         └──────────┬────────┘   └─────┬────────────┘
-                    │                   │
-        ┌───────────┴───────────┐       │
-        │                       │       │
-        ▼                       ▼       ▼
-    ┌───────────┐          ┌────────────────┐
-    │ test.yml  │          │  build.yml     │
-    │ lint.yml  │          │ (Docker build) │
-    │ (CI)      │          └────────┬───────┘
-    └───────────┘                   │
-                        ┌───────────┴──────────┐
-                        │                      │
-                        ▼                      ▼
-                    ┌─────────────┐    ┌──────────────────┐
-                    │  Push Image │    │ deploy-staging   │
-                    │ to Registry │    │ (Auto-deploy)    │
-                    └─────────────┘    └────────┬─────────┘
-                                               │
-                                    ┌──────────▼──────────┐
-                                    │ Deploy-production   │
-                                    │ (Requires approval) │
-                                    └─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            Git Repository Events                            │
+└───────────────────────┬───────────────────────────────┬──────────────────────┘
+                        │                               │
+             ┌──────────▼──────────┐         ┌──────────▼──────────┐
+             │ Push / Pull Request │         │   Create Tag v*     │
+             └──────────┬──────────┘         └──────────┬──────────┘
+                        │                               │
+        ┌───────────────┼────────────────┐              │
+        │               │                │              │
+        ▼               ▼                ▼              ▼
+ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+ │   ci.yml     │ │ focused      │ │ legacy test/ │ │  build.yml   │
+ │ canonical CI │ │ guard flows  │ │ lint shims   │ │ docker build │
+ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+        │                │                │                │
+        │                │                │                ├───────────────┐
+        │                │                │                │               │
+        ▼                ▼                ▼                ▼               ▼
+ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+ │ required PR  │ │ path-scoped  │ │ manual notice│ │ push image   │ │ deploy.yml   │
+ │ validation   │ │ specialists  │ │ only         │ │ to registry  │ │ staging/prod │
+ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ---
@@ -43,296 +39,237 @@ This document visualizes the CI/CD workflow architecture, trigger events, and ex
 ## Trigger Event Matrix
 
 ```
-┌──────────────────┬───────────────────┬──────────┬──────────┐
-│ Event            │ test.yml          │ lint.yml │ build    │
-├──────────────────┼───────────────────┼──────────┼──────────┤
-│ Push main        │ RUN               │ RUN      │ RUN      │
-│ Push develop     │ RUN               │ RUN      │ RUN      │
-│ Push claude/**   │ RUN               │ RUN      │ SKIP     │
-│ Push feature/*   │ RUN (no push)     │ RUN      │ SKIP     │
-│ Pull Request     │ RUN (required)    │ RUN      │ SKIP     │
-│ Tag v*           │ SKIP              │ SKIP     │ RUN      │
-│ Workflow Disp.   │ Optional          │ Optional │ OPTIONAL │
-└──────────────────┴───────────────────┴──────────┴──────────┘
+┌──────────────────┬──────────────┬──────────────┬──────────────┬──────────────┐
+│ Event            │ ci.yml       │ focused      │ legacy shims │ build/deploy │
+│                  │              │ guards       │              │              │
+├──────────────────┼──────────────┼──────────────┼──────────────┼──────────────┤
+│ Push main        │ RUN          │ path-based   │ SKIP         │ build.yml    │
+│ Push develop     │ RUN          │ path-based   │ SKIP         │ build.yml    │
+│ Push claude/**   │ RUN          │ path-based   │ SKIP         │ SKIP         │
+│ Push feature/*   │ RUN          │ path-based   │ SKIP         │ SKIP         │
+│ Pull Request     │ RUN          │ path-based   │ SKIP         │ SKIP         │
+│ Tag v*           │ SKIP         │ SKIP         │ SKIP         │ build+deploy │
+│ Workflow Dispatch│ RUN          │ depends      │ RUN          │ optional     │
+└──────────────────┴──────────────┴──────────────┴──────────────┴──────────────┘
+```
+
+Focused guards currently include:
+
+- `skill-ci.yml`
+- `benchmark-guard.yml`
+- `mcp-profile-guard.yml`
+
+These run only when matching files change, so they complement `ci.yml` instead of duplicating it.
+
+---
+
+## Canonical Validation Flow
+
+```
+Feature Branch / Pull Request
+        │
+        ▼
+   ci.yml starts
+        │
+        ├─ quality-gate
+        │   - Black
+        │   - Ruff
+        │   - workflow/package contract tests
+        │
+        ├─ compatibility
+        │   - Python 3.10
+        │   - Python 3.11
+        │   - Python 3.12
+        │   - import + smoke coverage
+        │
+        ├─ package-validation
+        │   - python -m build
+        │   - twine check
+        │   - install built package
+        │   - MCP installer smoke
+        │
+        └─ full-validation
+            - full pytest command
+            - no-cov
+            - perf test excluded
+        │
+        ▼
+   Required repository validation result
+        │
+   PASS ───────────────► merge / continue
+   FAIL ───────────────► fix locally and push again
 ```
 
 ---
 
-## Workflow Dependency Graph
+## `ci.yml` Job Topology
 
 ```
-Feature Branch
-     │
-     ├─────────────────────────────────────┐
-     │                                     │
-     ▼                                     ▼
-test.yml (8-12 min)                  lint.yml (2-4 min)
-     │                                     │
-     ├─────── REQUIRED PASS ───────────────┤
-     │                                     │
-     └──────────┬──────────────────────────┘
-                │
-                ▼
-         Pull Request Checks
-                │
-         ┌──────┴─────────┐
-         │                │
-      PASS            FAIL → Fix locally
-         │                │  & push again
-         │                │
-         ▼                │
-  Review & Approve        │
-         │                │
-         ▼                │
-     Merge to main ◄──────┘
-         │
-         ├─────────────────────────────────┐
-         │                                 │
-         ▼                                 ▼
-    build.yml (1-8 min)             All status checks pass
-    - Docker build                   (push to main)
-    - Push to registry
-    - Trivy scan
-    - SBOM generation
-         │
-         ├────────────────┬────────────────┐
-         │                │                │
-         ▼                ▼                ▼
-    Test (PR)    staging (tag)    production (tag)
-    - Local OK   - Auto-deploy     - Approval needed
-    - Skip push  - Health checks    - Auto-deploy when
-                                      approved
+ci.yml
+  │
+  ├─ quality-gate
+  │    Purpose:
+  │    - fail fast on repo-wide formatting/lint/contract drift
+  │
+  ├─ compatibility
+  │    Matrix:
+  │    - python-version = [3.10, 3.11, 3.12]
+  │    Purpose:
+  │    - validate install/import behavior across supported runtimes
+  │
+  ├─ package-validation
+  │    Purpose:
+  │    - verify sdist/wheel metadata
+  │    - verify installed MCP tooling is invokable
+  │
+  └─ full-validation
+       Purpose:
+       - run the canonical repo-wide pytest command
+       - catch integration drift not covered by smoke/contract checks
+```
+
+Design intent:
+
+- `quality-gate` fails quickly before the expensive jobs finish.
+- `compatibility` verifies supported Python runtimes explicitly.
+- `package-validation` protects the productized install surface, not just source-tree execution.
+- `full-validation` remains the broadest correctness gate.
+
+---
+
+## Focused Guard Workflow Role
+
+```
+Changed files
+    │
+    ├─ skills / help handlers ─────────────► skill-ci.yml
+    │
+    ├─ benchmark harness / compressor ─────► benchmark-guard.yml
+    │
+    └─ MCP profile / packaging surfaces ───► mcp-profile-guard.yml
+```
+
+These workflows exist for fast, high-signal specialist checks on narrow file sets.
+
+They are not replacements for `ci.yml`. They are additional safety rails when sensitive areas change.
+
+---
+
+## Legacy Workflow Compatibility Layer
+
+```
+Manual dispatch only
+        │
+        ├─ test.yml
+        │    └─ posts deprecation notice
+        │
+        └─ lint.yml
+             └─ posts deprecation notice
+```
+
+Behavior:
+
+- no push trigger
+- no pull request trigger
+- no required status role
+- purpose is migration compatibility only
+
+This prevents duplicate broad CI runs while preserving the old workflow names long enough for maintainers to update habits and branch protection settings.
+
+---
+
+## Branch Protection Model
+
+```
+Protected branch
+      │
+      ├─ Require PR review
+      ├─ Require ci.yml to pass
+      └─ Optionally require focused guards
+           when the team wants path-sensitive hardening
+```
+
+Recommended rule of thumb:
+
+- Always require `ci.yml`.
+- Require focused guards only if your branch protection strategy wants explicit specialist gates.
+- Do not require `test.yml` or `lint.yml`.
+
+---
+
+## Cache and Performance Strategy
+
+```
+Cold run
+  ├─ install dependencies from network
+  ├─ build package artifacts
+  └─ execute full validation
+
+Warm run
+  ├─ restore pip cache
+  ├─ reuse previously downloaded dependencies
+  └─ shorten setup time before validation work begins
+```
+
+Performance notes:
+
+- `ci.yml` uses pip caching keyed from dependency metadata.
+- `build.yml` uses Docker layer caching.
+- focused guards reduce unnecessary specialist checks on unrelated changes.
+- manual-only legacy shims eliminate duplicate broad validation work.
+
+---
+
+## Build and Release Flow
+
+```
+Merge / push to main or develop
+        │
+        └─ build.yml
+            ├─ build Docker image
+            ├─ push image when allowed
+            ├─ run Trivy scan
+            └─ generate SBOM
+
+Create semantic version tag
+        │
+        ├─ build.yml
+        │    └─ produce tagged image
+        │
+        └─ deploy.yml
+             ├─ deploy-staging automatically
+             └─ deploy-production after approval
 ```
 
 ---
 
-## Python Test Matrix Parallelization
+## Deployment Flow
 
 ```
-test.yml Job Execution (Runs in Parallel)
-┌────────────────────────────────────────────────────────┐
-│  Matrix: python-version = [3.10, 3.11, 3.12]          │
-└────────────────────────────────────────────────────────┘
-
-     Parallel Worker 1            Parallel Worker 2            Parallel Worker 3
-     ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
-     │ Python 3.10      │         │ Python 3.11      │         │ Python 3.12      │
-     ├──────────────────┤         ├──────────────────┤         ├──────────────────┤
-     │ 1. Checkout      │         │ 1. Checkout      │         │ 1. Checkout      │
-     │ 2. Setup Python  │         │ 2. Setup Python  │         │ 2. Setup Python  │
-     │ 3. Install deps  │         │ 3. Install deps  │         │ 3. Install deps  │
-     │ 4. Lint          │         │ 4. Lint          │         │ 4. Lint          │
-     │ 5. Tests         │         │ 5. Tests         │         │ 5. Tests         │
-     │ 6. Coverage      │         │ 6. Coverage      │         │ 6. Coverage      │
-     │ 7. Upload        │         │ 7. Upload        │         │ 7. Upload        │
-     │                  │         │                  │         │                  │
-     │ Duration: 3-4min │         │ Duration: 3-4min │         │ Duration: 3-4min │
-     │ Total: ~3-4 min  │         │ (All in parallel)│         │ (Not 12 min)     │
-     └──────────────────┘         └──────────────────┘         └──────────────────┘
-            │                              │                             │
-            └──────────────┬───────────────┴─────────────┬───────────────┘
-                          │
-                    All workers complete
-                          │
-                          ▼
-              test-matrix-complete (1 sec)
-                          │
-                          ▼
-                 Report overall status
-```
-
----
-
-## Caching Strategy
-
-```
-Workflow Run 1 (Cold Cache)
-┌─────────────────────────────────────────┐
-│ Install dependencies                    │
-│ - Download all pip packages (5-10 min)  │
-│ - No cache hit (first run)              │
-└─────────────────────────────────────────┘
-           │
-           ▼
-   Store cache (hashFiles requirements.txt)
-           │
-           ▼
-   Cache saved for future runs
-
-Workflow Run 2 (Warm Cache)
-┌─────────────────────────────────────────┐
-│ Install dependencies                    │
-│ - Load from GHA cache (30 sec)          │
-│ - No pip downloads needed               │
-└─────────────────────────────────────────┘
-           │
-           ▼
-   Saves 2-5 minutes per run!
-
-Cache Invalidation
-┌─────────────────────────────────────────┐
-│ requirements.txt changes                │
-│ - Hash changes                          │
-│ - Cache invalidated                     │
-│ - New download on next run              │
-└─────────────────────────────────────────┘
-```
-
----
-
-## Docker Image Build Caching
-
-```
-Dockerfile Multi-Stage Build
-┌──────────────────────────┐
-│ Stage 1: Builder         │
-├──────────────────────────┤
-│ FROM python:3.12-slim    │
-│ Install build tools      │
-│ Copy requirements.txt    │
-│ pip install all deps     │
-│ Download ML models      │ ◄─── Layer Cache
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│ Stage 2: Runtime         │
-├──────────────────────────┤
-│ FROM python:3.12-slim    │
-│ COPY /opt/venv           │◄─── Use builder cache
-│ COPY src/                │
-│ COPY models              │
-│ Set environment vars     │
-└────────────┬─────────────┘
-             │
-             ▼
-        Final Image
-        ~450MB size
-
-Build Times:
-First build:     8 minutes
-Cached build:    1-2 minutes (2-4x faster)
-CI rebuild:      2-4 minutes (GHA cache)
-```
-
----
-
-## Kubernetes Deployment Flow
-
-```
-Deploy Staging (Automatic on Tags)
-────────────────────────────────────
-
-Tag v0.6.1 pushed
-       │
-       ▼
-  build.yml completes
-       │
-       ▼
-deploy-staging triggered automatically
-       │
-       ├─ Auth to K8s cluster
-       │
-       ├─ Build manifests with kustomize
-       │
-       ├─ Patch image tag in YAML
-       │
-       ├─ Apply manifests (kubectl apply)
-       │
-       ├─ Wait for rollout (rolling update)
-       │     - New pod starts
-       │     - Liveness probe (30s initial, 10s period)
-       │     - Readiness probe (10s initial, 10s period)
-       │     - Service traffic switched
-       │
-       ├─ Verify pod status
-       │
-       ├─ Run health checks (HTTP endpoints)
-       │
-       ├─ Check logs for errors
-       │
-       └─ Report deployment status
-           │
-           ▼
-       Staging LIVE
-
-
-Deploy Production (Approval Required)
-────────────────────────────────────
-
-deploy-staging completes
-       │
-       ▼
-deploy-production awaits approval
-       │
-       ├─ GitHub shows "Review deployments"
-       │
-       ├─ Reviewers (1-2) notified
-       │
-       └─ Approval action taken
-           │
-           ├─ "Approve and deploy"
-           │
-           ▼
-       deploy-production triggered
-           │
-           ├─ Same K8s steps as staging
-           │  - Auth
-           │  - Build manifests
-           │  - Apply with rolling update
-           │  - Health checks
-           │  - Verify
-           │
-           └─ Production LIVE
-               (May have auto-rollback on failure)
-```
-
----
-
-## Health Check Sequence
-
-```
-Pod Startup and Readiness
-─────────────────────────
-
-0s     Container starts
-       Startup Probe begins
-       (httpGet /health/liveness)
-       initialDelaySeconds: 0
-       periodSeconds: 10
-       timeoutSeconds: 5
-       failureThreshold: 12
-
-0-120s Startup probe checks (up to 12 * 10 = 120s)
-       │
-       ├─ Probe 1: Request timeout → retry
-       ├─ Probe 2: 500 error → retry
-       ├─ Probe 3: Connection refused → retry
-       │  ...
-       └─ Probe N: 200 OK ✓
-          │
-          ├─ Container marked as "started"
-          │
-          ├─ Liveness probe begins
-          │  (httpGet /health/liveness)
-          │  initialDelaySeconds: 30
-          │  periodSeconds: 10
-          │
-          └─ Readiness probe begins
-             (httpGet /health/readiness)
-             initialDelaySeconds: 10
-             periodSeconds: 10
-
-30-∞s  Liveness probe (every 10s)
-       - Ensures container is running
-       - Restarts on 3 consecutive failures (30s)
-
-10-∞s  Readiness probe (every 10s)
-       - Ensures container ready for traffic
-       - Removes from service on 3 failures
-       - Re-adds when succeeds
-
-Result: Pod ready for traffic ✓
+Tag vX.Y.Z pushed
+      │
+      ▼
+ build.yml completes
+      │
+      ▼
+ deploy-staging
+      ├─ authenticate to cluster
+      ├─ build manifests
+      ├─ patch image tag
+      ├─ apply manifests
+      ├─ wait for rollout
+      ├─ run health checks
+      └─ inspect logs / status
+      │
+      ▼
+ staging live
+      │
+      ▼
+ deploy-production waits for approval
+      │
+      ├─ approve and deploy
+      ▼
+ production live
 ```
 
 ---
@@ -340,90 +277,25 @@ Result: Pod ready for traffic ✓
 ## Error Recovery Flow
 
 ```
-Test Failure
-     │
-     ▼
-Workflow blocked
-     │
-     ├─ GitHub shows failed check
-     │
-     ├─ Developer notified
-     │
-     ├─ Cannot merge to main
-     │
-     └─ Developer action:
-        │
-        ├─ Pull latest code
-        │
-        ├─ Run tests locally
-        │  (pytest tests/ --cov=src)
-        │
-        ├─ Fix failing tests
-        │
-        ├─ Verify locally
-        │  (All tests pass, coverage OK)
-        │
-        ├─ Commit and push
-        │
-        └─ GitHub re-runs test.yml
-           │
-           └─ If passes → workflow unblocked
+ci.yml failure
+    │
+    ├─ GitHub blocks merge
+    ├─ developer inspects failing job
+    ├─ developer reproduces locally
+    ├─ developer fixes code/config
+    └─ push re-runs canonical validation
 
+build.yml failure
+    │
+    ├─ image not published
+    ├─ tag/release pipeline stalls
+    └─ developer fixes Docker/build issue
 
-Build Failure
-     │
-     ▼
-Image not pushed
-     │
-     ├─ Staging deployment blocked
-     │
-     └─ Developer action:
-        │
-        ├─ Check build.yml logs
-        │
-        ├─ Identify error:
-        │  - Dockerfile syntax error
-        │  - Missing dependency
-        │  - Model download failed
-        │
-        ├─ Test locally:
-        │  docker build -t test:latest .
-        │
-        ├─ Fix issue
-        │
-        ├─ Commit and push
-        │
-        └─ build.yml re-runs
-           │
-           └─ If succeeds → Image pushed
-
-
-Deployment Failure
-     │
-     ▼
-Pod doesn't start
-     │
-     ├─ Rollout status shows failure
-     │
-     └─ Automatic retry? OR Manual action:
-        │
-        ├─ Check pod logs
-        │  kubectl logs -n token-saver-5000 pod-name
-        │
-        ├─ Identify issue:
-        │  - Image not found
-        │  - Port conflict
-        │  - Missing ConfigMap
-        │
-        ├─ Fix K8s manifests
-        │
-        ├─ Commit and push
-        │
-        ├─ Create new tag or manual dispatch
-        │
-        └─ deploy.yml re-runs
-           │
-           └─ If succeeds → Deployment complete
+deploy.yml failure
+    │
+    ├─ rollout or health checks fail
+    ├─ environment remains blocked
+    └─ maintainer fixes manifests/runtime issue and redeploys
 ```
 
 ---
@@ -431,116 +303,57 @@ Pod doesn't start
 ## Concurrency and Cancellation
 
 ```
-Feature Branch: feature/auth
-Push 1: Add auth module
-   │
-   ├─ test.yml starts (concurrency: test-feature/auth)
-   │
-Push 2: Fix auth bug (3 minutes later)
-   │
-   ├─ Previous test.yml CANCELLED (in-progress)
-   │
-   └─ New test.yml starts with latest code
-      (Only one test.yml per branch)
+New push on same branch
+      │
+      ├─ old ci.yml run cancelled
+      └─ new ci.yml run starts on latest commit
 
+Focused guards
+      │
+      └─ same principle: stale in-progress runs can be cancelled
 
-Main Branch: main
-Push 1: Release v0.6.1 tag
-   │
-   ├─ build.yml starts (concurrency: build-refs/tags/v0.6.1)
-   │
-   ├─ deploy-staging starts (concurrency: deploy-staging)
-   │
-Push 2: Hotfix pushed
-   │
-   ├─ New build.yml starts
-   │
-   ├─ Previous deploy-staging NOT cancelled
-   │  (Different concurrency group)
-   │
-   ├─ New deploy-staging waits for previous to complete
-   │  (Only one deploy-staging at a time)
-   │
-   └─ Then starts with new code
+Deployments
+      │
+      └─ serialized per environment where safety matters
+```
 
+Intent:
 
-Production Deployment: deploy-production
-   │
-   ├─ No cancellation (concurrency: cancel-in-progress: false)
-   │  Deployments are too risky to cancel
-   │
-   └─ Queue waits for current deployment to complete
+- prefer the newest validation result for code-review workflows
+- avoid wasting runner time on stale branches
+- avoid risky deployment cancellation behavior
+
+---
+
+## Security Coverage Map
+
+```
+Source / package validation
+    ├─ black / ruff / contract checks
+    ├─ package metadata validation
+    └─ installed entrypoint smoke tests
+
+Image security
+    ├─ Trivy scan
+    └─ SBOM generation
+
+Runtime security
+    ├─ environment protection / approvals
+    ├─ deployment auth checks
+    └─ Kubernetes runtime hardening
 ```
 
 ---
 
-## Performance Metrics
+## Practical Workflow Guidance
 
-```
-Typical CI/CD Run (Cold Cache vs Warm Cache)
+Use this mental model:
 
-                                Time (min)
-Task                     First Run    Cached Run    Speedup
-─────────────────────────────────────────────────────────────
-test.yml setup + tests      5-8          2-3         2-3x
-lint.yml                    2-3          1-2         2x
-build.yml                   5-8          1-2         5x
-deploy-staging              3-5          3-5         1x
-─────────────────────────────────────────────────────────────
-Total CI                    7-12         3-5         2.5x
-Total with deploy          10-17         6-10        1.7x
-
-Caching Impact:
-- Pip cache: Saves ~3-5 minutes (largest impact)
-- Docker layer cache: Saves ~3-5 minutes
-- Combined: 6-10 minute reduction per run
-
-For continuous deployment:
-- First deployment: 25-30 minutes (cold)
-- Typical deployment: 17-20 minutes (warm cache)
-```
-
----
-
-## Security Flow
-
-```
-Code Security (lint.yml)
-     │
-     ├─ Bandit scan
-     │  - Hardcoded passwords
-     │  - SQL injection risks
-     │  - Insecure hashing
-     │
-     └─ Results in artifacts (non-blocking)
-
-Image Security (build.yml)
-     │
-     ├─ Trivy vulnerability scan
-     │  - CVE detection in dependencies
-     │  - OS package vulnerabilities
-     │
-     ├─ SBOM generation
-     │  - Software bill of materials
-     │  - Dependency tracking
-     │
-     └─ Results in GitHub Security tab
-
-Deployment Security (deploy.yml)
-     │
-     ├─ RBAC authentication
-     │  - Service account verification
-     │
-     ├─ Pod security
-     │  - Non-root user (uid: 1000)
-     │  - Read-only filesystem
-     │  - Drop all capabilities
-     │
-     └─ Network policies enforced
-        - Pod-to-pod communication limited
-
-Overall: Defense in depth at code, image, and runtime levels
-```
+1. `ci.yml` answers: "Is the product valid overall?"
+2. focused guards answer: "Did this sensitive area get its extra checks?"
+3. `build.yml` answers: "Can we produce and inspect the release artifact?"
+4. `deploy.yml` answers: "Can we safely roll the artifact out?"
+5. `test.yml` / `lint.yml` answer only: "This workflow name is deprecated; use `ci.yml`."
 
 ---
 
@@ -548,28 +361,10 @@ Overall: Defense in depth at code, image, and runtime levels
 
 | Term | Meaning |
 |------|---------|
-| **Concurrency** | Prevent multiple jobs from running simultaneously |
-| **Matrix** | Run job multiple times with different inputs |
-| **Cache** | Store build artifacts to speed up future runs |
-| **Artifact** | File output from workflow (logs, reports, etc.) |
-| **Environment** | Deployment target (staging, production) |
-| **Secret** | Encrypted variable for sensitive data |
-| **Step** | Individual action in a workflow job |
-| **Job** | Set of steps that run on a runner |
-| **Workflow** | Automation triggered by events |
-| **Runner** | Virtual machine that executes workflows |
-| **Action** | Reusable workflow unit (uses/docker/script) |
-| **YAML** | Configuration language for workflows |
-
----
-
-## Architecture Principles
-
-1. **Automation First:** Minimize manual steps
-2. **Fast Feedback:** Tests run in parallel (3-5 min vs 10-12 min)
-3. **Defense in Depth:** Multiple validation layers
-4. **Clear Boundaries:** Each workflow has single responsibility
-5. **Observable:** Detailed logs and reports
-6. **Repeatable:** Same result every time (no manual tweaks)
-7. **Safe:** Production requires approval
-8. **Efficient:** Caching and parallel execution
+| **Canonical CI** | The one broad validation workflow the repo relies on by default |
+| **Focused guard** | A narrow workflow triggered by changes in a sensitive area |
+| **Compatibility shim** | A retained legacy workflow that exists only for migration compatibility |
+| **Matrix** | A job running multiple times with different runtime inputs |
+| **Artifact** | A generated output such as a package, report, or SBOM |
+| **Environment** | A deployment target such as staging or production |
+| **Concurrency** | A policy that controls overlapping workflow runs |

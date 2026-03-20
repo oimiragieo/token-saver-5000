@@ -36,6 +36,8 @@ class FileMetadata:
     ingestion_time: float  # When it was ingested
     size_bytes: int  # Original file size
     doc_id: str  # Document ID in MCP
+    source_type: str = "file"  # file, web, github, s3, slack_export, etc.
+    source_id: Optional[str] = None  # Connector/source identifier
 
 
 class FileSyncManager:
@@ -70,7 +72,15 @@ class FileSyncManager:
             f"(max_entries={max_entries if max_entries > 0 else 'unlimited'})"
         )
 
-    def register_file(self, doc_id: str, file_path: Optional[str], content: str) -> FileMetadata:
+    def register_file(
+        self,
+        doc_id: str,
+        file_path: Optional[str],
+        content: str,
+        *,
+        source_type: str = "file",
+        source_id: Optional[str] = None,
+    ) -> FileMetadata:
         """
         Register a file when it's ingested with automatic LRU eviction (v0.4.2).
 
@@ -123,6 +133,8 @@ class FileSyncManager:
             ingestion_time=datetime.now().timestamp(),
             size_bytes=size_bytes,
             doc_id=doc_id,
+            source_type=source_type,
+            source_id=source_id,
         )
 
         # Thread-safe: protect dictionary write and eviction
@@ -178,8 +190,14 @@ class FileSyncManager:
             if not metadata.file_path:
                 return {
                     "in_sync": True,
-                    "reason": "No source file (text-only document)",
+                    "reason": (
+                        "No source file (text-only document)"
+                        if metadata.source_type == "file"
+                        else f"External source registered via {metadata.source_type}"
+                    ),
                     "has_source_file": False,
+                    "source_type": metadata.source_type,
+                    "source_id": metadata.source_id,
                 }
 
             # Copy values we need for I/O (outside lock)
@@ -351,6 +369,8 @@ class FileSyncManager:
                 "file_path": metadata.file_path,
                 "in_sync": status["in_sync"],
                 "reason": status.get("reason", ""),
+                "source_type": metadata.source_type,
+                "source_id": metadata.source_id,
             }
             details.append(detail)
 
@@ -437,6 +457,8 @@ class FileSyncManager:
                     "ingestion_time": meta.ingestion_time,
                     "size_bytes": meta.size_bytes,
                     "doc_id": meta.doc_id,
+                    "source_type": meta.source_type,
+                    "source_id": meta.source_id,
                 }
                 for doc_id, meta in self.file_metadata.items()
             }

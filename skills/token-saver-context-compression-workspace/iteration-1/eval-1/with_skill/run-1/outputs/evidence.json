@@ -1,0 +1,36 @@
+{
+  "file_id": "skill_evidence_doc",
+  "query": "what are the retry rules?",
+  "sufficient": false,
+  "best_score": 0.0714,
+  "threshold": 0.35,
+  "top_matches": [
+    {
+      "segment_id": 1,
+      "similarity": 0.0714,
+      "text": "The API gateway forwards requests to the auth service and billing service."
+    },
+    {
+      "segment_id": 3,
+      "similarity": 0.0714,
+      "text": "Retry behavior is controlled with exponential backoff and bounded retries."
+    },
+    {
+      "segment_id": 2,
+      "similarity": 0.0667,
+      "text": "The auth service validates tokens, refreshes sessions, and enforces role checks."
+    },
+    {
+      "segment_id": 5,
+      "similarity": 0.0667,
+      "text": "If retries exceed thresholds, requests are routed to dead-letter handling."
+    },
+    {
+      "segment_id": 0,
+      "similarity": 0.0,
+      "text": "System architecture notes:"
+    }
+  ],
+  "used_expanded_search": false,
+  "message": "Evidence below threshold."
+}

@@ -14,6 +14,7 @@ import os
 import pytest
 import tempfile
 from unittest.mock import Mock, AsyncMock, patch
+from src.identity_scope import compose_scoped_file_id
 from src.handlers.file_sync_handlers import (
     handle_check_file_sync,
     handle_diff_cached_file,
@@ -134,6 +135,35 @@ class TestHandleCheckFileSync:
         with pytest.raises(ValueError, match="not found"):
             await handle_check_file_sync(mock_context, {"file_id": "nonexistent"})
 
+    @pytest.mark.asyncio
+    async def test_check_file_sync_scoped_file_id(self, mock_context):
+        """Scoped file IDs should resolve to the tenant-specific internal document."""
+        import json
+
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        mock_context["sync_manager"].file_metadata = {
+            scoped_file_id: FileMetadata(
+                doc_id=scoped_file_id,
+                file_path="/path/to/file.txt",
+                checksum="abc123",
+                mtime=1234567890.0,
+                ingestion_time=1234567890.0,
+                size_bytes=1000,
+            )
+        }
+        mock_context["sync_manager"].check_file_sync.return_value = {
+            "in_sync": True,
+            "reason": "File unchanged",
+        }
+
+        result = await handle_check_file_sync(
+            mock_context, {"file_id": "test_doc", "workspace_id": "acme"}
+        )
+
+        data = json.loads(result)
+        assert data["file_id"] == "test_doc"
+        mock_context["sync_manager"].check_file_sync.assert_called_once_with(scoped_file_id)
+
 
 class TestHandleDiffCachedFile:
     """Tests for handle_diff_cached_file handler"""
@@ -252,6 +282,26 @@ class TestHandleDiffCachedFile:
         # Verify
         assert "[ERROR]" in result
         assert "Unexpected error generating diff" in result
+
+    @pytest.mark.asyncio
+    async def test_diff_cached_file_scoped_file_id(self, mock_context):
+        """Scoped diff requests should target the tenant-specific version history."""
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        mock_context["sync_manager"].file_metadata[scoped_file_id] = FileMetadata(
+            doc_id=scoped_file_id,
+            file_path="/path/to/file.txt",
+            checksum="abc123",
+            mtime=1234567890.0,
+            ingestion_time=1234567890.0,
+            size_bytes=1000,
+        )
+        mock_context["version_manager"].diff_with_current_file_async.return_value = "diff output"
+
+        await handle_diff_cached_file(mock_context, {"file_id": "test_doc", "workspace_id": "acme"})
+
+        mock_context["version_manager"].diff_with_current_file_async.assert_called_once_with(
+            scoped_file_id, context_lines=3
+        )
 
 
 class TestHandleRefreshDocument:
@@ -406,6 +456,36 @@ class TestHandleRefreshDocument:
         assert "Error re-ingesting document" in result
         assert "Invalid content" in result
 
+    @pytest.mark.asyncio
+    async def test_refresh_document_scoped_file_id(self, mock_context, temp_file):
+        """Scoped refresh should read, reingest, and version the tenant-specific document."""
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        sync_manager = mock_context["sync_manager"]
+        with open(temp_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        sync_manager.register_file(scoped_file_id, temp_file, content)
+
+        skeleton_mock = Mock()
+        skeleton_mock.total_tokens = 100
+        skeleton_mock.skeleton_tokens = 20
+        skeleton_mock.compression_ratio = 5.0
+        mock_context["compressor"].ingest_file_async = AsyncMock(return_value=skeleton_mock)
+        mock_context["compressor"].graphs = {scoped_file_id: Mock()}
+        mock_context["compressor"].chunks = {f"{scoped_file_id}_0": Mock()}
+
+        result = await handle_refresh_document(
+            mock_context, {"file_id": "test_doc", "workspace_id": "acme"}
+        )
+
+        assert "test_doc" in result
+        mock_context["compressor"].ingest_file_async.assert_called_once()
+        assert (
+            mock_context["compressor"].ingest_file_async.call_args.kwargs["file_id"]
+            == scoped_file_id
+        )
+        history = mock_context["version_manager"].get_version_history(scoped_file_id)
+        assert len(history) == 1
+
 
 class TestHandleGetVersionHistory:
     """Tests for handle_get_version_history handler"""
@@ -551,6 +631,32 @@ class TestHandleGetVersionHistory:
         assert "-" in timestamp  # Date separator
         assert ":" in timestamp  # Time separator
         assert "." not in timestamp  # No microseconds
+
+    @pytest.mark.asyncio
+    async def test_get_version_history_scoped_doc_id(self, mock_context):
+        """Scoped history requests should resolve tenant-specific version timelines."""
+        import json
+
+        scoped_doc_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        test_file_path = (
+            os.path.abspath("/tmp/path/to/file.txt")
+            if os.name != "nt"
+            else os.path.abspath("C:\\temp\\path\\to\\file.txt")
+        )
+        mock_context["version_manager"].add_version(
+            doc_id=scoped_doc_id,
+            content="Scoped content",
+            checksum="abc123",
+            file_path=test_file_path,
+        )
+
+        result = await handle_get_version_history(
+            mock_context, {"doc_id": "test_doc", "workspace_id": "acme"}
+        )
+
+        data = json.loads(result)
+        assert data["doc_id"] == "test_doc"
+        assert data["total_versions"] == 1
 
 
 # Integration Tests

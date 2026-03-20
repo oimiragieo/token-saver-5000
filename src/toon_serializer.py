@@ -250,6 +250,144 @@ class TOONSerializer:
 
         return "\n".join(toon_lines)
 
+    def serialize_handoff_bundle(self, artifact: Dict[str, Any]) -> str:
+        """Serialize a structured handoff bundle to a compact TOON-like format."""
+        skeleton = artifact.get("skeleton", {})
+        search_results = artifact.get("search_results", [])
+        context_block = artifact.get("context_block", {})
+        lines = [
+            "handoff_bundle:",
+            f" bundle_id: {artifact.get('bundle_id', '')}",
+            f" doc_id: {artifact.get('doc_id', '')}",
+            f" created_at: {artifact.get('created_at', '')}",
+            f" query: {self._escape_text(str(artifact.get('query') or ''))}",
+            f" summary: {self._escape_text(str(artifact.get('summary') or ''))}",
+            f" skeleton_text: {self._escape_text(str(skeleton.get('text') or ''))}",
+            f" skeleton_total_nodes: {skeleton.get('total_nodes', 0)}",
+            f" skeleton_tokens: {skeleton.get('skeleton_tokens', 0)}",
+            f" compression_ratio: {skeleton.get('compression_ratio', 0)}",
+            f" context_summary: {self._escape_text(str(context_block.get('summary') or ''))}",
+            f" replay_text: {self._escape_text(str(artifact.get('replay_text') or ''))}",
+        ]
+        if search_results:
+            lines.append(" search_results:")
+            lines.append(
+                "  "
+                + self.serialize_search_results(
+                    search_results,
+                    fields=["node_id", "similarity", "importance", "summary"],
+                ).replace("\n", "\n  ")
+            )
+        else:
+            lines.append(" search_results:")
+            lines.append("  results[0]{}")
+        return "\n".join(lines)
+
+    def deserialize_handoff_bundle(self, toon_str: str) -> Dict[str, Any]:
+        """Parse the compact handoff bundle format produced by serialize_handoff_bundle."""
+        artifact: Dict[str, Any] = {"skeleton": {}, "search_results": []}
+        lines = toon_str.splitlines()
+        if not lines or lines[0].strip() != "handoff_bundle:":
+            raise ValueError("Invalid handoff bundle TOON payload")
+
+        index = 1
+        while index < len(lines):
+            line = lines[index]
+            stripped = line.strip()
+            if not stripped:
+                index += 1
+                continue
+            if stripped == "search_results:":
+                index += 1
+                if index >= len(lines):
+                    break
+                stripped = lines[index].strip()
+            if stripped.startswith("results["):
+                count_part = stripped.split("[", 1)[1].split("]", 1)[0]
+                if count_part == "0":
+                    break
+                header = stripped.split("{", 1)[1].split("}", 1)[0]
+                fields = header.split(",") if header else []
+                index += 1
+                while index < len(lines) and lines[index].startswith(" "):
+                    row = lines[index].strip()
+                    if row.startswith("results["):
+                        index += 1
+                        continue
+                    if not row:
+                        index += 1
+                        continue
+                    values = self._split_escaped_csv(row)
+                    entry = {
+                        field: self._parse_scalar(self._unescape_text(value))
+                        for field, value in zip(fields, values)
+                    }
+                    artifact["search_results"].append(entry)
+                    index += 1
+                continue
+            key, _, value = stripped.partition(": ")
+            value = self._unescape_text(value)
+            if key == "bundle_id":
+                artifact["bundle_id"] = value
+            elif key == "doc_id":
+                artifact["doc_id"] = value
+            elif key == "created_at":
+                artifact["created_at"] = value
+            elif key == "query":
+                artifact["query"] = value
+            elif key == "summary":
+                artifact["summary"] = value
+            elif key == "replay_text":
+                artifact["replay_text"] = value
+            elif key == "context_summary":
+                artifact.setdefault("context_block", {})["summary"] = value
+            elif key == "skeleton_text":
+                artifact["skeleton"]["text"] = value
+            elif key == "skeleton_total_nodes":
+                artifact["skeleton"]["total_nodes"] = self._parse_scalar(value)
+            elif key == "skeleton_tokens":
+                artifact["skeleton"]["skeleton_tokens"] = self._parse_scalar(value)
+            elif key == "compression_ratio":
+                artifact["skeleton"]["compression_ratio"] = self._parse_scalar(value)
+            index += 1
+        return artifact
+
+    def _escape_text(self, value: str) -> str:
+        return value.replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,")
+
+    def _unescape_text(self, value: str) -> str:
+        return value.replace("\\n", "\n").replace("\\,", ",").replace("\\\\", "\\")
+
+    def _split_escaped_csv(self, row: str) -> List[str]:
+        values: List[str] = []
+        current: List[str] = []
+        escaped = False
+        for char in row:
+            if escaped:
+                current.append(char)
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == ",":
+                values.append("".join(current))
+                current = []
+                continue
+            current.append(char)
+        values.append("".join(current))
+        return values
+
+    def _parse_scalar(self, value: str) -> Any:
+        if value == "":
+            return ""
+        try:
+            if "." in value:
+                return float(value)
+            return int(value)
+        except ValueError:
+            return value
+
     def to_json(self, toon_str: str) -> str:
         """
         Convert TOON back to JSON (for compatibility).

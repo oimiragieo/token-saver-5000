@@ -110,19 +110,19 @@ If using Docker Hub instead of GitHub Container Registry:
    - [ ] Require approval of the most recent reviewers before merging
    - [ ] Require status checks to pass before merging:
      - [ ] Require branches to be up to date before merging
-     - [ ] Status checks required: Select `test.yml`, `lint.yml`, `build.yml`
+     - [ ] Status checks required: Select `ci.yml`, any focused guards you want to enforce, and `build.yml` if needed
    - [ ] Restrict who can push to matching branches: (optional)
 5. Save
 
 **Status:**
 - [ ] Branch protection enabled for `main`
-- [ ] Status checks required: test.yml, lint.yml, build.yml
+- [ ] Status checks required: ci.yml, any chosen focused guards, build.yml
 - [ ] PR review required before merge
 
 ### For `develop` Branch (Optional)
 
 Similar to `main`, but with fewer restrictions:
-- Require test.yml to pass
+- Require ci.yml to pass
 - Require 1 reviewer (not required)
 
 **Status:**
@@ -145,7 +145,7 @@ Similar to `main`, but with fewer restrictions:
 ### Verify Integration
 
 1. Go to repository > Actions
-2. Re-run test.yml
+2. Re-run ci.yml
 3. Check that "Upload coverage to Codecov" step succeeds
 4. Visit Codecov dashboard to see coverage trends
 
@@ -177,36 +177,33 @@ The build.yml workflow already generates SBOM using `anchore/sbom-action`.
 
 ## 6. Test Workflow Execution
 
-### Test test.yml
+### Test ci.yml
 
 1. Create feature branch: `git checkout -b test/workflows`
 2. Make small change to src/
 3. Commit and push: `git push origin test/workflows`
 4. Go to Actions tab
-5. Click "test.yml"
-6. Wait for completion (8-12 min)
-7. Verify: All steps pass, coverage >= 70%
+5. Click "ci.yml"
+6. Wait for completion
+7. Verify: quality gate, compatibility, package validation, and full validation all pass
 
 **Status:**
-- [ ] test.yml runs on push
-- [ ] All 3 Python versions tested
-- [ ] Coverage report generated
-- [ ] Codecov upload successful
+- [ ] ci.yml runs on push
+- [ ] Compatibility matrix runs for all supported Python versions
+- [ ] Package validation passes
+- [ ] Full validation passes
 
-### Test lint.yml
+### Test legacy compatibility workflows
 
-1. Make a formatting violation: Add extra spaces
-2. Push code
-3. Go to Actions tab
-4. Click "lint.yml"
-5. Wait for completion (2-4 min)
-6. Verify: Black and Ruff checks run
+1. Go to Actions tab
+2. Trigger `test.yml` manually
+3. Trigger `lint.yml` manually
+4. Verify each workflow posts a deprecation notice pointing to `ci.yml`
 
 **Status:**
-- [ ] lint.yml runs on push
-- [ ] Black formatting check passes
-- [ ] Ruff linting check passes
-- [ ] Complexity reports generated
+- [ ] test.yml is manual-only
+- [ ] lint.yml is manual-only
+- [ ] Legacy workflows clearly point maintainers to ci.yml
 
 ### Test build.yml
 
@@ -367,8 +364,9 @@ GitHub provides automatic email on workflow failure:
 Before declaring setup complete:
 
 ### Workflows Present
-- [ ] `.github/workflows/test.yml` exists
-- [ ] `.github/workflows/lint.yml` exists
+- [ ] `.github/workflows/ci.yml` exists
+- [ ] `.github/workflows/test.yml` exists as a deprecated manual shim
+- [ ] `.github/workflows/lint.yml` exists as a deprecated manual shim
 - [ ] `.github/workflows/build.yml` exists
 - [ ] `.github/workflows/deploy.yml` exists
 - [ ] `.github/workflows/README.md` exists
@@ -385,13 +383,13 @@ Before declaring setup complete:
 
 ### Branch Protection
 - [ ] main branch protection enabled
-- [ ] test.yml required
-- [ ] lint.yml required (or informational)
+- [ ] ci.yml required
+- [ ] legacy workflows not required
 - [ ] build.yml required (or informational)
 
 ### Workflows Tested
-- [ ] test.yml runs successfully
-- [ ] lint.yml runs successfully
+- [ ] ci.yml runs successfully
+- [ ] legacy workflows show deprecation notices successfully when triggered manually
 - [ ] build.yml runs successfully
 - [ ] deploy-staging runs successfully
 - [ ] deploy-production approval/deploy works
@@ -479,7 +477,7 @@ docker images test:latest  # Check size
 ## Setup Complete!
 
 Once all items above are checked:
-1. All 4 workflows are active and tested
+1. Core workflows plus focused guards are active and tested, with `ci.yml` serving as the canonical validation pipeline
 2. CI/CD pipeline is fully operational
 3. Team can push code with confidence
 4. Automatic deployments to staging/production working

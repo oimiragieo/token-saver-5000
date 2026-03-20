@@ -544,14 +544,14 @@ class TestOTLPExport:
 
     @pytest.mark.skipif(not OPENTELEMETRY_AVAILABLE, reason="OpenTelemetry not installed")
     def test_console_fallback(self):
-        """Test fallback to console exporter when OTLP unavailable."""
+        """Test tracing still works when OTLP is unavailable and console export is disabled."""
         with patch("src.observability.OTLP_AVAILABLE", False):
             obs = ObservabilityManager(service_name="test-service")
 
-            # Should still be enabled with console exporter
-            # (if OPENTELEMETRY_AVAILABLE is True)
+            # Should still be enabled even without any exporter configured.
             if OPENTELEMETRY_AVAILABLE:
                 assert obs.is_enabled()
+                assert obs.enable_console_export is False
 
     @pytest.mark.skipif(not OPENTELEMETRY_AVAILABLE, reason="OpenTelemetry not installed")
     def test_console_exporter_explicit(self):

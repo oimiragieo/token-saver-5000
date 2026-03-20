@@ -59,8 +59,10 @@ Usage Examples:
 """
 
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Optional
+
+from .provider_profiles import get_provider_profile
 
 # Try to import prometheus_client, fall back to NoOp if not available
 try:
@@ -72,22 +74,27 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_PROVIDERS = {"anthropic", "openai", "google", "unknown"}
+ALLOWED_VALIDATION_STATUSES = {
+    "validated",
+    "validated_against_stale_expectation",
+    "missing_expectation",
+    "unvalidated",
+}
+
 # Allowed label values for cardinality control
 ALLOWED_FIDELITY_LEVELS = {"LOW", "BALANCED", "HIGH", "EXTREME", "NONE"}
-ALLOWED_OPERATIONS = {"ingest", "compress", "expand", "batch_ingest", "refresh"}
+ALLOWED_OPERATIONS = {
+    "ingest",
+    "compress",
+    "expand",
+    "batch_ingest",
+    "refresh",
+    "prompt_registry",
+    "experiment_tracker",
+}
 ALLOWED_STATUSES = {"success", "failure"}
 
-# Model pricing: cost per million input tokens (USD)
-MODEL_PRICING = {
-    "claude-opus-4": 15.0,
-    "claude-opus-4.5": 15.0,
-    "claude-opus-4.6": 15.0,
-    "claude-sonnet-4": 3.0,
-    "claude-sonnet-4.5": 3.0,
-    "claude-sonnet-4.6": 3.0,
-    "claude-haiku-3.5": 0.80,
-    "claude-haiku-4": 0.80,
-}
 DEFAULT_COST_PER_MILLION = 3.0  # Default to Sonnet pricing
 
 
@@ -102,6 +109,10 @@ class TokenSavingsTelemetry:
     cost_per_million: float
     cost_savings_usd: float
     savings_percent: float
+    provider: str = "unknown"
+    output_cost_per_million: float = 0.0
+    estimated_original_cost_usd: float = 0.0
+    estimated_compressed_cost_usd: float = 0.0
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON responses."""
@@ -124,18 +135,39 @@ def compute_cost_savings(
         TokenSavingsTelemetry with cost savings breakdown
     """
     saved = original_tokens - compressed_tokens
-    cost_per_million = MODEL_PRICING.get(model, DEFAULT_COST_PER_MILLION) if model else DEFAULT_COST_PER_MILLION
-    cost_savings = (saved / 1_000_000) * cost_per_million
+    model_aware = model is not None
+    reportable_saved = max(saved, 0) if model_aware else saved
+    if model:
+        try:
+            profile = get_provider_profile(model)
+            input_cost_per_million = profile.input_cost_per_million
+            output_cost_per_million = profile.output_cost_per_million
+            provider = profile.provider
+        except ValueError:
+            input_cost_per_million = DEFAULT_COST_PER_MILLION
+            output_cost_per_million = 0.0
+            provider = "unknown"
+    else:
+        input_cost_per_million = DEFAULT_COST_PER_MILLION
+        output_cost_per_million = 0.0
+        provider = "unknown"
+    cost_savings = (reportable_saved / 1_000_000) * input_cost_per_million
+    estimated_original_cost = (original_tokens / 1_000_000) * input_cost_per_million
+    estimated_compressed_cost = (compressed_tokens / 1_000_000) * input_cost_per_million
     savings_pct = (saved / original_tokens * 100) if original_tokens > 0 else 0.0
 
     return TokenSavingsTelemetry(
         original_tokens=original_tokens,
         compressed_tokens=compressed_tokens,
-        saved_tokens=saved,
+        saved_tokens=reportable_saved,
         model=model or "default",
-        cost_per_million=cost_per_million,
+        cost_per_million=input_cost_per_million,
         cost_savings_usd=round(cost_savings, 6),
         savings_percent=round(savings_pct, 1),
+        provider=provider,
+        output_cost_per_million=output_cost_per_million,
+        estimated_original_cost_usd=round(estimated_original_cost, 6),
+        estimated_compressed_cost_usd=round(estimated_compressed_cost, 6),
     )
 
 
@@ -237,6 +269,31 @@ class MetricsCollector:
             registry=self.registry,
         )
 
+        self.provider_cache_observations = Counter(
+            "provider_cache_observations_total",
+            "Total provider cache telemetry observations",
+            labelnames=["provider", "validation_status", "cache_hit"],
+            registry=self.registry,
+        )
+        self.provider_cache_read_tokens = Counter(
+            "provider_cache_read_tokens_total",
+            "Provider cache-read tokens observed",
+            labelnames=["provider"],
+            registry=self.registry,
+        )
+        self.provider_cache_creation_tokens = Counter(
+            "provider_cache_creation_tokens_total",
+            "Provider cache-creation tokens observed",
+            labelnames=["provider"],
+            registry=self.registry,
+        )
+        self.provider_cache_savings_usd = Counter(
+            "provider_cache_savings_usd_total",
+            "Estimated provider cache savings in USD",
+            labelnames=["provider"],
+            registry=self.registry,
+        )
+
         logger.info("MetricsCollector initialized with Prometheus metrics")
 
     @classmethod
@@ -315,6 +372,24 @@ class MetricsCollector:
         if status not in ALLOWED_STATUSES:
             logger.warning(
                 f"Invalid status '{status}', must be one of {ALLOWED_STATUSES}. "
+                f"Metric not recorded to prevent cardinality explosion."
+            )
+            return False
+        return True
+
+    def _validate_provider(self, provider: str) -> bool:
+        if provider not in ALLOWED_PROVIDERS:
+            logger.warning(
+                f"Invalid provider '{provider}', must be one of {ALLOWED_PROVIDERS}. "
+                f"Metric not recorded to prevent cardinality explosion."
+            )
+            return False
+        return True
+
+    def _validate_validation_status(self, status: str) -> bool:
+        if status not in ALLOWED_VALIDATION_STATUSES:
+            logger.warning(
+                f"Invalid validation status '{status}', must be one of {ALLOWED_VALIDATION_STATUSES}. "
                 f"Metric not recorded to prevent cardinality explosion."
             )
             return False
@@ -474,6 +549,33 @@ class MetricsCollector:
 
         self.batch_size.labels(operation=operation).observe(size)
 
+    def record_provider_cache_telemetry(self, telemetry: dict):
+        """Record normalized provider cache telemetry."""
+        if not self._enabled:
+            return
+        provider = str(telemetry.get("provider") or "unknown")
+        validation_status = str(telemetry.get("validation_status") or "unvalidated")
+        cache_hit = "true" if bool(telemetry.get("cache_hit_detected", False)) else "false"
+        if not self._validate_provider(provider):
+            return
+        if not self._validate_validation_status(validation_status):
+            return
+
+        self.provider_cache_observations.labels(
+            provider=provider,
+            validation_status=validation_status,
+            cache_hit=cache_hit,
+        ).inc()
+        self.provider_cache_read_tokens.labels(provider=provider).inc(
+            max(int(telemetry.get("cached_input_tokens") or 0), 0)
+        )
+        self.provider_cache_creation_tokens.labels(provider=provider).inc(
+            max(int(telemetry.get("cache_creation_input_tokens") or 0), 0)
+        )
+        savings = float(telemetry.get("estimated_cache_savings_usd") or 0.0)
+        if savings > 0:
+            self.provider_cache_savings_usd.labels(provider=provider).inc(savings)
+
     def reset_all_metrics(self):
         """
         Reset all metrics to initial state.
@@ -557,6 +659,10 @@ class NoOpMetricsCollector:
 
     def record_batch_size(self, size: int, operation: str = "batch_ingest"):
         """NoOp batch size recording."""
+        pass
+
+    def record_provider_cache_telemetry(self, telemetry: dict):
+        """NoOp provider cache telemetry recording."""
         pass
 
     def reset_all_metrics(self):

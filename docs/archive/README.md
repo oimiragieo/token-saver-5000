@@ -1,8 +1,20 @@
 # Documentation Archive
 
-This directory contains historical documentation and audit reports from the development of Token Saver 5000.
+This directory contains historical documentation, audits, and roadmap artifacts from the development of Token Saver 5000.
 
 ## Contents
+
+### Archived Subdirectories
+
+1. **audits\\**
+   - Historical audit outputs and analysis dumps that do not belong in the repository root
+   - Includes the migrated MCP tool analysis report
+
+2. **architecture\\**
+   - Historical end-to-end flow walkthroughs and system-shape writeups
+
+3. **roadmaps\\**
+   - Old seam maps, implementation matrices, and generated code-template bundles
 
 ### Audit Reports
 
@@ -65,11 +77,11 @@ This directory contains historical documentation and audit reports from the deve
 
 ## Note
 
-These documents are kept for historical reference and to track the evolution of the project. For current documentation, see the root-level markdown files:
+These documents are kept for historical reference and to track the evolution of the project. For current documentation, start with:
 
-- README.md
-- GETTING_STARTED.md
-- QUICKSTART.md
-- ARCHITECTURE.md
-- CHANGELOG.md
-- CONTRIBUTING.md
+- `README.md`
+- `CHANGELOG.md`
+- `docs\\getting-started\\`
+- `docs\\guides\\`
+- `docs\\reference\\`
+- `docs\\deployment\\`

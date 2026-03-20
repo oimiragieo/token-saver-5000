@@ -1,0 +1,6 @@
+{
+  "eval_id": 3,
+  "eval_name": "langchain-json-adapter",
+  "prompt": "I have a LangChain-style JSON payload and want it compressed into a cache-friendly context block for a specific question. Show me the command pattern I should use and what output format policy applies.",
+  "assertions": []
+}

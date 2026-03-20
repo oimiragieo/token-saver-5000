@@ -258,13 +258,21 @@ class TestSkeletonQueryPlacement:
         query_one = json.loads(
             await handle_read_skeleton(
                 context,
-                {"file_id": "cache_doc", "selection_mode": "query_guided", "query": "refresh token rotation"},
+                {
+                    "file_id": "cache_doc",
+                    "selection_mode": "query_guided",
+                    "query": "refresh token rotation",
+                },
             )
         )
         query_two = json.loads(
             await handle_read_skeleton(
                 context,
-                {"file_id": "cache_doc", "selection_mode": "query_guided", "query": "audit compliance actions"},
+                {
+                    "file_id": "cache_doc",
+                    "selection_mode": "query_guided",
+                    "query": "audit compliance actions",
+                },
             )
         )
 

@@ -16,9 +16,20 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict
+
+from ..identity_scope import compose_scoped_file_id
 from ..types import HandlerContext  # TypedDict for handler context
 
 logger = logging.getLogger("semantic-modulator")
+
+
+def _scope_kwargs(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "workspace_id": args.get("workspace_id"),
+        "user_id": args.get("user_id"),
+        "agent_id": args.get("agent_id"),
+        "session_id": args.get("session_id"),
+    }
 
 
 async def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -39,15 +50,16 @@ async def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) 
         ValueError: If file_id is invalid or document not found
     """
     file_id = args["file_id"]
+    scoped_file_id = compose_scoped_file_id(file_id, **_scope_kwargs(args))
     sync_manager = context["sync_manager"]
 
     # Validation - check if file exists in sync manager
-    if file_id not in sync_manager.file_metadata:
+    if scoped_file_id not in sync_manager.file_metadata:
         raise ValueError(f"Document '{file_id}' not found in file sync manager")
 
-    logger.info(f"Checking file sync for: {file_id}")
+    logger.info(f"Checking file sync for: {scoped_file_id}")
 
-    status = sync_manager.check_file_sync(file_id)
+    status = sync_manager.check_file_sync(scoped_file_id)
 
     # Build JSON response
     response = {"file_id": file_id, "in_sync": status["in_sync"], "reason": status["reason"]}
@@ -97,13 +109,14 @@ async def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any])
         ValueError: If file_id is invalid or document not found
     """
     file_id = args["file_id"]
+    scoped_file_id = compose_scoped_file_id(file_id, **_scope_kwargs(args))
     context_lines = args.get("context_lines", 3)
     sync_manager = context["sync_manager"]
     version_manager = context["version_manager"]
 
     # Validation - check sync manager registration
     # v0.8.0: Use ASCII-only output for enterprise compatibility
-    if file_id not in sync_manager.file_metadata:
+    if scoped_file_id not in sync_manager.file_metadata:
         return (
             f"[ERROR] Cannot diff '{file_id}'\n"
             f"\n"
@@ -113,11 +126,13 @@ async def handle_diff_cached_file(context: HandlerContext, args: Dict[str, Any])
             f'  ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")'
         )
 
-    logger.info(f"Generating diff for: {file_id}")
+    logger.info(f"Generating diff for: {scoped_file_id}")
 
     # Use version manager to generate diff (v0.8.0: use async version to avoid blocking event loop)
     # Version manager now returns detailed error messages instead of None
-    diff = await version_manager.diff_with_current_file_async(file_id, context_lines=context_lines)
+    diff = await version_manager.diff_with_current_file_async(
+        scoped_file_id, context_lines=context_lines
+    )
 
     # v0.8.0: version_manager now always returns a string (error message or diff)
     # None only returned for truly unexpected cases
@@ -145,17 +160,18 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
         ValueError: If file_id is invalid or document not found
     """
     file_id = args["file_id"]
+    scoped_file_id = compose_scoped_file_id(file_id, **_scope_kwargs(args))
     sync_manager = context["sync_manager"]
     version_manager = context["version_manager"]
     compressor = context["compressor"]
     persistence = context["persistence"]
 
     # Validation - check if file exists in compressor
-    if file_id not in compressor.graphs:
+    if scoped_file_id not in compressor.graphs:
         raise ValueError(f"Document '{file_id}' not found")
 
     # v0.8.0: Use ASCII-only output for enterprise compatibility
-    if file_id not in sync_manager.file_metadata:
+    if scoped_file_id not in sync_manager.file_metadata:
         return (
             f"[ERROR] Cannot refresh '{file_id}'\n"
             f"\n"
@@ -165,12 +181,12 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
             f'  ingest_context(text=..., file_id="{file_id}", file_path="/path/to/file")'
         )
 
-    metadata = sync_manager.file_metadata[file_id]
+    metadata = sync_manager.file_metadata[scoped_file_id]
 
     if not metadata.file_path:
         return f"[ERROR] Document '{file_id}' has no source file (text-only ingestion)"
 
-    logger.info(f"Refreshing document from disk: {file_id} <- {metadata.file_path}")
+    logger.info(f"Refreshing document from disk: {scoped_file_id} <- {metadata.file_path}")
 
     # Read current file
     try:
@@ -190,7 +206,7 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
     try:
         skeleton = await compressor.ingest_file_async(
             text=content,
-            file_id=file_id,
+            file_id=scoped_file_id,
             metadata={"refreshed_at": __import__("datetime").datetime.now().isoformat()},
         )
     except Exception as e:
@@ -204,7 +220,7 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
 
     # Update sync metadata
     checksum = hashlib.md5(content.encode()).hexdigest()
-    sync_manager.update_metadata(file_id, metadata.file_path, content)
+    sync_manager.update_metadata(scoped_file_id, metadata.file_path, content)
 
     # Persist file sync metadata
     try:
@@ -215,7 +231,7 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
 
     # Store new version (v0.8.0: use async version to avoid blocking event loop)
     await version_manager.add_version_async(
-        doc_id=file_id,
+        doc_id=scoped_file_id,
         content=content,
         checksum=checksum,
         file_path=metadata.file_path,
@@ -230,18 +246,18 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
     try:
         import networkx as nx
 
-        graph_data = nx.node_link_data(compressor.graphs[file_id])
+        graph_data = nx.node_link_data(compressor.graphs[scoped_file_id], edges="links")
         persistence.save_document(
-            file_id=file_id,
-            chunks={k: v for k, v in compressor.chunks.items() if k.startswith(file_id)},
+            file_id=scoped_file_id,
+            chunks={k: v for k, v in compressor.chunks.items() if k.startswith(scoped_file_id)},
             graph_data=graph_data,
-            metadata=compressor.file_metadata.get(file_id, {}),
+            metadata=compressor.file_metadata.get(scoped_file_id, {}),
         )
     except Exception as e:
         logger.error(f"Failed to persist refreshed {file_id}: {e}")
 
     # v0.8.0 audit fix: Use async wrapper to avoid blocking event loop
-    history = await version_manager.get_version_history_async(file_id)
+    history = await version_manager.get_version_history_async(scoped_file_id)
     version_count = len(history)
 
     # v0.8.0: Use ASCII-only output for enterprise compatibility
@@ -276,10 +292,11 @@ async def handle_get_version_history(context: HandlerContext, args: Dict[str, An
         JSON string with version history
     """
     doc_id = args["doc_id"]
+    scoped_doc_id = compose_scoped_file_id(doc_id, **_scope_kwargs(args))
     version_manager = context["version_manager"]
 
     # Get version history (v0.8.0 audit fix: use async wrapper)
-    history = await version_manager.get_version_history_async(doc_id)
+    history = await version_manager.get_version_history_async(scoped_doc_id)
 
     # Build JSON response
     versions = []

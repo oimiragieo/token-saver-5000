@@ -98,6 +98,7 @@ class FidelityAdvisor:
         num_nodes: int,
         token_budget: Optional[int] = None,
         query_complexity: str = "medium",
+        model: Optional[str] = None,
     ) -> FidelityRecommendation:
         """
         Recommend optimal fidelity level.
@@ -158,6 +159,26 @@ class FidelityAdvisor:
                     recommended_level = level_upgrade
                     reasoning_parts.append(
                         "Upgraded one level due to complex query requiring more context"
+                    )
+
+        if model:
+            model_name = model.lower()
+            if ("opus" in model_name or "gpt-5.4" in model_name) and recommended_level not in {
+                FidelityLevel.ABSTRACT,
+                FidelityLevel.RAW,
+            }:
+                downgraded = self._downgrade_level(recommended_level)
+                if downgraded is not None:
+                    recommended_level = downgraded
+                    reasoning_parts.append(
+                        f"Adjusted downward for higher-cost model '{model}' to preserve cost efficiency"
+                    )
+            elif "gemini" in model_name and query_complexity == "complex":
+                upgraded = self._upgrade_level(recommended_level)
+                if upgraded is not None:
+                    recommended_level = upgraded
+                    reasoning_parts.append(
+                        f"Adjusted upward for large-context model '{model}' on a complex query"
                     )
 
         # Step 5: Calculate confidence

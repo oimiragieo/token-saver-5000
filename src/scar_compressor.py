@@ -10,12 +10,18 @@ Key adaptations:
 3. Adaptive fidelity based on semantic similarity
 """
 
+import logging
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass
+
+
+_UNTRAINED_WARNING_EMITTED = False
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -321,15 +327,14 @@ class SCAREnhancedCompressor:
             # 3. Load trained weights with self.learnable_compressor.load_state_dict(torch.load('scar_weights.pt'))
             # Without training, the compression is essentially a random projection,
             # which may not preserve semantic information optimally.
-            import warnings
-
-            warnings.warn(
-                "[SCAR] Using UNTRAINED random weights for learnable compression. "
-                "For optimal semantic preservation, train the compressor first. "
-                "See training_utils.py for training infrastructure.",
-                UserWarning,
-                stacklevel=2,
-            )
+            global _UNTRAINED_WARNING_EMITTED
+            if not _UNTRAINED_WARNING_EMITTED:
+                logger.warning(
+                    "[SCAR] Using UNTRAINED random weights for learnable compression. "
+                    "For optimal semantic preservation, train the compressor first. "
+                    "See training_utils.py for training infrastructure."
+                )
+                _UNTRAINED_WARNING_EMITTED = True
 
         if use_alignment_guidance:
             self.alignment_module = SemanticAlignmentModule(embedding_dim=embedding_dim)

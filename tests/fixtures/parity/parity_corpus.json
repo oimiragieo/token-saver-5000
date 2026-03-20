@@ -1,0 +1,10 @@
+{
+  "documents": [
+    {
+      "file_id": "phase0_architecture",
+      "title": "Phase 0 architecture corpus",
+      "query": "What improves prompt cache stability and semantic retrieval?",
+      "text": "Prompt caching depends on stable prefixes and predictable prompt structure. Semantic compression reduces token cost by keeping only the most informative context. Query-guided retrieval should preserve the passages that best answer the active question.\n\nObservability matters for AI infrastructure. Metrics, warnings, and traces should make it clear when compression, retrieval, or persistence fail. Strong handler contracts let downstream clients depend on stable response shapes even while internals evolve.\n\nA context engineering platform should support retrieval, compression, and explicit memory workflows. Stable skeletons provide the cache-friendly layer, while semantic search and region modulation expose the details needed for high-fidelity answers."
+    }
+  ]
+}

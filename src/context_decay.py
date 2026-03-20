@@ -8,7 +8,7 @@ eviction of stale context to keep the context budget tight.
 
 import math
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class AccessTracker:
@@ -16,10 +16,17 @@ class AccessTracker:
 
     def __init__(self):
         self._access_log: Dict[str, dict] = {}
+        self._events: List[dict[str, Any]] = []
 
-    def record_access(self, doc_id: str) -> None:
+    def record_access(
+        self,
+        doc_id: str,
+        timestamp: float | None = None,
+        access_type: str = "access",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Record an access event for a document."""
-        now = time.time()
+        now = time.time() if timestamp is None else float(timestamp)
         if doc_id not in self._access_log:
             self._access_log[doc_id] = {
                 "first_accessed": now,
@@ -29,6 +36,14 @@ class AccessTracker:
         else:
             self._access_log[doc_id]["last_accessed"] = now
             self._access_log[doc_id]["access_count"] += 1
+        self._events.append(
+            {
+                "doc_id": doc_id,
+                "event_type": access_type,
+                "timestamp": now,
+                "metadata": dict(metadata or {}),
+            }
+        )
 
     def get_access_info(self, doc_id: str) -> Optional[dict]:
         """Get access info for a document, or None if not tracked."""
@@ -54,6 +69,31 @@ class AccessTracker:
     def get_all_stats(self) -> Dict[str, dict]:
         """Get access stats for all tracked documents."""
         return dict(self._access_log)
+
+    def get_access_timeline(
+        self,
+        doc_id: str | None = None,
+        *,
+        since: float | None = None,
+        until: float | None = None,
+        access_type: str | None = None,
+        limit: int = 50,
+    ) -> List[dict[str, Any]]:
+        """Return individual access events in reverse chronological order."""
+        events: List[dict[str, Any]] = []
+        for event in reversed(self._events):
+            if doc_id is not None and event["doc_id"] != doc_id:
+                continue
+            if access_type is not None and event["event_type"] != access_type:
+                continue
+            if since is not None and event["timestamp"] < since:
+                continue
+            if until is not None and event["timestamp"] > until:
+                continue
+            events.append(dict(event))
+            if len(events) >= limit:
+                break
+        return events
 
 
 def compute_decay_score(

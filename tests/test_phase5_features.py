@@ -18,7 +18,6 @@ Features tested:
 import time
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 # =============================================================================
@@ -342,9 +341,7 @@ class TestFidelityScoring:
                     embeddings.append(np.array([0.0, 1.0, 0.0]))
             return np.array(embeddings)
 
-        score = compute_fidelity_score(
-            "Python is great", "Weather is nice", mock_encode
-        )
+        score = compute_fidelity_score("Python is great", "Weather is nice", mock_encode)
         assert score < 0.5
 
     def test_fidelity_returns_float(self):
@@ -383,11 +380,13 @@ class TestMultiLevelSkeleton:
 
         nodes = []
         for i in range(10):
-            nodes.append({
-                "node_id": f"n{i}",
-                "text": f"Node {i} content about topic {i % 3}.",
-                "importance": 1.0 - (i * 0.08),
-            })
+            nodes.append(
+                {
+                    "node_id": f"n{i}",
+                    "text": f"Node {i} content about topic {i % 3}.",
+                    "importance": 1.0 - (i * 0.08),
+                }
+            )
 
         result = generate_multi_level_skeleton(nodes)
 
@@ -505,9 +504,7 @@ class TestQueryAdaptiveCompression:
             {"text": "B", "embedding": np.array([0.0, 1.0])},
         ]
 
-        ratios = compute_section_ratios(
-            sections, np.array([1.0, 0.0]), base_ratio=0.1
-        )
+        ratios = compute_section_ratios(sections, np.array([1.0, 0.0]), base_ratio=0.1)
         assert all(0.05 <= r <= 1.0 for r in ratios)
 
 
@@ -575,9 +572,11 @@ class TestContextAdvisor:
         """Should include a recommended compression strategy."""
         from src.context_advisor import advise_context
 
-        advice = advise_context([
-            {"doc_id": "d1", "tokens": 100000, "importance": 0.5},
-        ])
+        advice = advise_context(
+            [
+                {"doc_id": "d1", "tokens": 100000, "importance": 0.5},
+            ]
+        )
         assert "strategy" in advice
         assert isinstance(advice["strategy"], str)
 
@@ -787,29 +786,35 @@ class TestPhase5MCPWiring:
     def test_prune_by_relevance_tool_exists(self):
         """prune_by_relevance should be registered as MCP tool handler."""
         from src.handlers.compression_handlers import handle_prune_by_relevance
+
         assert callable(handle_prune_by_relevance)
 
     def test_multi_level_skeleton_tool_exists(self):
         """get_multi_level_skeleton should be a callable handler."""
         from src.handlers.compression_handlers import handle_multi_level_skeleton
+
         assert callable(handle_multi_level_skeleton)
 
     def test_evict_stale_tool_exists(self):
         """evict_stale should be a callable handler."""
         from src.handlers.compression_handlers import handle_evict_stale
+
         assert callable(handle_evict_stale)
 
     def test_advise_context_tool_exists(self):
         """advise_context should be a callable handler."""
         from src.handlers.compression_handlers import handle_advise_context
+
         assert callable(handle_advise_context)
 
     def test_get_compression_insights_tool_exists(self):
         """get_compression_insights should be a callable handler."""
         from src.handlers.compression_handlers import handle_get_compression_insights
+
         assert callable(handle_get_compression_insights)
 
     def test_generate_rewrite_prompt_tool_exists(self):
         """generate_rewrite_prompt should be a callable handler."""
         from src.handlers.compression_handlers import handle_generate_rewrite_prompt
+
         assert callable(handle_generate_rewrite_prompt)

@@ -1,0 +1,47 @@
+{
+  "expectations": [
+    {
+      "text": "The workflow uses query-guided or evidence-aware compression rather than a generic baseline.",
+      "passed": true,
+      "evidence": "Mode used: query_guided"
+    },
+    {
+      "text": "The response reports token savings or compression ratio.",
+      "passed": true,
+      "evidence": "Savings 18.31%, ratio 1.224"
+    },
+    {
+      "text": "The response explicitly addresses whether the retry-rule evidence is sufficient.",
+      "passed": true,
+      "evidence": "Evidence status: sufficient=False"
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "PythonScript": 3
+    },
+    "total_tool_calls": 3,
+    "total_steps": 3,
+    "errors_encountered": 0,
+    "output_chars": 573,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 1.005
+  },
+  "user_notes_summary": {
+    "uncertainties": [
+      "Evidence validation remained below threshold, so the answer is not high-confidence yet."
+    ],
+    "needs_review": [],
+    "workarounds": [
+      "Broaden retrieval or lower compression aggressiveness for a safer answer."
+    ]
+  }
+}

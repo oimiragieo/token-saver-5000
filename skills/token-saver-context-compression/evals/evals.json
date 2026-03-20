@@ -1,0 +1,42 @@
+{
+  "skill_name": "token-saver-context",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the token-saver-context-compression skill's documented local script commands, not MCP or server commands. Give the exact command in this repo to compress tests\\fixtures\\skill_context_sample.txt for the question 'what are the retry rules?' using the best query-targeted mode, then say whether the result should be treated as safe to answer from. If the documented skill command is unavailable, say that directly.",
+      "expected_output": "An exact `compress_context.py` command using `query_guided` plus a clear statement about whether the result is safe to answer from.",
+      "files": [
+        "tests/fixtures/skill_context_sample.txt"
+      ],
+      "expectations": [
+        "The response uses the documented local `compress_context.py` command rather than MCP or server guidance.",
+        "The response explicitly names a query-targeted mode such as `query_guided`.",
+        "The response explicitly addresses whether the result is safe to answer from."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the token-saver-context-compression skill's documented local script commands, not MCP or server commands. Give the exact command in this repo to run the full local workflow on tests\\fixtures\\skill_context_sample.txt and fail loudly if the compressed result is not safe enough to answer from. Explain what that loud failure means. If the documented skill command is unavailable, say that directly.",
+      "expected_output": "An exact `run_skill_workflow.py` command including `--fail-on-insufficient-evidence`, plus a clear explanation of the loud failure behavior.",
+      "files": [
+        "tests/fixtures/skill_context_sample.txt"
+      ],
+      "expectations": [
+        "The response uses the documented local `run_skill_workflow.py` command rather than MCP or server guidance.",
+        "The command includes `--fail-on-insufficient-evidence`.",
+        "The response explains what the loud failure means."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use the token-saver-context-compression skill's documented local script commands, not MCP or server commands. I have a LangChain-style JSON payload and want the exact command pattern in this repo for compressing it for a specific question. Include the documented output-format policy and one cache-friendly prompt-structure note. If the documented skill command is unavailable, say that directly.",
+      "expected_output": "An exact `compress_context.py` JSON-adapter command, plus the documented `auto`/JSON/TOON policy and a cache-friendly prompt-structure note.",
+      "files": [],
+      "expectations": [
+        "The response uses the documented local JSON adapter flow rather than MCP or server guidance.",
+        "The response mentions cache-friendly prompt structure or stable-prefix concerns.",
+        "The response explains TOON, JSON, or auto output behavior."
+      ]
+    }
+  ]
+}

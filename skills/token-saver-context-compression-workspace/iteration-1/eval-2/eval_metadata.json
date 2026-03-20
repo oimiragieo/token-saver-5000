@@ -1,0 +1,6 @@
+{
+  "eval_id": 2,
+  "eval_name": "full-workflow-fail-loudly",
+  "prompt": "Run the full local workflow on this sample file and fail loudly if the compressed result is not safe enough to answer from.",
+  "assertions": []
+}

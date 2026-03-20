@@ -1,0 +1,16 @@
+[
+  {
+    "page_content": "Retry policy uses exponential backoff with bounded retries before dead-letter handling.",
+    "metadata": {
+      "source": "architecture.md",
+      "id": "doc-1"
+    }
+  },
+  {
+    "page_content": "Prompt caching works best when stable context comes before dynamic metadata and the user question.",
+    "metadata": {
+      "source": "prompt-caching.md",
+      "id": "doc-2"
+    }
+  }
+]

@@ -23,4 +23,12 @@ __all__ = [
     "file_sync_handlers",
     "resource_handlers",
     "detection_handlers",
+    "prompt_handlers",
+    "memory_handlers",
+    "experiment_handlers",
+    "model_handlers",
+    "bundle_handlers",
+    "connector_handlers",
+    "temporal_handlers",
+    "multimodal_handlers",
 ]

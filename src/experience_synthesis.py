@@ -46,6 +46,8 @@ logger = logging.getLogger(__name__)
 class TestCategory(Enum):
     """Categories of test cases"""
 
+    __test__ = False
+
     BOUNDARY = "boundary"
     ADVERSARIAL = "adversarial"
     STRESS = "stress"

@@ -186,6 +186,12 @@ chmod +x scripts/install_mcp.sh
 ./scripts/install_mcp.sh
 ```
 
+Or, after `pip install -e .`:
+
+```bash
+token-saver-install-mcp
+```
+
 **What it does:**
 1. Auto-detects your operating system (macOS, Windows, Linux)
 2. Locates Claude Desktop config file
@@ -196,7 +202,25 @@ chmod +x scripts/install_mcp.sh
 **Supported platforms:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Linux: `~/.config/claude/claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+
+**Claude Code / project config:**
+
+```bash
+token-saver-install-mcp --project-config
+```
+
+**Claude Code / shared portable project config:**
+
+```bash
+token-saver-install-mcp --portable-project-config
+```
+
+**Inspect MCP setup health:**
+
+```bash
+token-saver-install-mcp --doctor
+```
 
 **Manual alternative:** See [GETTING_STARTED.md](../GETTING_STARTED.md#configure-claude-desktop)
 

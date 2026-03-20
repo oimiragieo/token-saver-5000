@@ -30,10 +30,181 @@ from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
 from ..metrics import compute_cost_savings, get_metrics
 from ..constants import MAX_TEXT_LENGTH_BYTES
+from ..identity_scope import (
+    compose_scoped_file_id,
+    display_file_id,
+    parse_scoped_file_id,
+    scope_matches,
+)
 from ..node_identity import collect_file_ids, extract_file_id_from_node
+from ..temporal_graph import coerce_timestamp, format_timestamp
+from ..compression_pipeline import run_read_skeleton_pipeline
 
 
 logger = logging.getLogger("semantic-modulator")
+
+
+def _scope_kwargs(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "workspace_id": args.get("workspace_id"),
+        "user_id": args.get("user_id"),
+        "agent_id": args.get("agent_id"),
+        "session_id": args.get("session_id"),
+    }
+
+
+def _scoped_file_id(file_id: str, args: Dict[str, Any]) -> str:
+    return compose_scoped_file_id(file_id, **_scope_kwargs(args))
+
+
+def _scope_filtered_results(
+    search_results: List[tuple[str, float]], args: Dict[str, Any]
+) -> List[tuple[str, float]]:
+    scope_kwargs = _scope_kwargs(args)
+    return [
+        (node_id, similarity)
+        for node_id, similarity in search_results
+        if scope_matches(extract_file_id_from_node(node_id), **scope_kwargs)
+    ]
+
+
+def _scope_filtered_file_ids(file_ids: List[str], args: Dict[str, Any]) -> List[str]:
+    scope_kwargs = _scope_kwargs(args)
+    return [file_id for file_id in file_ids if scope_matches(file_id, **scope_kwargs)]
+
+
+def _has_scope_args(args: Dict[str, Any]) -> bool:
+    return any(_scope_kwargs(args).values())
+
+
+def _compressor_temporal_graph(compressor: Any) -> Any:
+    sentinel = object()
+    static_attr = inspect.getattr_static(compressor, "_temporal_graph", sentinel)
+    if static_attr is sentinel:
+        return None
+    return getattr(compressor, "_temporal_graph", None)
+
+
+def _temporal_graph(context: HandlerContext) -> Any:
+    return _compressor_temporal_graph(context["compressor"])
+
+
+def _temporal_excluded_node_ids(
+    context: HandlerContext, args: Dict[str, Any], scoped_file_id: str | None = None
+) -> set[str]:
+    temporal_graph = _temporal_graph(context)
+    if temporal_graph is None or args.get("include_invalidated", False):
+        return set()
+
+    as_of = args.get("as_of")
+    if scoped_file_id is not None:
+        return temporal_graph.get_invalidated_fact_ids(scoped_file_id, as_of=as_of)
+
+    excluded: set[str] = set()
+    for file_id in _scope_filtered_file_ids(list(context["compressor"].graphs.keys()), args):
+        excluded.update(temporal_graph.get_invalidated_fact_ids(file_id, as_of=as_of))
+    return excluded
+
+
+def _temporal_filter_search_results(
+    context: HandlerContext, search_results: List[tuple[str, float]], args: Dict[str, Any]
+) -> List[tuple[str, float]]:
+    temporal_graph = _temporal_graph(context)
+    if temporal_graph is None or args.get("include_invalidated", False):
+        return search_results
+
+    as_of = args.get("as_of")
+    return [
+        (node_id, similarity)
+        for node_id, similarity in search_results
+        if temporal_graph.is_fact_active(node_id, as_of=as_of)
+    ]
+
+
+def _scoped_global_stats(context: HandlerContext, args: Dict[str, Any]) -> Dict[str, Any]:
+    scoped_file_ids = _scope_filtered_file_ids(list(context["compressor"].graphs.keys()), args)
+    if not scoped_file_ids:
+        return {"total_files": 0, "total_documents": 0, "total_nodes": 0, "files": []}
+
+    file_stats = [context["compressor"].get_stats(file_id) for file_id in scoped_file_ids]
+    return {
+        "total_files": len(scoped_file_ids),
+        "total_documents": len(scoped_file_ids),
+        "total_nodes": sum(stats["total_nodes"] for stats in file_stats),
+        "files": [display_file_id(file_id) for file_id in scoped_file_ids],
+    }
+
+
+def _scope_label(scoped_or_raw_file_id: str) -> str | None:
+    parsed = parse_scoped_file_id(scoped_or_raw_file_id)
+    labels = []
+    for field, display_name in (
+        ("workspace_id", "workspace"),
+        ("user_id", "user"),
+        ("agent_id", "agent"),
+        ("session_id", "session"),
+    ):
+        value = parsed.get(field)
+        if value is not None:
+            labels.append(f"{display_name}={value}")
+    return ", ".join(labels) if labels else None
+
+
+async def _resolve_awaitable(result: Any) -> Any:
+    """Await awaitables while leaving synchronous results untouched."""
+    if inspect.isawaitable(result):
+        return await result
+    return result
+
+
+async def _call_explicit_optional_method(
+    obj: Any, attr_name: str, method_name: str, *args: Any, **kwargs: Any
+) -> Any:
+    """
+    Call an explicitly defined optional method, supporting sync and async hooks.
+
+    inspect.getattr_static() avoids Mock/AsyncMock auto-creating attributes that
+    would otherwise look present and trigger false-positive hook execution.
+    """
+    sentinel = object()
+    static_attr = inspect.getattr_static(obj, attr_name, sentinel)
+    if static_attr is sentinel:
+        return None
+
+    target = getattr(obj, attr_name, None)
+    if target is None:
+        return None
+
+    method = getattr(target, method_name, None)
+    if method is None:
+        return None
+
+    return await _resolve_awaitable(method(*args, **kwargs))
+
+
+def _generate_skeleton_with_optional_filters(
+    compressor: Any,
+    file_id: str,
+    *,
+    query: str | None = None,
+    anchor_node_ids: set[str] | None = None,
+    exclude_node_ids: set[str] | None = None,
+) -> Any:
+    kwargs: dict[str, Any] = {}
+    if query is not None:
+        kwargs["query"] = query
+    if anchor_node_ids is not None:
+        kwargs["anchor_node_ids"] = anchor_node_ids
+
+    try:
+        params = inspect.signature(compressor._generate_skeleton).parameters
+    except (TypeError, ValueError):
+        params = {}
+
+    if exclude_node_ids and "exclude_node_ids" in params:
+        kwargs["exclude_node_ids"] = exclude_node_ids
+
+    return compressor._generate_skeleton(file_id, **kwargs)
 
 
 def _flatten_output_fields(schema: Dict[str, Any], prefix: str = "") -> List[str]:
@@ -73,6 +244,10 @@ SEARCH_SEMANTIC_RESPONSE_TEMPLATE: Dict[str, Any] = {
         "similarity": "",
         "importance": "",
     },
+    "temporal_filters": {
+        "as_of": "",
+        "include_invalidated": False,
+    },
     "evidence": {
         "sufficient": True,
         "best_score": 0.0,
@@ -99,6 +274,10 @@ READ_SKELETON_RESPONSE_TEMPLATE: Dict[str, Any] = {
     "node_map": {},
     "selection_mode": "baseline",
     "query": "",
+    "temporal_filters": {
+        "as_of": "",
+        "include_invalidated": False,
+    },
     "evidence": {
         "sufficient": True,
         "best_score": 0.0,
@@ -113,6 +292,21 @@ READ_SKELETON_RESPONSE_TEMPLATE: Dict[str, Any] = {
         "cached_time": 0,
         "current_time": 0,
         "recommendation": "",
+    },
+    "pipeline": {
+        "final_stage": "baseline",
+        "stage_count": 0,
+        "stages": [
+            {
+                "name": "baseline",
+                "query": "",
+                "anchor_node_count": 0,
+                "evidence_used": False,
+                "total_nodes": 0,
+                "skeleton_tokens": 0,
+                "compression_ratio": 0.0,
+            }
+        ],
     },
 }
 
@@ -288,6 +482,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     file_id = args["file_id"]
     file_path = args.get("file_path")  # Optional file path for sync tracking
     metadata = args.get("metadata")
+    scoped_file_id = _scoped_file_id(file_id, args)
 
     # Text content length validation (v0.7.0 security hardening)
     text_bytes = len(text.encode("utf-8"))
@@ -322,18 +517,20 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             "Tip: Provide at least 20 characters for meaningful semantic analysis"
         )
 
-    validate_file_id(file_id, context, must_exist=False)
+    validate_file_id(scoped_file_id, context, must_exist=False)
 
     # Check resource limits BEFORE ingestion
     # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
     text_size = len(text.encode("utf-8"))
     allowed, error_msg = await context["resource_manager"].check_document_size_async(
-        file_id, text_size
+        scoped_file_id, text_size
     )
     if not allowed:
         raise ValueError(error_msg)
 
-    logger.info(f"Ingesting document: {file_id} ({len(text)} chars, {text_size / 1024:.1f}KB)")
+    logger.info(
+        f"Ingesting document: {scoped_file_id} ({len(text)} chars, {text_size / 1024:.1f}KB)"
+    )
 
     # NEW v0.4.1: Provide compression estimate before actual compression
     advisor = CompressionAdvisor()
@@ -346,7 +543,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     try:
         chunking_strategy = args.get("chunking_strategy", "fixed")
         skeleton = await context["compressor"].ingest_file_async(
-            text, file_id, metadata, chunking_strategy=chunking_strategy
+            text, scoped_file_id, metadata, chunking_strategy=chunking_strategy
         )
     except Exception as e:
         raise RuntimeError(
@@ -356,21 +553,24 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     # Register with resource manager
     # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
-    await context["resource_manager"].register_document_async(file_id, text_size)
+    await context["resource_manager"].register_document_async(scoped_file_id, text_size)
 
     # Persist to storage
     try:
         import networkx as nx
 
-        graph_data = nx.node_link_data(context["compressor"].graphs[file_id])
+        graph_data = nx.node_link_data(context["compressor"].graphs[scoped_file_id], edges="links")
         success = context["persistence"].save_document(
-            file_id=file_id,
-            chunks={k: v for k, v in context["compressor"].chunks.items() if k.startswith(file_id)},
+            file_id=scoped_file_id,
+            chunks={
+                k: v
+                for k, v in context["compressor"].chunks.items()
+                if k.startswith(scoped_file_id)
+            },
             graph_data=graph_data,
-            metadata=context["compressor"].file_metadata.get(file_id, {}),
+            metadata=context["compressor"].file_metadata.get(scoped_file_id, {}),
         )
-        if inspect.isawaitable(success):
-            success = await success
+        success = await _resolve_awaitable(success)
         if success:
             logger.info(f"[OK] Persisted document {file_id}")
         else:
@@ -380,11 +580,11 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     # NEW: Register with file sync manager and version manager
     checksum = hashlib.md5(text.encode()).hexdigest()
-    context["sync_manager"].register_file(file_id, file_path, text)
+    context["sync_manager"].register_file(scoped_file_id, file_path, text)
     try:
         # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
         await context["version_manager"].add_version_async(
-            doc_id=file_id,
+            doc_id=scoped_file_id,
             content=text,
             checksum=checksum,
             file_path=file_path,
@@ -403,8 +603,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     try:
         metadata_export = context["sync_manager"].export_metadata()
         success = context["persistence"].save_file_sync_metadata(metadata_export)
-        if inspect.isawaitable(success):
-            success = await success
+        success = await _resolve_awaitable(success)
         if success:
             logger.info(f"[OK] Saved file sync metadata for {len(metadata_export)} documents")
         else:
@@ -413,7 +612,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         logger.error(f"Failed to save file sync metadata: {e}")
 
     # Initialize retrieval history
-    context["retrieval_history"][file_id] = []
+    context["retrieval_history"][scoped_file_id] = []
 
     # Compare estimate vs actual (v0.4.1+)
     actual_ratio = skeleton.compression_ratio
@@ -432,9 +631,11 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         "skeleton_tokens": skeleton.skeleton_tokens,
         "compression_ratio": skeleton.compression_ratio,
         "token_savings": skeleton.total_tokens - skeleton.skeleton_tokens,
-        "token_savings_percent": round(
-            (1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1
-        ) if skeleton.total_tokens > 0 else 0.0,
+        "token_savings_percent": (
+            round((1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1)
+            if skeleton.total_tokens > 0
+            else 0.0
+        ),
         "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
         "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
     }
@@ -461,24 +662,29 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     # Phase 5: Record access and compression replay for optimization
     try:
         compressor = context["compressor"]
-        if hasattr(compressor, '_access_tracker'):
-            compressor._access_tracker.record_access(file_id)
-        if hasattr(compressor, '_compression_replay'):
+        content_type = args.get("content_type", "general")
+        await _call_explicit_optional_method(
+            compressor, "_access_tracker", "record_access", scoped_file_id
+        )
+        replay_hook = inspect.getattr_static(compressor, "_compression_replay", None)
+        if replay_hook is not None:
             from ..fidelity_scoring import compute_fidelity_score
+
             fidelity = 0.0
             try:
                 original_text = args.get("text", "")
                 if original_text and skeleton.skeleton_text:
                     emb_mgr = compressor.model
                     fidelity = compute_fidelity_score(
-                        original_text, skeleton.skeleton_text,
-                        lambda texts: emb_mgr.encode(texts)
+                        original_text, skeleton.skeleton_text, lambda texts: emb_mgr.encode(texts)
                     )
             except Exception as exc:
                 logger.warning(f"Fidelity scoring failed for '{file_id}': {exc}")
-            content_type = args.get("content_type", "general")
-            compressor._compression_replay.record(
-                doc_id=file_id,
+            await _call_explicit_optional_method(
+                compressor,
+                "_compression_replay",
+                "record",
+                doc_id=scoped_file_id,
                 content_type=content_type,
                 input_tokens=skeleton.total_tokens,
                 output_tokens=skeleton.skeleton_tokens,
@@ -486,6 +692,40 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
                 fidelity_score=fidelity,
             )
             response["fidelity_score"] = round(fidelity, 4)
+        temporal_graph = _compressor_temporal_graph(compressor)
+        if temporal_graph is not None:
+            graph = compressor.graphs.get(scoped_file_id)
+            facts = []
+            if graph is not None:
+                for node_id in graph.nodes():
+                    node = compressor.chunks.get(node_id)
+                    if node is None or not node_id.startswith(scoped_file_id):
+                        continue
+                    facts.append(
+                        {
+                            "fact_id": node_id,
+                            "content": node.text,
+                            "metadata": {
+                                "tokens": node.metadata.get("tokens", 0),
+                                "importance": round(node.importance, 4),
+                                "entities": node.metadata.get("entities", [])[:5],
+                            },
+                        }
+                    )
+            temporal_graph.record_document_state(
+                scoped_file_id,
+                facts,
+                metadata={
+                    "content_type": content_type,
+                    "compression_ratio": round(skeleton.compression_ratio, 4),
+                },
+            )
+            temporal_graph.record_event(
+                "document_ingested",
+                doc_id=scoped_file_id,
+                summary=f"Ingested {len(facts)} facts",
+                metadata={"content_type": content_type},
+            )
     except Exception as exc:
         logger.warning(f"Phase 5 replay/tracking failed for '{file_id}': {exc}")
 
@@ -511,10 +751,12 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         RuntimeError: If reading skeleton fails
     """
     file_id = args["file_id"]
+    scoped_file_id = _scoped_file_id(file_id, args)
     selection_mode = args.get("selection_mode", "baseline")
     query = args.get("query")
     top_k = args.get("top_k", 5)
     min_similarity = args.get("min_similarity", 0.35)
+    excluded_node_ids = _temporal_excluded_node_ids(context, args, scoped_file_id)
 
     valid_modes = {"baseline", "query_guided", "evidence_aware"}
     if selection_mode not in valid_modes:
@@ -528,14 +770,14 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "[TIP] Provide a natural-language query to guide anchor selection."
         )
 
-    validate_file_id(file_id, context, must_exist=True)
+    validate_file_id(scoped_file_id, context, must_exist=True)
 
-    logger.info(f"Reading skeleton: {file_id}")
+    logger.info(f"Reading skeleton: {scoped_file_id}")
 
     # NEW: Check file sync status before reading
     staleness_warning = None
-    if file_id in context["sync_manager"].file_metadata:
-        status = context["sync_manager"].check_file_sync(file_id)
+    if scoped_file_id in context["sync_manager"].file_metadata:
+        status = context["sync_manager"].check_file_sync(scoped_file_id)
         if not status["in_sync"]:
             staleness_warning = {
                 "is_stale": True,
@@ -546,7 +788,6 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             }
 
     try:
-        evidence_info = None
         compressor = context["compressor"]
         anchored_keywords = args.get("anchored_keywords", [])
         anchored_node_ids = set()
@@ -555,47 +796,37 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             anchored_node_ids = {
                 node_id
                 for node_id, node in compressor.chunks.items()
-                if node_id.startswith(file_id)
+                if node_id.startswith(scoped_file_id)
                 and any(kw in node.text.lower() for kw in keywords_lower)
             }
-        anchor_kwargs = {"anchor_node_ids": anchored_node_ids} if anchored_node_ids else {}
-
-        if selection_mode == "query_guided":
-            skeleton_response = compressor._generate_skeleton(
-                file_id,
-                query=query,
-                **anchor_kwargs,
-            )
-        elif selection_mode == "evidence_aware":
-            evidence = compressor.retrieve_evidence(
-                query=query,
-                file_id=file_id,
-                top_k=top_k,
-                min_similarity=min_similarity,
-            )
-            skeleton_response = compressor._generate_skeleton(
-                file_id,
-                query=query,
-                anchor_node_ids=set(evidence.node_ids).union(anchored_node_ids),
-            )
-            evidence_info = {
-                "sufficient": evidence.sufficient,
-                "best_score": round(evidence.best_score, 3),
-                "threshold": evidence.threshold,
-                "used_expanded_search": evidence.used_expanded_search,
-                "message": evidence.message,
-                "node_ids": evidence.node_ids,
-            }
-        else:
-            skeleton_response = compressor._generate_skeleton(
-                file_id,
-                **anchor_kwargs,
-            )
+        pipeline = run_read_skeleton_pipeline(
+            compressor=compressor,
+            file_id=scoped_file_id,
+            selection_mode=selection_mode,
+            query=query,
+            top_k=top_k,
+            min_similarity=min_similarity,
+            anchor_node_ids=anchored_node_ids,
+            excluded_node_ids=excluded_node_ids,
+        )
+        skeleton_response = pipeline["final_skeleton"]
 
         # Phase 5: Record access for decay tracking
         try:
-            if hasattr(compressor, '_access_tracker'):
-                compressor._access_tracker.record_access(file_id)
+            await _call_explicit_optional_method(
+                compressor,
+                "_access_tracker",
+                "record_access",
+                scoped_file_id,
+                access_type="read_skeleton",
+            )
+            temporal_graph = _compressor_temporal_graph(compressor)
+            if temporal_graph is not None:
+                temporal_graph.record_access(
+                    scoped_file_id,
+                    access_type="read_skeleton",
+                    metadata={"query": query, "selection_mode": selection_mode},
+                )
         except Exception as exc:
             logger.warning(f"Access tracking failed for '{file_id}': {exc}")
 
@@ -605,12 +836,12 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             baseline_cache = getattr(compressor, "_baseline_skeleton_cache", None)
             if isinstance(baseline_cache, dict):
                 cache_stable_prefix = baseline_cache.get(
-                    file_id,
+                    scoped_file_id,
                     skeleton_response.skeleton_text,
                 )
 
         response = {
-            "file_id": skeleton_response.file_id,
+            "file_id": file_id,
             "total_nodes": skeleton_response.total_nodes,
             "total_tokens": skeleton_response.total_tokens,
             "skeleton_tokens": skeleton_response.skeleton_tokens,
@@ -619,13 +850,28 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "cache_stable_prefix": cache_stable_prefix,
             "node_map": skeleton_response.node_map,
             "selection_mode": selection_mode,
+            "temporal_filters": {
+                "as_of": (
+                    format_timestamp(coerce_timestamp(args["as_of"])) if args.get("as_of") else None
+                ),
+                "include_invalidated": args.get("include_invalidated", False),
+            },
+            "pipeline": {
+                "final_stage": pipeline["final_stage"],
+                "stage_count": pipeline["stage_count"],
+                "stages": pipeline["stages"],
+            },
         }
 
         if anchored_keywords:
             response["anchored_nodes"] = sorted(anchored_node_ids)
         if query:
             response["query"] = query
+        evidence_info = pipeline["evidence"]
         if evidence_info:
+            evidence_info["node_ids"] = [
+                node_id for node_id in evidence_info["node_ids"] if node_id not in excluded_node_ids
+            ]
             response["evidence"] = evidence_info
 
         if staleness_warning:
@@ -728,24 +974,33 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     """
     query = args["query"]
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(file_id, args) if file_id else None
     top_k = args.get("top_k", 5)
     evidence_aware = args.get("evidence_aware", False)
     min_similarity = args.get("min_similarity", 0.35)
+    search_top_k = max(top_k * 5, top_k) if _has_scope_args(args) and not file_id else top_k
 
-    logger.info(f"Semantic search: '{query}' in {file_id or 'all files'}")
+    logger.info(f"Semantic search: '{query}' in {scoped_file_id or 'scoped files'}")
 
     if evidence_aware:
         evidence = context["compressor"].retrieve_evidence(
             query=query,
-            file_id=file_id,
-            top_k=top_k,
+            file_id=scoped_file_id,
+            top_k=search_top_k,
             min_similarity=min_similarity,
         )
-        search_results = evidence.scores[:top_k]
+        search_results = _scope_filtered_results(evidence.scores, args)
     else:
         evidence = None
         # Use search_semantic_with_scores to get both node IDs and similarity scores
-        search_results = context["compressor"].search_semantic_with_scores(query, file_id, top_k)
+        raw_results = context["compressor"].search_semantic_with_scores(
+            query,
+            scoped_file_id,
+            search_top_k,
+        )
+        search_results = _scope_filtered_results(raw_results, args)
+
+    search_results = _temporal_filter_search_results(context, search_results, args)[:top_k]
 
     # Build structured results with both similarity and importance
     results = []
@@ -774,6 +1029,12 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
             "similarity": "Semantic match to query (higher = better match)",
             "importance": "PageRank centrality in document graph (higher = more central)",
         },
+        "temporal_filters": {
+            "as_of": (
+                format_timestamp(coerce_timestamp(args["as_of"])) if args.get("as_of") else None
+            ),
+            "include_invalidated": args.get("include_invalidated", False),
+        },
     }
     if evidence is not None:
         response["evidence"] = {
@@ -787,16 +1048,29 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     # Phase 5: Record access for decay tracking
     try:
         compressor = context["compressor"]
-        if hasattr(compressor, '_access_tracker'):
+        if hasattr(compressor, "_access_tracker"):
             accessed_files = set()
             for r in results:
                 fid = extract_file_id_from_node(r["node_id"])
                 if fid:
                     accessed_files.add(fid)
             for fid in accessed_files:
-                compressor._access_tracker.record_access(fid)
-    except Exception:
-        pass
+                await _call_explicit_optional_method(
+                    compressor,
+                    "_access_tracker",
+                    "record_access",
+                    fid,
+                    access_type="search_semantic",
+                )
+                temporal_graph = _compressor_temporal_graph(compressor)
+                if temporal_graph is not None:
+                    temporal_graph.record_access(
+                        fid,
+                        access_type="search_semantic",
+                        metadata={"query": query},
+                    )
+    except Exception as exc:
+        logger.warning(f"Access tracking failed during semantic search: {exc}")
 
     return json.dumps(response, indent=2)
 
@@ -812,14 +1086,26 @@ async def handle_get_stats(context: HandlerContext, args: Dict[str, Any]) -> str
         Formatted statistics
     """
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(file_id, args) if file_id else None
 
-    stats = context["compressor"].get_stats(file_id)
+    stats = (
+        context["compressor"].get_stats(scoped_file_id)
+        if scoped_file_id
+        else (
+            _scoped_global_stats(context, args)
+            if _has_scope_args(args)
+            else context["compressor"].get_stats()
+        )
+    )
 
     if file_id:
+        display_stats_file_id = file_id or display_file_id(scoped_file_id)
+        scope_label = _scope_label(scoped_file_id or file_id)
+        scope_line = f"Scope: {scope_label}\n\n" if scope_label else ""
         result = f"""
-[STATS] Document Statistics: {file_id}
+[STATS] Document Statistics: {display_stats_file_id}
 
-Total nodes: {stats['total_nodes']}
+{scope_line}Total nodes: {stats['total_nodes']}
 Total edges: {stats['total_edges']}
 Original tokens: {stats['total_tokens']:,}
 Skeleton tokens: {stats['skeleton_tokens']:,}
@@ -830,13 +1116,26 @@ Token savings: {stats['total_tokens'] - stats['skeleton_tokens']:,} ({(1 - stats
 Metadata: {json.dumps(stats['metadata'], indent=2)}
 """
     else:
+        scope_lines = (
+            [
+                (
+                    f"  - {display_file_id(fid)} ({label})"
+                    if (label := _scope_label(fid))
+                    else f"  - {display_file_id(fid)}"
+                )
+                for fid in _scope_filtered_file_ids(list(context["compressor"].graphs.keys()), args)
+            ]
+            if _has_scope_args(args)
+            else None
+        )
+        files_output = "\n".join(scope_lines) if scope_lines else ", ".join(stats["files"])
         result = f"""
 [STATS] Global Statistics
 
 Total files ingested: {stats['total_files']}
 Total nodes: {stats['total_nodes']}
 
-Files: {', '.join(stats['files'])}
+Files: {files_output}
 """
 
     return result
@@ -855,7 +1154,9 @@ async def handle_list_documents(context: HandlerContext, args: Dict[str, Any]) -
     logger.info("Listing all ingested documents")
 
     # Get all unique file_ids from chunks (supports both text and code node formats)
-    file_ids = sorted(collect_file_ids(context["compressor"].chunks.keys()))
+    file_ids = sorted(
+        _scope_filtered_file_ids(list(collect_file_ids(context["compressor"].chunks.keys())), args)
+    )
 
     if not file_ids:
         return """
@@ -868,13 +1169,15 @@ No documents ingested yet.
 
     # Build structured inventory
     documents = []
-    for file_id in sorted(file_ids):
-        stats = context["compressor"].get_stats(file_id)
+    for internal_file_id in sorted(file_ids):
+        stats = context["compressor"].get_stats(internal_file_id)
         metadata = stats.get("metadata", {})
+        visible_file_id = display_file_id(internal_file_id)
 
         doc_info = {
-            "file_id": file_id,
-            "title": metadata.get("title", file_id),
+            "file_id": visible_file_id,
+            "title": metadata.get("title", visible_file_id),
+            "scope_label": _scope_label(internal_file_id),
             "total_nodes": stats["total_nodes"],
             "total_tokens": stats["total_tokens"],
             "skeleton_tokens": stats["skeleton_tokens"],
@@ -891,6 +1194,8 @@ No documents ingested yet.
         result_lines.append(f"{i}. [{doc['file_id']}]")
         if doc["title"] != doc["file_id"]:
             result_lines.append(f"   Title: {doc['title']}")
+        if doc["scope_label"]:
+            result_lines.append(f"   Scope: {doc['scope_label']}")
         result_lines.append(f"   Nodes: {doc['total_nodes']}")
         result_lines.append(
             f"   Tokens: {doc['total_tokens']:,} → {doc['skeleton_tokens']:,} ({doc['compression_ratio']:.1f}x compression)"
@@ -929,10 +1234,11 @@ async def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) 
         RuntimeError: If deletion fails
     """
     file_id = args["file_id"]
+    scoped_file_id = _scoped_file_id(file_id, args)
     confirm = args.get("confirm", False)
 
     # Validation
-    validate_file_id(file_id, context, must_exist=True)
+    validate_file_id(scoped_file_id, context, must_exist=True)
 
     if not confirm:
         return f"""
@@ -941,7 +1247,7 @@ async def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) 
 You are about to delete document: {file_id}
 
 This will:
-  -Remove all {len([k for k in context['compressor'].chunks.keys() if k.startswith(file_id)])} semantic nodes from memory
+  -Remove all {len([k for k in context['compressor'].chunks.keys() if k.startswith(scoped_file_id)])} semantic nodes from memory
   -Delete persistent storage (cannot be undone)
   -Clear retrieval history for this document
 
@@ -951,30 +1257,32 @@ To proceed, call again with confirm=true:
 Tip: Use list_documents() to see all available documents first
 """
 
-    logger.info(f"Deleting document: {file_id}")
+    logger.info(f"Deleting document: {scoped_file_id}")
 
     # Get stats before deletion
-    stats = context["compressor"].get_stats(file_id)
+    stats = context["compressor"].get_stats(scoped_file_id)
     node_count = stats["total_nodes"]
 
     # Delete from memory
     try:
         # Remove chunks
-        chunks_to_delete = [k for k in context["compressor"].chunks.keys() if k.startswith(file_id)]
+        chunks_to_delete = [
+            k for k in context["compressor"].chunks.keys() if k.startswith(scoped_file_id)
+        ]
         for chunk_id in chunks_to_delete:
             del context["compressor"].chunks[chunk_id]
 
         # Remove graph
-        if file_id in context["compressor"].graphs:
-            del context["compressor"].graphs[file_id]
+        if scoped_file_id in context["compressor"].graphs:
+            del context["compressor"].graphs[scoped_file_id]
 
         # Remove metadata
-        if file_id in context["compressor"].file_metadata:
-            del context["compressor"].file_metadata[file_id]
+        if scoped_file_id in context["compressor"].file_metadata:
+            del context["compressor"].file_metadata[scoped_file_id]
 
         # Remove retrieval history
-        if file_id in context["retrieval_history"]:
-            del context["retrieval_history"][file_id]
+        if scoped_file_id in context["retrieval_history"]:
+            del context["retrieval_history"][scoped_file_id]
 
         logger.info(f"[OK] Removed {file_id} from memory ({node_count} nodes)")
 
@@ -984,7 +1292,7 @@ Tip: Use list_documents() to see all available documents first
 
     # Delete from persistent storage
     try:
-        success = context["persistence"].delete_document(file_id)
+        success = context["persistence"].delete_document(scoped_file_id)
         if success:
             logger.info(f"[OK] Deleted {file_id} from persistent storage")
         else:
@@ -995,15 +1303,15 @@ Tip: Use list_documents() to see all available documents first
     # Unregister from resource manager
     # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
     try:
-        await context["resource_manager"].unregister_document_async(file_id)
+        await context["resource_manager"].unregister_document_async(scoped_file_id)
     except Exception as e:
         logger.warning(f"Failed to unregister {file_id} from resource manager: {e}")
 
     # NEW: Clean up file sync metadata and version history
     try:
-        context["sync_manager"].remove_metadata(file_id)
+        context["sync_manager"].remove_metadata(scoped_file_id)
         # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
-        await context["version_manager"].delete_versions_async(file_id)
+        await context["version_manager"].delete_versions_async(scoped_file_id)
         # Save metadata after removal
         metadata_export = context["sync_manager"].export_metadata()
         context["persistence"].save_file_sync_metadata(metadata_export)
@@ -1543,13 +1851,13 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
 
             batch_documents.append(
                 BatchDocument(
-                    file_id=file_id,
+                    file_id=_scoped_file_id(file_id, args),
                     text=text,
                     metadata={
                         "source_path": str(file_path),
+                        "file_path": str(file_path),
                         "file_size": len(text),
                     },
-                    file_path=str(file_path),  # Enable file sync tracking
                 )
             )
         except Exception as e:
@@ -1588,8 +1896,9 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
 
     result_list = []
     for result in results:
+        display_id = display_file_id(result.file_id)
         entry = {
-            "file_id": result.file_id,
+            "file_id": display_id,
             "success": result.success,
             "processing_time": round(result.processing_time, 2),
         }
@@ -1643,6 +1952,7 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
 async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Re-ingest a document preserving unchanged chunk embeddings."""
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(file_id, args) if file_id else None
     text = args.get("text")
 
     if not file_id or not text:
@@ -1650,20 +1960,20 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
 
     try:
         compressor = context["compressor"]
-        result = await compressor.diff_reingest_async(file_id, text)
+        result = await compressor.diff_reingest_async(scoped_file_id, text)
 
         # Persist updated document to disk (same as handle_ingest)
         try:
             import networkx as nx
-            graph_data = nx.node_link_data(compressor.graphs[file_id])
+
+            graph_data = nx.node_link_data(compressor.graphs[scoped_file_id], edges="links")
             success = context["persistence"].save_document(
-                file_id=file_id,
-                chunks={k: v for k, v in compressor.chunks.items() if k.startswith(file_id)},
+                file_id=scoped_file_id,
+                chunks={k: v for k, v in compressor.chunks.items() if k.startswith(scoped_file_id)},
                 graph_data=graph_data,
-                metadata=compressor.file_metadata.get(file_id, {}),
+                metadata=compressor.file_metadata.get(scoped_file_id, {}),
             )
-            if inspect.isawaitable(success):
-                success = await success
+            success = await _resolve_awaitable(success)
             if success:
                 logger.info(f"[OK] Persisted diff-reingested document {file_id}")
             else:
@@ -1675,7 +1985,7 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
         try:
             checksum = hashlib.md5(text.encode()).hexdigest()
             await context["version_manager"].add_version_async(
-                doc_id=file_id,
+                doc_id=scoped_file_id,
                 content=text,
                 checksum=checksum,
                 metadata={},
@@ -1690,19 +2000,22 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
         except Exception as e:
             logger.warning(f"[WARN] Failed to save version for diff-reingested {file_id}: {e}")
 
-        return json.dumps({
-            "status": "success",
-            "file_id": result.file_id,
-            "chunks_unchanged": result.chunks_unchanged,
-            "chunks_updated": result.chunks_updated,
-            "chunks_added": result.chunks_added,
-            "chunks_removed": result.chunks_removed,
-            "message": (
-                f"Diff re-ingestion complete: {result.chunks_unchanged} unchanged, "
-                f"{result.chunks_updated} updated, {result.chunks_added} added, "
-                f"{result.chunks_removed} removed"
-            ),
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "file_id": file_id,
+                "chunks_unchanged": result.chunks_unchanged,
+                "chunks_updated": result.chunks_updated,
+                "chunks_added": result.chunks_added,
+                "chunks_removed": result.chunks_removed,
+                "message": (
+                    f"Diff re-ingestion complete: {result.chunks_unchanged} unchanged, "
+                    f"{result.chunks_updated} updated, {result.chunks_added} added, "
+                    f"{result.chunks_removed} removed"
+                ),
+            },
+            indent=2,
+        )
     except ValueError as e:
         return json.dumps({"error": str(e)}, indent=2)
     except Exception as e:
@@ -1717,14 +2030,19 @@ async def handle_find_duplicates(context: HandlerContext, args: Dict[str, Any]) 
 
     try:
         compressor = context["compressor"]
-        duplicates = compressor.find_duplicates(threshold=threshold, timeout_seconds=timeout_seconds)
-        return json.dumps({
-            "status": "success",
-            "duplicate_count": len(duplicates),
-            "threshold": threshold,
-            "duplicates": duplicates[:50],
-            "message": f"Found {len(duplicates)} duplicate pairs above {threshold} similarity",
-        }, indent=2)
+        duplicates = compressor.find_duplicates(
+            threshold=threshold, timeout_seconds=timeout_seconds
+        )
+        return json.dumps(
+            {
+                "status": "success",
+                "duplicate_count": len(duplicates),
+                "threshold": threshold,
+                "duplicates": duplicates[:50],
+                "message": f"Found {len(duplicates)} duplicate pairs above {threshold} similarity",
+            },
+            indent=2,
+        )
     except Exception as e:
         logger.error(f"Duplicate detection failed: {e}")
         return json.dumps({"error": f"Duplicate detection failed: {e}"}, indent=2)
@@ -1733,12 +2051,16 @@ async def handle_find_duplicates(context: HandlerContext, args: Dict[str, Any]) 
 async def handle_get_presets(context: HandlerContext, args: Dict[str, Any]) -> str:
     """List available compression presets."""
     from ..compression_presets import list_presets
+
     presets = list_presets()
-    return json.dumps({
-        "status": "success",
-        "presets": [p.to_dict() for p in presets],
-        "message": f"{len(presets)} compression presets available",
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "success",
+            "presets": [p.to_dict() for p in presets],
+            "message": f"{len(presets)} compression presets available",
+        },
+        indent=2,
+    )
 
 
 async def handle_check_context_budget(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -1749,6 +2071,7 @@ async def handle_check_context_budget(context: HandlerContext, args: Dict[str, A
     context_limit = args.get("context_limit", 200_000)
 
     from ..token_threshold import check_context_budget
+
     result = check_context_budget(current_tokens, context_limit)
     return json.dumps(result.to_dict(), indent=2)
 
@@ -1781,18 +2104,22 @@ async def handle_prune_by_relevance(context: HandlerContext, args: Dict[str, Any
 
     # Encode query
     from ..embeddings import EmbeddingManager
+
     emb_mgr = EmbeddingManager()
     query_emb = emb_mgr.encode([query])[0]
 
     kept_ids = prune_by_relevance(node_embeddings, query_emb, keep_ratio)
 
-    return json.dumps({
-        "doc_id": doc_id,
-        "total_nodes": len(node_embeddings),
-        "kept_nodes": len(kept_ids),
-        "kept_node_ids": kept_ids,
-        "compression_ratio": round(len(kept_ids) / len(node_embeddings), 3),
-    }, indent=2)
+    return json.dumps(
+        {
+            "doc_id": doc_id,
+            "total_nodes": len(node_embeddings),
+            "kept_nodes": len(kept_ids),
+            "kept_node_ids": kept_ids,
+            "compression_ratio": round(len(kept_ids) / len(node_embeddings), 3),
+        },
+        indent=2,
+    )
 
 
 async def handle_multi_level_skeleton(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -1809,17 +2136,22 @@ async def handle_multi_level_skeleton(context: HandlerContext, args: Dict[str, A
     nodes = []
     for nid, node in compressor.chunks.items():
         if nid.startswith(doc_id):
-            nodes.append({
-                "node_id": nid,
-                "text": node.text,
-                "importance": node.importance,
-            })
+            nodes.append(
+                {
+                    "node_id": nid,
+                    "text": node.text,
+                    "importance": node.importance,
+                }
+            )
 
     result = generate_multi_level_skeleton(nodes)
-    return json.dumps({
-        "doc_id": doc_id,
-        "levels": result,
-    }, indent=2)
+    return json.dumps(
+        {
+            "doc_id": doc_id,
+            "levels": result,
+        },
+        indent=2,
+    )
 
 
 async def handle_evict_stale(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -1828,13 +2160,15 @@ async def handle_evict_stale(context: HandlerContext, args: Dict[str, Any]) -> s
     max_age_seconds = max_age_hours * 3600
 
     compressor = context["compressor"]
-    tracker = getattr(compressor, '_access_tracker', None)
+    tracker = getattr(compressor, "_access_tracker", None)
 
     if tracker is None:
-        return json.dumps({
-            "evicted": [],
-            "message": "Access tracking not enabled. Access documents first.",
-        })
+        return json.dumps(
+            {
+                "evicted": [],
+                "message": "Access tracking not enabled. Access documents first.",
+            }
+        )
 
     stale_ids = tracker.find_stale(max_age_seconds=max_age_seconds)
 
@@ -1843,11 +2177,14 @@ async def handle_evict_stale(context: HandlerContext, args: Dict[str, Any]) -> s
         if doc_id in compressor.graphs:
             evicted.append(doc_id)
 
-    return json.dumps({
-        "stale_documents": stale_ids,
-        "evictable": evicted,
-        "max_age_hours": max_age_hours,
-    }, indent=2)
+    return json.dumps(
+        {
+            "stale_documents": stale_ids,
+            "evictable": evicted,
+            "max_age_hours": max_age_hours,
+        },
+        indent=2,
+    )
 
 
 async def handle_advise_context(context: HandlerContext, args: Dict[str, Any]) -> str:
@@ -1866,16 +2203,16 @@ async def handle_advise_context(context: HandlerContext, args: Dict[str, Any]) -
         avg_importance = 0.0
         if graph.nodes:
             avg_importance = sum(
-                compressor.chunks[nid].importance
-                for nid in graph.nodes
-                if nid in compressor.chunks
+                compressor.chunks[nid].importance for nid in graph.nodes if nid in compressor.chunks
             ) / len(graph.nodes)
 
-        doc_stats.append({
-            "doc_id": file_id,
-            "tokens": total_tokens,
-            "importance": round(avg_importance, 3),
-        })
+        doc_stats.append(
+            {
+                "doc_id": file_id,
+                "tokens": total_tokens,
+                "importance": round(avg_importance, 3),
+            }
+        )
 
     advice = advise_context(doc_stats)
     return json.dumps(advice, indent=2)
@@ -1884,7 +2221,7 @@ async def handle_advise_context(context: HandlerContext, args: Dict[str, Any]) -
 async def handle_get_compression_insights(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Get compression replay insights (ACON)."""
     compressor = context["compressor"]
-    replay_log = getattr(compressor, '_compression_replay', None)
+    replay_log = getattr(compressor, "_compression_replay", None)
 
     if replay_log is None:
         return json.dumps({"insights": {}, "message": "No compression history recorded yet."})

@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 30707,
+  "duration_api_ms": 30267,
+  "num_turns": 7,
+  "result": "I don't have file system tools (Bash, Read, Glob, Grep, etc.) available in this session \u00e2\u20ac\u201d only Hugging Face MCP tools, LSP, and image generation. I cannot inspect local files or the repo structure without those tools.\n\nTo answer your question properly, I'd need access to file-reading tools (like `Read`, `Bash`, or `Glob`) so I can:\n\n1. Find the repo and its CLI/API for context compression.\n2. Read the code to identify the \"best query-targeted mode\" option.\n3. Determine the exact command syntax and whether the output is marked as safe to answer from.\n\nCould you either:\n- Re-run this with file system tools enabled, or\n- Share the relevant source code / CLI help output so I can answer precisely?",
+  "stop_reason": "end_turn",
+  "session_id": "02f1f9b2-6899-445e-95c4-7027438af460",
+  "total_cost_usd": 0.10266325000000001,
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 10111,
+    "cache_read_input_tokens": 46959,
+    "output_tokens": 638,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 10111,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 8,
+      "outputTokens": 638,
+      "cacheReadInputTokens": 46959,
+      "cacheCreationInputTokens": 10111,
+      "webSearchRequests": 0,
+      "costUSD": 0.10266325000000001,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "55ce5138-4b10-42ea-89c1-c4586f3ac659",
+  "_wall_seconds": 34.861
+}

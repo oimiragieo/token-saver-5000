@@ -26,6 +26,36 @@ class CompressionPreset:
             "fidelity": self.fidelity,
         }
 
+    def to_prompt_seed(self) -> dict:
+        prompt_name = f"compression-{self.name}"
+        return {
+            "name": prompt_name,
+            "description": (
+                f"Managed prompt template seeded from compression preset '{self.name}'. "
+                f"{self.description}."
+            ),
+            "system_prompt": (
+                "You are a token-saving prompt optimizer. Preserve factual accuracy, "
+                "structural anchors, and retrieval-critical context. Prefer stable "
+                "instructions and output deterministic sections."
+            ),
+            "user_prompt_template": (
+                "Use the '{preset_name}' compression strategy for the following content.\n"
+                "Target skeleton ratio: {skeleton_ratio}\n"
+                "Target fidelity: {fidelity}\n"
+                "Use case: {use_case}\n\n"
+                "Content to transform:\n{content}"
+            ),
+            "variables": ["preset_name", "skeleton_ratio", "fidelity", "use_case", "content"],
+            "metadata": {
+                "preset_name": self.name,
+                "default_skeleton_ratio": self.skeleton_ratio,
+                "default_fidelity": self.fidelity,
+            },
+            "source_preset": self.name,
+            "deployment_label": "production",
+        }
+
 
 _PRESETS = {
     "code-review": CompressionPreset(

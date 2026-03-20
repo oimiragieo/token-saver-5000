@@ -14,8 +14,9 @@ All workflows are located in `workflows/` directory:
 
 | Workflow | Purpose | Trigger | Duration |
 |----------|---------|---------|----------|
-| **test.yml** | Unit tests, coverage enforcement | Push, PR | 8-12 min |
-| **lint.yml** | Code quality, security scanning | Push, PR | 2-4 min |
+| **ci.yml** | Canonical full-product validation | Push, PR, Manual | 10-20 min |
+| **test.yml** | Deprecated compatibility shim | Manual only | <1 min |
+| **lint.yml** | Deprecated compatibility shim | Manual only | <1 min |
 | **build.yml** | Docker image build & push | Push (main), Tags | 1-8 min |
 | **deploy.yml** | Kubernetes deployments | Tags, Manual | 3-10 min |
 
@@ -35,8 +36,9 @@ Start with one of these based on your role:
 ```
 .github/
 ├── workflows/
-│   ├── test.yml                    # Unit test + coverage validation
-│   ├── lint.yml                    # Code quality + security scanning
+│   ├── ci.yml                      # Canonical product CI validation
+│   ├── test.yml                    # Deprecated manual compatibility shim
+│   ├── lint.yml                    # Deprecated manual compatibility shim
 │   ├── build.yml                   # Docker image build & push
 │   ├── deploy.yml                  # Kubernetes deployment automation
 │   └── README.md                   # Detailed workflow documentation
@@ -51,19 +53,16 @@ Start with one of these based on your role:
 
 ### Workflows Overview
 
-**test.yml** - Continuous Integration Testing
-- Runs on: Every push and PR
-- Tests: Python 3.10, 3.11, 3.12 (parallel matrix)
-- Checks: pytest, coverage (70%+), black, ruff, mypy
-- Duration: 8-12 min (cold), 5-8 min (cached)
-- Caching: Pip dependencies save 2-5 min
+**ci.yml** - Canonical Product CI
+- Runs on: Every push, PR, or manual dispatch
+- Checks: Black, Ruff, workflow/package contracts, Python 3.10-3.12 compatibility smoke, package build, MCP installer smoke, full pytest suite
+- Duration: 10-20 min depending on cache and runner state
+- Notes: This is the preferred required-status workflow for broad repository validation
 
-**lint.yml** - Code Quality & Security
-- Runs on: Every push and PR
-- Checks: Black (formatting), Ruff (linting), mypy (types), Bandit (security)
-- Tools: pydocstyle, isort, radon
-- Duration: 2-4 min
-- Reports: Artifacts for security and complexity analysis
+**test.yml / lint.yml** - Deprecated Compatibility Shims
+- Run on: Manual dispatch only
+- Purpose: Preserve old workflow names during migration while directing maintainers to `ci.yml`
+- Notes: These workflows no longer participate in automatic CI or branch protection
 
 **build.yml** - Docker Image Build
 - Runs on: Push to main, semantic version tags, manual trigger
@@ -111,15 +110,15 @@ Start with one of these based on your role:
 ## Workflow Triggers
 
 ### On Every Push to main/develop
-All 4 workflows run (test, lint, build auto-runs):
+Core validation plus build workflows run:
 ```
-Push → test.yml (8-12 min) → lint.yml (2-4 min) → build.yml (2-5 min)
+Push → ci.yml (10-20 min) + focused guards (path-based) + build.yml (2-5 min)
 ```
 
 ### On Pull Request
-Only test + lint run (no image push):
+Canonical validation and fast quality workflows run (no image push):
 ```
-PR → test.yml (8-12 min) + lint.yml (2-4 min)
+PR → ci.yml (10-20 min) + focused guards (path-based)
 ```
 
 ### On Semantic Version Tag (v0.6.2)
@@ -132,9 +131,9 @@ Tag → build.yml (2-5 min) → deploy-staging (3-5 min) → deploy-production (
 
 | Metric | Value |
 |--------|-------|
-| Total Workflows | 4 |
+| Total Workflows | 5 core + 3 focused guards |
 | Total YAML Lines | 952 |
-| Documentation | 4 guides + 5000+ lines |
+| Documentation | 5 guides + 5000+ lines |
 | Test Coverage Threshold | 70% (enforced) |
 | Docker Image Size Target | <500MB |
 | Python Versions Tested | 3.10, 3.11, 3.12 |
@@ -172,7 +171,7 @@ git push origin v0.6.2
 ### Troubleshooting
 ```bash
 # Check workflow status
-gh run list --workflow=test.yml
+gh run list --workflow=ci.yml
 
 # View detailed logs
 gh run view <run-id> --log
@@ -198,8 +197,7 @@ Before workflows can run:
    - `production` - Requires approval
 
 3. **Branch Protection** (Settings > Branches)
-   - Require test.yml to pass
-   - Require lint.yml to pass
+   - Require ci.yml to pass
    - Require PR approval
 
 4. **Enable Actions** (Settings > Actions)
@@ -255,9 +253,9 @@ See [WORKFLOWS_SETUP_CHECKLIST.md](WORKFLOWS_SETUP_CHECKLIST.md) for detailed se
 ## Status
 
 - **Created:** November 27, 2025
-- **Version:** 1.0 (Production Ready)
+- **Version:** 1.0
 - **Validation:** All YAML syntax verified
-- **Documentation:** Complete with 4 comprehensive guides
+- **Documentation:** Complete with 5 workflow guides
 - **Testing:** Ready for workflow validation
 - **Status:** Ready for implementation
 
@@ -265,7 +263,7 @@ See [WORKFLOWS_SETUP_CHECKLIST.md](WORKFLOWS_SETUP_CHECKLIST.md) for detailed se
 
 1. Read appropriate documentation based on your role
 2. Follow setup checklist to configure GitHub
-3. Test workflows with test push/PR
+3. Test `ci.yml` with a push or PR; optionally trigger legacy shims manually
 4. Train team on CI/CD process
 5. Start using for development and releases
 

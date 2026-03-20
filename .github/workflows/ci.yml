@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, claude/**]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install build twine
+
+      - name: Black
+        run: |
+          python -m black --check src tests scripts
+
+      - name: Ruff
+        run: |
+          python -m ruff check src tests scripts
+
+      - name: Workflow and packaging contracts
+        run: |
+          pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_mcp_packaging.py
+
+  compatibility:
+    name: Python Compatibility ${{ matrix.python-version }}
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Core import smoke test
+        run: |
+          python -c "import src.server, src.mcp_install; print('core imports ok')"
+
+      - name: Compatibility smoke tests
+        run: |
+          pytest -q -o addopts="" tests/test_health.py tests/test_server_aliases.py tests/test_mcp_packaging.py
+
+  package-validation:
+    name: Package Validation
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install build twine
+
+      - name: Build distributions
+        run: |
+          python -m build
+
+      - name: Check built metadata
+        run: |
+          python -m twine check dist/*
+
+      - name: Install built wheel
+        run: |
+          python -m pip install --force-reinstall dist/*.whl
+
+      - name: MCP installer smoke test
+        run: |
+          TOKEN_SAVER_INSTALL="$(python -c "import pathlib, sys, sysconfig; suffix = '.exe' if sys.platform == 'win32' else ''; print(pathlib.Path(sysconfig.get_path('scripts')) / f'token-saver-install-mcp{suffix}')")"
+          "$TOKEN_SAVER_INSTALL" --print-config > generated-mcp-config.json
+          python -c "import json, pathlib; cfg = json.loads(pathlib.Path('generated-mcp-config.json').read_text()); assert 'mcpServers' in cfg and 'token-saver' in cfg['mcpServers']"
+
+      - name: Upload package artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: |
+            dist/*
+            generated-mcp-config.json
+          retention-days: 7
+
+  full-validation:
+    name: Full Validation
+    needs:
+      - quality-gate
+      - compatibility
+      - package-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run full test suite
+        run: |
+          python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py

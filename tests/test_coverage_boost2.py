@@ -5,12 +5,9 @@ embeddings, and embeddings_onnx modules.
 Targets ~60+ tests covering large uncovered areas with extensive mocking.
 """
 
-import asyncio
 import json
-import os
-import threading
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch, mock_open
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -27,6 +24,7 @@ class TestSaveGraphDataSafe:
     def _make_manager(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_save_graph_data_basic(self, tmp_path):
@@ -82,6 +80,7 @@ class TestLoadGraphDataSafe:
     def _make_manager(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_load_nonexistent_returns_none(self, tmp_path):
@@ -156,6 +155,7 @@ class TestChromaDBPaths:
     def _make_manager_with_chromadb(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             pm = PersistenceManager(storage_dir=str(tmp_path / "storage"))
         # Manually set up ChromaDB mock after creation
         mock_client = MagicMock()
@@ -255,6 +255,7 @@ class TestAfmHistory:
     def _make_manager(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def _make_mock_message(self, role="user", content="hello", embedding=None):
@@ -343,6 +344,7 @@ class TestClearAll:
     def _make_manager(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_clear_all_removes_files(self, tmp_path):
@@ -358,6 +360,7 @@ class TestClearAll:
     def test_clear_all_with_chromadb(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             pm = PersistenceManager(storage_dir=str(tmp_path / "storage"))
         mock_client = MagicMock()
         pm.use_chromadb = True
@@ -378,15 +381,18 @@ class TestChromaDBInitFailure:
 
     def test_chromadb_init_failure_fallback(self, tmp_path):
         from src.persistence import PersistenceManager
+
         with patch("src.persistence.CHROMADB_AVAILABLE", True):
             # Mock the chromadb module at the point of use in __init__
             mock_chromadb = MagicMock()
             mock_chromadb.PersistentClient.side_effect = Exception("init failed")
-            with patch.dict("sys.modules", {"chromadb": mock_chromadb, "chromadb.config": MagicMock()}):
-                import importlib
+            with patch.dict(
+                "sys.modules", {"chromadb": mock_chromadb, "chromadb.config": MagicMock()}
+            ):
                 import src.persistence as pers_mod
+
                 # Temporarily set chromadb reference
-                original_chromadb = getattr(pers_mod, 'chromadb', None)
+                original_chromadb = getattr(pers_mod, "chromadb", None)
                 pers_mod.chromadb = mock_chromadb
                 try:
                     pm = PersistenceManager(storage_dir=str(tmp_path / "storage"))
@@ -449,6 +455,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_no_confirm_returns_prompt(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         result = await handle_delete_document(context, {"file_id": "doc1", "confirm": False})
         assert "DELETE CONFIRMATION REQUIRED" in result
@@ -456,6 +463,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_with_confirm_succeeds(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         result = await handle_delete_document(context, {"file_id": "doc1", "confirm": True})
         assert "Deleted Successfully" in result
@@ -464,6 +472,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_nonexistent_raises(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         with pytest.raises(ValueError):
             await handle_delete_document(context, {"file_id": "nonexistent", "confirm": True})
@@ -471,6 +480,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_cleans_up_retrieval_history(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         context["retrieval_history"]["doc1"] = ["some_data"]
         await handle_delete_document(context, {"file_id": "doc1", "confirm": True})
@@ -479,6 +489,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_memory_error_raises_runtime(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         context["compressor"].get_stats.side_effect = Exception("memory error")
         with pytest.raises((RuntimeError, Exception)):
@@ -487,6 +498,7 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_persistence_failure_still_succeeds(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
         context["persistence"].delete_document.return_value = False
         result = await handle_delete_document(context, {"file_id": "doc1", "confirm": True})
@@ -495,8 +507,11 @@ class TestHandleDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_version_manager_error_handled(self):
         from src.handlers.compression_handlers import handle_delete_document
+
         context = _make_handler_context()
-        context["version_manager"].delete_versions_async = AsyncMock(side_effect=Exception("ver fail"))
+        context["version_manager"].delete_versions_async = AsyncMock(
+            side_effect=Exception("ver fail")
+        )
         # Should not raise, error is handled gracefully
         result = await handle_delete_document(context, {"file_id": "doc1", "confirm": True})
         assert "Deleted Successfully" in result
@@ -508,14 +523,18 @@ class TestHandleMultilevelEncode:
     @pytest.mark.asyncio
     async def test_multilevel_encode_success(self):
         from src.handlers.compression_handlers import handle_multilevel_encode
+
         context = _make_handler_context()
         context["multilevel_encoder"].generate_adaptive_skeleton.return_value = "skeleton output"
-        result = await handle_multilevel_encode(context, {"file_id": "doc1", "available_tokens": 5000})
+        result = await handle_multilevel_encode(
+            context, {"file_id": "doc1", "available_tokens": 5000}
+        )
         assert result == "skeleton output"
 
     @pytest.mark.asyncio
     async def test_multilevel_encode_invalid_file(self):
         from src.handlers.compression_handlers import handle_multilevel_encode
+
         context = _make_handler_context()
         with pytest.raises(ValueError):
             await handle_multilevel_encode(context, {"file_id": "bad", "available_tokens": 5000})
@@ -523,6 +542,7 @@ class TestHandleMultilevelEncode:
     @pytest.mark.asyncio
     async def test_multilevel_encode_zero_tokens(self):
         from src.handlers.compression_handlers import handle_multilevel_encode
+
         context = _make_handler_context()
         with pytest.raises(ValueError):
             await handle_multilevel_encode(context, {"file_id": "doc1", "available_tokens": 0})
@@ -530,6 +550,7 @@ class TestHandleMultilevelEncode:
     @pytest.mark.asyncio
     async def test_multilevel_encode_failure_raises_runtime(self):
         from src.handlers.compression_handlers import handle_multilevel_encode
+
         context = _make_handler_context()
         context["multilevel_encoder"].generate_adaptive_skeleton.side_effect = Exception("fail")
         with pytest.raises(RuntimeError):
@@ -542,53 +563,83 @@ class TestHandleBatchIngest:
     @pytest.mark.asyncio
     async def test_batch_ingest_empty_documents_raises(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises((ValueError, Exception)):
                 await handle_batch_ingest(context, {"documents": []})
 
     @pytest.mark.asyncio
     async def test_batch_ingest_invalid_documents_type(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises(ValueError, match="must be a list"):
                 await handle_batch_ingest(context, {"documents": "not a list"})
 
     @pytest.mark.asyncio
     async def test_batch_ingest_invalid_max_concurrent(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises(ValueError, match="max_concurrent"):
-                await handle_batch_ingest(context, {
-                    "documents": [{"file_id": "d1", "text": "hi"}],
-                    "max_concurrent": 99,
-                })
+                await handle_batch_ingest(
+                    context,
+                    {
+                        "documents": [{"file_id": "d1", "text": "hi"}],
+                        "max_concurrent": 99,
+                    },
+                )
 
     @pytest.mark.asyncio
     async def test_batch_ingest_missing_file_id(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises((ValueError, Exception)):
-                await handle_batch_ingest(context, {
-                    "documents": [{"text": "no id"}],
-                })
+                await handle_batch_ingest(
+                    context,
+                    {
+                        "documents": [{"text": "no id"}],
+                    },
+                )
 
     @pytest.mark.asyncio
     async def test_batch_ingest_missing_text(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises((ValueError, Exception)):
-                await handle_batch_ingest(context, {
-                    "documents": [{"file_id": "d1"}],
-                })
+                await handle_batch_ingest(
+                    context,
+                    {
+                        "documents": [{"file_id": "d1"}],
+                    },
+                )
 
     @pytest.mark.asyncio
     async def test_batch_ingest_success(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
 
         mock_result = MagicMock()
@@ -597,25 +648,38 @@ class TestHandleBatchIngest:
         mock_result.processing_time = 0.5
         mock_result.result = MagicMock(skeleton_text="skeleton...", compression_ratio=2.0)
 
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with patch("src.batch_manager.BatchCompressionManager") as MockBCM:
                 instance = MockBCM.return_value
                 instance.compress_batch = AsyncMock(return_value=[mock_result])
-                result = await handle_batch_ingest(context, {
-                    "documents": [{"file_id": "d1", "text": "hello world"}],
-                })
+                result = await handle_batch_ingest(
+                    context,
+                    {
+                        "documents": [{"file_id": "d1", "text": "hello world"}],
+                    },
+                )
         parsed = json.loads(result)
         assert parsed["successful"] == 1
 
     @pytest.mark.asyncio
     async def test_batch_ingest_non_dict_document(self):
         from src.handlers.compression_handlers import handle_batch_ingest
+
         context = _make_handler_context()
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS", {"batch_ingest": AsyncMock(acquire=AsyncMock())}):
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
             with pytest.raises(ValueError, match="must be an object"):
-                await handle_batch_ingest(context, {
-                    "documents": ["not a dict"],
-                })
+                await handle_batch_ingest(
+                    context,
+                    {
+                        "documents": ["not a dict"],
+                    },
+                )
 
 
 class TestHandleIngestDirectory:
@@ -624,6 +688,7 @@ class TestHandleIngestDirectory:
     @pytest.mark.asyncio
     async def test_ingest_directory_missing_dir(self):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         with pytest.raises((ValueError, Exception)):
             await handle_ingest_directory(context, {"directory": ""})
@@ -631,6 +696,7 @@ class TestHandleIngestDirectory:
     @pytest.mark.asyncio
     async def test_ingest_directory_nonexistent(self):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         with pytest.raises(ValueError, match="not found"):
             await handle_ingest_directory(context, {"directory": "/nonexistent/path/xyz"})
@@ -638,41 +704,54 @@ class TestHandleIngestDirectory:
     @pytest.mark.asyncio
     async def test_ingest_directory_invalid_max_files(self):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         with patch("os.path.isdir", return_value=True):
             with pytest.raises(ValueError, match="max_files"):
-                await handle_ingest_directory(context, {
-                    "directory": "/some/dir",
-                    "max_files": 200,
-                })
+                await handle_ingest_directory(
+                    context,
+                    {
+                        "directory": "/some/dir",
+                        "max_files": 200,
+                    },
+                )
 
     @pytest.mark.asyncio
     async def test_ingest_directory_invalid_max_concurrent(self):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         with patch("os.path.isdir", return_value=True):
             with pytest.raises(ValueError, match="max_concurrent"):
-                await handle_ingest_directory(context, {
-                    "directory": "/some/dir",
-                    "max_concurrent": 99,
-                })
+                await handle_ingest_directory(
+                    context,
+                    {
+                        "directory": "/some/dir",
+                        "max_concurrent": 99,
+                    },
+                )
 
     @pytest.mark.asyncio
     async def test_ingest_directory_no_files_found(self, tmp_path):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
-        result = await handle_ingest_directory(context, {
-            "directory": str(empty_dir),
-            "patterns": ["*.xyz"],
-        })
+        result = await handle_ingest_directory(
+            context,
+            {
+                "directory": str(empty_dir),
+                "patterns": ["*.xyz"],
+            },
+        )
         parsed = json.loads(result)
         assert parsed["status"] == "no_files"
 
     @pytest.mark.asyncio
     async def test_ingest_directory_success(self, tmp_path):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
 
         # Create test files
@@ -693,17 +772,64 @@ class TestHandleIngestDirectory:
             with patch("src.batch_manager.BatchDocument", mock_batch_doc_cls):
                 instance = MockBCM.return_value
                 instance.compress_batch = AsyncMock(return_value=[mock_result, mock_result])
-                result = await handle_ingest_directory(context, {
-                    "directory": str(test_dir),
-                    "patterns": ["*.py"],
-                })
+                result = await handle_ingest_directory(
+                    context,
+                    {
+                        "directory": str(test_dir),
+                        "patterns": ["*.py"],
+                    },
+                )
         parsed = json.loads(result)
         assert parsed["status"] == "complete"
         assert parsed["successful"] == 2
 
     @pytest.mark.asyncio
+    async def test_ingest_directory_scoped_ids_and_file_metadata(self, tmp_path):
+        from src.handlers.compression_handlers import handle_ingest_directory
+        from src.identity_scope import compose_scoped_file_id
+
+        context = _make_handler_context()
+
+        test_dir = tmp_path / "code"
+        test_dir.mkdir()
+        (test_dir / "main.py").write_text("print('hello')")
+
+        captured_documents = []
+        scoped_file_id = compose_scoped_file_id("main.py", workspace_id="acme")
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.file_id = scoped_file_id
+        mock_result.processing_time = 0.1
+        mock_result.result = MagicMock(compression_ratio=3.0, total_nodes=5)
+
+        with patch("src.batch_manager.BatchCompressionManager") as MockBCM:
+            instance = MockBCM.return_value
+
+            async def _capture(documents):
+                captured_documents.extend(documents)
+                return [mock_result]
+
+            instance.compress_batch = AsyncMock(side_effect=_capture)
+            result = await handle_ingest_directory(
+                context,
+                {
+                    "directory": str(test_dir),
+                    "patterns": ["*.py"],
+                    "workspace_id": "acme",
+                },
+            )
+
+        parsed = json.loads(result)
+        assert parsed["status"] == "complete"
+        assert parsed["results"][0]["file_id"] == "main.py"
+        assert len(captured_documents) == 1
+        assert captured_documents[0].file_id == scoped_file_id
+        assert captured_documents[0].metadata["file_path"].endswith("main.py")
+
+    @pytest.mark.asyncio
     async def test_ingest_directory_path_traversal_rejected(self):
         from src.handlers.compression_handlers import handle_ingest_directory
+
         context = _make_handler_context()
         context["path_validator"].validate.side_effect = ValueError("path traversal")
         with pytest.raises(ValueError, match="Invalid directory"):
@@ -731,12 +857,14 @@ class TestCodeCompressionAdapter:
 
     def _create_adapter_instance(self, MockSC):
         from src.code_compression_adapter import CodeCompressionAdapter
+
         return CodeCompressionAdapter(preload_code_model=False)
 
     def test_load_code_compressor_success(self):
         with patch("src.code_compression_adapter.SemanticCompressor"):
             with patch("src.code_compression_adapter.CodeSemanticCompressor") as MockCSC:
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 mock_code = MockCSC.return_value
                 result = adapter._load_code_compressor()
@@ -747,6 +875,7 @@ class TestCodeCompressionAdapter:
         with patch("src.code_compression_adapter.SemanticCompressor"):
             with patch("src.code_compression_adapter.CodeSemanticCompressor") as MockCSC:
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()
                 # Second call should return cached
@@ -756,8 +885,12 @@ class TestCodeCompressionAdapter:
 
     def test_load_code_compressor_failure(self):
         with patch("src.code_compression_adapter.SemanticCompressor"):
-            with patch("src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("no torch")):
+            with patch(
+                "src.code_compression_adapter.CodeSemanticCompressor",
+                side_effect=Exception("no torch"),
+            ):
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 result = adapter._load_code_compressor()
                 assert result is None
@@ -766,8 +899,11 @@ class TestCodeCompressionAdapter:
 
     def test_load_code_compressor_already_failed(self):
         with patch("src.code_compression_adapter.SemanticCompressor"):
-            with patch("src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("err")):
+            with patch(
+                "src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("err")
+            ):
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()  # fail first time
                 result = adapter._load_code_compressor()  # skip second time
@@ -783,6 +919,7 @@ class TestCodeCompressionAdapter:
                 mock_text.file_metadata = {}
                 mock_text.ingest_file_async = AsyncMock(return_value="skeleton")
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 result = await adapter.ingest_file_async("hello", "doc1", file_path="readme.txt")
                 assert result == "skeleton"
@@ -806,23 +943,32 @@ class TestCodeCompressionAdapter:
                     "compression_ratio": 3.0,
                 }
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
-                result = await adapter.ingest_file_async("def foo(): pass", "main.py", file_path="main.py")
+                result = await adapter.ingest_file_async(
+                    "def foo(): pass", "main.py", file_path="main.py"
+                )
                 assert result is not None
                 assert "main.py" in adapter._code_file_ids
 
     @pytest.mark.asyncio
     async def test_ingest_file_async_code_fallback_to_text(self):
         with patch("src.code_compression_adapter.SemanticCompressor") as MockSC:
-            with patch("src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("no torch")):
+            with patch(
+                "src.code_compression_adapter.CodeSemanticCompressor",
+                side_effect=Exception("no torch"),
+            ):
                 mock_text = MockSC.return_value
                 mock_text.graphs = {}
                 mock_text.chunks = {}
                 mock_text.file_metadata = {}
                 mock_text.ingest_file_async = AsyncMock(return_value="fallback")
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
-                result = await adapter.ingest_file_async("def foo(): pass", "main.py", file_path="main.py")
+                result = await adapter.ingest_file_async(
+                    "def foo(): pass", "main.py", file_path="main.py"
+                )
                 assert result == "fallback"
 
     def test_generate_code_skeleton(self):
@@ -841,6 +987,7 @@ class TestCodeCompressionAdapter:
                 mock_code.file_metadata = {}
 
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()
                 adapter._code_file_ids.add("main.py")
@@ -850,12 +997,15 @@ class TestCodeCompressionAdapter:
 
     def test_generate_code_skeleton_not_found(self):
         with patch("src.code_compression_adapter.SemanticCompressor") as MockSC:
-            with patch("src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("err")):
+            with patch(
+                "src.code_compression_adapter.CodeSemanticCompressor", side_effect=Exception("err")
+            ):
                 mock_text = MockSC.return_value
                 mock_text.graphs = {}
                 mock_text.chunks = {}
                 mock_text.file_metadata = {}
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 with pytest.raises(ValueError, match="not found"):
                     adapter._generate_code_skeleton("nonexistent.py")
@@ -869,6 +1019,7 @@ class TestCodeCompressionAdapter:
                 mock_text.file_metadata = {}
                 mock_text.modulate_region.return_value = "text content"
                 from src.code_compression_adapter import CodeCompressionAdapter, FidelityLevel
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 result = adapter.modulate_region(["doc_n0"], FidelityLevel.STRUCTURE)
                 assert result == "text content"
@@ -894,6 +1045,7 @@ class TestCodeCompressionAdapter:
                 mock_code.file_metadata = {}
 
                 from src.code_compression_adapter import CodeCompressionAdapter, FidelityLevel
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()
 
@@ -921,6 +1073,7 @@ class TestCodeCompressionAdapter:
                 mock_code.file_metadata = {}
 
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()
                 adapter._code_file_ids.add("f.py")
@@ -950,6 +1103,7 @@ class TestCodeCompressionAdapter:
                 mock_code.file_metadata = {"app.py": {"language": "python"}}
 
                 from src.code_compression_adapter import CodeCompressionAdapter
+
                 adapter = CodeCompressionAdapter(preload_code_model=False)
                 adapter._load_code_compressor()
                 adapter._code_file_ids.add("app.py")
@@ -970,6 +1124,7 @@ class TestEmbeddingManager:
 
     def _reset_singleton(self):
         from src.embeddings import EmbeddingManager
+
         EmbeddingManager._instance = None
 
     def test_encode_tier_routing_standard(self):
@@ -978,6 +1133,7 @@ class TestEmbeddingManager:
             mock_model = MockST.return_value
             mock_model.encode.return_value = np.array([[0.1, 0.2]])
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.STANDARD, enable_cache=False)
             result = mgr.encode(["hello"])
             assert result.shape == (1, 2)
@@ -987,6 +1143,7 @@ class TestEmbeddingManager:
         self._reset_singleton()
         with patch("src.embeddings.SentenceTransformer"):
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.ONNX, enable_cache=False)
             mock_onnx = MagicMock()
             mock_onnx.encode.return_value = np.array([[0.3, 0.4]])
@@ -1000,6 +1157,7 @@ class TestEmbeddingManager:
         self._reset_singleton()
         with patch("src.embeddings.SentenceTransformer"):
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.TFIDF, enable_cache=False)
             mock_tfidf = MagicMock()
             mock_tfidf.encode.return_value = np.array([[0.5, 0.6]])
@@ -1013,6 +1171,7 @@ class TestEmbeddingManager:
         self._reset_singleton()
         with patch("src.embeddings.SentenceTransformer"):
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.ONNX, enable_cache=False)
 
             mock_tfidf = MagicMock()
@@ -1031,6 +1190,7 @@ class TestEmbeddingManager:
         self._reset_singleton()
         with patch("src.embeddings.SentenceTransformer"):
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.STANDARD, enable_cache=False)
             with patch.object(mgr, "_encode_standard", side_effect=Exception("fail")):
                 with patch("src.embeddings.ONNX_AVAILABLE", False):
@@ -1045,6 +1205,7 @@ class TestEmbeddingManager:
             mock_model = MockST.return_value
             mock_model.encode.return_value = np.array([[0.1, 0.2]])
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.STANDARD, enable_cache=False)
             result = mgr.encode("single string")
             assert result.shape[0] == 1
@@ -1056,6 +1217,7 @@ class TestEmbeddingManager:
             mock_model = MockST.return_value
             mock_model.encode.return_value = np.array([[0.9, 0.8]])
             from src.embeddings import EmbeddingManager, EmbeddingTier
+
             mgr = EmbeddingManager(tier=EmbeddingTier.ONNX, enable_cache=False)
             # ONNX not available, should fallback
             with patch("src.embeddings.ONNX_AVAILABLE", False):
@@ -1074,6 +1236,7 @@ class TestONNXEmbeddingManager:
 
     def test_init_defaults(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         assert mgr.model_name == "sentence-transformers/all-MiniLM-L6-v2"
         assert mgr.quantized is True
@@ -1081,27 +1244,27 @@ class TestONNXEmbeddingManager:
 
     def test_initialize_success(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
 
-        mock_tokenizer = MagicMock()
-        mock_ort_model = MagicMock()
-
-        with patch.dict("sys.modules", {
-            "onnxruntime": MagicMock(),
-            "transformers": MagicMock(),
-            "optimum": MagicMock(),
-            "optimum.onnxruntime": MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "onnxruntime": MagicMock(),
+                "transformers": MagicMock(),
+                "optimum": MagicMock(),
+                "optimum.onnxruntime": MagicMock(),
+            },
+        ):
             with patch("src.embeddings_onnx.ONNXEmbeddingManager._initialize") as mock_init:
-                mock_init.side_effect = lambda: setattr(mgr, '_initialized', True)
+                mock_init.side_effect = lambda: setattr(mgr, "_initialized", True)
                 mgr._initialize()
                 assert mgr._initialized is True
 
     def test_initialize_import_error(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
-        mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
 
-        original_init = ONNXEmbeddingManager._initialize
+        mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
 
         # Simulate ImportError inside _initialize
         def mock_init(self_ref):
@@ -1114,6 +1277,7 @@ class TestONNXEmbeddingManager:
 
     def test_initialize_already_initialized(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._initialized = True
         # Should return immediately without error
@@ -1122,6 +1286,7 @@ class TestONNXEmbeddingManager:
 
     def test_encode_calls_initialize(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
 
         mock_tokenizer = MagicMock()
@@ -1140,13 +1305,16 @@ class TestONNXEmbeddingManager:
         with patch.object(mgr, "_initialize"):
             with patch.object(mgr, "_mean_pooling") as mock_pool:
                 mock_tensor = MagicMock()
-                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array([[0.1, 0.2]])
+                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array(
+                    [[0.1, 0.2]]
+                )
                 mock_pool.return_value = mock_tensor
                 result = mgr.encode(["hello"])
                 assert result.shape == (1, 2)
 
     def test_encode_single_string(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._tokenizer = MagicMock()
         mgr._session = MagicMock()
@@ -1154,13 +1322,16 @@ class TestONNXEmbeddingManager:
         with patch.object(mgr, "_initialize"):
             with patch.object(mgr, "_mean_pooling") as mock_pool:
                 mock_tensor = MagicMock()
-                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array([[0.5]])
+                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array(
+                    [[0.5]]
+                )
                 mock_pool.return_value = mock_tensor
                 result = mgr.encode("single", normalize=False)
                 assert result.shape == (1, 1)
 
     def test_encode_with_normalization(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._tokenizer = MagicMock()
         mgr._session = MagicMock()
@@ -1168,7 +1339,9 @@ class TestONNXEmbeddingManager:
         with patch.object(mgr, "_initialize"):
             with patch.object(mgr, "_mean_pooling") as mock_pool:
                 mock_tensor = MagicMock()
-                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array([[3.0, 4.0]])
+                mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = np.array(
+                    [[3.0, 4.0]]
+                )
                 mock_pool.return_value = mock_tensor
                 result = mgr.encode(["test"], normalize=True)
                 # Normalized vector should have unit norm
@@ -1176,6 +1349,7 @@ class TestONNXEmbeddingManager:
 
     def test_encode_inference_error(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._tokenizer = MagicMock()
         mgr._session = MagicMock(side_effect=Exception("ONNX failure"))
@@ -1186,6 +1360,7 @@ class TestONNXEmbeddingManager:
 
     def test_get_embedding_dim(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._initialized = True
         mgr._tokenizer = MagicMock()
@@ -1195,13 +1370,12 @@ class TestONNXEmbeddingManager:
 
     def test_get_memory_usage(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
         mgr._session = MagicMock()
         mock_psutil = MagicMock()
         mock_proc = MagicMock()
-        mock_proc.memory_info.return_value = MagicMock(
-            rss=100 * 1024 * 1024, vms=200 * 1024 * 1024
-        )
+        mock_proc.memory_info.return_value = MagicMock(rss=100 * 1024 * 1024, vms=200 * 1024 * 1024)
         mock_proc.memory_percent.return_value = 5.0
         mock_psutil.Process.return_value = mock_proc
         with patch.dict("sys.modules", {"psutil": mock_psutil}):

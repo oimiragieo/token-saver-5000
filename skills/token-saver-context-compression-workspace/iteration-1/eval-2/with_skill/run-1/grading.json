@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "The workflow uses run_skill_workflow.py.",
+      "passed": true,
+      "evidence": "Command executed: run_skill_workflow.py"
+    },
+    {
+      "text": "The result surfaces evidence sufficiency rather than guessing.",
+      "passed": true,
+      "evidence": "Evidence sufficient=False"
+    },
+    {
+      "text": "The output makes it clear what to do next if evidence is insufficient.",
+      "passed": true,
+      "evidence": "Assistant response includes explicit next-step guidance."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "PythonScript": 1
+    },
+    "total_tool_calls": 1,
+    "total_steps": 1,
+    "errors_encountered": 0,
+    "output_chars": 458,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 0.426
+  },
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": [
+      "Use the non-zero exit code as a guardrail in automation."
+    ]
+  }
+}

@@ -212,6 +212,30 @@ class TestBasicMetrics:
             assert "batch_size" in text
             assert 'operation="batch_ingest"' in text
 
+    def test_record_provider_cache_telemetry(self, metrics):
+        """Test provider cache telemetry counters."""
+        metrics.record_provider_cache_telemetry(
+            {
+                "provider": "openai",
+                "validation_status": "validated",
+                "cache_hit_detected": True,
+                "cached_input_tokens": 300,
+                "cache_creation_input_tokens": 120,
+                "estimated_cache_savings_usd": 0.0042,
+            }
+        )
+
+        if PROMETHEUS_AVAILABLE:
+            text = metrics.generate_metrics_text()
+            assert "provider_cache_observations_total" in text
+            assert (
+                'provider_cache_observations_total{cache_hit="true",provider="openai",'
+                'validation_status="validated"} 1.0' in text
+            )
+            assert 'provider_cache_read_tokens_total{provider="openai"} 300.0' in text
+            assert 'provider_cache_creation_tokens_total{provider="openai"} 120.0' in text
+            assert "provider_cache_savings_usd_total" in text
+
 
 # ===========================
 # Cardinality Control Tests

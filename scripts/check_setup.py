@@ -256,7 +256,8 @@ def main():
         print("\nNext steps:")
         print("  1. Run examples: python examples/example_usage.py")
         print("  2. Run tests: pytest tests/ -v")
-        print("  3. Start MCP server: python -m src.server")
+        print("  3. Start MCP server: token-saver-mcp")
+        print("  4. Install Claude Desktop config: token-saver-install-mcp")
         return 0
     else:
         print(f"\n⚠️  {total - passed} check(s) failed. Please fix the issues above.")

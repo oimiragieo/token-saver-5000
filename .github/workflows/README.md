@@ -1,87 +1,78 @@
 # GitHub Actions CI/CD Workflows
 
-This directory contains 6 production-grade GitHub Actions workflows for Token Saver 5000 with comprehensive automation, caching, and validation.
+This directory contains 8 GitHub Actions workflows for Token Saver 5000: canonical CI, focused guards, release automation, and legacy compatibility shims.
 
 ## Workflows Overview
 
-### 1. test.yml - Continuous Integration Testing
-**Purpose:** Validates code quality and test coverage on every push and pull request
+### 0. ci.yml - Canonical Product CI
+**Purpose:** Runs the canonical repository-wide validation pipeline used to check the full product surface.
 
 **Trigger Events:**
 - Push to: `main`, `develop`, `claude/**` branches
 - Pull requests to: `main`, `develop`
+- Manual: `workflow_dispatch`
 
 **Key Features:**
-- **Matrix Testing:** Tests across Python 3.10, 3.11, 3.12 in parallel
-- **Pip Caching:** Saves 2-5 minutes per run using `hashFiles('**/requirements.txt')`
-- **Coverage Enforcement:** Fails if coverage drops below 70% threshold
-- **Multi-Report Support:**
-  - Terminal output (human-readable)
-  - XML report (Codecov integration)
-  - HTML report (artifacts)
-- **Setup Verification:** Runs `scripts/check_setup.py` to validate environment
-- **Code Formatting:** Checks Black formatting compliance
-- **Linting:** Validates with Ruff (fast Python linter)
-- **Type Checking:** Optional mypy type safety checks
+- **Fast Quality Gate:** Runs Black and Ruff using the same repo-wide commands validated locally
+- **Workflow/Packaging Contracts:** Runs `tests/test_ci_workflows.py` and `tests/test_mcp_packaging.py` early
+- **Python Compatibility Matrix:** Verifies install/import + smoke tests on Python 3.10, 3.11, and 3.12
+- **Package Validation:** Builds sdist/wheel, runs `twine check`, reinstalls the wheel, and smoke-tests the installed `token-saver-install-mcp --print-config` entrypoint via Python's scripts directory for runner-stable PATH handling
+- **Full Validation:** Runs `python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py`
+- **Deterministic by Design:** Avoids `scripts/check_setup.py` and Docker model downloads in CI because they depend on optional packages or network availability
 
 **Jobs:**
-- `test` (matrix): Runs tests for each Python version
-- `test-matrix-complete`: Validates all matrix jobs passed
-
-**Artifacts Generated:**
-- `coverage-report-py3.10`, `coverage-report-py3.11`, `coverage-report-py3.12` (HTML coverage reports)
-- Coverage reports uploaded to Codecov for historical tracking
+- `quality-gate`
+- `compatibility`
+- `package-validation`
+- `full-validation`
 
 **Performance:**
-- Typical run time: 8-12 minutes (3 Python versions in parallel)
-- Pip cache hit: Saves ~2-3 minutes per run on cache hit
+- Typical run time: 10-20 minutes depending on cache warmth
+- Uses pip cache keyed from `requirements.txt` and `pyproject.toml`
 
 ---
 
-### 2. lint.yml - Code Quality & Security
-**Purpose:** Enforces code style, security standards, and maintainability on every push
+### 1. test.yml - Deprecated Compatibility Shim
+**Purpose:** Preserves the legacy workflow name while redirecting maintainers to `ci.yml`.
 
 **Trigger Events:**
-- Push to: `main`, `develop`, `claude/**` branches
-- Pull requests to: `main`, `develop`
+- Manual: `workflow_dispatch`
 
 **Key Features:**
-- **Black Formatting:** Strict PEP 8 compliance checking with diff output
-- **Ruff Linting:** 10-100x faster Python linting with 500+ rules
-- **Format Verification:** Additional formatting checks using Ruff formatter
-- **Type Safety:** Optional mypy type checking (informational)
-- **Security Scanning:**
-  - Bandit: Scans for common Python security vulnerabilities
-  - Identifies hardcoded passwords, SQL injection risks, etc.
-- **Documentation Check:** pydocstyle validates docstring coverage (Google style)
-- **Import Sorting:** isort ensures consistent import organization
-- **Complexity Analysis:**
-  - Radon McCabe complexity score
-  - Maintainability index calculation
-- **Concurrency Control:** Cancels previous runs if new commits pushed
+- Manual-only compatibility workflow
+- Writes a deprecation notice to the GitHub step summary
+- Directs maintainers to `ci.yml` for real repository validation
 
 **Jobs:**
-- `lint`: All linting and security checks in single job
+- `legacy-test-notice`
 
 **Artifacts Generated:**
-- `bandit-security-report`: JSON report of security findings
-- `complexity-reports`: Radon complexity and maintainability indices
-
-**Fail Conditions (Blocking):**
-- Black formatting check fails
-- Ruff lint check fails
-- Ruff format check fails
-
-**Informational Only (Non-blocking):**
-- Type checking warnings
-- Security scan results
-- Docstring coverage gaps
-- Import sorting issues
-- Code complexity metrics
+- None
 
 **Performance:**
-- Typical run time: 2-4 minutes
-- Single Python version (3.12 latest)
+- Typical run time: <1 minute
+
+---
+
+### 2. lint.yml - Deprecated Compatibility Shim
+**Purpose:** Preserves the legacy workflow name while redirecting maintainers to `ci.yml`.
+
+**Trigger Events:**
+- Manual: `workflow_dispatch`
+
+**Key Features:**
+- Manual-only compatibility workflow
+- Writes a deprecation notice to the GitHub step summary
+- Directs maintainers to `ci.yml` for real repository validation
+
+**Jobs:**
+- `legacy-lint-notice`
+
+**Artifacts Generated:**
+- None
+
+**Performance:**
+- Typical run time: <1 minute
 
 ---
 
@@ -309,16 +300,15 @@ For production deployments, add GitHub environments (Settings > Environments):
 
 ```
 1. Developer pushes code to feature branch
-   └─ test.yml: Runs tests (5-8 min)
-   └─ lint.yml: Checks code quality (2-3 min)
+   └─ ci.yml: Runs the canonical validation pipeline
+   └─ focused guards: Run when matching paths change
 
 2. Developer creates pull request
-   └─ All workflows run automatically
-   └─ Blocking checks (test, lint) must pass
+   └─ ci.yml runs automatically
+   └─ Blocking checks should be based on ci.yml and any chosen focused guards
 
 3. After merge to main
-   └─ test.yml: Final validation
-   └─ lint.yml: Final code quality check
+   └─ ci.yml: Final validation
    └─ build.yml: Builds Docker image (2-5 min)
 
 4. Create semantic version tag (v0.6.2)
@@ -333,8 +323,7 @@ For production deployments, add GitHub environments (Settings > Environments):
 
 Workflows use concurrency groups to prevent duplicate runs:
 
-- `test-${{ github.ref }}`: One test run per branch
-- `lint-${{ github.ref }}`: One lint run per branch
+- `ci-${{ github.workflow }}-${{ github.ref }}`: One canonical CI run per branch/workflow
 - `build-${{ github.ref }}`: One build run per branch
 - `deploy-staging`, `deploy-production`: One deployment at a time
 
@@ -397,8 +386,8 @@ Build.yml uses multi-layer Docker caching:
 
 ### Parallel Job Execution
 
-- Test matrix: 3 Python versions run in parallel (3x speedup)
-- Lint job: Single serial job (fast enough)
+- Compatibility matrix: 3 Python versions run in parallel
+- Quality gate and package validation stay separate for faster failure visibility
 - Build job: Single serial job (caching makes it fast)
 - Deploy jobs: Staging runs first, production waits for approval
 
@@ -409,7 +398,7 @@ Build.yml uses multi-layer Docker caching:
 1. **Commit Messages:** Use conventional commits (feat:, fix:, docs:)
 2. **Pull Requests:** Reference issues and include testing notes
 3. **Testing:** Add tests for new features before merging
-4. **Coverage:** Maintain >70% code coverage (enforced by test.yml)
+4. **Coverage:** Maintain >70% code coverage through the canonical CI path and local validation
 5. **Tagging:** Use semantic versioning for releases (v1.0.0, v0.6.1)
 6. **Secrets:** Never hardcode secrets; use GitHub Secrets
 7. **Docker:** Use multi-stage builds for smaller images
@@ -422,8 +411,9 @@ Build.yml uses multi-layer Docker caching:
 ```
 .github/
 └── workflows/
-    ├── test.yml      (139 lines) - CI test automation
-    ├── lint.yml      (170 lines) - Code quality enforcement
+    ├── ci.yml        (canonical validation workflow)
+    ├── test.yml      (deprecated manual compatibility shim)
+    ├── lint.yml      (deprecated manual compatibility shim)
     ├── build.yml     (216 lines) - Docker image building
     ├── deploy.yml    (427 lines) - K8s deployment
     └── README.md     (This file) - Workflow documentation

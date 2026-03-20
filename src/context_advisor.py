@@ -6,7 +6,7 @@ recommends optimal model selection, pruning priorities, and compression
 strategy based on total token budget.
 """
 
-from typing import Dict, List
+from typing import List
 
 # Model context window sizes (tokens)
 MODEL_CONTEXT_WINDOWS = {
@@ -55,12 +55,14 @@ def advise_context(
     for model, window in sorted(MODEL_CONTEXT_WINDOWS.items(), key=lambda x: x[1]):
         usable = int(window * safety_margin)
         if total_tokens <= usable:
-            recommended.append({
-                "model": model,
-                "context_window": window,
-                "usable_tokens": usable,
-                "utilization": round(total_tokens / usable * 100, 1),
-            })
+            recommended.append(
+                {
+                    "model": model,
+                    "context_window": window,
+                    "usable_tokens": usable,
+                    "utilization": round(total_tokens / usable * 100, 1),
+                }
+            )
 
     # Prune suggestions: lowest importance first
     sorted_docs = sorted(doc_stats, key=lambda d: d.get("importance", 0))
@@ -69,7 +71,9 @@ def advise_context(
             "doc_id": d["doc_id"],
             "tokens": d["tokens"],
             "importance": d.get("importance", 0),
-            "savings_percent": round(d["tokens"] / total_tokens * 100, 1) if total_tokens > 0 else 0,
+            "savings_percent": (
+                round(d["tokens"] / total_tokens * 100, 1) if total_tokens > 0 else 0
+            ),
         }
         for d in sorted_docs
     ]
@@ -92,7 +96,11 @@ def advise_context(
         "prune_first": prune_first,
         "strategy": strategy,
         "token_breakdown": [
-            {"doc_id": d["doc_id"], "tokens": d["tokens"], "percent": round(d["tokens"] / total_tokens * 100, 1)}
+            {
+                "doc_id": d["doc_id"],
+                "tokens": d["tokens"],
+                "percent": round(d["tokens"] / total_tokens * 100, 1),
+            }
             for d in sorted(doc_stats, key=lambda d: d["tokens"], reverse=True)
         ],
     }

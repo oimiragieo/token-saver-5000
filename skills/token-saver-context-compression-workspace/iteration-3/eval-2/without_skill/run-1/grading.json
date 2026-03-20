@@ -1,0 +1,43 @@
+{
+  "expectations": [
+    {
+      "text": "The answer gives the exact run_skill_workflow.py command for this repo.",
+      "passed": false,
+      "evidence": "No repo-specific run_skill_workflow.py command was provided."
+    },
+    {
+      "text": "The command includes fail-on-insufficient-evidence behavior.",
+      "passed": false,
+      "evidence": "Missing --fail-on-insufficient-evidence."
+    },
+    {
+      "text": "The answer explains the loud failure meaning.",
+      "passed": false,
+      "evidence": "No explanation of the failure semantics."
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 3,
+    "total": 3,
+    "pass_rate": 0.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 3,
+    "errors_encountered": 0,
+    "output_chars": 506,
+    "transcript_chars": 0
+  },
+  "timing": {
+    "total_duration_seconds": 18.926
+  },
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": [
+      "Baseline lacked project-specific skill guidance and missed one or more exact workflow details."
+    ]
+  }
+}

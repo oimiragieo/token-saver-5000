@@ -3,7 +3,6 @@ Integration tests for Phase 5 wiring — verifies that modules are actually
 connected to the main pipeline, not just importable.
 """
 
-import asyncio
 import json
 import time
 from unittest.mock import MagicMock, patch
@@ -18,6 +17,7 @@ from src.semantic_compressor import SemanticCompressor, SemanticNode
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def compressor():
@@ -43,6 +43,7 @@ def handler_context(compressor):
     """Minimal handler context for testing handlers."""
     from unittest.mock import AsyncMock
     from src.file_sync_manager import FileSyncManager
+
     sync_mgr = FileSyncManager()
     persistence = MagicMock()
     persistence.save_graphs = MagicMock(return_value=True)
@@ -76,17 +77,20 @@ def handler_context(compressor):
 # Test: AccessTracker + CompressionReplayLog are initialized
 # ---------------------------------------------------------------------------
 
+
 class TestCompressorInitialization:
     def test_access_tracker_initialized(self, compressor):
         """AccessTracker should be created in __init__."""
-        assert hasattr(compressor, '_access_tracker')
+        assert hasattr(compressor, "_access_tracker")
         from src.context_decay import AccessTracker
+
         assert isinstance(compressor._access_tracker, AccessTracker)
 
     def test_compression_replay_initialized(self, compressor):
         """CompressionReplayLog should be created in __init__."""
-        assert hasattr(compressor, '_compression_replay')
+        assert hasattr(compressor, "_compression_replay")
         from src.compression_replay import CompressionReplayLog
+
         assert isinstance(compressor._compression_replay, CompressionReplayLog)
 
 
@@ -94,11 +98,13 @@ class TestCompressorInitialization:
 # Test: handle_ingest records to tracker and replay
 # ---------------------------------------------------------------------------
 
+
 class TestIngestWiring:
     @pytest.mark.asyncio
     async def test_ingest_records_access(self, handler_context, sample_text):
         """After ingest, access_tracker should have an entry for the file."""
         from src.handlers.compression_handlers import handle_ingest
+
         args = {"text": sample_text, "file_id": "test_doc"}
         result = await handle_ingest(handler_context, args)
         response = json.loads(result)
@@ -113,6 +119,7 @@ class TestIngestWiring:
     async def test_ingest_records_replay(self, handler_context, sample_text):
         """After ingest, compression_replay should have an entry."""
         from src.handlers.compression_handlers import handle_ingest
+
         args = {"text": sample_text, "file_id": "replay_doc"}
         await handle_ingest(handler_context, args)
 
@@ -126,6 +133,7 @@ class TestIngestWiring:
     async def test_ingest_includes_fidelity_score(self, handler_context, sample_text):
         """Ingest response should include fidelity_score from Phase 5."""
         from src.handlers.compression_handlers import handle_ingest
+
         args = {"text": sample_text, "file_id": "fidelity_doc"}
         result = await handle_ingest(handler_context, args)
         response = json.loads(result)
@@ -136,10 +144,13 @@ class TestIngestWiring:
     async def test_ingest_with_semantic_chunking(self, handler_context):
         """Ingest with chunking_strategy='semantic' should work."""
         from src.handlers.compression_handlers import handle_ingest
-        long_text = " ".join([
-            f"Section {i}: This is a paragraph about topic {i} with enough detail to be meaningful."
-            for i in range(20)
-        ])
+
+        long_text = " ".join(
+            [
+                f"Section {i}: This is a paragraph about topic {i} with enough detail to be meaningful."
+                for i in range(20)
+            ]
+        )
         args = {"text": long_text, "file_id": "semantic_doc", "chunking_strategy": "semantic"}
         result = await handle_ingest(handler_context, args)
         response = json.loads(result)
@@ -151,11 +162,13 @@ class TestIngestWiring:
 # Test: handle_read_skeleton records access + keyword anchoring
 # ---------------------------------------------------------------------------
 
+
 class TestSkeletonWiring:
     @pytest.mark.asyncio
     async def test_skeleton_records_access(self, handler_context, sample_text):
         """Reading skeleton should record access in the tracker."""
         from src.handlers.compression_handlers import handle_ingest, handle_read_skeleton
+
         await handle_ingest(handler_context, {"text": sample_text, "file_id": "skel_doc"})
 
         # Reset tracker to verify skeleton adds its own access
@@ -172,11 +185,12 @@ class TestSkeletonWiring:
     async def test_skeleton_keyword_anchoring(self, handler_context, sample_text):
         """Skeleton with anchored_keywords should force matching nodes into anchors."""
         from src.handlers.compression_handlers import handle_ingest, handle_read_skeleton
+
         await handle_ingest(handler_context, {"text": sample_text, "file_id": "anchor_doc"})
 
         result = await handle_read_skeleton(
             handler_context,
-            {"file_id": "anchor_doc", "anchored_keywords": ["transformers", "backpropagation"]}
+            {"file_id": "anchor_doc", "anchored_keywords": ["transformers", "backpropagation"]},
         )
         response = json.loads(result)
         assert "file_id" in response
@@ -190,11 +204,13 @@ class TestSkeletonWiring:
 # Test: handle_search_semantic records access
 # ---------------------------------------------------------------------------
 
+
 class TestSearchWiring:
     @pytest.mark.asyncio
     async def test_search_records_access(self, handler_context, sample_text):
         """Semantic search should record access for found documents."""
         from src.handlers.compression_handlers import handle_ingest, handle_search_semantic
+
         await handle_ingest(handler_context, {"text": sample_text, "file_id": "search_doc"})
 
         handler_context["compressor"]._access_tracker._access_log.clear()
@@ -213,6 +229,7 @@ class TestSearchWiring:
 # ---------------------------------------------------------------------------
 # Test: evict_stale and get_compression_insights now work
 # ---------------------------------------------------------------------------
+
 
 class TestPhase5ToolsWork:
     @pytest.mark.asyncio
@@ -247,6 +264,7 @@ class TestPhase5ToolsWork:
 # Test: semantic chunking module works in _chunk_text
 # ---------------------------------------------------------------------------
 
+
 class TestSemanticChunking:
     def test_chunk_text_auto_uses_semantic_for_large_structured_docs(self, compressor):
         """Auto mode should upgrade larger structured documents to semantic chunking."""
@@ -257,15 +275,22 @@ class TestSemanticChunking:
                 "Paragraph three discusses audit logs, compliance review, and admin actions. " * 16,
             ]
         )
-        with patch("src.semantic_chunking.chunk_by_semantics", return_value=["semantic-a", "semantic-b"]) as mocked:
+        with patch(
+            "src.semantic_chunking.chunk_by_semantics", return_value=["semantic-a", "semantic-b"]
+        ) as mocked:
             chunks = compressor._chunk_text(text, strategy="auto")
         assert chunks == ["semantic-a", "semantic-b"]
         mocked.assert_called_once()
+        assert isinstance(mocked.call_args.args[0], list)
+        assert mocked.call_args.kwargs["max_chunk_size"] == 512
 
     def test_chunk_text_auto_keeps_fixed_for_small_docs(self, compressor):
         """Auto mode should avoid semantic chunking for small/simple docs."""
         text = "Short doc. " * 20
-        with patch("src.semantic_chunking.chunk_by_semantics", side_effect=AssertionError("should not be called")):
+        with patch(
+            "src.semantic_chunking.chunk_by_semantics",
+            side_effect=AssertionError("should not be called"),
+        ):
             chunks = compressor._chunk_text(text, strategy="auto")
         assert len(chunks) > 0
 
@@ -277,10 +302,12 @@ class TestSemanticChunking:
 
     def test_chunk_text_semantic_strategy(self, compressor):
         """Semantic strategy should produce chunks."""
-        text = " ".join([
-            f"Topic {i} is about something completely different from the others."
-            for i in range(20)
-        ])
+        text = " ".join(
+            [
+                f"Topic {i} is about something completely different from the others."
+                for i in range(20)
+            ]
+        )
         chunks = compressor._chunk_text(text, strategy="semantic")
         assert len(chunks) > 0
 
@@ -295,6 +322,7 @@ class TestSemanticChunking:
 # ---------------------------------------------------------------------------
 # Test: intra-doc dedup runs during ingest
 # ---------------------------------------------------------------------------
+
 
 class TestIntraDocDedup:
     def test_ingest_deduplicates_redundant_chunks(self, compressor):
@@ -320,11 +348,13 @@ class TestIntraDocDedup:
             encode_calls.append(list(chunks))
             if len(encode_calls) > 1:
                 raise AssertionError("Embeddings should be reused after dedup")
-            return np.array([
-                [1.0, 0.0],
-                [1.0, 0.0],
-                [0.0, 1.0],
-            ])
+            return np.array(
+                [
+                    [1.0, 0.0],
+                    [1.0, 0.0],
+                    [0.0, 1.0],
+                ]
+            )
 
         compressor._encode_async = fake_encode
 
@@ -346,6 +376,7 @@ class TestIntraDocDedup:
 # ---------------------------------------------------------------------------
 # Test: query-adaptive ratios affect skeleton
 # ---------------------------------------------------------------------------
+
 
 class TestQueryAdaptive:
     def test_skeleton_with_query_uses_adaptive_ratios(self, compressor):
@@ -382,7 +413,9 @@ class TestQueryAdaptive:
         captured = {}
         original = compressor._select_skeleton_nodes
 
-        def wrapped(file_nodes, num_skeleton, query=None, redundancy_penalty=0.2, priority_scores=None):
+        def wrapped(
+            file_nodes, num_skeleton, query=None, redundancy_penalty=0.2, priority_scores=None
+        ):
             captured["priority_scores"] = priority_scores
             return original(
                 file_nodes,
@@ -418,11 +451,13 @@ class TestQueryAdaptive:
 # Test: workflow guidance in tool_help
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowGuidance:
     @pytest.mark.asyncio
     async def test_tool_help_includes_workflow(self):
         """tool_help() with no args should include recommended workflow."""
         from src.handlers.help_handlers import handle_tool_help
+
         result = await handle_tool_help({}, {})
         response = json.loads(result)
         assert "recommended_workflow" in response
@@ -432,6 +467,7 @@ class TestWorkflowGuidance:
     async def test_tool_help_includes_profiles(self):
         """tool_help() should document core_stable and full profiles."""
         from src.handlers.help_handlers import handle_tool_help
+
         result = await handle_tool_help({}, {})
         response = json.loads(result)
         assert "tool_profiles" in response
@@ -442,6 +478,7 @@ class TestWorkflowGuidance:
     async def test_tool_help_core_stable_matches_actual_tools(self):
         """Workflow guidance should list the real core_stable profile tools."""
         from src.handlers.help_handlers import handle_tool_help
+
         result = await handle_tool_help({}, {})
         response = json.loads(result)
         assert response["tool_profiles"]["core_stable"]["tools"] == [
@@ -458,6 +495,7 @@ class TestWorkflowGuidance:
     async def test_modulate_region_help_uses_fidelity_level_param(self):
         """Help examples should use the real fidelity_level argument name."""
         from src.handlers.help_handlers import handle_tool_help
+
         result = await handle_tool_help({}, {"tool_name": "modulate_region", "verbose": True})
         response = json.loads(result)
         example_args = response["examples"][0]["args"]

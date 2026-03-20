@@ -13,6 +13,7 @@ Tests are designed to skip when optional dependencies are unavailable.
 import json
 import pytest
 from unittest.mock import MagicMock, patch
+from src.identity_scope import compose_scoped_file_id
 
 
 # =============================================================================
@@ -261,6 +262,31 @@ class TestSCARCompress:
         # Should find embeddings from object-based chunks
         assert result.get("experimental") is True
 
+    @pytest.mark.asyncio
+    async def test_compress_scoped_doc_id(self, mock_handler_context):
+        """SCAR should resolve scoped internal IDs while preserving visible doc_id output."""
+        from src.handlers.experimental_handlers import handle_scar_compress
+        import numpy as np
+
+        scoped_doc_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        mock_handler_context["compressor"].graphs = {scoped_doc_id: MagicMock()}
+        mock_handler_context["compressor"].chunks = {
+            f"{scoped_doc_id}_n0": {"embedding": [0.1] * 384}
+        }
+
+        with patch("src.handlers.experimental_handlers._get_scar_compressor") as mock_get:
+            mock_scar = MagicMock()
+            mock_scar.compress_embeddings.return_value = np.zeros((1, 128), dtype=np.float32)
+            mock_get.return_value = mock_scar
+
+            result_str = await handle_scar_compress(
+                mock_handler_context, {"doc_id": "test_doc", "workspace_id": "acme"}
+            )
+            result = json.loads(result_str)
+
+        assert result.get("doc_id") == "test_doc"
+        assert result.get("experimental") is True
+
 
 class TestSCARGetStats:
     """Tests for scar_get_stats handler."""
@@ -386,6 +412,29 @@ class TestMultimodalIngest:
         assert result.get("experimental") is True
 
     @pytest.mark.asyncio
+    async def test_ingest_scoped_doc_id(self, mock_handler_context):
+        """Multimodal ingest should pass scoped IDs internally and visible IDs externally."""
+        from src.handlers.experimental_handlers import handle_multimodal_ingest
+
+        with patch("src.handlers.experimental_handlers._get_multimodal_compressor") as mock_get:
+            mock_compressor = MagicMock()
+            mock_compressor.ingest_mixed_content.return_value = {"node_count": 1}
+            mock_get.return_value = mock_compressor
+
+            result_str = await handle_multimodal_ingest(
+                mock_handler_context,
+                {"doc_id": "test", "workspace_id": "acme", "text_content": "Hello world"},
+            )
+            result = json.loads(result_str)
+
+        scoped_doc_id = compose_scoped_file_id("test", workspace_id="acme")
+        mock_compressor.ingest_mixed_content.assert_called_once_with(
+            scoped_doc_id, [{"type": "text", "content": "Hello world"}]
+        )
+        assert result.get("doc_id") == "test"
+        assert result.get("experimental") is True
+
+    @pytest.mark.asyncio
     async def test_ingest_images_without_validator(self, mock_handler_context_no_validator):
         """Test error when PathValidator not available for image paths."""
         from src.handlers.experimental_handlers import handle_multimodal_ingest
@@ -481,13 +530,13 @@ class TestExperimentalHandlerRegistry:
 
     def test_registry_handlers_are_callable(self):
         """Verify all handlers in registry are async callable."""
-        import asyncio
+        import inspect
         from src.handlers.experimental_handlers import EXPERIMENTAL_HANDLERS
 
         for name, handler in EXPERIMENTAL_HANDLERS.items():
             assert callable(handler), f"Handler {name} is not callable"
             # Check if it's a coroutine function
-            assert asyncio.iscoroutinefunction(handler), f"Handler {name} is not async"
+            assert inspect.iscoroutinefunction(handler), f"Handler {name} is not async"
 
 
 # =============================================================================
@@ -521,11 +570,12 @@ class TestMCPCoreIntegration:
             assert name in tool_names, f"Tool schema missing: {name}"
 
     def test_tool_count_is_48(self):
-        """Verify total tool count is 51."""
+        """Verify total tool count includes cache telemetry additions."""
         from src.handlers.mcp_core import setup_mcp_tools
 
         tools = setup_mcp_tools()
-        assert len(tools) == 58, f"Expected 58 tools, got {len(tools)}"
+        assert len(tools) == 99, f"Expected 99 tools, got {len(tools)}"
+
     def test_experimental_tools_have_experimental_in_description(self):
         """Verify all experimental tool descriptions mention EXPERIMENTAL."""
         from src.handlers.mcp_core import setup_mcp_tools

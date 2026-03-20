@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 36065,
+  "duration_api_ms": 34324,
+  "num_turns": 8,
+  "result": "I don't have file-reading tools (Read, Bash, Glob, Grep) available in this session \u00e2\u20ac\u201d only Hugging Face and LSP tools. I need those local tools to inspect the skill scripts and give you the exact command.\n\nHowever, based on the CLAUDE.md context, I can point you in the right direction:\n\nThe skill lives at `skills/token-saver-context-compression/` which contains **12 scripts**. To find the exact full workflow command and the \"fail loudly\" safety gate, you'd need to check:\n\n1. **`skills/token-saver-context-compression/SKILL.md`** \u00e2\u20ac\u201d the skill definition with usage instructions\n2. The 12 scripts in that directory \u00e2\u20ac\u201d one will be a pipeline/workflow runner, and one will be a fidelity/safety check\n\n**What I can tell you from CLAUDE.md context:**\n\nThe project has a **`recommend_fidelity`** MCP tool and a **`fidelity_advisor`** module (`src/fidelity_advisor.py`, 90% coverage) plus a **`compression_advisor`** (`src/compression_advisor.py`, 91% coverage). The \"loud failure\" almost certainly comes from the fidelity check \u00e2\u20ac\u201d it means the **compressed output lost too much semantic information to safely answer questions from**. The compression was too aggressive (fidelity too low), so the system refuses to serve the result rather than risk hallucination or missing critical context.\n\n**To get the exact command**, I need you to grant me access to the `Read` or `Bash` tools so I can inspect the skill scripts. Could you re-run with those tools enabled, or check `skills/token-saver-context-compression/SKILL.md` yourself for the workflow entry point?",
+  "stop_reason": "end_turn",
+  "session_id": "1988c9c4-effd-4246-a6a8-4e05d5090712",
+  "total_cost_usd": 0.25232924999999995,
+  "usage": {
+    "input_tokens": 9,
+    "cache_creation_input_tokens": 21435,
+    "cache_read_input_tokens": 185831,
+    "output_tokens": 1016,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21435,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 9,
+      "outputTokens": 1016,
+      "cacheReadInputTokens": 185831,
+      "cacheCreationInputTokens": 21435,
+      "webSearchRequests": 0,
+      "costUSD": 0.25232924999999995,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "14b7747d-8072-4bd0-989b-109f8321874d",
+  "_wall_seconds": 39.835
+}

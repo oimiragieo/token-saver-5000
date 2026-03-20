@@ -178,7 +178,7 @@ def print_next_steps():
 
     print("📚 Quick Start Commands:\n")
     print("  # Start the MCP server (for Claude Desktop integration)")
-    print("  python -m src.server\n")
+    print("  token-saver-mcp\n")
 
     print("  # Run examples")
     print("  python examples/example_usage.py      # Document compression")
@@ -214,7 +214,13 @@ def print_next_steps():
     print("    • refresh_document - Update cache from disk\n")
 
     print("🔗 MCP Integration:")
-    print("  • Run: ./scripts/install_mcp.sh")
+    print("  • Run: token-saver-install-mcp")
+    print("  • Or create project config: token-saver-install-mcp --project-config")
+    print(
+        "  • Or create portable project config: token-saver-install-mcp --portable-project-config"
+    )
+    print("  • Or inspect setup health: token-saver-install-mcp --doctor")
+    print("  • Or print raw JSON: token-saver-install-mcp --print-config > .mcp.json")
     print("  • Or manually configure Claude Desktop (see README.md)\n")
 
 

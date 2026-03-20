@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 53573,
+  "duration_api_ms": 53147,
+  "num_turns": 11,
+  "result": "The LSP server isn't cooperating. Let me try reading files via the Hugging Face doc fetch for local context \u00e2\u20ac\u201d that won't work either. Let me try the available tools differently.\n\nBased on the CLAUDE.md documentation already loaded in context, here's what I can provide:\n\n---\n\n### Command Pattern for LangChain-style JSON Compression\n\nUse the **`ingest_context`** MCP tool (via `python -m src.server` stdio transport) with a query-specific call:\n\n```\nTool: ingest_context\n{\n  \"content\": \"<your LangChain JSON payload as string>\",\n  \"doc_id\": \"langchain-payload\",\n  \"query\": \"your specific question here\"\n}\n```\n\nThen retrieve the compressed version with:\n\n```\nTool: read_context\n{\n  \"doc_id\": \"langchain-payload\",\n  \"fidelity\": \"BALANCED\"\n}\n```\n\nThe `query` parameter in `ingest_context` activates **query-adaptive compression** (`src/query_adaptive.py`), which allocates higher fidelity to nodes semantically relevant to your question and aggressively prunes irrelevant ones \u00e2\u20ac\u201d ideal for large LangChain chain/agent JSON where only a subset matters.\n\n### Output-Format Policy\n\nAll MCP tool responses return **structured JSON** with these guaranteed fields:\n- `\"content\"` \u00e2\u20ac\u201d the compressed/processed result\n- `\"metadata\"` \u00e2\u20ac\u201d compression stats (ratio, token counts, fidelity level)\n- Experimental tools additionally include `\"experimental\": true`\n\nFidelity levels (`MINIMAL`, `LOW`, `BALANCED`, `HIGH`, `LOSSLESS`) control the compression\u00e2\u20ac\u201cdetail tradeoff in every response.\n\n### Cache-Friendly Prompt-Structure Note\n\n**Place static/stable content (system prompts, tool definitions, schema definitions) at the front of your prompt, and variable/query-specific content at the end.** Provider prompt caches (Anthropic, OpenAI) use prefix-matching \u00e2\u20ac\u201d content that shares a common prefix across calls gets cache hits. Reordering a LangChain payload so the chain definition is first and the user question is last maximizes cache reuse across multiple queries against the same chain. (Documented in `docs/guides/PROMPT_CACHING.md`.)",
+  "stop_reason": "end_turn",
+  "session_id": "804442b5-5405-4031-8e93-b41ee7fc0406",
+  "total_cost_usd": 0.26264975,
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 19123,
+    "cache_read_input_tokens": 213712,
+    "output_tokens": 1449,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 19123,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 10,
+      "outputTokens": 1449,
+      "cacheReadInputTokens": 213712,
+      "cacheCreationInputTokens": 19123,
+      "webSearchRequests": 0,
+      "costUSD": 0.26264975,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "27caaf24-b881-440a-b80d-73315b7d02e1",
+  "_wall_seconds": 56.707
+}

@@ -28,10 +28,10 @@ class TestSetupMCPTools:
         assert len(tools) > 0
 
     def test_correct_number_of_tools(self):
-        """Test that all 51 tools are registered"""
+        """Test that all MCP tools are registered."""
         tools = mcp_core.setup_mcp_tools()
 
-        # Expected count: 51 tools total
+        # Expected count: 99 tools total
         # - Document Compression: 9
         # - Batch Processing: 1 (NEW in v0.6.0)
         # - Directory Ingestion: 1 (NEW in v0.9.0)
@@ -46,7 +46,16 @@ class TestSetupMCPTools:
         # - Experimental: 9 (v0.11.0) - TOON, SCAR, Multimodal, ASG-SI suite
         # - New: 3 (diff_reingest, find_duplicates, get_compression_presets)
         # - New: 1 (check_context_budget)
-        assert len(tools) == 58, f"Expected 58 tools, got {len(tools)}"
+        # - Prompt registry: 6
+        # - Explicit memory and personalization: 6
+        # - Datasets and experiments: 5
+        # - Managed connector feeds: 5
+        # - Temporal context and lifecycle: 4
+        # - Stable multimodal: 2
+        # - Structured handoff bundles: 4
+        # - Model optimization: 6
+        # - Prompt registry/cache audit/rendering: 8
+        assert len(tools) == 99, f"Expected 99 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""
@@ -279,8 +288,8 @@ class TestRouteToolCall:
             pytest.fail("Expected ValueError to be raised")
         except ValueError as e:
             error_msg = str(e)
-            # Should mention count of available tools
-            assert "58" in error_msg or "(58)" in error_msg or "58)" in error_msg
+            expected_count = len(mcp_core.setup_mcp_tools())
+            assert str(expected_count) in error_msg
             # Should list some tool names
             assert "ingest_context" in error_msg or "afm_add_message" in error_msg
 

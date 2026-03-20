@@ -296,7 +296,7 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
 type %APPDATA%\Claude\claude_desktop_config.json
 
 # Linux
-cat ~/.config/claude/claude_desktop_config.json
+cat ~/.config/Claude/claude_desktop_config.json
 ```
 
 **2. Check config syntax:**
@@ -304,9 +304,9 @@ cat ~/.config/claude/claude_desktop_config.json
 ```json
 {
   "mcpServers": {
-    "semantic-modulator": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/ABSOLUTE/PATH/to/token-saver-5000",
       "env": {}
     }
@@ -316,8 +316,8 @@ cat ~/.config/claude/claude_desktop_config.json
 
 **Common mistakes:**
 - ❌ Relative path in `cwd` (must be absolute)
-- ❌ Missing comma after `semantic-modulator` block
-- ❌ Wrong Python command (`python3` vs `python`)
+- ❌ Missing comma after `token-saver` block
+- ❌ Running the installer before `pip install -e .`
 - ❌ Incorrect file path (spaces not escaped)
 
 **3. Test Python command manually:**
@@ -329,11 +329,10 @@ python -m src.server
 
 **4. Use the automated installer:**
 ```bash
-chmod +x scripts/install_mcp.sh
-./install_mcp.sh
+token-saver-install-mcp
 ```
 
-This script auto-detects your OS and config location.
+This installer auto-detects your OS and config location.
 
 **5. Restart Claude Desktop:**
 - Quit Claude Desktop completely (not just close window)
@@ -355,8 +354,8 @@ tail -f ~/.local/share/Claude/logs/mcp*.log
 
 Look for errors like:
 ```
-Failed to start MCP server: semantic-modulator
-Error: python: command not found
+Failed to start MCP server: token-saver
+Error: token-saver-mcp: command not found
 ```
 
 ---
@@ -386,9 +385,9 @@ for i, chunk in enumerate(chunks):
 ```json
 {
   "mcpServers": {
-    "semantic-modulator": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/path/to/token-saver-5000",
       "env": {},
       "timeout": 60000  // 60 seconds (default: 30000)

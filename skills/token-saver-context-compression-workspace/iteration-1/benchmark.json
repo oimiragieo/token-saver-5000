@@ -1,0 +1,153 @@
+{
+  "metadata": {
+    "skill_name": "token-saver-context",
+    "skill_path": "C:\\dev\\projects\\token-saver-5000\\skills\\token-saver-context-compression",
+    "executor_model": "manual-local-skill-run",
+    "analyzer_model": "manual-local-review",
+    "timestamp": "2026-03-18T03:10:43Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 1.005,
+        "tokens": 573,
+        "tool_calls": 3,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The workflow uses query-guided or evidence-aware compression rather than a generic baseline.",
+          "passed": true,
+          "evidence": "Mode used: query_guided"
+        },
+        {
+          "text": "The response reports token savings or compression ratio.",
+          "passed": true,
+          "evidence": "Savings 18.31%, ratio 1.224"
+        },
+        {
+          "text": "The response explicitly addresses whether the retry-rule evidence is sufficient.",
+          "passed": true,
+          "evidence": "Evidence status: sufficient=False"
+        }
+      ],
+      "notes": [
+        "Evidence validation remained below threshold, so the answer is not high-confidence yet.",
+        "Broaden retrieval or lower compression aggressiveness for a safer answer."
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.426,
+        "tokens": 458,
+        "tool_calls": 1,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The workflow uses run_skill_workflow.py.",
+          "passed": true,
+          "evidence": "Command executed: run_skill_workflow.py"
+        },
+        {
+          "text": "The result surfaces evidence sufficiency rather than guessing.",
+          "passed": true,
+          "evidence": "Evidence sufficient=False"
+        },
+        {
+          "text": "The output makes it clear what to do next if evidence is insufficient.",
+          "passed": true,
+          "evidence": "Assistant response includes explicit next-step guidance."
+        }
+      ],
+      "notes": [
+        "Use the non-zero exit code as a guardrail in automation."
+      ]
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.447,
+        "tokens": 605,
+        "tool_calls": 1,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response uses the JSON adapter flow.",
+          "passed": true,
+          "evidence": "Adapter resolved to langchain_json"
+        },
+        {
+          "text": "The response mentions cache-friendly prompt structure or stable-prefix concerns.",
+          "passed": true,
+          "evidence": "Assistant response references placing compressed context before dynamic metadata and the user query."
+        },
+        {
+          "text": "The response explains TOON, JSON, or auto output behavior.",
+          "passed": true,
+          "evidence": "Assistant response explains auto output-format policy."
+        }
+      ],
+      "notes": [
+        "Use --output-format json explicitly when downstream consumers require rigid JSON."
+      ]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.626,
+        "stddev": 0.3284,
+        "min": 0.426,
+        "max": 1.005
+      },
+      "tokens": {
+        "mean": 545.3333,
+        "stddev": 77.3067,
+        "min": 458,
+        "max": 605
+      }
+    },
+    "delta": {
+      "pass_rate": "+1.00",
+      "time_seconds": "+0.6",
+      "tokens": "+545"
+    }
+  },
+  "notes": [
+    "This iteration contains with-skill demo runs only; no baseline configuration was generated."
+  ]
+}

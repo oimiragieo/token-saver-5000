@@ -55,6 +55,20 @@ async def test_modulate_region_help_uses_fidelity_level_parameter_name():
 
 
 @pytest.mark.asyncio
+async def test_cache_compatibility_help_includes_visibility_controls():
+    result = await handle_tool_help(
+        {}, {"tool_name": "assess_cache_compatibility", "verbose": True}
+    )
+    data = json.loads(result)
+
+    params = data["parameters"]
+    assert "raw_usage_available" in params
+    assert "cli_stats_available" in params
+    assert "harness" in params
+    assert "assessment.support_level" in data["output_fields"]
+
+
+@pytest.mark.asyncio
 async def test_tool_list_response_contains_total_tools():
     result = await handle_tool_help({}, {})
     data = json.loads(result)

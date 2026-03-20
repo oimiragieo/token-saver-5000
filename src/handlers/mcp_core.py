@@ -22,18 +22,45 @@ from mcp.types import Tool
 # Import all handler modules
 from . import compression_handlers as ch
 from . import afm_handlers as afm
+from . import bundle_handlers as bh
 from . import file_sync_handlers as fs
 from . import resource_handlers as rh
 from . import detection_handlers as dh
 from . import ace_handlers as ace
 from . import visualization_handlers as vh
 from . import help_handlers as hh
+from . import connector_handlers as coh
+from . import model_handlers as moh
+from . import multimodal_handlers as mmh
+from . import temporal_handlers as th
 from . import experimental_handlers as exp
+from . import experiment_handlers as eh
+from . import memory_handlers as mh
+from . import prompt_handlers as ph
 
 # Import structured logging for operation tracking
 from ..structured_logging import get_logger
 
 logger = get_logger("semantic-modulator")
+
+SCOPE_PROPERTIES = {
+    "workspace_id": {
+        "type": "string",
+        "description": "Optional workspace scope for multi-tenant isolation",
+    },
+    "user_id": {
+        "type": "string",
+        "description": "Optional user scope for multi-tenant isolation",
+    },
+    "agent_id": {
+        "type": "string",
+        "description": "Optional agent scope for multi-tenant isolation",
+    },
+    "session_id": {
+        "type": "string",
+        "description": "Optional session scope for multi-tenant isolation",
+    },
+}
 
 CORE_STABLE_TOOL_NAMES: Set[str] = {
     "ingest_context",
@@ -71,7 +98,7 @@ def _tools_for_profile(tools: List[Tool], profile: str) -> List[Tool]:
 
 def setup_mcp_tools(profile: str = "full") -> List[Tool]:
     """
-    Define all 48 MCP tools available in the Semantic Modulator server.
+    Define all MCP tools available in the Semantic Modulator server.
 
     Returns:
         List of Tool objects with complete schemas (name, description, inputSchema)
@@ -141,6 +168,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Chunking strategy: 'auto' (semantic for larger structured docs), 'fixed' (paragraph/sentence boundaries), or 'semantic' (embedding-based boundaries). Default: auto",
                         "default": "auto",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["text", "file_id"],
             },
@@ -186,6 +214,16 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "items": {"type": "string"},
                         "description": "Keywords that must be preserved in the skeleton output, even if they would otherwise be hidden",
                     },
+                    "as_of": {
+                        "type": "string",
+                        "description": "Optional ISO-8601 or unix timestamp for temporal filtering",
+                    },
+                    "include_invalidated": {
+                        "type": "boolean",
+                        "description": "Include invalidated facts in skeleton generation",
+                        "default": False,
+                    },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id"],
             },
@@ -262,6 +300,16 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Minimum best-match similarity for sufficient evidence",
                         "default": 0.35,
                     },
+                    "as_of": {
+                        "type": "string",
+                        "description": "Optional ISO-8601 or unix timestamp for temporal filtering",
+                    },
+                    "include_invalidated": {
+                        "type": "boolean",
+                        "description": "Include invalidated facts in semantic search results",
+                        "default": False,
+                    },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["query"],
             },
@@ -280,6 +328,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Optional: specific file ID, or omit for global stats",
                     },
+                    **SCOPE_PROPERTIES,
                 },
             },
         ),
@@ -293,7 +342,9 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    **SCOPE_PROPERTIES,
+                },
             },
         ),
         Tool(
@@ -316,6 +367,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Confirmation flag (must be true to proceed)",
                         "default": False,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id", "confirm"],
             },
@@ -407,6 +459,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "items": {"type": "string"},
                         "description": "Which node IDs you actually retrieved/viewed",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["ai_response", "file_id", "retrieved_nodes"],
             },
@@ -430,6 +483,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "The source document",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["ai_response", "file_id"],
             },
@@ -566,6 +620,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Document ID to check sync status",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id"],
             },
@@ -590,6 +645,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Lines of context around changes (default: 3)",
                         "default": 3,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id"],
             },
@@ -609,6 +665,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Document ID to refresh from disk",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id"],
             },
@@ -628,6 +685,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Document ID to get version history for",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["doc_id"],
             },
@@ -1047,6 +1105,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "maximum": 8,
                         "default": 4,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["directory"],
             },
@@ -1123,6 +1182,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Minimum importance score to include (default: 0.0)",
                         "minimum": 0.0,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id"],
             },
@@ -1151,6 +1211,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Maximum nodes to visualize (default: 50)",
                         "minimum": 1,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id", "output_path"],
             },
@@ -1174,6 +1235,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Path to save GraphML file (e.g., 'graph.graphml')",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id", "output_path"],
             },
@@ -1197,6 +1259,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "Node ID to explain (e.g., 'quantum_paper_n3')",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id", "node_id"],
             },
@@ -1257,6 +1320,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "description": "Target embedding dimension (default: 128)",
                         "default": 128,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["doc_id"],
             },
@@ -1305,8 +1369,344 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "items": {"type": "string"},
                         "description": "Paths to images (validated for security)",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["doc_id"],
+            },
+        ),
+        Tool(
+            name="ingest_multimodal",
+            description=(
+                "Production-grade multimodal ingestion for text, code, images, audio transcripts, "
+                "and document-with-images bundles."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Logical multimodal document identifier",
+                    },
+                    "text_content": {"type": "string", "description": "Optional text content"},
+                    "code_content": {"type": "string", "description": "Optional code content"},
+                    "code_language": {
+                        "type": "string",
+                        "description": "Optional code language label",
+                    },
+                    "image_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional local image paths validated for security",
+                    },
+                    "image_captions": {
+                        "type": "object",
+                        "description": "Optional mapping from submitted image path to caption text",
+                    },
+                    "image_ocr_text": {
+                        "type": "object",
+                        "description": "Optional mapping from submitted image path to OCR text",
+                    },
+                    "audio_items": {
+                        "type": "array",
+                        "description": "Optional transcript-backed audio payloads",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "path": {"type": "string"},
+                                "transcript": {"type": "string"},
+                            },
+                            "required": ["transcript"],
+                        },
+                    },
+                    "document_items": {
+                        "type": "array",
+                        "description": "Optional document-with-images bundles",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "text": {"type": "string"},
+                                "image_paths": {"type": "array", "items": {"type": "string"}},
+                                "image_captions": {"type": "object"},
+                                "image_ocr_text": {"type": "object"},
+                            },
+                        },
+                    },
+                    "video_items": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "Currently unsupported and rejected explicitly",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["doc_id"],
+            },
+        ),
+        Tool(
+            name="search_multimodal",
+            description="Search a production multimodal project using text, code, or image queries.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Logical multimodal document identifier",
+                    },
+                    "query": {"type": "string", "description": "Text or code query"},
+                    "query_type": {
+                        "type": "string",
+                        "enum": ["text", "code", "image"],
+                        "description": "Query modality",
+                        "default": "text",
+                    },
+                    "image_query_path": {
+                        "type": "string",
+                        "description": "Required when query_type=image",
+                    },
+                    "top_k": {"type": "integer", "description": "Result count", "default": 5},
+                    "filter_modality": {
+                        "type": "string",
+                        "enum": ["text", "code", "image"],
+                        "description": "Optional result modality filter",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["doc_id"],
+            },
+        ),
+        Tool(
+            name="create_handoff_bundle",
+            description=(
+                "Create a structured, auditable handoff bundle from a compressed document, "
+                "including distilled skeleton context and optional focused evidence."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {"type": "string", "description": "Visible document identifier"},
+                    "query": {
+                        "type": "string",
+                        "description": "Optional query to focus bundle distillation",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Focused search result count",
+                        "default": 5,
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional handoff metadata for ownership or routing",
+                    },
+                    "bundle_id": {
+                        "type": "string",
+                        "description": "Optional explicit bundle identifier",
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "description": "Optional explicit creation timestamp",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["file_id"],
+            },
+        ),
+        Tool(
+            name="list_handoff_bundles",
+            description="List structured handoff bundles visible to the current scope.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Optional visible document identifier filter",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="get_handoff_bundle",
+            description="Fetch one structured handoff bundle including its distilled artifacts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bundle_id": {"type": "string", "description": "Handoff bundle identifier"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["bundle_id"],
+            },
+        ),
+        Tool(
+            name="replay_handoff_bundle",
+            description="Replay a structured handoff bundle as text plus token-efficient artifact payloads.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bundle_id": {"type": "string", "description": "Handoff bundle identifier"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["bundle_id"],
+            },
+        ),
+        Tool(
+            name="get_provider_profile",
+            description="Get provider-aware pricing, cache telemetry fields, and prompt-shaping guidance for a model.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "description": "Model identifier"},
+                },
+                "required": ["model"],
+            },
+        ),
+        Tool(
+            name="estimate_model_cost",
+            description="Estimate token cost savings for a model using original and compressed token counts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "description": "Model identifier"},
+                    "original_tokens": {"type": "integer", "description": "Original token count"},
+                    "compressed_tokens": {
+                        "type": "integer",
+                        "description": "Compressed token count",
+                    },
+                },
+                "required": ["model", "original_tokens", "compressed_tokens"],
+            },
+        ),
+        Tool(
+            name="optimize_for_model",
+            description="Generate provider-aware cost, fidelity, and prompt-shaping recommendations for a target model.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "description": "Model identifier"},
+                    "text": {"type": "string", "description": "Representative source text"},
+                    "use_case": {
+                        "type": "string",
+                        "enum": [
+                            "quick_summary",
+                            "topic_overview",
+                            "entity_extraction",
+                            "question_answering",
+                            "detailed_analysis",
+                            "exact_quotes",
+                            "code_review",
+                            "fact_verification",
+                        ],
+                    },
+                    "num_nodes": {
+                        "type": "integer",
+                        "description": "Expected retrieval node count",
+                    },
+                    "token_budget": {
+                        "type": "integer",
+                        "description": "Optional explicit token budget",
+                    },
+                    "query_complexity": {
+                        "type": "string",
+                        "enum": ["simple", "medium", "complex"],
+                        "default": "medium",
+                    },
+                },
+                "required": ["model", "text", "use_case", "num_nodes"],
+            },
+        ),
+        Tool(
+            name="assess_cache_compatibility",
+            description="Assess whether a provider and harness combination exposes enough telemetry to validate prompt cache behavior reliably.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "description": "Model identifier"},
+                    "harness": {
+                        "type": "string",
+                        "enum": [
+                            "anthropic_api",
+                            "claude_code",
+                            "openai_api",
+                            "codex_cli",
+                            "gemini_api",
+                            "gemini_cli",
+                        ],
+                        "description": "Provider or CLI surface used to make the request",
+                    },
+                    "raw_usage_available": {
+                        "type": "boolean",
+                        "description": "Whether raw provider usage payloads are visible",
+                        "default": False,
+                    },
+                    "cli_stats_available": {
+                        "type": "boolean",
+                        "description": "Whether CLI-exported cache stats are available",
+                        "default": False,
+                    },
+                },
+                "required": ["model", "harness"],
+            },
+        ),
+        Tool(
+            name="capture_cache_telemetry",
+            description="Normalize provider-side prompt cache telemetry from a real model API response and warn on silent cache misses.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "description": "Model identifier"},
+                    "api_response": {
+                        "type": "object",
+                        "description": "Raw provider response object containing usage telemetry",
+                    },
+                    "file_id": {
+                        "type": "string",
+                        "description": "Optional document or prompt identifier tied to this request",
+                    },
+                    "prompt_id": {
+                        "type": "string",
+                        "description": "Optional prompt identifier returned by render_prompt_template",
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Optional session identifier for aggregating multi-turn cache metrics",
+                    },
+                    "actual_rendered_prefix": {
+                        "type": "string",
+                        "description": "Optional exact prefix string actually sent to the provider for cache miss diagnosis",
+                    },
+                    "expected_cache_hit": {
+                        "type": "boolean",
+                        "description": "Whether this request was expected to reuse a cached prompt prefix",
+                        "default": False,
+                    },
+                },
+                "required": ["model", "api_response"],
+            },
+        ),
+        Tool(
+            name="diagnose_cache_miss",
+            description=(
+                "Diagnose why an expected provider cache hit missed by comparing the recorded prompt "
+                "expectation with the actual rendered prefix that reached the provider."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "prompt_id": {
+                        "type": "string",
+                        "description": "Prompt identifier returned by render_prompt_template",
+                    },
+                    "model": {"type": "string", "description": "Model identifier"},
+                    "actual_rendered_prefix": {
+                        "type": "string",
+                        "description": "Exact rendered prompt prefix actually sent to the provider",
+                    },
+                    "api_response": {
+                        "type": "object",
+                        "description": "Raw provider response object containing usage telemetry",
+                    },
+                },
+                "required": ["prompt_id", "model", "actual_rendered_prefix", "api_response"],
             },
         ),
         # === ASG-SI TOOLS (4) - EXPERIMENTAL ===
@@ -1455,6 +1855,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "type": "string",
                         "description": "The updated document text",
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["file_id", "text"],
             },
@@ -1487,6 +1888,662 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {},
+            },
+        ),
+        Tool(
+            name="create_prompt_template",
+            description=(
+                "Create a managed prompt template with version 1 and optional deployment "
+                "label. Use this to make prompts first-class artifacts instead of hard-coded strings."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Unique prompt template name"},
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable prompt description",
+                    },
+                    "system_prompt": {
+                        "type": "string",
+                        "description": "Static system prompt section",
+                    },
+                    "user_prompt_template": {
+                        "type": "string",
+                        "description": "User prompt template with optional {variables}",
+                    },
+                    "variables": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Template variable names used by the prompt",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional structured prompt metadata",
+                    },
+                    "deployment_label": {
+                        "type": "string",
+                        "description": "Optional initial deployment label (for example: production, staging)",
+                    },
+                },
+                "required": ["name", "description", "system_prompt", "user_prompt_template"],
+            },
+        ),
+        Tool(
+            name="update_prompt_template",
+            description=(
+                "Create a new version of an existing prompt template. Supports prompt edits, "
+                "variable changes, metadata updates, and change notes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Existing prompt template name"},
+                    "description": {
+                        "type": "string",
+                        "description": "Optional updated template description",
+                    },
+                    "system_prompt": {
+                        "type": "string",
+                        "description": "Optional replacement system prompt",
+                    },
+                    "user_prompt_template": {
+                        "type": "string",
+                        "description": "Optional replacement user prompt template",
+                    },
+                    "variables": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional replacement variable list",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional metadata patch merged into the latest version metadata",
+                    },
+                    "change_note": {
+                        "type": "string",
+                        "description": "Optional summary of why this version changed",
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="list_prompt_templates",
+            description=(
+                "List managed prompt templates with their latest version and deployment labels. "
+                "Optionally include all versions."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_versions": {
+                        "type": "boolean",
+                        "description": "Include all versions for each template (default: false)",
+                        "default": False,
+                    }
+                },
+            },
+        ),
+        Tool(
+            name="get_prompt_template",
+            description=(
+                "Get a prompt template and resolve a specific version or deployment label "
+                "to the exact prompt content."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Prompt template name"},
+                    "version": {
+                        "type": "integer",
+                        "description": "Optional version number to resolve",
+                    },
+                    "deployment_label": {
+                        "type": "string",
+                        "description": "Optional deployment label to resolve (mutually exclusive with version)",
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="deploy_prompt_version",
+            description=(
+                "Assign or move a deployment label (production, staging, canary) to a specific "
+                "prompt template version."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Prompt template name"},
+                    "version": {"type": "integer", "description": "Version to deploy"},
+                    "deployment_label": {
+                        "type": "string",
+                        "description": "Deployment label to assign",
+                    },
+                    "allow_stable_prefix_change": {
+                        "type": "boolean",
+                        "description": "Acknowledge and allow deployment if the stable cacheable prefix will change",
+                        "default": False,
+                    },
+                },
+                "required": ["name", "version", "deployment_label"],
+            },
+        ),
+        Tool(
+            name="compare_prompt_versions",
+            description=(
+                "Compare two versions of the same prompt template and return changed fields "
+                "plus a unified diff."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Prompt template name"},
+                    "version_a": {"type": "integer", "description": "Base version"},
+                    "version_b": {"type": "integer", "description": "Comparison version"},
+                },
+                "required": ["name", "version_a", "version_b"],
+            },
+        ),
+        Tool(
+            name="render_prompt_template",
+            description=(
+                "Resolve and render a prompt template into cache-friendly ordered sections "
+                "for a provider call."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Prompt template name"},
+                    "variables": {
+                        "type": "object",
+                        "description": "Template variables used to render the user prompt",
+                    },
+                    "version": {
+                        "type": "integer",
+                        "description": "Optional version number to resolve",
+                    },
+                    "deployment_label": {
+                        "type": "string",
+                        "description": "Optional deployment label to resolve",
+                    },
+                    "tool_definitions": {
+                        "type": "string",
+                        "description": "Optional serialized tool definitions to pin in the stable prefix",
+                    },
+                    "rag_context": {
+                        "type": "string",
+                        "description": "Optional static retrieved context to place before volatile sections",
+                    },
+                    "few_shot_examples": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional few-shot examples",
+                    },
+                    "chat_history": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional prior conversation turns",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional dynamic metadata to place in the volatile tail",
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="list_prefix_collisions",
+            description=(
+                "List rendered prompt prefixes that collide across templates so shared "
+                "provider-cacheable prefixes are visible."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="audit_prompt_cacheability",
+            description=(
+                "Audit a composed prompt for cache-friendly section ordering and volatile "
+                "metadata that can break provider prefix caching."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sections": {
+                        "type": "array",
+                        "description": "Ordered prompt sections using canonical names",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "enum": [
+                                        "tool_definitions",
+                                        "system_instructions",
+                                        "rag_context",
+                                        "few_shot_examples",
+                                        "chat_history",
+                                        "metadata",
+                                        "user_query",
+                                    ],
+                                },
+                                "content": {"type": "string"},
+                            },
+                            "required": ["name", "content"],
+                        },
+                    }
+                },
+                "required": ["sections"],
+            },
+        ),
+        Tool(
+            name="add_memory",
+            description=(
+                "Store an explicit memory independently of document ingestion. "
+                "Useful for user preferences, decisions, gotchas, and persistent workflow hints."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Memory text to store"},
+                    "category": {
+                        "type": "string",
+                        "description": "Optional explicit category override",
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Optional source tag such as manual, hook, or import",
+                    },
+                    "file_id": {
+                        "type": "string",
+                        "description": "Optional source file or document identifier",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional structured metadata for the memory record",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
+        Tool(
+            name="search_memory",
+            description=(
+                "Search explicit memories within the requested scope using lexical overlap "
+                "and similarity scoring."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Maximum results to return (default: 5)",
+                        "default": 5,
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="list_memories",
+            description=(
+                "List explicit memories in the requested scope. Supports optional category "
+                "filtering and result limits."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Optional maximum memories to return",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="delete_memory",
+            description="Delete a previously stored explicit memory by ID.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "memory_id": {"type": "string", "description": "Memory identifier"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["memory_id"],
+            },
+        ),
+        Tool(
+            name="summarize_user_memory",
+            description=(
+                "Summarize one user's explicit memories into preferences, topical signals, "
+                "and category breakdowns."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User identifier"},
+                    "workspace_id": SCOPE_PROPERTIES["workspace_id"],
+                    "agent_id": SCOPE_PROPERTIES["agent_id"],
+                    "session_id": SCOPE_PROPERTIES["session_id"],
+                },
+                "required": ["user_id"],
+            },
+        ),
+        Tool(
+            name="get_user_profile",
+            description=(
+                "Build a deterministic user profile from explicit stored memories within "
+                "the requested scope."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User identifier"},
+                    "workspace_id": SCOPE_PROPERTIES["workspace_id"],
+                    "agent_id": SCOPE_PROPERTIES["agent_id"],
+                    "session_id": SCOPE_PROPERTIES["session_id"],
+                },
+                "required": ["user_id"],
+            },
+        ),
+        Tool(
+            name="create_dataset",
+            description=(
+                "Create a reusable named benchmark/evaluation dataset from inline cases "
+                "or a JSON corpus fixture."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Dataset name"},
+                    "description": {"type": "string", "description": "Dataset description"},
+                    "cases": {
+                        "type": "array",
+                        "description": "Optional inline benchmark cases",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "case_id": {"type": "string"},
+                                "name": {"type": "string"},
+                                "text": {"type": "string"},
+                                "min_compression_ratio": {"type": "number"},
+                                "min_token_savings_pct": {"type": "number"},
+                                "query": {"type": "string"},
+                            },
+                            "required": [
+                                "case_id",
+                                "name",
+                                "text",
+                                "min_compression_ratio",
+                                "min_token_savings_pct",
+                            ],
+                        },
+                    },
+                    "source_path": {
+                        "type": "string",
+                        "description": "Optional benchmark corpus JSON path",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional structured dataset metadata",
+                    },
+                },
+                "required": ["name", "description"],
+            },
+        ),
+        Tool(
+            name="list_datasets",
+            description="List named datasets available for experiment runs.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="run_experiment",
+            description=(
+                "Run a tracked benchmark/evaluation experiment over a named dataset and "
+                "store benchmark, verifier, and reward outputs."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_name": {"type": "string", "description": "Dataset name"},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["baseline", "query_guided", "evidence_aware"],
+                        "description": "Benchmark mode to execute",
+                        "default": "baseline",
+                    },
+                    "case_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional subset of case IDs to run",
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Optional similarity threshold override",
+                        "default": 0.75,
+                    },
+                    "skeleton_ratio": {
+                        "type": "number",
+                        "description": "Optional skeleton ratio override",
+                        "default": 0.2,
+                    },
+                    "baseline_run_id": {
+                        "type": "string",
+                        "description": "Optional baseline run identifier",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional structured run metadata",
+                    },
+                },
+                "required": ["dataset_name"],
+            },
+        ),
+        Tool(
+            name="get_experiment_run",
+            description="Fetch a stored experiment run and its per-case evaluation details.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string", "description": "Experiment run identifier"}
+                },
+                "required": ["run_id"],
+            },
+        ),
+        Tool(
+            name="compare_experiment_runs",
+            description=(
+                "Compare two experiment runs and report deltas in pass counts, compression, "
+                "verification, and reward quality."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "run_id_a": {"type": "string", "description": "Base run identifier"},
+                    "run_id_b": {"type": "string", "description": "Comparison run identifier"},
+                },
+                "required": ["run_id_a", "run_id_b"],
+            },
+        ),
+        Tool(
+            name="list_connector_types",
+            description="List available managed connector types and their purposes.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="create_connector_feed",
+            description=(
+                "Create a managed connector feed definition for exported web, GitHub, S3, "
+                "or Slack payloads."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Connector feed name"},
+                    "connector_type": {
+                        "type": "string",
+                        "enum": ["web", "github", "s3", "slack_export"],
+                        "description": "Connector type",
+                    },
+                    "config": {
+                        "type": "object",
+                        "description": "Connector-specific feed configuration",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional feed metadata",
+                    },
+                },
+                "required": ["name", "connector_type", "config"],
+            },
+        ),
+        Tool(
+            name="list_connector_feeds",
+            description="List managed connector feeds and their last sync state.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="get_connector_feed",
+            description="Fetch one managed connector feed definition.",
+            inputSchema={
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "Connector feed name"}},
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="sync_connector_feed",
+            description=(
+                "Normalize and ingest a managed connector feed through the standard "
+                "compression pipeline."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Connector feed name"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="get_context_block",
+            description=(
+                "Build a lifecycle-aware context block with active facts, recent events, "
+                "and a cache-stable skeleton prefix."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {"type": "string", "description": "Document ID"},
+                    "query": {"type": "string", "description": "Optional query bias"},
+                    "as_of": {
+                        "type": "string",
+                        "description": "Optional ISO-8601 or unix timestamp reference time",
+                    },
+                    "max_facts": {
+                        "type": "integer",
+                        "description": "Maximum active facts to include",
+                        "default": 5,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum recent events to include",
+                        "default": 10,
+                    },
+                    "include_invalidated": {
+                        "type": "boolean",
+                        "description": "Include invalidated facts/events",
+                        "default": False,
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["file_id"],
+            },
+        ),
+        Tool(
+            name="search_timeline",
+            description="Search lifecycle events across ingests, reads, searches, and invalidations.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional timeline text filter"},
+                    "file_id": {"type": "string", "description": "Optional document ID filter"},
+                    "fact_id": {"type": "string", "description": "Optional exact fact ID filter"},
+                    "event_types": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional event type allowlist",
+                    },
+                    "since": {"type": "string", "description": "Optional lower time bound"},
+                    "until": {"type": "string", "description": "Optional upper time bound"},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum events to return",
+                        "default": 25,
+                    },
+                    "include_invalidated": {
+                        "type": "boolean",
+                        "description": "Include invalidation and supersession events",
+                        "default": True,
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="list_fact_history",
+            description="List temporal fact versions for a document or exact fact identifier.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_id": {"type": "string", "description": "Optional document ID filter"},
+                    "fact_id": {"type": "string", "description": "Optional exact fact ID filter"},
+                    "as_of": {
+                        "type": "string",
+                        "description": "Optional reference time for version visibility",
+                    },
+                    "include_invalidated": {
+                        "type": "boolean",
+                        "description": "Include invalidated versions",
+                        "default": True,
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="invalidate_fact",
+            description="Invalidate a fact so temporal retrieval excludes it by default.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "fact_id": {"type": "string", "description": "Exact fact ID"},
+                    "reason": {
+                        "type": "string",
+                        "description": "Human-readable invalidation reason",
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "Optional ISO-8601 or unix timestamp",
+                    },
+                },
+                "required": ["fact_id", "reason"],
             },
         ),
         Tool(
@@ -1525,7 +2582,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "properties": {
                     "doc_id": {"type": "string", "description": "Document ID to prune"},
                     "query": {"type": "string", "description": "Query to score relevance against"},
-                    "keep_ratio": {"type": "number", "description": "Fraction of nodes to keep (0.0-1.0)", "default": 0.5},
+                    "keep_ratio": {
+                        "type": "number",
+                        "description": "Fraction of nodes to keep (0.0-1.0)",
+                        "default": 0.5,
+                    },
                 },
                 "required": ["doc_id", "query"],
             },
@@ -1553,7 +2614,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "max_age_hours": {"type": "number", "description": "Max hours since last access", "default": 1.0},
+                    "max_age_hours": {
+                        "type": "number",
+                        "description": "Max hours since last access",
+                        "default": 1.0,
+                    },
                 },
             },
         ),
@@ -1588,9 +2653,19 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "doc_id": {"type": "string", "description": "Document ID (optional if text provided)"},
-                    "text": {"type": "string", "description": "Text to compress (optional if doc_id provided)"},
-                    "target_ratio": {"type": "number", "description": "Target compression ratio", "default": 0.5},
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Document ID (optional if text provided)",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to compress (optional if doc_id provided)",
+                    },
+                    "target_ratio": {
+                        "type": "number",
+                        "description": "Target compression ratio",
+                        "default": 0.5,
+                    },
                     "preserve_keywords": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -1700,6 +2775,18 @@ async def route_tool_call(
         "scar_compress": exp.handle_scar_compress,
         "scar_get_stats": exp.handle_scar_get_stats,
         "multimodal_ingest": exp.handle_multimodal_ingest,
+        "ingest_multimodal": mmh.handle_ingest_multimodal,
+        "search_multimodal": mmh.handle_search_multimodal,
+        "create_handoff_bundle": bh.handle_create_handoff_bundle,
+        "list_handoff_bundles": bh.handle_list_handoff_bundles,
+        "get_handoff_bundle": bh.handle_get_handoff_bundle,
+        "replay_handoff_bundle": bh.handle_replay_handoff_bundle,
+        "get_provider_profile": moh.handle_get_provider_profile,
+        "estimate_model_cost": moh.handle_estimate_model_cost,
+        "optimize_for_model": moh.handle_optimize_for_model,
+        "assess_cache_compatibility": moh.handle_assess_cache_compatibility,
+        "capture_cache_telemetry": moh.handle_capture_cache_telemetry,
+        "diagnose_cache_miss": moh.handle_diagnose_cache_miss,
         # ASG-SI (4 tools) - Experimental self-improvement framework
         "verify_compression": exp.handle_verify_compression,
         "calculate_reward": exp.handle_calculate_reward,
@@ -1709,6 +2796,35 @@ async def route_tool_call(
         "diff_reingest": ch.handle_diff_reingest,
         "find_duplicates": ch.handle_find_duplicates,
         "get_compression_presets": ch.handle_get_presets,
+        "create_prompt_template": ph.handle_create_prompt_template,
+        "update_prompt_template": ph.handle_update_prompt_template,
+        "list_prompt_templates": ph.handle_list_prompt_templates,
+        "get_prompt_template": ph.handle_get_prompt_template,
+        "deploy_prompt_version": ph.handle_deploy_prompt_version,
+        "compare_prompt_versions": ph.handle_compare_prompt_versions,
+        "render_prompt_template": ph.handle_render_prompt_template,
+        "list_prefix_collisions": ph.handle_list_prefix_collisions,
+        "audit_prompt_cacheability": ph.handle_audit_prompt_cacheability,
+        "add_memory": mh.handle_add_memory,
+        "search_memory": mh.handle_search_memory,
+        "list_memories": mh.handle_list_memories,
+        "delete_memory": mh.handle_delete_memory,
+        "summarize_user_memory": mh.handle_summarize_user_memory,
+        "get_user_profile": mh.handle_get_user_profile,
+        "create_dataset": eh.handle_create_dataset,
+        "list_datasets": eh.handle_list_datasets,
+        "run_experiment": eh.handle_run_experiment,
+        "get_experiment_run": eh.handle_get_experiment_run,
+        "compare_experiment_runs": eh.handle_compare_experiment_runs,
+        "list_connector_types": coh.handle_list_connector_types,
+        "create_connector_feed": coh.handle_create_connector_feed,
+        "list_connector_feeds": coh.handle_list_connector_feeds,
+        "get_connector_feed": coh.handle_get_connector_feed,
+        "sync_connector_feed": coh.handle_sync_connector_feed,
+        "get_context_block": th.handle_get_context_block,
+        "search_timeline": th.handle_search_timeline,
+        "list_fact_history": th.handle_list_fact_history,
+        "invalidate_fact": th.handle_invalidate_fact,
         "check_context_budget": ch.handle_check_context_budget,
         # Phase 5: Research-based features (2025 papers)
         "prune_by_relevance": ch.handle_prune_by_relevance,
@@ -1739,13 +2855,18 @@ async def route_tool_call(
 
     # Pre-execute input validation
     from ..validation_hooks import validate_tool_input
+
     validation_errors = validate_tool_input(name, args)
     if validation_errors:
         import json
-        return json.dumps({
-            "error": "Input validation failed",
-            "validation_errors": validation_errors,
-        }, indent=2)
+
+        return json.dumps(
+            {
+                "error": "Input validation failed",
+                "validation_errors": validation_errors,
+            },
+            indent=2,
+        )
 
     # Route to handler (async)
     handler = router[name]

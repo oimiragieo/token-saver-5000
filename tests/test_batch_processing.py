@@ -461,33 +461,25 @@ class TestPerformanceCharacteristics:
 
     @pytest.mark.asyncio
     async def test_batch_faster_than_sequential(self, compressor):
-        """Test that batch processing is faster than sequential."""
+        """Test that batch processing overlaps work rather than fully serializing."""
         import time
 
         documents = [
             BatchDocument(f"doc_{i}", f"Performance test document {i}.", {}) for i in range(10)
         ]
 
-        # Batch processing (max_concurrent=4)
         manager_batch = BatchCompressionManager(compressor, max_concurrent=4)
         start_batch = time.time()
-        await manager_batch.compress_batch(documents)
+        results = await manager_batch.compress_batch(documents)
         batch_time = time.time() - start_batch
+        total_reported_work = sum(result.processing_time for result in results)
 
-        # Sequential processing (max_concurrent=1)
-        compressor_fresh = SemanticCompressor()
-        manager_seq = BatchCompressionManager(compressor_fresh, max_concurrent=1)
-        start_seq = time.time()
-        await manager_seq.compress_batch(documents)
-        seq_time = time.time() - start_seq
-
-        # Batch should be faster (allowing some variance)
-        # This may vary based on CPU/async scheduler, so use generous threshold
-        # Note: For small documents, async overhead may make batch slower
-        # We verify batch is not MORE than 2× slower (very generous for CI stability)
-        assert batch_time < seq_time * 2.0, (
-            f"Batch processing ({batch_time:.2f}s) significantly slower than "
-            f"sequential ({seq_time:.2f}s)"
+        assert all(result.success for result in results)
+        assert batch_time < 30.0
+        assert batch_time < total_reported_work, (
+            f"Batch wall-clock time ({batch_time:.2f}s) should be lower than "
+            f"the sum of per-document work ({total_reported_work:.2f}s) when "
+            f"bounded concurrency overlaps execution"
         )
 
     @pytest.mark.asyncio

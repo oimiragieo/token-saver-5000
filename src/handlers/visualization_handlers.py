@@ -9,18 +9,31 @@ Provides 4 MCP tools for visualizing and analyzing semantic compression graphs:
 """
 
 import logging
+import json
 from typing import Any, Dict
 
 from ..graph_visualizer import GraphVisualizer, VisualizationConfig
 from ..error_helpers import SmartError
+from ..identity_scope import compose_scoped_file_id
 
 logger = logging.getLogger(__name__)
 
 
-def handle_export_graph_json(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+def _scoped_file_id(args: Dict[str, Any]) -> str:
+    return compose_scoped_file_id(
+        args.get("file_id", ""),
+        workspace_id=args.get("workspace_id"),
+        user_id=args.get("user_id"),
+        agent_id=args.get("agent_id"),
+        session_id=args.get("session_id"),
+    )
+
+
+async def handle_export_graph_json(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle export_graph_json MCP tool (v0.6.0)."""
     # Extract arguments
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(args)
     max_nodes = args.get("max_nodes", 50)
     min_importance = args.get("min_importance", 0.0)
 
@@ -41,8 +54,10 @@ def handle_export_graph_json(context: Dict[str, Any], args: Dict[str, Any]) -> s
 
     # Export as JSON
     try:
-        json_output = visualizer.export_json(file_id, config)
-        return json_output
+        json_output = visualizer.export_json(scoped_file_id, config)
+        parsed = json.loads(json_output)
+        parsed["file_id"] = file_id
+        return json.dumps(parsed)
     except ValueError:
         raise SmartError.document_not_found(file_id)
     except Exception as e:
@@ -50,10 +65,11 @@ def handle_export_graph_json(context: Dict[str, Any], args: Dict[str, Any]) -> s
         raise
 
 
-def handle_visualize_graph_html(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+async def handle_visualize_graph_html(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle visualize_graph_html MCP tool (v0.6.0)."""
     # Extract arguments
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(args)
     output_path = args.get("output_path")
     max_nodes = args.get("max_nodes", 50)
 
@@ -77,7 +93,7 @@ def handle_visualize_graph_html(context: Dict[str, Any], args: Dict[str, Any]) -
 
     # Generate HTML visualization
     try:
-        result = visualizer.visualize_html(file_id, output_path, config)
+        result = visualizer.visualize_html(scoped_file_id, output_path, config)
         return result
     except ValueError as e:
         if "No graph found" in str(e):
@@ -92,10 +108,11 @@ def handle_visualize_graph_html(context: Dict[str, Any], args: Dict[str, Any]) -
         raise
 
 
-def handle_export_graph_graphml(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+async def handle_export_graph_graphml(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle export_graph_graphml MCP tool (v0.6.0)."""
     # Extract arguments
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(args)
     output_path = args.get("output_path")
 
     # Validate arguments
@@ -110,7 +127,7 @@ def handle_export_graph_graphml(context: Dict[str, Any], args: Dict[str, Any]) -
 
     # Export as GraphML
     try:
-        result = visualizer.export_graphml(file_id, output_path)
+        result = visualizer.export_graphml(scoped_file_id, output_path)
         return result
     except ValueError as e:
         if "No graph found" in str(e):
@@ -121,10 +138,11 @@ def handle_export_graph_graphml(context: Dict[str, Any], args: Dict[str, Any]) -
         raise
 
 
-def handle_explain_compression_decision(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+async def handle_explain_compression_decision(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle explain_compression_decision MCP tool (v0.6.0)."""
     # Extract arguments
     file_id = args.get("file_id")
+    scoped_file_id = _scoped_file_id(args)
     node_id = args.get("node_id")
 
     # Validate arguments
@@ -139,7 +157,7 @@ def handle_explain_compression_decision(context: Dict[str, Any], args: Dict[str,
 
     # Generate explanation
     try:
-        explanation = visualizer.explain_compression_decision(file_id, node_id)
+        explanation = visualizer.explain_compression_decision(scoped_file_id, node_id)
         return explanation
     except ValueError as e:
         error_msg = str(e)

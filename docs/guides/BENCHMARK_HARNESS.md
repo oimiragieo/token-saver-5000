@@ -53,6 +53,8 @@ The report includes:
 - benchmark mode (`baseline`, `query_guided`, `evidence_aware`)
 - CI guard thresholds from `artifacts/benchmarks/golden_thresholds.json`
 
+The harness also supports method-level comparison so you can contrast the existing semantic baseline with the new local extractive baseline when evaluating low-latency token trimming.
+
 ## TDD Workflow
 
 1. Add or adjust corpus case thresholds in `tests/fixtures/benchmark_corpus.json`.

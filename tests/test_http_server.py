@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from aiohttp import web
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 
 from src.http_server import (
     create_app,
@@ -45,7 +45,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         """Create test application."""
         return await create_app()
 
-    @unittest_run_loop
     async def test_liveness_endpoint_returns_healthy(self):
         """Test liveness endpoint always returns healthy status."""
         resp = await self.client.request("GET", "/health/liveness")
@@ -56,7 +55,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         assert data["status"] == "healthy"
         assert "timestamp" in data
 
-    @unittest_run_loop
     async def test_readiness_endpoint_healthy(self):
         """Test readiness endpoint when all components healthy."""
         # Default behavior should be healthy (or degraded if model not loaded)
@@ -69,7 +67,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         assert "timestamp" in data
         assert "components" in data
 
-    @unittest_run_loop
     async def test_readiness_endpoint_unhealthy_returns_503(self):
         """Test readiness endpoint returns 503 when unhealthy."""
         with patch("src.http_server.get_health") as mock_health:
@@ -92,7 +89,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
             data = await resp.json()
             assert data["status"] == "unhealthy"
 
-    @unittest_run_loop
     async def test_readiness_endpoint_degraded_returns_200(self):
         """Test readiness endpoint returns 200 when degraded."""
         with patch("src.http_server.get_health") as mock_health:
@@ -115,7 +111,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
             data = await resp.json()
             assert data["status"] == "degraded"
 
-    @unittest_run_loop
     async def test_diagnostics_endpoint_returns_detailed_metrics(self):
         """Test diagnostics endpoint returns detailed metrics."""
         resp = await self.client.request("GET", "/health/diagnostics")
@@ -128,7 +123,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         # Diagnostics includes components from readiness
         assert "components" in data or "performance" in data or "resources" in data
 
-    @unittest_run_loop
     async def test_metrics_endpoint_returns_prometheus_format(self):
         """Test metrics endpoint returns Prometheus text format."""
         resp = await self.client.request("GET", "/metrics")
@@ -141,7 +135,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         # Check for either actual metrics or unavailable message
         assert "compression_ratio" in text or "Prometheus metrics" in text or "unavailable" in text
 
-    @unittest_run_loop
     async def test_root_endpoint_returns_readiness(self):
         """Test root endpoint redirects to readiness check."""
         resp = await self.client.request("GET", "/")
@@ -152,7 +145,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         assert "status" in data
         assert "components" in data  # Should have readiness check structure
 
-    @unittest_run_loop
     async def test_liveness_response_format(self):
         """Test liveness response has correct JSON format."""
         resp = await self.client.request("GET", "/health/liveness")
@@ -165,7 +157,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         # Timestamp should be ISO format with Z suffix
         assert data["timestamp"].endswith("Z")
 
-    @unittest_run_loop
     async def test_readiness_response_format(self):
         """Test readiness response has correct JSON format."""
         resp = await self.client.request("GET", "/health/readiness")
@@ -184,7 +175,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
             assert "status" in component
             assert "message" in component
 
-    @unittest_run_loop
     async def test_diagnostics_response_format(self):
         """Test diagnostics response has correct JSON format."""
         resp = await self.client.request("GET", "/health/diagnostics")
@@ -194,7 +184,6 @@ class TestHTTPEndpoints(AioHTTPTestCase):
         assert "status" in data
         assert "timestamp" in data
 
-    @unittest_run_loop
     async def test_metrics_content_type_header(self):
         """Test metrics endpoint has correct content-type header."""
         resp = await self.client.request("GET", "/metrics")
@@ -213,7 +202,6 @@ class TestHTTPIntegration(AioHTTPTestCase):
         """Create test application."""
         return await create_app()
 
-    @unittest_run_loop
     async def test_integration_with_health_module(self):
         """Test that endpoints use real health.py module."""
         # This test verifies that the health module is actually called
@@ -229,7 +217,6 @@ class TestHTTPIntegration(AioHTTPTestCase):
             # At least some components should be present
             assert len(actual_components) > 0
 
-    @unittest_run_loop
     async def test_integration_with_metrics_module(self):
         """Test that metrics endpoint uses real metrics.py module."""
         resp = await self.client.request("GET", "/metrics")
@@ -245,7 +232,6 @@ class TestHTTPIntegration(AioHTTPTestCase):
             # Should have Prometheus format markers
             assert "#" in text or "compression_ratio" in text
 
-    @unittest_run_loop
     async def test_readiness_with_mocked_health_components(self):
         """Test readiness check with various component states."""
         with patch("src.http_server.get_health") as mock_health:
@@ -317,7 +303,6 @@ class TestHTTPConfiguration(AioHTTPTestCase):
         assert config["port"] > 0
         assert len(config["host"]) > 0
 
-    @unittest_run_loop
     async def test_create_app_configures_all_routes(self):
         """Test create_app configures all expected routes."""
         app = await create_app()
@@ -499,7 +484,6 @@ class TestHTTPEdgeCases(AioHTTPTestCase):
         """Create test application."""
         return await create_app()
 
-    @unittest_run_loop
     async def test_liveness_never_fails(self):
         """Test liveness endpoint never returns error status."""
         # Make multiple requests
@@ -509,14 +493,12 @@ class TestHTTPEdgeCases(AioHTTPTestCase):
             data = await resp.json()
             assert data["status"] == "healthy"
 
-    @unittest_run_loop
     async def test_endpoints_handle_head_requests(self):
         """Test endpoints handle HEAD requests (common for health checks)."""
         # aiohttp doesn't automatically handle HEAD, but GET should work
         resp = await self.client.request("GET", "/health/liveness")
         assert resp.status == 200
 
-    @unittest_run_loop
     async def test_readiness_components_field_always_present(self):
         """Test readiness response always includes components field."""
         resp = await self.client.request("GET", "/health/readiness")
@@ -526,7 +508,6 @@ class TestHTTPEdgeCases(AioHTTPTestCase):
         assert "components" in data
         assert isinstance(data["components"], dict)
 
-    @unittest_run_loop
     async def test_diagnostics_includes_readiness_data(self):
         """Test diagnostics includes all readiness check data."""
         diagnostics_resp = await self.client.request("GET", "/health/diagnostics")

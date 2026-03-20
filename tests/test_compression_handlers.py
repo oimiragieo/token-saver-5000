@@ -12,10 +12,11 @@ Testing philosophy (2025 best practices):
 Coverage target: 85%+ of compression_handlers.py
 """
 
-import pytest
 import json
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, call, patch
 from types import SimpleNamespace
+
+import pytest
 from src.handlers import compression_handlers as ch
 from src.semantic_compressor import FidelityLevel
 
@@ -245,17 +246,25 @@ class TestHandleReadSkeleton:
         assert data["skeleton_text"] == "Mock skeleton text"
         assert data["compression_ratio"] == 10.0
         assert data["selection_mode"] == "baseline"
+        assert data["pipeline"]["final_stage"] == "baseline"
+        assert data["pipeline"]["stages"][0]["name"] == "baseline"
 
     @pytest.mark.asyncio
     async def test_query_guided_mode_calls_query_skeleton(self, mock_validate_file):
         """Test query-guided selection mode passes query to compressor."""
         args = {"file_id": "doc1", "selection_mode": "query_guided", "query": "error correction"}
 
-        await ch.handle_read_skeleton(self.context, args)
+        result = await ch.handle_read_skeleton(self.context, args)
+        data = json.loads(result)
 
-        self.mock_compressor._generate_skeleton.assert_called_once_with(
-            "doc1", query="error correction"
-        )
+        assert self.mock_compressor._generate_skeleton.call_args_list == [
+            call("doc1"),
+            call("doc1", query="error correction"),
+        ]
+        assert [stage["name"] for stage in data["pipeline"]["stages"]] == [
+            "baseline",
+            "query_guided",
+        ]
 
     @pytest.mark.asyncio
     async def test_evidence_aware_mode_adds_evidence_payload(self, mock_validate_file):
@@ -287,6 +296,11 @@ class TestHandleReadSkeleton:
         )
         assert "evidence" in data
         assert data["evidence"]["sufficient"] is True
+        assert [stage["name"] for stage in data["pipeline"]["stages"]] == [
+            "baseline",
+            "query_guided",
+            "evidence_aware",
+        ]
 
     @pytest.mark.asyncio
     async def test_read_skeleton_rejects_invalid_selection_mode(self, mock_validate_file):

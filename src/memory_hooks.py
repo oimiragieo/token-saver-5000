@@ -6,7 +6,10 @@ to a memory index for cross-session knowledge retention.
 """
 
 import logging
-from typing import Any, Callable, Dict, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from .memory_api import MemoryAPI
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +17,10 @@ logger = logging.getLogger(__name__)
 class MemoryHookManager:
     """Manages event hooks and accumulated memory entries."""
 
-    def __init__(self):
+    def __init__(self, memory_api: Optional["MemoryAPI"] = None):
         self._hooks: Dict[str, List[Callable]] = {}
         self._memory_index: List[Dict[str, Any]] = []
+        self._memory_api = memory_api
 
     def register_hook(self, event: str, callback: Callable) -> None:
         """Register a callback for an event.
@@ -43,7 +47,17 @@ class MemoryHookManager:
                 logger.error(f"Hook error on '{event}': {e}")
 
     def add_memory_entry(
-        self, file_id: str, insight: str, category: str
+        self,
+        file_id: str,
+        insight: str,
+        category: str,
+        *,
+        source: str = "hook",
+        metadata: Optional[Dict[str, Any]] = None,
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> None:
         """Add a memory entry to the index.
 
@@ -52,11 +66,20 @@ class MemoryHookManager:
             insight: Distilled insight text
             category: Classification category
         """
-        self._memory_index.append({
-            "file_id": file_id,
-            "insight": insight,
-            "category": category,
-        })
+        entry = {"file_id": file_id, "insight": insight, "category": category}
+        self._memory_index.append(entry)
+        if self._memory_api is not None:
+            self._memory_api.add_memory(
+                text=insight,
+                category=category,
+                source=source,
+                file_id=file_id,
+                metadata=metadata or {},
+                workspace_id=workspace_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                session_id=session_id,
+            )
 
     def get_memory_index(self) -> List[Dict[str, Any]]:
         """Get all accumulated memory entries."""

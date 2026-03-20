@@ -1,0 +1,10 @@
+{
+  "file_id": "skill_profile_doc",
+  "mode": "baseline",
+  "original_tokens": 71,
+  "compressed_tokens": 4,
+  "compression_ratio": 17.75,
+  "token_savings_pct": 94.37,
+  "selected_segments": 1,
+  "total_segments": 6
+}

@@ -1,0 +1,6 @@
+{
+  "eval_id": 1,
+  "eval_name": "exact-query-guided-command",
+  "prompt": "You are evaluating a local Claude skill. Give a concise answer only. I need the exact command in this repo to compress tests\\fixtures\\skill_context_sample.txt for the question 'what are the retry rules?' using the best query-targeted mode, and say whether the result should be treated as safe to answer from. Do not modify files.",
+  "assertions": []
+}

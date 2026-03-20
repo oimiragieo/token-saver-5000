@@ -4,7 +4,7 @@
 - **Type**: Multi-platform agent configuration bundle
 - **Stack**: Claude Code, Cursor 2.0, Factory Droid with shared rule base
 - **Architecture**: Claude Projects as source of truth, mirrored role prompts for Cursor/Droid, technology-specific rule packs
-- **Primary Model**: Claude 3.5 Sonnet for reasoning + vision, fallback Sonnet API [1]
+- **Primary Model**: Claude Sonnet 4.6 for reasoning + vision, Claude Opus 4.6 for high-complexity tasks [1]
 
 This CLAUDE.md is authoritative. Subdirectories extend these rules within the Claude Projects hierarchy.
 
@@ -16,21 +16,21 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 ### Key Metrics (v0.10.0)
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Source Modules** | 50 Python files in src/ | ✅ All active |
-| **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 44 tools defined | ✅ All routed |
-| **Test Files** | 39 test modules | ✅ 1,171 tests |
+| **Source Modules** | 71 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
+| **Handler Modules** | 10 modules in src/handlers/ | ✅ All integrated |
+| **MCP Tools** | 49 tools defined | ✅ All routed |
+| **Test Files** | 78 test modules | ✅ 1,171+ tests |
 | **Test Coverage** | 73%+ overall | ✅ Exceeds 70% threshold |
 | **Documentation** | 49 markdown files | ⚠️ Minor updates needed |
 
 ### Version Alignment
 - **pyproject.toml**: v0.10.0 ✅ (updated from 0.7.0)
 - **README.md**: 44 MCP tools ✅ (updated from 35)
-- **CHANGELOG.md**: Latest dated release v0.9.0
+- **CHANGELOG.md**: Latest dated release v0.10.0 ✅ (added 2026-02-26)
 
 ### Architecture Summary
 ```
-src/                              # 50 modules, ~25,000 lines
+src/                              # 71 modules, ~25,000 lines
 ├── Core Compression (4 modules)  # semantic_compressor, code_compressor, adapter, multimodal
 ├── Embeddings (4 modules)        # 3-tier system: SBERT → ONNX → TF-IDF
 ├── Dialogue/Context (2 modules)  # AFM (dialogue), ACE (context)
@@ -40,27 +40,34 @@ src/                              # 50 modules, ~25,000 lines
 ├── Reliability (3 modules)       # timeout, circuit breaker, retry
 ├── Security (2 modules)          # path_validator, graceful_degradation
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
-└── handlers/ (11 modules)        # 44 MCP tool implementations
+├── semantic_modulator/           # subpackage (additional modules)
+└── handlers/ (10 modules)        # 49 MCP tool implementations
 ```
 
 ### Experimental Features Status
 | Feature | Module | MCP Exposed | Production Ready |
 |---------|--------|-------------|------------------|
 | TOON Serialization | toon_serializer.py | ✅ v0.10.0 | ⚠️ API may change |
-| SCAR Compression | scar_compressor.py | ✅ v0.10.0 | ❌ Untrained weights |
+| SCAR Compression | scar_compressor.py | ✅ v0.10.0 | ❌ Untrained weights — results are meaningless |
 | Multimodal | multimodal_compressor.py | ✅ v0.10.0 | ⚠️ Needs benchmarks |
 | Training Utils | training_utils.py | ❌ Not exposed | ❌ Reference only |
 
-### Aspirational Features (Not Yet Implemented)
-The following features are documented for future Claude Code integration but do **NOT** currently exist in this repository:
-- `.claude/hooks/` - Lifecycle hooks (PreToolUse, PostToolUse, etc.)
-- `.claude/commands/` - Custom slash commands
-- `.claude/subagents/` - Specialized agent definitions
-- `.claude/workflows/` - Workflow automation
-- `.claude/config.yaml`, `.claude/settings.json`, `.claude/.mcp.json` - Config files
-- `skills/`, `rules/` directories
-
-**Current Reality:** Only `.claude/CLAUDE.md` exists. MCP configuration is in user's Claude Desktop settings (`~/Library/Application Support/Claude/claude_desktop_config.json`).
+### Claude Code Infrastructure (Implemented)
+The following Claude Code integrations are active in this repository:
+- `.claude/hooks/` - Lifecycle hooks (PreToolUse, PostToolUse, UserPromptSubmit)
+- `.claude/commands/` - Custom slash commands (/review, /fix-issue)
+- `.claude/subagents/` - 10 specialized agent definitions (analyst, pm, architect, developer, qa, ux-expert, product-owner, scrum-master, bmad-orchestrator, bmad-master)
+- `.claude/agents/` - 9 alternate agent role definitions (legacy format, see subagents/ for authoritative routing)
+- `.claude/workflows/` - 2 workflow definitions (greenfield-fullstack, brownfield-fullstack) — **declarative only**: Claude reads these as orchestration prompts; there is no automatic workflow runtime. The BMAD orchestrator subagent coordinates execution step-by-step.
+- `.claude/config.yaml` - BMAD agent routing and model assignments
+- `.claude/settings.json` - Tool permissions and hook configuration
+- `.claude/.mcp.json` - 6 MCP server registrations (repo, artifacts, github, linear, slack, chrome-devtools)
+- `.claude/schemas/` - 10 JSON validation schemas
+- `.claude/templates/` - 9 reusable artifact templates
+- `.claude/instructions/` - 12 guidance documents
+- `.claude/context/` - Runtime artifacts, gate results, and session state
+- `.claude/tools/gates/` - Quality gate validation script (gate.mjs)
+- `skills/token-saver-context-compression/` - Python compression skill with 12 scripts
 
 ### Tech Debt Identified
 1. **Documentation Tool Counts**: Some docs still reference old counts (HOW_IT_WORKS.md, API_REFERENCE.md)
@@ -139,12 +146,12 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - **PostToolUse**: summarize changes, collect lint/test logs, publish Artifacts, and notify Factory Cloud agents when further work is required.
 
 ## Skills Inventory
-- `skills/repo-rag.yaml`: registers repo/knowledge-base retrieval MCP endpoints.
-- `skills/artifact-publisher.yaml`: pushes generated artifacts to the Claude Project activity feed.
-- `skills/context-bridge.yaml`: syncs metadata across Claude, Cursor, and Droid sessions.
+- `.claude/skills/repo-rag.yaml`: registers repo/knowledge-base retrieval MCP endpoints via filesystem MCP server.
+- `.claude/skills/artifact-publisher.yaml`: pushes generated artifacts to the Claude Project activity feed via filesystem MCP server.
+- `.claude/skills/context-bridge.yaml`: syncs metadata across Claude, Cursor, and Droid sessions (requires GITHUB_TOKEN, LINEAR_API_KEY, SLACK_BOT_TOKEN).
 
 ## Rule Packs
-- Framework-specific `.md` and `.yaml` files in `rules/` enforce language conventions, testing standards, and deployment steps.
+- Framework-specific `.md` and `.yaml` files in `rules-library/` enforce language conventions, testing standards, and deployment steps.
 - Rules share identifiers across platforms so Cursor `.cursorrules` and Droid guidelines match the Claude truth source.
 
 ## Common Bash Commands
@@ -578,14 +585,15 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 **Phase 3 Refactoring (Completed):**
 - ✅ Modular handler architecture with centralized routing
 - ✅ `src/server.py` reduced from 1,911 → 299 lines (84% reduction)
-- ✅ Created `src/handlers/` with 7 focused modules:
-  - `mcp_core.py` - Tool schemas and routing (29 tools)
+- ✅ Created `src/handlers/` with 7 focused modules (v0.4.3 baseline; 10 modules as of v0.10.0):
+  - `mcp_core.py` - Tool schemas and routing
   - `compression_handlers.py` - 9 document compression handlers
   - `afm_handlers.py` - 6 dialogue memory handlers
   - `ace_handlers.py` - 7 ACE Framework handlers (NEW in v0.4.0!)
   - `file_sync_handlers.py` - 4 file sync/version handlers
   - `detection_handlers.py` - 2 blind spot/hallucination handlers
-  - `resource_handlers.py` - 1 resource health handler
+  - `resource_handlers.py` - resource health + environment check handlers
+  - (+ help_handlers.py, visualization_handlers.py, experimental_handlers.py added in v0.9.0–v0.10.0)
 - ✅ `src/embeddings.py` - Singleton embedding manager (~70% memory reduction)
 - ✅ `src/constants.py` - Centralized configuration with WHY documentation
 - ✅ All 319 tests passing (v0.4.3 - Week 4 testing & refactoring)
@@ -646,7 +654,7 @@ rg -n "async def handle_" src/handlers/
 find tests -name "test_*.py" | head -20
 
 # Find all Python modules in src/
-find src -name "*.py" -not -path "*/handlers/*" | wc -l  # 39 core modules
+find src -name "*.py" -not -path "*/handlers/*" | wc -l  # ~61 core modules
 
 # Check handler module count
 find src/handlers -name "*.py" | wc -l  # 11 handler modules
@@ -692,34 +700,42 @@ MCP server configuration is NOT stored in the repository. Users configure in the
 
 ### Actual Project Structure
 ```
-.claude/
-└── CLAUDE.md           # Only file in .claude/ directory
+.claude/                    # Claude Code configuration
+├── CLAUDE.md               # Root instructions (this file)
+├── config.yaml             # BMAD agent routing (10 agents)
+├── settings.json           # Tool permissions and hooks
+├── settings.local.json     # Local permission overrides
+├── .mcp.json               # 6 MCP server registrations
+├── agents/                 # 9 alternate role definitions (legacy)
+├── subagents/              # 10 routable agent definitions (authoritative)
+├── commands/               # 2 slash commands (/review, /fix-issue)
+├── hooks/                  # 3 lifecycle hooks (pre/post tool use, prompt submit)
+├── instructions/           # 12 guidance documents
+├── schemas/                # 10 JSON validation schemas
+├── skills/                 # 3 YAML skills + compression skill reference
+├── templates/              # 9 artifact templates
+├── workflows/              # 2 workflow definitions
+├── context/                # Runtime artifacts, gates, session state
+├── tools/gates/            # Quality gate validation (gate.mjs)
+└── rules-library/          # 174 technology-specific rule sets
 
-.github/workflows/      # CI/CD pipelines (test, lint, build, deploy)
-config/                 # Example configurations
-deployment/kubernetes/  # Production K8s manifests
-docs/                   # 49 documentation files
-examples/               # 10 usage examples
-scripts/                # 8 utility scripts
-src/                    # 50 source modules + handlers
-tests/                  # 39 test files (1,171 tests)
+.github/workflows/          # CI/CD pipelines (test, lint, build, deploy)
+config/                     # Example configurations
+deployment/kubernetes/      # Production K8s manifests
+docs/                       # 49 documentation files
+examples/                   # 10 usage examples
+scripts/                    # 8 utility scripts
+skills/                     # Python compression skill (12 scripts)
+src/                        # 71 source modules + handlers
+tests/                      # 78 test files (1,171 tests)
 ```
-
-### Aspirational Features (Future Roadmap)
-The following are documented as reference for potential Claude Code integration:
-- `.claude/hooks/` - Not implemented (uses `.pre-commit-config.yaml` instead)
-- `.claude/commands/` - Not implemented (slash commands not yet created)
-- `.claude/subagents/` - Not implemented
-- `.claude/workflows/` - Not implemented
-- `skills/`, `rules/` - Not implemented
 
 ## Developer Environment Setup
 
 ### Prerequisites
-- **Python 3.10-3.12** (required for this MCP server project)
-  - **Note:** Python 3.13+ not recommended (ChromaDB incompatibility)
-  - ChromaDB requires numpy<2.0, but Python 3.13+ requires numpy>=2.0
-  - System automatically uses JSON fallback storage if ChromaDB unavailable
+- **Python 3.10–3.13** (required; `<3.14` upper bound in pyproject.toml)
+  - **Note:** ChromaDB is an optional extra (`pip install ".[chromadb]"`); base install uses JSON fallback storage
+  - If ChromaDB is installed, Python 3.13+ may have numpy compatibility issues (numpy<2.0 required by chromadb)
 - pip and virtualenv (for dependency management)
 - GitHub CLI (`gh`) installed for GitHub integration (optional)
 - Claude Code CLI installed and configured
@@ -795,7 +811,7 @@ The following are documented as reference for potential Claude Code integration:
   - Dangerous Git operations without approval
 
 ### MCP Server Access
-Token Saver 5000 provides 44 MCP tools via stdio transport. Configure in your Claude Desktop settings:
+Token Saver 5000 provides 49 MCP tools via stdio transport. Configure in your Claude Desktop settings:
 
 **Tool Categories:**
 - **Document Compression** (9 tools): ingest, read, search, modulate, batch operations

@@ -7,9 +7,6 @@ multimodal production, SCAR training pipeline, cross-document deduplication.
 TDD: Written BEFORE implementation (Red phase).
 """
 
-import json
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-
 import pytest
 
 
@@ -54,8 +51,9 @@ class TestCitationTags:
         compressor.ingest_file(text, "fmt_test")
         skeleton = compressor._generate_skeleton("fmt_test")
         import re
+
         # Should find at least one [rag:...] citation
-        citations = re.findall(r'\[rag:[^\]]+\]', skeleton.skeleton_text)
+        citations = re.findall(r"\[rag:[^\]]+\]", skeleton.skeleton_text)
         assert len(citations) > 0
 
 
@@ -84,7 +82,11 @@ class TestAutoRatioMCPExposure:
         ingest_tool = next(t for t in tools if t.name == "ingest_context")
         ratio_schema = ingest_tool.inputSchema["properties"]["skeleton_ratio"]
         # Should support both number and string "auto"
-        assert "auto" in str(ratio_schema).lower() or "oneOf" in ratio_schema or "description" in ratio_schema
+        assert (
+            "auto" in str(ratio_schema).lower()
+            or "oneOf" in ratio_schema
+            or "description" in ratio_schema
+        )
 
 
 # ============================================================================
@@ -127,10 +129,9 @@ class TestInputValidationHooks:
         """File IDs must be alphanumeric with underscores."""
         from src.validation_hooks import validate_tool_input
 
-        errors = validate_tool_input("ingest_context", {
-            "text": "valid text content here",
-            "file_id": "invalid file id!@#"
-        })
+        errors = validate_tool_input(
+            "ingest_context", {"text": "valid text content here", "file_id": "invalid file id!@#"}
+        )
         assert len(errors) > 0
         assert "file_id" in errors[0].lower()
 
@@ -338,7 +339,9 @@ class TestMemoryClassification:
         """Text about design choices should classify as 'decision'."""
         from src.memory_classifier import classify_insight
 
-        result = classify_insight("We decided to use PostgreSQL instead of MongoDB for ACID compliance")
+        result = classify_insight(
+            "We decided to use PostgreSQL instead of MongoDB for ACID compliance"
+        )
         assert result.category == "decision"
 
     def test_classify_pattern(self):
@@ -590,7 +593,7 @@ class TestDiffAwareReingestion:
         }
 
         # Re-ingest identical content
-        result = await compressor.diff_reingest_async("preserve_test", original)
+        await compressor.diff_reingest_async("preserve_test", original)
 
         # Embeddings should be identical (not recomputed)
         for nid, orig_emb in original_embeddings.items():
@@ -728,12 +731,10 @@ class TestCrossDocumentDedup:
 
         compressor = SemanticCompressor()
         compressor.ingest_file(
-            "The authentication module validates user credentials using JWT tokens. " * 10,
-            "doc_x"
+            "The authentication module validates user credentials using JWT tokens. " * 10, "doc_x"
         )
         compressor.ingest_file(
-            "User authentication is handled by verifying JWT-based credentials. " * 10,
-            "doc_y"
+            "User authentication is handled by verifying JWT-based credentials. " * 10, "doc_y"
         )
 
         dupes = compressor.find_duplicates(threshold=0.85)

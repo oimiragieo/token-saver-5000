@@ -6,7 +6,7 @@ embedding-based boundary detection that keeps semantically coherent
 units together.
 """
 
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 import numpy as np
 

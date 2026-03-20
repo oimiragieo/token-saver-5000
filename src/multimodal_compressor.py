@@ -135,7 +135,7 @@ class MultiModalCompressor:
             Image embedding or None if CLIP not available
         """
         if self.image_encoder is None:
-            print("Warning: Image encoder not available")
+            logger.warning("Image encoder not available")
             return None
 
         try:
@@ -147,13 +147,13 @@ class MultiModalCompressor:
             embedding = self.image_encoder.encode([image], show_progress_bar=True)[0]
             return embedding
         except Exception as e:
-            print(f"Error encoding image: {e}")
+            logger.warning("Error encoding image: %s", e)
             return None
 
     def ingest_mixed_content(
         self,
-        content_items: List[Dict],
-        project_id: str,
+        content_items: List[Dict] | str,
+        project_id: str | List[Dict],
         similarity_threshold: float = 0.70,
     ) -> Dict:
         """
@@ -177,7 +177,13 @@ class MultiModalCompressor:
                 {'type': 'image', 'content': b'...png bytes...', 'metadata': {'file': 'diagram.png'}},
             ]
         """
-        logger.info(f"Ingesting mixed content for project: {project_id}")
+        if isinstance(content_items, str) and isinstance(project_id, list):
+            content_items, project_id = project_id, content_items
+
+        if not isinstance(content_items, list) or not isinstance(project_id, str):
+            raise ValueError("ingest_mixed_content expects (content_items, project_id)")
+
+        logger.info("Ingesting mixed content for project: %s", project_id)
 
         nodes = []
         embeddings = []
@@ -197,12 +203,19 @@ class MultiModalCompressor:
                 embedding = self._encode_code(content)
             elif content_type == "image":
                 modality = ModalityType.IMAGE
+                if "content" not in item and item.get("path"):
+                    with open(item["path"], "rb") as image_file:
+                        content = image_file.read()
                 embedding = self._encode_image(content)
                 if embedding is None:
-                    print(f"  [WARN] Skipping image {i} (CLIP not available)")
+                    logger.warning(
+                        "Skipping image %s for project %s because image encoding failed",
+                        i,
+                        project_id,
+                    )
                     continue
             else:
-                print(f"  [WARN] Unknown type '{content_type}', treating as text")
+                logger.warning("Unknown content type '%s', treating as text", content_type)
                 modality = ModalityType.TEXT
                 embedding = self._encode_text(str(content))
 
@@ -218,13 +231,7 @@ class MultiModalCompressor:
             embeddings.append(embedding)
             self.nodes[node.node_id] = node
 
-        print(f"  Created {len(nodes)} nodes:")
-        print(f"    Text: {sum(1 for n in nodes if n.modality == ModalityType.TEXT)}")
-        print(f"    Code: {sum(1 for n in nodes if n.modality == ModalityType.CODE)}")
-        print(f"    Images: {sum(1 for n in nodes if n.modality == ModalityType.IMAGE)}")
-
         # Build cross-modal semantic graph
-        print("  Building cross-modal graph...")
         graph = nx.Graph()
 
         from sklearn.metrics.pairwise import cosine_similarity
@@ -248,7 +255,6 @@ class MultiModalCompressor:
                     )
 
         # Calculate importance
-        print("  Calculating importance...")
         if len(graph.nodes) > 0:
             pagerank = nx.pagerank(graph)
             for node_id, score in pagerank.items():
@@ -275,10 +281,12 @@ class MultiModalCompressor:
             "cross_modal_connections": edge_types,
         }
 
-        print("  [DONE] Created unified graph:")
-        print(f"     Nodes: {stats['total_nodes']}")
-        print(f"     Edges: {stats['graph_edges']}")
-        print(f"     Cross-modal connections: {edge_types}")
+        logger.info(
+            "Created multimodal graph for %s with %s nodes and %s edges",
+            project_id,
+            stats["total_nodes"],
+            stats["graph_edges"],
+        )
 
         return stats
 
@@ -457,76 +465,5 @@ class MultiModalCompressor:
         return "\n".join(lines)
 
 
-# Example usage
 if __name__ == "__main__":
-    print("=" * 70)
-    print("MULTI-MODAL SEMANTIC COMPRESSION DEMO")
-    print("=" * 70)
-
-    # Initialize
-    compressor = MultiModalCompressor(
-        use_clip_for_images=True,  # Try to use CLIP for images
-        use_codebert_for_code=False,  # Use general model for simplicity
-    )
-
-    # Sample multi-modal content
-    content = [
-        {
-            "type": "text",
-            "content": "This project implements a neural network for image classification using PyTorch.",
-            "metadata": {"file": "README.md"},
-        },
-        {
-            "type": "code",
-            "content": '''
-def train_model(model, data_loader, epochs=10):
-    """Train the neural network model"""
-    for epoch in range(epochs):
-        for batch in data_loader:
-            loss = model(batch)
-            loss.backward()
-    return model
-''',
-            "metadata": {"file": "train.py", "function": "train_model"},
-        },
-        {
-            "type": "text",
-            "content": "The model achieves 95% accuracy on the test set after 10 epochs of training.",
-            "metadata": {"file": "results.txt"},
-        },
-    ]
-
-    # Ingest
-    stats = compressor.ingest_mixed_content(content, "ml_project")
-
-    print("\n" + "=" * 70)
-    print("PROJECT SUMMARY")
-    print("=" * 70)
-    summary = compressor.generate_multimodal_summary("ml_project")
-    print(summary)
-
-    # Cross-modal search
-    print("\n" + "=" * 70)
-    print("CROSS-MODAL SEARCH")
-    print("=" * 70)
-
-    # Find code related to "training"
-    query = "training neural networks"
-    results = compressor.search_cross_modal(
-        query=query,
-        query_type="text",
-        project_id="ml_project",
-        filter_modality="code",  # Only return code
-        top_k=3,
-    )
-
-    print(f"\nQuery: '{query}'")
-    print("Filter: Show only CODE")
-    print("\nResults:")
-    for node_id, score, modality in results:
-        node = compressor.nodes[node_id]
-        preview = node.content[:60].replace("\n", " ")
-        print(f"  {node_id} ({modality}, score: {score:.3f}): {preview}...")
-
-    print("\n[DONE] Multi-modal compression demo complete!")
-    print("Note: For full image support, install CLIP: pip install clip-ViT-B-32")
+    raise SystemExit("Run multimodal examples from tests or notebooks instead.")

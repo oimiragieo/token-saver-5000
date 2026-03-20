@@ -29,6 +29,8 @@ import numpy as np
 import tempfile
 import shutil
 
+from .identity_scope import compose_scoped_file_id, display_file_id, has_scope, scope_matches
+
 # File format version for migration tracking
 PERSISTENCE_FORMAT_VERSION = 2  # v1 = pickle, v2 = JSON + numpy
 
@@ -113,7 +115,9 @@ class PersistenceManager:
         os.close(tmp_fd)
         try:
             np.savez(tmp_path, **arrays)
-            shutil.move(tmp_path + ".npz" if os.path.exists(tmp_path + ".npz") else tmp_path, filepath)
+            shutil.move(
+                tmp_path + ".npz" if os.path.exists(tmp_path + ".npz") else tmp_path, filepath
+            )
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
         except BaseException:
@@ -346,6 +350,10 @@ class PersistenceManager:
         chunks: Dict[str, Any],
         graph_data: Dict[str, Any],
         metadata: Dict[str, Any],
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> bool:
         """
         Save document to persistent storage.
@@ -359,13 +367,20 @@ class PersistenceManager:
         Returns:
             True if saved successfully
         """
+        internal_file_id = compose_scoped_file_id(
+            file_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
         try:
             if self.use_chromadb:
-                return self._save_document_chromadb(file_id, chunks, graph_data, metadata)
+                return self._save_document_chromadb(internal_file_id, chunks, graph_data, metadata)
             else:
-                return self._save_document_json(file_id, chunks, graph_data, metadata)
+                return self._save_document_json(internal_file_id, chunks, graph_data, metadata)
         except Exception as e:
-            logger.error(f"Failed to save document {file_id}: {e}", exc_info=True)
+            logger.error(f"Failed to save document {internal_file_id}: {e}", exc_info=True)
             return False
 
     def _save_document_chromadb(
@@ -472,7 +487,14 @@ class PersistenceManager:
             logger.error(f"JSON save failed for {file_id}: {e}")
             return False
 
-    def load_document(self, file_id: str) -> Optional[Dict[str, Any]]:
+    def load_document(
+        self,
+        file_id: str,
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Load document from persistent storage.
 
@@ -482,13 +504,20 @@ class PersistenceManager:
         Returns:
             Dictionary with chunks, graph_data, metadata, or None if not found
         """
+        internal_file_id = compose_scoped_file_id(
+            file_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
         try:
             if self.use_chromadb:
-                return self._load_document_chromadb(file_id)
+                return self._load_document_chromadb(internal_file_id)
             else:
-                return self._load_document_json(file_id)
+                return self._load_document_json(internal_file_id)
         except Exception as e:
-            logger.error(f"Failed to load document {file_id}: {e}", exc_info=True)
+            logger.error(f"Failed to load document {internal_file_id}: {e}", exc_info=True)
             return None
 
     def _load_document_chromadb(self, file_id: str) -> Optional[Dict[str, Any]]:
@@ -615,7 +644,13 @@ class PersistenceManager:
             logger.error(f"JSON load failed for {file_id}: {e}")
             return None
 
-    def list_documents(self) -> List[str]:
+    def list_documents(
+        self,
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> List[str]:
         """
         List all persisted document IDs.
 
@@ -623,9 +658,24 @@ class PersistenceManager:
             List of file_ids
         """
         if self.use_chromadb:
-            return self._list_documents_chromadb()
+            file_ids = self._list_documents_chromadb()
         else:
-            return self._list_documents_json()
+            file_ids = self._list_documents_json()
+
+        if not has_scope(workspace_id, user_id, agent_id, session_id):
+            return file_ids
+
+        return [
+            display_file_id(file_id)
+            for file_id in file_ids
+            if scope_matches(
+                file_id,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                session_id=session_id,
+            )
+        ]
 
     def _list_documents_chromadb(self) -> List[str]:
         """List documents from ChromaDB."""
@@ -670,7 +720,14 @@ class PersistenceManager:
             logger.error(f"Failed to list JSON documents: {e}")
             return []
 
-    def delete_document(self, file_id: str) -> bool:
+    def delete_document(
+        self,
+        file_id: str,
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> bool:
         """
         Delete document from persistent storage.
 
@@ -680,13 +737,20 @@ class PersistenceManager:
         Returns:
             True if deleted successfully
         """
+        internal_file_id = compose_scoped_file_id(
+            file_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
         try:
             if self.use_chromadb:
-                return self._delete_document_chromadb(file_id)
+                return self._delete_document_chromadb(internal_file_id)
             else:
-                return self._delete_document_json(file_id)
+                return self._delete_document_json(internal_file_id)
         except Exception as e:
-            logger.error(f"Failed to delete document {file_id}: {e}")
+            logger.error(f"Failed to delete document {internal_file_id}: {e}")
             return False
 
     def _delete_document_chromadb(self, file_id: str) -> bool:

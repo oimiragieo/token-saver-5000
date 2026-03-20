@@ -11,6 +11,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from dataclasses import dataclass
 from typing import List
+from src.identity_scope import compose_scoped_file_id
 from src.handlers.detection_handlers import (
     handle_check_blind_spots,
     handle_detect_hallucination,
@@ -253,6 +254,37 @@ class TestHandleCheckBlindSpots:
             "Test response", "test_doc", []
         )
 
+    @pytest.mark.asyncio
+    async def test_check_blind_spots_scoped_file_id(self, mock_context, mock_rate_limiter):
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        mock_context["compressor"].graphs[scoped_file_id] = Mock()
+        report = MockBlindSpotReport(
+            response_analyzed="Scoped response",
+            total_blind_spots=0,
+            critical_blind_spots=0,
+            blind_spots=[],
+            recommendations=["[OK] Response appears complete"],
+            auto_inject=[],
+        )
+        mock_context["blind_spot_detector"].analyze_response.return_value = report
+        mock_context["blind_spot_detector"].format_report.return_value = (
+            "[OK] No blind spots detected"
+        )
+
+        await handle_check_blind_spots(
+            mock_context,
+            {
+                "ai_response": "Scoped response",
+                "file_id": "test_doc",
+                "workspace_id": "acme",
+                "retrieved_nodes": ["test_doc_n1"],
+            },
+        )
+
+        mock_context["blind_spot_detector"].analyze_response.assert_called_once_with(
+            "Scoped response", scoped_file_id, ["test_doc_n1"]
+        )
+
 
 # ============================================================================
 # Test handle_detect_hallucination Handler
@@ -404,6 +436,21 @@ class TestHandleDetectHallucination:
         assert result is not None
         assert isinstance(result, str)
         assert len(result) > 0
+
+    @pytest.mark.asyncio
+    async def test_detect_hallucination_scoped_file_id(self, mock_context, mock_rate_limiter):
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        mock_context["compressor"].graphs[scoped_file_id] = Mock()
+        mock_context["halo_detector"].detect_hallucination.return_value = (False, [])
+
+        await handle_detect_hallucination(
+            mock_context,
+            {"ai_response": "Scoped response", "file_id": "test_doc", "workspace_id": "acme"},
+        )
+
+        mock_context["halo_detector"].detect_hallucination.assert_called_once_with(
+            "Scoped response", scoped_file_id
+        )
 
 
 # ============================================================================

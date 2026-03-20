@@ -12,7 +12,7 @@ TypedDict Benefits:
 """
 
 from typing import TypedDict, Callable, Any, TYPE_CHECKING
-from typing_extensions import ReadOnly  # For read-only fields (Python 3.13+)
+from typing_extensions import NotRequired, ReadOnly  # For read-only fields (Python 3.13+)
 
 # Import types for type annotations
 from src.semantic_compressor import SemanticCompressor
@@ -28,6 +28,8 @@ from src.path_validator import PathValidator
 
 # Avoid circular import: server.py imports HandlerContext from this module
 if TYPE_CHECKING:
+    from src.memory_api import MemoryAPI
+    from src.prompt_registry import PromptRegistry
     from src.server import ACEContextManager
 
 
@@ -105,6 +107,8 @@ class HandlerContext(TypedDict, total=True):
     validate_node_ids: ReadOnly[Callable[[list[str]], None]]
     validate_token_count: ReadOnly[Callable[[int, str], None]]
     save_file_sync_metadata: ReadOnly[Callable[[str, str | None], None]]
+    memory_api: NotRequired[ReadOnly["MemoryAPI"]]
+    prompt_registry: NotRequired[ReadOnly["PromptRegistry"]]
 
 
 class ToolArguments(TypedDict, total=False):
@@ -135,6 +139,10 @@ class ToolArguments(TypedDict, total=False):
     file_id: str
     file_path: str | None
     metadata: dict[str, Any] | None
+    workspace_id: str
+    user_id: str
+    agent_id: str
+    session_id: str
 
     # Node retrieval
     node_ids: list[str]

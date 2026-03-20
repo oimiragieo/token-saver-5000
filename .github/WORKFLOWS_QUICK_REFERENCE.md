@@ -4,8 +4,9 @@
 
 | Workflow | Trigger | Duration | Key Checks |
 |----------|---------|----------|-----------|
-| **test.yml** | Push, PR | 8-12 min | Tests (3 Python versions), Coverage (70%+), Setup |
-| **lint.yml** | Push, PR | 2-4 min | Black, Ruff, Type checking, Security, Complexity |
+| **ci.yml** | Push, PR, Manual | 10-20 min | Quality gate, package validation, compatibility, full pytest |
+| **test.yml** | Manual | <1 min | Deprecated compatibility notice |
+| **lint.yml** | Manual | <1 min | Deprecated compatibility notice |
 | **build.yml** | Push, Tag, Manual | 1-8 min | Docker build, Image scan (Trivy), SBOM generation |
 | **deploy.yml** | Tag, Manual | 3-10 min | Staging auto, Production approval, Health checks |
 
@@ -14,14 +15,14 @@
 ## When Each Workflow Runs
 
 ### On Every Push to `main` / `develop`
-1. test.yml (8-12 min) - Tests & coverage
-2. lint.yml (2-4 min) - Code quality
+1. ci.yml (10-20 min) - Canonical product validation
+2. Focused guard workflows - Path-scoped specialist checks
 3. build.yml (1-8 min) - Docker build & push
-4. GitHub shows all 3 as "passing" required checks
+4. GitHub should treat `ci.yml` as the primary required check
 
 ### On Pull Request
-1. test.yml - Tests & coverage required
-2. lint.yml - Code quality (informational)
+1. ci.yml - Required canonical validation
+2. Focused guard workflows - Optional/required based on changed paths
 3. build.yml skipped (PR don't push to registry)
 
 ### On Semantic Version Tag (`v0.6.1`)
@@ -134,9 +135,8 @@ git push origin v0.6.2
 ## GitHub Actions Artifacts & Reports
 
 ### Coverage Reports
-- **Where:** GitHub Actions > test.yml > Artifacts
-- **Files:** coverage-report-py3.10, py3.11, py3.12 (HTML)
-- **Access:** Download zip from artifacts section
+- **Where:** GitHub Actions > ci.yml
+- **Access:** Review logs and package-validation outputs from the canonical CI run
 
 ### Security Reports
 - **Where:** GitHub Security > Code scanning
@@ -149,9 +149,8 @@ git push origin v0.6.2
 - **Use:** Compliance, vulnerability tracking
 
 ### Complexity Reports
-- **Where:** GitHub Actions > lint.yml > Artifacts
-- **Files:** complexity-reports/
-- **Content:** McCabe complexity, maintainability index
+- **Where:** Legacy `lint.yml` is now manual-only and does not produce canonical reports
+- **Use instead:** Review `ci.yml` output plus any focused guard workflow artifacts
 
 ---
 
@@ -183,14 +182,14 @@ git push origin v0.6.2
 
 ### Developer
 1. Feature branch → push code
-2. GitHub Actions runs test.yml, lint.yml automatically
+2. GitHub Actions runs ci.yml automatically
 3. Fix any issues until all checks pass
 4. Create pull request
 5. Get code review
 6. Merge to main
 
 ### CI/CD Pipeline
-1. Push to main → test.yml, lint.yml, build.yml run
+1. Push to main → ci.yml, focused guards, and build.yml run
 2. Image built and pushed to ghcr.io
 3. Tag created (v0.6.2)
 4. Tag push → build.yml, deploy-staging, deploy-production
@@ -214,8 +213,9 @@ git push origin v0.6.2
 
 | Workflow | Time (First) | Time (Cached) | Bottleneck |
 |----------|--------------|---------------|-----------|
-| test.yml | 12 min | 8 min | Pip dependency install, pytest |
-| lint.yml | 3 min | 2 min | Tool install |
+| ci.yml | 20 min | 10 min | Full validation breadth |
+| test.yml | <1 min | <1 min | Deprecated notice only |
+| lint.yml | <1 min | <1 min | Deprecated notice only |
 | build.yml | 8 min | 2 min | Layer download/build |
 | deploy-staging | 5 min | 5 min | Pod startup |
 
@@ -277,8 +277,9 @@ git push origin v0.6.2
 
 ## Files Modified
 
-- `.github/workflows/test.yml` - Updated with pip caching, coverage enforcement
-- `.github/workflows/lint.yml` - New - Code quality & security
+- `.github/workflows/ci.yml` - Canonical repository validation
+- `.github/workflows/test.yml` - Deprecated manual compatibility shim
+- `.github/workflows/lint.yml` - Deprecated manual compatibility shim
 - `.github/workflows/build.yml` - New - Docker build & push
 - `.github/workflows/deploy.yml` - New - Kubernetes deployment
 - `.github/workflows/README.md` - New - Detailed documentation

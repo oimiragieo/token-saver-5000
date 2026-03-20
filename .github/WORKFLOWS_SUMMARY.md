@@ -2,23 +2,23 @@
 
 ## Project: Token Saver 5000 - Semantic Compression Engine
 **Version:** v0.7.0 with CI/CD Automation
-**Status:** Production Ready
+**Status:** Current documented workflow topology
 **Deployment Date:** 2025-11-27
 
 ---
 
 ## Executive Summary
 
-Successfully created 4 production-grade GitHub Actions workflows providing complete CI/CD automation for Token Saver 5000. The workflows implement:
+This summary documents the current GitHub Actions topology for Token Saver 5000, centered on `ci.yml` as the canonical validation workflow, focused guards for path-scoped protection, release workflows for build/deploy, and deprecated manual-only legacy shims retained for migration.
 
-- **Continuous Integration:** Automated testing across Python 3.10, 3.11, 3.12 with 70%+ coverage enforcement
-- **Code Quality:** Comprehensive linting, security scanning, and complexity analysis
+- **Canonical CI:** Automated validation across formatting, linting, packaging, compatibility smoke, and the full pytest suite
+- **Focused Guards:** Path-scoped specialist checks for skills, benchmarks, and MCP profile surfaces
 - **Container Builds:** Multi-stage Docker builds with caching, vulnerability scanning, and SBOM generation
 - **Continuous Deployment:** Zero-downtime Kubernetes deployments to staging (automatic) and production (approval-gated)
 
 **Key Metrics:**
 - Total Lines of Workflow Code: 952 lines (YAML)
-- Documentation Pages: 4 comprehensive guides
+- Documentation Pages: 5 workflow guides
 - Estimated Time Savings: 6-10 minutes per deployment (with caching)
 - Test Coverage Enforcement: 70% minimum threshold
 - Container Image Optimization: Multi-stage, <500MB target
@@ -27,58 +27,39 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 
 ## Workflows Created
 
-### 1. test.yml - Continuous Integration Testing
-**Purpose:** Validate code quality, run tests, and enforce coverage thresholds
+### 1. test.yml - Deprecated Compatibility Shim
+**Purpose:** Preserve the legacy workflow name while redirecting maintainers to `ci.yml`.
 
 | Metric | Value |
 |--------|-------|
-| Lines of Code | 139 |
-| Jobs | 2 (test matrix + summary) |
-| Matrix Configs | 3 (Python 3.10, 3.11, 3.12) |
-| Triggers | Push (main/develop/claude/**), PR (main/develop) |
-| Duration | 8-12 min (cold), 5-8 min (cached) |
-| Key Tools | pytest, coverage, black, ruff |
-| Caching | Pip dependencies (2-5 min savings) |
+| Lines of Code | 27 |
+| Jobs | 1 |
+| Triggers | Manual only (`workflow_dispatch`) |
+| Duration | <1 min |
+| Purpose | Deprecation notice + redirect to `ci.yml` |
 
 **Features:**
-- Parallel matrix testing (3 Python versions simultaneously)
-- Pip caching via `hashFiles('**/requirements.txt')`
-- Coverage enforcement (fail if <70%)
-- Setup verification script execution
-- Code formatting checks (Black)
-- Linting validation (Ruff)
-- Optional type checking (mypy)
-- HTML and XML coverage report generation
-- Codecov integration for trend tracking
-- GitHub step summary for PR visibility
+- Manual-only trigger
+- Deprecation notice in logs and step summary
+- Directs maintainers to the canonical `ci.yml` workflow
 
 ---
 
-### 2. lint.yml - Code Quality & Security Enforcement
-**Purpose:** Enforce code style, security standards, and maintainability
+### 2. lint.yml - Deprecated Compatibility Shim
+**Purpose:** Preserve the legacy workflow name while redirecting maintainers to `ci.yml`.
 
 | Metric | Value |
 |--------|-------|
-| Lines of Code | 170 |
-| Jobs | 1 (serial) |
-| Python Version | 3.12 (latest stable) |
-| Triggers | Push (main/develop/claude/**), PR (main/develop) |
-| Duration | 2-4 min |
-| Tools | Black, Ruff, mypy, Bandit, pydocstyle, isort, radon |
-| Concurrency | Cancels previous runs on new push |
+| Lines of Code | 27 |
+| Jobs | 1 |
+| Triggers | Manual only (`workflow_dispatch`) |
+| Duration | <1 min |
+| Purpose | Deprecation notice + redirect to `ci.yml` |
 
 **Features:**
-- Black formatting checks (strict PEP 8 compliance)
-- Ruff linting (10-100x faster than pylint)
-- Format verification via Ruff formatter
-- Static type checking (mypy, informational)
-- Security vulnerability scanning (Bandit)
-- Docstring coverage validation (pydocstyle)
-- Import sorting checks (isort)
-- Code complexity analysis (Radon McCabe, maintainability index)
-- JSON artifact outputs for trending
-- Non-blocking informational checks
-- Detailed GitHub step summary
+- Manual-only trigger
+- Deprecation notice in logs and step summary
+- Directs maintainers to the canonical `ci.yml` workflow
 
 ---
 
@@ -253,7 +234,7 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 - **Non-blocking Checks:** Informational checks don't block merges
 
 ### 6. Developer Experience
-- **Clear Documentation:** 4 comprehensive guides for different audiences
+- **Clear Documentation:** 5 workflow documents for different audiences
 - **Quick Reference:** Easy lookup for common tasks
 - **Setup Checklist:** Step-by-step implementation guide
 - **Architecture Diagrams:** Visual understanding of flows
@@ -324,8 +305,8 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 ### Scenario 1: Normal Development Flow
 1. Developer creates feature branch
 2. Commits code and pushes
-3. test.yml auto-runs (8-12 min)
-4. lint.yml auto-runs (2-4 min)
+3. ci.yml auto-runs (10-20 min)
+4. Focused guard workflows auto-run when matching paths change
 5. Developer creates PR
 6. Reviewers approve
 7. Merge to main
@@ -350,7 +331,7 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 1. Create hotfix branch from main
 2. Commit fix, run local tests
 3. Push to hotfix branch
-4. test.yml validates (8-12 min)
+4. ci.yml validates (10-20 min)
 5. Create PR for review
 6. Merge to main after approval
 7. create tag: `git tag -a v0.6.2-hotfix.1`
@@ -383,8 +364,9 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 ```
 .github/
 ├── workflows/
-│   ├── test.yml              (139 lines) - CI testing
-│   ├── lint.yml              (170 lines) - Code quality
+│   ├── ci.yml                (canonical validation)
+│   ├── test.yml              (deprecated manual shim)
+│   ├── lint.yml              (deprecated manual shim)
 │   ├── build.yml             (216 lines) - Docker build
 │   ├── deploy.yml            (427 lines) - K8s deployment
 │   └── README.md             (Detailed documentation)
@@ -417,12 +399,9 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 
 ## Implementation Checklist
 
-- [x] Create test.yml with Python matrix testing
-- [x] Add pip caching with hashFiles
-- [x] Implement coverage enforcement (70%+)
-- [x] Create lint.yml with Black + Ruff
-- [x] Add security scanning (Bandit)
-- [x] Add complexity analysis (Radon)
+- [x] Add canonical `ci.yml` broad validation workflow
+- [x] Convert `test.yml` into a manual-only deprecated compatibility shim
+- [x] Convert `lint.yml` into a manual-only deprecated compatibility shim
 - [x] Create build.yml with Docker BuildKit
 - [x] Implement multi-stage caching
 - [x] Add Trivy vulnerability scanning
@@ -435,7 +414,7 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 - [x] Add quick reference guide
 - [x] Create setup checklist
 - [x] Add architecture diagrams
-- [x] Validate all YAML syntax
+- [x] Validate workflow files and contracts
 - [x] Test workflows (dry-run ready)
 
 ---
@@ -489,7 +468,7 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 ## Testing & Validation
 
 ### Validation Performed
-- [x] YAML syntax validation (all 4 workflows)
+- [x] YAML syntax validation for canonical and release workflow surfaces
 - [x] Trigger event configuration verification
 - [x] Job dependency validation
 - [x] Action version compatibility check
@@ -497,16 +476,17 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 - [x] File permissions verification
 
 ### Ready for Testing
-- [x] test.yml can be triggered immediately
-- [x] lint.yml can be triggered immediately
+- [x] ci.yml can be triggered immediately
+- [x] test.yml can be triggered manually as a deprecated compatibility shim
+- [x] lint.yml can be triggered manually as a deprecated compatibility shim
 - [x] build.yml ready (requires main push)
 - [x] deploy.yml ready (requires kubeconfig secrets)
 
 ### Recommended First Test
-1. Push code to feature branch (triggers test.yml + lint.yml)
-2. Verify test matrix runs all 3 Python versions
-3. Check coverage report in artifacts
-4. Review Codecov upload
+1. Push code to feature branch (triggers ci.yml plus any matching focused guards)
+2. Verify the quality gate, compatibility matrix, package validation, and full validation jobs all pass
+3. Check package artifacts from `ci.yml`
+4. Confirm branch protections require `ci.yml`, not the legacy shims
 
 ---
 
@@ -515,7 +495,7 @@ Successfully created 4 production-grade GitHub Actions workflows providing compl
 After setup, measure:
 1. **Merge velocity:** PRs merged per day (expect 2-3x improvement)
 2. **Build times:** Typical time from push to production (expect 15-30 min)
-3. **Test coverage:** Maintain >70% (enforced by test.yml)
+3. **Test coverage:** Maintain >70% through the canonical CI path and local validation
 4. **Deployment success rate:** Target 95%+ (non-breaking releases)
 5. **Mean time to recovery (MTTR):** Rollback time (target <5 min)
 6. **Caching efficiency:** Hit rate (expect 70%+ cache hits)
@@ -525,8 +505,8 @@ After setup, measure:
 ## Sign-Off
 
 **Created:** November 27, 2025
-**Version:** 1.0 (Production Ready)
-**Status:** Ready for Implementation
+**Version:** 1.0
+**Status:** Aligned with current repository workflow topology
 **Validation:** All YAML syntaxes valid, all documentation complete
 
 **Next Step:** Follow WORKFLOWS_SETUP_CHECKLIST.md to enable in GitHub repository.
@@ -548,8 +528,9 @@ For questions or issues:
 
 | File | Type | Size | Purpose |
 |------|------|------|---------|
-| test.yml | Workflow | 139 lines | CI testing automation |
-| lint.yml | Workflow | 170 lines | Code quality enforcement |
+| ci.yml | Workflow | Canonical CI | Broad repository validation |
+| test.yml | Workflow | Deprecated manual shim | Legacy compatibility |
+| lint.yml | Workflow | Deprecated manual shim | Legacy compatibility |
 | build.yml | Workflow | 216 lines | Docker image building |
 | deploy.yml | Workflow | 427 lines | K8s deployment |
 | workflows/README.md | Documentation | 8KB | Detailed reference |

@@ -23,6 +23,7 @@ Supported Models:
 
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -62,55 +63,61 @@ class ONNXEmbeddingManager:
         self._session = None
         self._tokenizer = None
         self._initialized = False
+        self._init_lock = threading.Lock()
 
     def _initialize(self):
-        """Lazy initialization of ONNX session and tokenizer."""
+        """Lazy initialization of ONNX session and tokenizer (thread-safe)."""
         if self._initialized:
             return
 
-        try:
-            import onnxruntime as ort  # noqa: F401 - Check availability
-            from transformers import AutoTokenizer
-            from optimum.onnxruntime import ORTModelForFeatureExtraction
+        with self._init_lock:
+            # Double-checked locking pattern
+            if self._initialized:
+                return
 
-            logger.info(f"Initializing ONNX embedding manager: {self.model_name}")
+            try:
+                import onnxruntime as ort  # noqa: F401 - Check availability
+                from transformers import AutoTokenizer
+                from optimum.onnxruntime import ORTModelForFeatureExtraction
 
-            # Load tokenizer
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name, cache_dir=str(self.cache_dir)
-            )
+                logger.info(f"Initializing ONNX embedding manager: {self.model_name}")
 
-            # Load ONNX model (with optional quantization)
-            model_path = self.cache_dir / self.model_name.replace("/", "_")
-
-            if not model_path.exists():
-                logger.info("Downloading and optimizing ONNX model (first-time setup)...")
-                # Export model to ONNX format
-                ort_model = ORTModelForFeatureExtraction.from_pretrained(
-                    self.model_name, export=True, cache_dir=str(self.cache_dir)
+                # Load tokenizer
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name, cache_dir=str(self.cache_dir)
                 )
 
-                # Save to cache
-                ort_model.save_pretrained(str(model_path))
-                logger.info(f"ONNX model cached to {model_path}")
-            else:
-                # Load from cache
-                ort_model = ORTModelForFeatureExtraction.from_pretrained(str(model_path))
+                # Load ONNX model (with optional quantization)
+                model_path = self.cache_dir / self.model_name.replace("/", "_")
 
-            self._session = ort_model
+                if not model_path.exists():
+                    logger.info("Downloading and optimizing ONNX model (first-time setup)...")
+                    # Export model to ONNX format
+                    ort_model = ORTModelForFeatureExtraction.from_pretrained(
+                        self.model_name, export=True, cache_dir=str(self.cache_dir)
+                    )
 
-            self._initialized = True
-            logger.info("ONNX embedding manager initialized successfully")
+                    # Save to cache
+                    ort_model.save_pretrained(str(model_path))
+                    logger.info(f"ONNX model cached to {model_path}")
+                else:
+                    # Load from cache
+                    ort_model = ORTModelForFeatureExtraction.from_pretrained(str(model_path))
 
-        except ImportError as e:
-            logger.error(
-                f"ONNX dependencies not available: {e}. "
-                "Install with: pip install onnxruntime optimum"
-            )
-            raise
-        except Exception as e:
-            logger.error(f"Failed to initialize ONNX embedding manager: {e}")
-            raise
+                self._session = ort_model
+
+                self._initialized = True
+                logger.info("ONNX embedding manager initialized successfully")
+
+            except ImportError as e:
+                logger.error(
+                    f"ONNX dependencies not available: {e}. "
+                    "Install with: pip install onnxruntime optimum"
+                )
+                raise
+            except Exception as e:
+                logger.error(f"Failed to initialize ONNX embedding manager: {e}")
+                raise
 
     def encode(
         self,
@@ -234,6 +241,7 @@ class ONNXEmbeddingManager:
 
 # Singleton instance for global access
 _onnx_manager_instance: Optional[ONNXEmbeddingManager] = None
+_onnx_singleton_lock = threading.Lock()
 
 
 def get_onnx_embedding_manager(
@@ -242,7 +250,7 @@ def get_onnx_embedding_manager(
     quantized: bool = True,
 ) -> ONNXEmbeddingManager:
     """
-    Get or create singleton ONNX embedding manager.
+    Get or create singleton ONNX embedding manager (thread-safe).
 
     Args:
         model_name: Hugging Face model identifier
@@ -255,10 +263,12 @@ def get_onnx_embedding_manager(
     global _onnx_manager_instance
 
     if _onnx_manager_instance is None:
-        _onnx_manager_instance = ONNXEmbeddingManager(
-            model_name=model_name,
-            cache_dir=cache_dir,
-            quantized=quantized,
-        )
+        with _onnx_singleton_lock:
+            if _onnx_manager_instance is None:
+                _onnx_manager_instance = ONNXEmbeddingManager(
+                    model_name=model_name,
+                    cache_dir=cache_dir,
+                    quantized=quantized,
+                )
 
     return _onnx_manager_instance

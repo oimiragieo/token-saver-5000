@@ -348,6 +348,14 @@ class TestEdgeCasesAndBoundaries:
         # Should have loaded entry
         assert cache2.get("test_text") is not None
 
+    def test_destructor_swallows_shutdown_errors(self, temp_cache_file, sample_embeddings):
+        """Destructor should not surface persistence errors during shutdown."""
+        cache = LRUEmbeddingCache(max_entries=10, persist_path=temp_cache_file)
+        cache.put("test_text", sample_embeddings["text1"])
+
+        with patch.object(cache, "_save_to_disk", side_effect=NameError("open missing")):
+            cache.__del__()
+
 
 # ===========================
 # Singleton & Memory Tests

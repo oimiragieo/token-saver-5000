@@ -91,6 +91,75 @@ if cached == 0:
     print("WARNING: Prompt cache miss — check for dynamic prefix content")
 ```
 
+## Monitoring With Token Saver 5000
+
+The repo now includes prompt-cache observability tools so you can validate real provider behavior instead of inferring it from cost drift.
+
+If you are integrating through Gemini CLI, Claude Code, or Codex, also read `docs/guides/PROVIDER_CACHE_COMPATIBILITY.md` for provider-versus-harness guidance.
+
+Recommended workflow:
+
+1. Use `render_prompt_template` to generate a cache-friendly prompt and capture a `prompt_id`.
+2. Send the rendered prompt to your provider.
+3. Pass the raw provider response into `capture_cache_telemetry`.
+4. If reuse underperforms or misses unexpectedly, call `diagnose_cache_miss` with the exact `actual_rendered_prefix`.
+
+Key outputs to watch:
+
+- `telemetry.cache_hit_detected`: whether the provider reported any cache reuse
+- `telemetry.validation.prefix_integrity`: whether the actual stable prefix changed byte-for-byte
+- `telemetry.validation.diagnostic`: likely miss cause, including section interleaving and semantic-equivalence drift
+- `telemetry.validation.cache_creation_churn`: repeated cache creation on the same stable prefix
+- `telemetry.session_metrics`: multi-turn cache hit ratio and cached-token totals across a workflow session
+- `assess_cache_compatibility`: whether your Gemini CLI / Claude Code / Codex surface exposes enough telemetry to trust automated cache monitoring
+- `optimize_for_model.cache_thresholds`: whether your reusable prefix is large enough to qualify for provider-side cache accounting
+
+### Example: End-to-End Cache Validation
+
+```json
+{
+  "tool": "capture_cache_telemetry",
+  "args": {
+    "model": "gpt-5.4",
+    "prompt_id": "prompt-cache-abc123",
+    "session_id": "review-session-42",
+    "actual_rendered_prefix": "[system_instructions]\nBe accurate.\n[rag_context]\n...",
+    "api_response": {
+      "usage": {
+        "prompt_tokens": 500,
+        "completion_tokens": 100,
+        "prompt_tokens_details": {
+          "cached_tokens": 300
+        }
+      }
+    }
+  }
+}
+```
+
+If `cached_tokens` is unexpectedly low or zero, inspect:
+
+- `validation.warning`
+- `validation.diagnostic.probable_cause`
+- `validation.diagnostic.partial_reuse`
+- `validation.cache_creation_churn`
+
+### Provider Telemetry Notes
+
+- **Claude / Anthropic**: monitor both `cache_read_input_tokens` and `cache_creation_input_tokens`
+- **OpenAI**: monitor `usage.prompt_tokens_details.cached_tokens`
+- **OpenAI / Codex**: when supported by your integration, use a stable `prompt_cache_key` to improve routing stickiness for repeated workflows
+- **Gemini**: monitor `cachedContentTokenCount`; SDK-style payloads may expose the same data as `usage_metadata.cached_content_token_count`
+- **Gemini CLI**: exported stats may use camelCase counters like `inputTokens`, `outputTokens`, and `cachedTokens`
+
+## Additional Token-Saving Techniques Now Reflected In The Repo
+
+- **Extractive compression baseline**: prefer sentence selection over abstractive summarization when you need low-latency, high-fidelity trimming.
+- **Segment-level compression caching**: cache repeated chunk-compression results for shared or recurring context blocks.
+- **History compaction**: summarize older turns into a stable prefix while keeping the most recent turns verbatim at the tail.
+
+Repeated positive `cache_creation_input_tokens` with a supposedly stable prefix is a warning sign: the provider is rebuilding cache state instead of reusing it.
+
 ## Checklist
 
 - [ ] Tool definitions are at the very start of your prompt
@@ -99,4 +168,5 @@ if cached == 0:
 - [ ] No timestamps, UUIDs, or request IDs appear before your RAG context
 - [ ] User query is at the absolute end
 - [ ] You are monitoring provider cache hit metrics
+- [ ] You are monitoring provider cache creation metrics for churn, not just hit/miss
 - [ ] Your framework is not injecting hidden dynamic IDs

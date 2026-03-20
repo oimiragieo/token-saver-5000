@@ -5,6 +5,13 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Changed
+- Added a local extractive compression baseline plus reusable segment-level compression cache for lower-latency token trimming experiments.
+- Added stable-prefix-preserving history compaction utilities for conversation workflows.
+- Extended `optimize_for_model` and provider profiles with cache-threshold guidance and deterministic `prompt_cache_key` helper output.
+- Extended benchmark harness support with semantic-vs-extractive method comparison metrics.
+- Added provider+harness cache compatibility assessment via `assess_cache_compatibility`, including Gemini CLI stats visibility checks and Codex/OpenAI routing-stickiness guidance.
+- Extended model-aware optimization and provider profiles with OpenAI/Codex `prompt_cache_key` routing guidance and Codex-family aliases.
+- Extended cache telemetry summarization to understand Gemini CLI-style camelCase stats exports (`inputTokens`, `outputTokens`, `cachedTokens`).
 - Added portable skill external input adapters (`raw_json`, `langchain_json`, `llamaindex_json`, `auto`) across profile/compress/evidence/workflow scripts with JSON input support and adapter diagnostics in output payloads.
 - Added explainability payloads to portable skill segment outputs with score decomposition (`relevance`, `position`, `final`) and `selection_reason` (`forced_by_tag`, `local_rate_policy`, `top_rank`, `not_selected`).
 - Added structured segment controls to skill compression via `<llmlingua ...>` tags, including `compress=False` preserve blocks and per-block `rate` overrides that can supersede global skeleton ratios for tagged sections.
@@ -137,6 +144,38 @@ All notable changes to Token Saver 5000.
 - Added typed build-kwargs contract `BuildKwargsMap` and updated `build_kwargs_from_resolved_classes(...)` to return the typed mapping for stronger alias-to-constructor parity semantics.
 - Added `validate_build_kwargs_map(...)` and wired `build_default()` to fail fast when build-kwargs keys drift from the canonical constructor kwargs contract.
 - Added factory contract tests in `tests/test_server_factory_service.py` for build-kwargs schema declaration/alignment and early drift rejection before server build invocation.
+
+## [0.10.0] - 2026-02-26
+
+**Experimental Module Exposure + Production Hardening**
+
+### Added
+- TOON serialization MCP tools: `toon_encode`, `toon_decode` (~40% smaller than JSON)
+- SCAR compression MCP tools: `scar_compress`, `scar_get_stats` (experimental: untrained weights)
+- Multimodal ingest MCP tool: `multimodal_ingest` (text + code + images via Pillow)
+- `experimental_handlers.py`: 300+ lines, 30+ tests, all responses include `"experimental": true` flag
+- `help_handlers.py`: `tool_help` MCP tool for structured per-tool documentation
+- `visualization_handlers.py`: graph visualization MCP tools
+- MCP tool profile system: `MCP_TOOL_PROFILE` env var selects `full` (49), `core`, or `minimal` tool set
+- HTTP server (`src/http_server.py`) for Kubernetes health probes (`HTTP_ENABLED=true`)
+- Docker multi-stage build targeting <500MB image with non-root security
+- Kubernetes production manifests in `deployment/kubernetes/` (HPA, ServiceMonitor, PrometheusRule)
+- GitHub Actions CI/CD workflows (test matrix, lint, build, deploy)
+- `.env.example` documenting all 13 environment variables
+- `.claude/context/state.json` cross-session metadata schema (v1.0.0)
+- ChromaDB moved to optional extra (`pip install ".[chromadb]"`)
+
+### Changed
+- `pyproject.toml`: `requires-python` tightened to `>=3.10,<3.14`; added `structlog`, `orjson`, `msgpack` to core deps
+- Handler count: 7 → 10 modules in `src/handlers/`
+- Total MCP tools: 39 → 49
+- Test count: 1,063 → 1,171 (78 test modules)
+- Source module count: 50 → 71 (incl. `semantic_modulator` subpackage)
+
+### Fixed
+- `.claude/settings.json` rewritten to valid Claude Code hooks format (command-based)
+- `.claude/.mcp.json` phantom packages replaced with `@modelcontextprotocol/server-filesystem`
+- Hook scripts created as proper Python executables in `.claude/hooks/`
 
 ## [0.9.0] - 2025-11-29
 

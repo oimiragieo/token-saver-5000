@@ -18,6 +18,7 @@ import json
 import os
 import tempfile
 import pytest
+from src.identity_scope import compose_scoped_file_id
 from src.graph_visualizer import GraphVisualizer, VisualizationConfig
 from src.semantic_compressor import SemanticCompressor
 from src.handlers import visualization_handlers
@@ -354,7 +355,7 @@ class TestMCPToolIntegration:
         await compressor.ingest_file_async(sample_document, "test_doc")
 
         args = {"file_id": "test_doc"}
-        result = visualization_handlers.handle_export_graph_json(handler_context, args)
+        result = await visualization_handlers.handle_export_graph_json(handler_context, args)
 
         # Should return valid JSON
         data = json.loads(result)
@@ -374,9 +375,26 @@ class TestMCPToolIntegration:
         node_id = list(graph.nodes)[0]
 
         args = {"file_id": "test_doc", "node_id": node_id}
-        result = visualization_handlers.handle_explain_compression_decision(handler_context, args)
+        result = await visualization_handlers.handle_explain_compression_decision(
+            handler_context, args
+        )
 
         # Should return explanation
         assert "Node:" in result
         assert "Status:" in result
         assert "Reasons:" in result
+
+    @pytest.mark.asyncio
+    async def test_handle_export_graph_json_scoped_file_id(
+        self, compressor, handler_context, sample_document
+    ):
+        scoped_file_id = compose_scoped_file_id("test_doc", workspace_id="acme")
+        await compressor.ingest_file_async(sample_document, scoped_file_id)
+
+        result = await visualization_handlers.handle_export_graph_json(
+            handler_context,
+            {"file_id": "test_doc", "workspace_id": "acme"},
+        )
+
+        data = json.loads(result)
+        assert data["file_id"] == "test_doc"

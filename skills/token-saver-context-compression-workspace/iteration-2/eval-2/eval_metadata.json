@@ -1,0 +1,6 @@
+{
+  "eval_id": 2,
+  "eval_name": "exact-full-workflow-command",
+  "prompt": "You are evaluating a local Claude skill. Give a concise answer only. I need the exact command in this repo to run the full local workflow on tests\\fixtures\\skill_context_sample.txt and fail loudly if the compressed result is not safe enough to answer from. Explain what the loud failure means. Do not modify files.",
+  "assertions": []
+}

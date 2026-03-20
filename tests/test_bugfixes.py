@@ -12,7 +12,7 @@ Covers:
 """
 
 import json
-import os
+import warnings
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -24,6 +24,7 @@ from src.metrics import compute_cost_savings
 # =========================================================================
 # compute_adaptive_ratio validation
 # =========================================================================
+
 
 class TestComputeAdaptiveRatioValidation:
     def test_negative_tokens_raises(self):
@@ -50,6 +51,7 @@ class TestComputeAdaptiveRatioValidation:
 # compute_cost_savings negative savings (expansion case)
 # =========================================================================
 
+
 class TestComputeCostSavingsNegative:
     def test_expansion_shows_negative_savings(self):
         result = compute_cost_savings(100, 150)
@@ -72,6 +74,7 @@ class TestComputeCostSavingsNegative:
 # =========================================================================
 # find_duplicates null embedding guard
 # =========================================================================
+
 
 class TestFindDuplicatesNullGuard:
     def test_skips_none_embeddings(self):
@@ -112,6 +115,7 @@ class TestFindDuplicatesNullGuard:
 # diff_reingest null embedding guard
 # =========================================================================
 
+
 class TestDiffReingestNullGuard:
     def test_preserves_only_non_null_embeddings(self):
         compressor = SemanticCompressor.__new__(SemanticCompressor)
@@ -140,6 +144,7 @@ class TestDiffReingestNullGuard:
 # =========================================================================
 # handle_ingest div-by-zero and cost_savings protection
 # =========================================================================
+
 
 class TestHandleIngestProtection:
     @pytest.mark.asyncio
@@ -175,7 +180,10 @@ class TestHandleIngestProtection:
         context["resource_manager"].register_document_async = AsyncMock()
         context["persistence"].save_document = MagicMock(return_value=True)
 
-        args = {"text": "This is a sufficiently long test document for semantic analysis purposes.", "file_id": "test"}
+        args = {
+            "text": "This is a sufficiently long test document for semantic analysis purposes.",
+            "file_id": "test",
+        }
         result = await handle_ingest(context, args)
         parsed = json.loads(result)
         assert parsed["token_savings_percent"] == 0.0
@@ -213,21 +221,82 @@ class TestHandleIngestProtection:
         context["resource_manager"].register_document_async = AsyncMock()
         context["persistence"].save_document = MagicMock(return_value=True)
 
-        args = {"text": "This is a sufficiently long test document for semantic analysis purposes.", "file_id": "test"}
-        with patch("src.handlers.compression_handlers.compute_cost_savings", side_effect=Exception("boom")):
+        args = {
+            "text": "This is a sufficiently long test document for semantic analysis purposes.",
+            "file_id": "test",
+        }
+        with patch(
+            "src.handlers.compression_handlers.compute_cost_savings", side_effect=Exception("boom")
+        ):
             result = await handle_ingest(context, args)
         parsed = json.loads(result)
         assert parsed["cost_savings"] is None
         assert parsed["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_phase5_async_hooks_are_awaited_without_runtime_warnings(self):
+        from src.handlers.compression_handlers import handle_ingest
+
+        mock_skeleton = MagicMock()
+        mock_skeleton.total_tokens = 100
+        mock_skeleton.skeleton_tokens = 20
+        mock_skeleton.total_nodes = 5
+        mock_skeleton.compression_ratio = 5.0
+        mock_skeleton.skeleton_text = "compressed summary"
+
+        tracker = MagicMock(record_access=AsyncMock())
+        replay = MagicMock(record=AsyncMock())
+        compressor = AsyncMock()
+        compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
+        compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
+        compressor.estimate_compression = MagicMock(return_value=MagicMock(compression_ratio=5.0))
+        compressor.model = MagicMock(
+            encode=MagicMock(return_value=np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]))
+        )
+        compressor._access_tracker = tracker
+        compressor._compression_replay = replay
+        compressor.chunks = {}
+        compressor.graphs = {}
+
+        context = {
+            "compressor": compressor,
+            "persistence": MagicMock(),
+            "sync_manager": MagicMock(),
+            "version_manager": AsyncMock(),
+            "validate_file_id": MagicMock(),
+            "resource_manager": AsyncMock(),
+            "retrieval_history": {},
+        }
+        context["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        context["resource_manager"].register_document_async = AsyncMock()
+        context["persistence"].save_document = MagicMock(return_value=True)
+
+        args = {
+            "text": "This is a sufficiently long test document for semantic analysis purposes.",
+            "file_id": "test",
+        }
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = await handle_ingest(context, args)
+
+        parsed = json.loads(result)
+        assert parsed["status"] == "success"
+        tracker.record_access.assert_awaited_once_with("test")
+        replay.record.assert_awaited_once()
+        runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+        assert runtime_warnings == []
 
 
 # =========================================================================
 # Atomic persistence writes
 # =========================================================================
 
+
 class TestAtomicPersistence:
     def test_atomic_write_json(self, tmp_path):
         from src.persistence import PersistenceManager
+
         pm = PersistenceManager(str(tmp_path / "store"))
         target = tmp_path / "store" / "test.json"
         pm._atomic_write_json(target, {"key": "value"})
@@ -239,6 +308,7 @@ class TestAtomicPersistence:
 
     def test_atomic_write_json_cleanup_on_error(self, tmp_path):
         from src.persistence import PersistenceManager
+
         pm = PersistenceManager(str(tmp_path / "store"))
         # Use a non-existent directory to cause write failure
         target = tmp_path / "nonexistent_dir" / "deep" / "test.json"
@@ -248,6 +318,7 @@ class TestAtomicPersistence:
 
     def test_atomic_write_npz(self, tmp_path):
         from src.persistence import PersistenceManager
+
         pm = PersistenceManager(str(tmp_path / "store"))
         target = tmp_path / "store" / "test.npz"
         pm._atomic_write_npz(target, embeddings=np.array([1.0, 2.0]))
@@ -259,10 +330,12 @@ class TestAtomicPersistence:
 # New MCP tool handlers
 # =========================================================================
 
+
 class TestNewMCPHandlers:
     @pytest.mark.asyncio
     async def test_handle_diff_reingest_missing_args(self):
         from src.handlers.compression_handlers import handle_diff_reingest
+
         result = await handle_diff_reingest({}, {"file_id": "test"})
         parsed = json.loads(result)
         assert "error" in parsed
@@ -270,11 +343,12 @@ class TestNewMCPHandlers:
     @pytest.mark.asyncio
     async def test_handle_diff_reingest_not_found(self):
         from src.handlers.compression_handlers import handle_diff_reingest
+
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(side_effect=ValueError("not found"))
         result = await handle_diff_reingest(
             {"compressor": compressor, "persistence": MagicMock(), "version_manager": AsyncMock()},
-            {"file_id": "missing", "text": "hello"}
+            {"file_id": "missing", "text": "hello"},
         )
         parsed = json.loads(result)
         assert "error" in parsed
@@ -284,9 +358,9 @@ class TestNewMCPHandlers:
     async def test_handle_diff_reingest_success(self):
         from src.handlers.compression_handlers import handle_diff_reingest
         from src.semantic_compressor import DiffReingestionResult
+
         mock_result = DiffReingestionResult(
-            file_id="test", chunks_unchanged=3, chunks_updated=1,
-            chunks_added=1, chunks_removed=0
+            file_id="test", chunks_unchanged=3, chunks_updated=1, chunks_added=1, chunks_removed=0
         )
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
@@ -298,10 +372,7 @@ class TestNewMCPHandlers:
             "persistence": MagicMock(save_document=MagicMock(return_value=True)),
             "version_manager": AsyncMock(add_version_async=AsyncMock()),
         }
-        result = await handle_diff_reingest(
-            context,
-            {"file_id": "test", "text": "new content"}
-        )
+        result = await handle_diff_reingest(context, {"file_id": "test", "text": "new content"})
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["chunks_unchanged"] == 3
@@ -311,9 +382,9 @@ class TestNewMCPHandlers:
         """Verify diff_reingest calls persistence.save_document."""
         from src.handlers.compression_handlers import handle_diff_reingest
         from src.semantic_compressor import DiffReingestionResult
+
         mock_result = DiffReingestionResult(
-            file_id="doc1", chunks_unchanged=2, chunks_updated=1,
-            chunks_added=0, chunks_removed=0
+            file_id="doc1", chunks_unchanged=2, chunks_updated=1, chunks_added=0, chunks_removed=0
         )
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
@@ -340,9 +411,9 @@ class TestNewMCPHandlers:
         """Verify diff_reingest calls version_manager.add_version_async."""
         from src.handlers.compression_handlers import handle_diff_reingest
         from src.semantic_compressor import DiffReingestionResult
+
         mock_result = DiffReingestionResult(
-            file_id="doc1", chunks_unchanged=2, chunks_updated=1,
-            chunks_added=0, chunks_removed=0
+            file_id="doc1", chunks_unchanged=2, chunks_updated=1, chunks_added=0, chunks_removed=0
         )
         compressor = AsyncMock()
         compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
@@ -365,13 +436,50 @@ class TestNewMCPHandlers:
         assert call_kwargs.kwargs["checksum"] is not None
 
     @pytest.mark.asyncio
+    async def test_handle_diff_reingest_scoped_file_id(self):
+        """Verify diff_reingest uses tenant-scoped internal IDs."""
+        from src.handlers.compression_handlers import handle_diff_reingest
+        from src.identity_scope import compose_scoped_file_id
+        from src.semantic_compressor import DiffReingestionResult
+
+        scoped_file_id = compose_scoped_file_id("doc1", workspace_id="acme")
+        mock_result = DiffReingestionResult(
+            file_id=scoped_file_id,
+            chunks_unchanged=2,
+            chunks_updated=1,
+            chunks_added=0,
+            chunks_removed=0,
+        )
+        compressor = AsyncMock()
+        compressor.diff_reingest_async = AsyncMock(return_value=mock_result)
+        compressor.graphs = {scoped_file_id: MagicMock()}
+        compressor.chunks = {f"{scoped_file_id}_n0": MagicMock()}
+        compressor.file_metadata = {scoped_file_id: {}}
+        mock_version_mgr = AsyncMock(add_version_async=AsyncMock())
+        mock_persistence = MagicMock(save_document=MagicMock(return_value=True))
+        context = {
+            "compressor": compressor,
+            "persistence": mock_persistence,
+            "version_manager": mock_version_mgr,
+        }
+
+        result = await handle_diff_reingest(
+            context,
+            {"file_id": "doc1", "workspace_id": "acme", "text": "updated text"},
+        )
+        parsed = json.loads(result)
+        assert parsed["status"] == "success"
+        assert parsed["file_id"] == "doc1"
+        compressor.diff_reingest_async.assert_called_once_with(scoped_file_id, "updated text")
+        assert mock_version_mgr.add_version_async.call_args.kwargs["doc_id"] == scoped_file_id
+
+    @pytest.mark.asyncio
     async def test_handle_find_duplicates_success(self):
         from src.handlers.compression_handlers import handle_find_duplicates
+
         compressor = MagicMock()
         compressor.find_duplicates = MagicMock(return_value=[])
-        result = await handle_find_duplicates(
-            {"compressor": compressor}, {"threshold": 0.95}
-        )
+        result = await handle_find_duplicates({"compressor": compressor}, {"threshold": 0.95})
         parsed = json.loads(result)
         assert parsed["status"] == "success"
         assert parsed["duplicate_count"] == 0
@@ -379,17 +487,17 @@ class TestNewMCPHandlers:
     @pytest.mark.asyncio
     async def test_handle_find_duplicates_error(self):
         from src.handlers.compression_handlers import handle_find_duplicates
+
         compressor = MagicMock()
         compressor.find_duplicates = MagicMock(side_effect=RuntimeError("fail"))
-        result = await handle_find_duplicates(
-            {"compressor": compressor}, {}
-        )
+        result = await handle_find_duplicates({"compressor": compressor}, {})
         parsed = json.loads(result)
         assert "error" in parsed
 
     @pytest.mark.asyncio
     async def test_handle_get_presets(self):
         from src.handlers.compression_handlers import handle_get_presets
+
         result = await handle_get_presets({}, {})
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -403,9 +511,11 @@ class TestNewMCPHandlers:
 # MCP tool registration
 # =========================================================================
 
+
 class TestToolRegistration:
     def test_new_tools_in_schema(self):
         from src.handlers.mcp_core import setup_mcp_tools
+
         tools = setup_mcp_tools()
         tool_names = {t.name for t in tools}
         assert "diff_reingest" in tool_names
@@ -416,6 +526,7 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_router_dispatches_new_tools(self):
         from src.handlers.mcp_core import route_tool_call
+
         context = {"compressor": MagicMock()}
         context["compressor"].find_duplicates = MagicMock(return_value=[])
         result = await route_tool_call("find_duplicates", {}, context)
@@ -425,6 +536,7 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_router_dispatches_presets(self):
         from src.handlers.mcp_core import route_tool_call
+
         result = await route_tool_call("get_compression_presets", {}, {})
         parsed = json.loads(result)
         assert parsed["status"] == "success"
@@ -434,6 +546,7 @@ class TestToolRegistration:
 # =========================================================================
 # find_duplicates timeout
 # =========================================================================
+
 
 class TestFindDuplicatesTimeout:
     def test_timeout_returns_partial_results(self):
@@ -450,7 +563,6 @@ class TestFindDuplicatesTimeout:
         # With a tiny timeout, should hit timeout marker
         result = compressor.find_duplicates(threshold=0.99, timeout_seconds=0.0001)
         # Either we get timeout marker or it finished fast enough — both valid
-        has_timeout = any(d.get("warning") for d in result if isinstance(d, dict) and "warning" in d)
         # Just verify no crash and returns list
         assert isinstance(result, list)
 
@@ -471,37 +583,44 @@ class TestFindDuplicatesTimeout:
 # Validation hooks for destructive operations
 # =========================================================================
 
+
 class TestValidationHooksDestructive:
     def test_delete_document_requires_file_id(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("delete_document", {"file_id": ""})
         assert len(errors) == 1
         assert "file_id" in errors[0]
 
     def test_delete_document_valid(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("delete_document", {"file_id": "my_doc"})
         assert errors == []
 
     def test_batch_ingest_empty_list(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("batch_ingest", {"documents": []})
         assert len(errors) == 1
         assert "empty" in errors[0]
 
     def test_batch_ingest_too_many(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("batch_ingest", {"documents": [{}] * 101})
         assert len(errors) == 1
         assert "100" in errors[0]
 
     def test_batch_ingest_valid(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("batch_ingest", {"documents": [{"text": "a"}]})
         assert errors == []
 
     def test_unregistered_tool_passes(self):
         from src.validation_hooks import validate_tool_input
+
         errors = validate_tool_input("some_unknown_tool", {"anything": True})
         assert errors == []
 
@@ -509,6 +628,7 @@ class TestValidationHooksDestructive:
 # =========================================================================
 # MetricsCollector wired into handlers
 # =========================================================================
+
 
 class TestMetricsWiring:
     @pytest.mark.asyncio
@@ -537,7 +657,9 @@ class TestMetricsWiring:
                 register_document_async=AsyncMock(),
             ),
             "version_manager": AsyncMock(add_version_async=AsyncMock()),
-            "sync_manager": MagicMock(register_file=MagicMock(), export_metadata=MagicMock(return_value={})),
+            "sync_manager": MagicMock(
+                register_file=MagicMock(), export_metadata=MagicMock(return_value={})
+            ),
             "path_validator": MagicMock(),
             "retrieval_history": {},
         }
@@ -546,12 +668,17 @@ class TestMetricsWiring:
             mock_metrics = MagicMock()
             mock_get_metrics.return_value = mock_metrics
 
-            args = {"text": "This is a sufficiently long test document for semantic analysis purposes.", "file_id": "test"}
+            args = {
+                "text": "This is a sufficiently long test document for semantic analysis purposes.",
+                "file_id": "test",
+            }
             result = await handle_ingest(context, args)
             parsed = json.loads(result)
             assert parsed["status"] == "success"
 
             # Verify metrics were recorded
             mock_metrics.record_compression_ratio.assert_called_once()
-            mock_metrics.increment_documents_processed.assert_called_once_with("ingest", "BALANCED", "success")
+            mock_metrics.increment_documents_processed.assert_called_once_with(
+                "ingest", "BALANCED", "success"
+            )
             mock_metrics.set_active_documents.assert_called_once()

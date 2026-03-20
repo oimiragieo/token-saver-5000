@@ -4,9 +4,55 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+LEGACY_TEST_WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
+LEGACY_LINT_WORKFLOW = ROOT / ".github" / "workflows" / "lint.yml"
 SKILL_CI = ROOT / ".github" / "workflows" / "skill-ci.yml"
 BENCHMARK_GUARD = ROOT / ".github" / "workflows" / "benchmark-guard.yml"
 MCP_PROFILE_GUARD = ROOT / ".github" / "workflows" / "mcp-profile-guard.yml"
+
+
+def test_ci_workflow_exists_and_runs_canonical_validation():
+    assert CI_WORKFLOW.exists()
+    content = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "name: CI" in content
+    assert "workflow_dispatch:" in content
+    assert 'python-version: ["3.10", "3.11", "3.12"]' in content
+    assert "python -m black --check src tests scripts" in content
+    assert "python -m ruff check src tests scripts" in content
+    assert (
+        'pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_mcp_packaging.py' in content
+    )
+    assert "python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py" in content
+    assert "python -m build" in content
+    assert "python -m twine check dist/*" in content
+    assert "token-saver-install-mcp" in content
+    assert "--print-config" in content
+
+
+def test_legacy_test_workflow_is_manual_deprecated_shim():
+    assert LEGACY_TEST_WORKFLOW.exists()
+    content = LEGACY_TEST_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "name: Legacy Test (Deprecated)" in content
+    assert "workflow_dispatch:" in content
+    assert "pull_request:" not in content
+    assert "push:" not in content
+    assert "ci.yml" in content
+    assert "deprecated compatibility workflow" in content
+
+
+def test_legacy_lint_workflow_is_manual_deprecated_shim():
+    assert LEGACY_LINT_WORKFLOW.exists()
+    content = LEGACY_LINT_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "name: Legacy Lint (Deprecated)" in content
+    assert "workflow_dispatch:" in content
+    assert "pull_request:" not in content
+    assert "push:" not in content
+    assert "ci.yml" in content
+    assert "deprecated compatibility workflow" in content
 
 
 def test_skill_ci_workflow_exists():

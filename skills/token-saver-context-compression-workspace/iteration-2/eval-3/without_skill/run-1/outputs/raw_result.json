@@ -1,0 +1,46 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 12775,
+  "duration_api_ms": 11843,
+  "num_turns": 3,
+  "result": "I don't have access to local filesystem tools (Bash, Glob, Grep, Read, etc.) in this session \u00e2\u20ac\u201d only Hugging Face MCP tools, LSP, and image generation are available.\n\nI cannot inspect a local repo without filesystem access. Could you:\n\n1. **Tell me which repo** you're referring to (a Hugging Face repo ID, a GitHub URL, or a local path), and\n2. **Enable filesystem tools** (Bash/Read/Glob) so I can examine it?\n\nWithout being able to read the actual files, I'd just be guessing, which wouldn't give you the \"exact\" patterns you need.",
+  "stop_reason": "end_turn",
+  "session_id": "b295984f-234e-4cc2-9dd5-ac41aeb1525b",
+  "total_cost_usd": 0.02775225,
+  "usage": {
+    "input_tokens": 5,
+    "cache_creation_input_tokens": 773,
+    "cache_read_input_tokens": 26942,
+    "output_tokens": 377,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 773,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-opus-4-6[1m]": {
+      "inputTokens": 5,
+      "outputTokens": 377,
+      "cacheReadInputTokens": 26942,
+      "cacheCreationInputTokens": 773,
+      "webSearchRequests": 0,
+      "costUSD": 0.02775225,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 32000
+    }
+  },
+  "permission_denials": [],
+  "fast_mode_state": "off",
+  "uuid": "d05f041b-41c1-4f5c-b9e7-9f59d2b08898",
+  "_wall_seconds": 16.522
+}

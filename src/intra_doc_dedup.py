@@ -6,7 +6,7 @@ detection to find and collapse near-redundant passages WITHIN a single
 document, reducing token waste from repetitive content.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 import numpy as np
 
@@ -46,11 +46,13 @@ def find_intra_duplicates(
 
             sim = float(np.dot(emb_a, emb_b) / (norm_a * norm_b))
             if sim >= threshold:
-                duplicates.append({
-                    "node_a": nid_a,
-                    "node_b": nid_b,
-                    "similarity": round(sim, 4),
-                })
+                duplicates.append(
+                    {
+                        "node_a": nid_a,
+                        "node_b": nid_b,
+                        "similarity": round(sim, 4),
+                    }
+                )
 
     return duplicates
 

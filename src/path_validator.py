@@ -17,8 +17,10 @@ Usage:
     safe_path = validator.validate("../../etc/passwd")  # ValueError
 """
 
-import os
 import logging
+import os
+import re
+from urllib.parse import urlparse
 from typing import List, Optional
 
 logger = logging.getLogger("path_validator")
@@ -196,6 +198,33 @@ class PathValidator:
             # Re-sort by length (longest first)
             self.allowed_base_dirs.sort(key=len, reverse=True)
             logger.info(f"Added allowed directory: {abs_dir}")
+
+    def validate_web_url(self, url: str) -> str:
+        """Validate an HTTP(S) URL for connector ingestion."""
+        if not url or not isinstance(url, str):
+            raise ValueError("url cannot be empty or non-string")
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Web connector only supports absolute http/https URLs")
+        if parsed.username or parsed.password:
+            raise ValueError("Credentials in URLs are not allowed")
+        return url
+
+    def validate_github_repo(self, repo: str) -> str:
+        """Validate GitHub repo identifier format."""
+        if not repo or not isinstance(repo, str):
+            raise ValueError("repo cannot be empty or non-string")
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo.strip()):
+            raise ValueError("GitHub repo must use 'owner/repo' format")
+        return repo.strip()
+
+    def validate_s3_bucket(self, bucket: str) -> str:
+        """Validate S3 bucket naming used by connector feeds."""
+        if not bucket or not isinstance(bucket, str):
+            raise ValueError("bucket cannot be empty or non-string")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket.strip()):
+            raise ValueError("Invalid S3 bucket name")
+        return bucket.strip()
 
     def remove_allowed_directory(self, directory: str) -> None:
         """

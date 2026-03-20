@@ -1,0 +1,92 @@
+{
+  "file_id": "skill_context_doc",
+  "mode": "query_guided",
+  "query": "what are the retry rules?",
+  "original_tokens": 71,
+  "compressed_tokens": 58,
+  "compression_ratio": 1.224,
+  "token_savings_pct": 18.31,
+  "compressed_text": "System architecture notes:\nThe API gateway forwards requests to the auth service and billing service.\nThe auth service validates tokens, refreshes sessions, and enforces role checks.\nRetry behavior is controlled with exponential backoff and bounded retries.\nIf retries exceed thresholds, requests are routed to dead-letter handling.",
+  "segments": [
+    {
+      "segment_id": 0,
+      "score": 0.125,
+      "tokens": 4,
+      "text": "System architecture notes:",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0,
+        "position": 0.5,
+        "final": 0.125
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    },
+    {
+      "segment_id": 1,
+      "score": 0.1503,
+      "tokens": 13,
+      "text": "The API gateway forwards requests to the auth service and billing service.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0714,
+        "position": 0.3869,
+        "final": 0.1503
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    },
+    {
+      "segment_id": 2,
+      "score": 0.1333,
+      "tokens": 16,
+      "text": "The auth service validates tokens, refreshes sessions, and enforces role checks.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0667,
+        "position": 0.3333,
+        "final": 0.1333
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    },
+    {
+      "segment_id": 3,
+      "score": 0.1288,
+      "tokens": 12,
+      "text": "Retry behavior is controlled with exponential backoff and bounded retries.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0714,
+        "position": 0.301,
+        "final": 0.1288
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    },
+    {
+      "segment_id": 5,
+      "score": 0.1157,
+      "tokens": 13,
+      "text": "If retries exceed thresholds, requests are routed to dead-letter handling.",
+      "force_keep": false,
+      "local_rate": null,
+      "group_id": null,
+      "score_components": {
+        "relevance": 0.0667,
+        "position": 0.2626,
+        "final": 0.1157
+      },
+      "selected": true,
+      "selection_reason": "top_rank"
+    }
+  ]
+}

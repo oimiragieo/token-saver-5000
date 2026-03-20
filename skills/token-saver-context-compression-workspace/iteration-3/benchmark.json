@@ -1,0 +1,269 @@
+{
+  "metadata": {
+    "skill_name": "token-saver-context",
+    "skill_path": "C:\\dev\\projects\\token-saver-5000\\.claude\\skills\\token-saver-context-compression",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-03-18T19:45:29Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.3333,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 54.116,
+        "tokens": 1563,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact compress_context.py command for this repo.",
+          "passed": false,
+          "evidence": "No repo-specific compress_context.py command was provided."
+        },
+        {
+          "text": "The answer identifies a query-targeted mode.",
+          "passed": false,
+          "evidence": "No query-targeted mode was identified."
+        },
+        {
+          "text": "The answer states whether the result is safe to answer from.",
+          "passed": true,
+          "evidence": "Answer discusses safety/sufficiency."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 3,
+        "total": 3,
+        "time_seconds": 44.607,
+        "tokens": 1111,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact run_skill_workflow.py command for this repo.",
+          "passed": false,
+          "evidence": "No repo-specific run_skill_workflow.py command was provided."
+        },
+        {
+          "text": "The command includes fail-on-insufficient-evidence behavior.",
+          "passed": false,
+          "evidence": "Missing --fail-on-insufficient-evidence."
+        },
+        {
+          "text": "The answer explains the loud failure meaning.",
+          "passed": false,
+          "evidence": "No explanation of the failure semantics."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.3333,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 42.868,
+        "tokens": 1879,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact JSON-adapter command for this repo.",
+          "passed": false,
+          "evidence": "No exact JSON adapter command was provided."
+        },
+        {
+          "text": "The answer explains output-format policy.",
+          "passed": false,
+          "evidence": "Output-format policy explanation is incomplete."
+        },
+        {
+          "text": "The answer includes a cache-friendly prompt-structure note.",
+          "passed": true,
+          "evidence": "Answer includes cache-friendly prompt-ordering guidance."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.3333,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 34.861,
+        "tokens": 703,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact compress_context.py command for this repo.",
+          "passed": false,
+          "evidence": "No repo-specific compress_context.py command was provided."
+        },
+        {
+          "text": "The answer identifies a query-targeted mode.",
+          "passed": false,
+          "evidence": "No query-targeted mode was identified."
+        },
+        {
+          "text": "The answer states whether the result is safe to answer from.",
+          "passed": true,
+          "evidence": "Answer discusses safety/sufficiency."
+        }
+      ],
+      "notes": [
+        "Baseline lacked project-specific skill guidance and missed one or more exact workflow details."
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 3,
+        "total": 3,
+        "time_seconds": 18.926,
+        "tokens": 506,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact run_skill_workflow.py command for this repo.",
+          "passed": false,
+          "evidence": "No repo-specific run_skill_workflow.py command was provided."
+        },
+        {
+          "text": "The command includes fail-on-insufficient-evidence behavior.",
+          "passed": false,
+          "evidence": "Missing --fail-on-insufficient-evidence."
+        },
+        {
+          "text": "The answer explains the loud failure meaning.",
+          "passed": false,
+          "evidence": "No explanation of the failure semantics."
+        }
+      ],
+      "notes": [
+        "Baseline lacked project-specific skill guidance and missed one or more exact workflow details."
+      ]
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.3333,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 20.205,
+        "tokens": 610,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives the exact JSON-adapter command for this repo.",
+          "passed": false,
+          "evidence": "No exact JSON adapter command was provided."
+        },
+        {
+          "text": "The answer explains output-format policy.",
+          "passed": false,
+          "evidence": "Output-format policy explanation is incomplete."
+        },
+        {
+          "text": "The answer includes a cache-friendly prompt-structure note.",
+          "passed": true,
+          "evidence": "Answer includes cache-friendly prompt-ordering guidance."
+        }
+      ],
+      "notes": [
+        "Baseline lacked project-specific skill guidance and missed one or more exact workflow details."
+      ]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.2222,
+        "stddev": 0.1924,
+        "min": 0.0,
+        "max": 0.3333
+      },
+      "time_seconds": {
+        "mean": 47.197,
+        "stddev": 6.0548,
+        "min": 42.868,
+        "max": 54.116
+      },
+      "tokens": {
+        "mean": 1517.6667,
+        "stddev": 386.0017,
+        "min": 1111,
+        "max": 1879
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.2222,
+        "stddev": 0.1924,
+        "min": 0.0,
+        "max": 0.3333
+      },
+      "time_seconds": {
+        "mean": 24.664,
+        "stddev": 8.854,
+        "min": 18.926,
+        "max": 34.861
+      },
+      "tokens": {
+        "mean": 606.3333,
+        "stddev": 98.5512,
+        "min": 506,
+        "max": 703
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.00",
+      "time_seconds": "+22.5",
+      "tokens": "+911"
+    }
+  },
+  "notes": []
+}

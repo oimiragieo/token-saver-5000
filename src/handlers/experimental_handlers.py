@@ -21,12 +21,24 @@ from __future__ import annotations
 
 import json
 import logging
+import inspect
 from typing import TYPE_CHECKING, Any, Dict
+from src.identity_scope import compose_scoped_file_id
 
 if TYPE_CHECKING:
     from src.types import HandlerContext
 
 logger = logging.getLogger(__name__)
+
+
+def _scoped_doc_id(args: Dict[str, Any]) -> str:
+    return compose_scoped_file_id(
+        args["doc_id"],
+        workspace_id=args.get("workspace_id"),
+        user_id=args.get("user_id"),
+        agent_id=args.get("agent_id"),
+        session_id=args.get("session_id"),
+    )
 
 
 # =============================================================================
@@ -218,6 +230,7 @@ async def handle_scar_compress(context: "HandlerContext", args: Dict[str, Any]) 
     doc_id = args.get("doc_id")
     if not doc_id:
         return json.dumps({"error": "Missing required argument: doc_id", "experimental": True})
+    scoped_doc_id = _scoped_doc_id(args)
 
     try:
         # Check PyTorch availability first
@@ -235,7 +248,7 @@ async def handle_scar_compress(context: "HandlerContext", args: Dict[str, Any]) 
         compressor = context["compressor"]
 
         # Check if document exists in compressor's graphs
-        if doc_id not in compressor.graphs:
+        if scoped_doc_id not in compressor.graphs:
             return json.dumps(
                 {
                     "error": f"Document '{doc_id}' not found. Ingest it first.",
@@ -249,7 +262,10 @@ async def handle_scar_compress(context: "HandlerContext", args: Dict[str, Any]) 
         for chunk_id, chunk_data in compressor.chunks.items():
             # Semantic chunks: {doc_id}_n0, {doc_id}_n1, etc.
             # Code chunks: {doc_id}::function_name, {doc_id}::imports, etc.
-            if not (chunk_id.startswith(f"{doc_id}_") or chunk_id.startswith(f"{doc_id}::")):
+            if not (
+                chunk_id.startswith(f"{scoped_doc_id}_")
+                or chunk_id.startswith(f"{scoped_doc_id}::")
+            ):
                 continue
 
             # Handle both object-based (SemanticNode/CodeChunk) and dict-based chunks
@@ -272,15 +288,19 @@ async def handle_scar_compress(context: "HandlerContext", args: Dict[str, Any]) 
                 }
             )
 
-        import torch
+        import numpy as np
 
-        embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32)
+        embeddings_array = np.asarray(embeddings, dtype=np.float32)
 
         scar = _get_scar_compressor(context)
         target_dim = args.get("target_dim", 128)
-        compressed = scar.compress_embeddings(embeddings_tensor, target_dim=target_dim)
+        compress_signature = inspect.signature(scar.compress_embeddings)
+        if "target_dim" in compress_signature.parameters:
+            compressed = scar.compress_embeddings(embeddings_array, target_dim=target_dim)
+        else:
+            compressed = scar.compress_embeddings(embeddings_array)
 
-        original_dim = embeddings_tensor.shape[-1]
+        original_dim = embeddings_array.shape[-1]
         compressed_dim = compressed.shape[-1]
 
         return json.dumps(
@@ -380,6 +400,7 @@ async def handle_multimodal_ingest(context: "HandlerContext", args: Dict[str, An
     doc_id = args.get("doc_id")
     if not doc_id:
         return json.dumps({"error": "Missing required argument: doc_id", "experimental": True})
+    scoped_doc_id = _scoped_doc_id(args)
 
     text_content = args.get("text_content")
     code_content = args.get("code_content")
@@ -457,7 +478,7 @@ async def handle_multimodal_ingest(context: "HandlerContext", args: Dict[str, An
             content_types.append("image")
 
         # Ingest mixed content
-        result = compressor.ingest_mixed_content(doc_id, content_items)
+        result = compressor.ingest_mixed_content(scoped_doc_id, content_items)
 
         return json.dumps(
             {

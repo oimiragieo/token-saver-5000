@@ -1,0 +1,7 @@
+{
+  "workspace": "C:\\dev\\projects\\token-saver-5000\\skills\\token-saver-context-compression-workspace",
+  "iteration": "iteration-3",
+  "benchmark_exit_code": 0,
+  "benchmark_stdout": "Generated: C:\\dev\\projects\\token-saver-5000\\skills\\token-saver-context-compression-workspace\\iteration-3\\benchmark.json\nGenerated: C:\\dev\\projects\\token-saver-5000\\skills\\token-saver-context-compression-workspace\\iteration-3\\benchmark.md\n\nSummary:\n  With Skill: 22.2% pass rate\n  Without Skill: 22.2% pass rate\n  Delta:         +0.00\n",
+  "benchmark_stderr": ""
+}

@@ -16,6 +16,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Iterable, List, Optional
 
+from .extractive_baseline import ExtractiveCompressor
 from .semantic_compressor import SemanticCompressor
 
 
@@ -73,6 +74,16 @@ class BenchmarkSummary:
     @property
     def all_passed(self) -> bool:
         return self.failed_cases == 0
+
+
+@dataclass(frozen=True)
+class BenchmarkExecutionDetail:
+    """Detailed benchmark execution used by experiment tracking."""
+
+    case: BenchmarkCase
+    result: BenchmarkResult
+    skeleton_text: str
+    node_map: dict[str, str]
 
 
 def _project_root() -> Path:
@@ -142,22 +153,19 @@ def _quality_overlap_metrics(
     return precision, recall, _f1(precision, recall)
 
 
-def run_benchmark_cases(
+def run_benchmark_cases_detailed(
     cases: Iterable[BenchmarkCase],
     mode: str = "baseline",
     similarity_threshold: float = 0.75,
     skeleton_ratio: float = 0.2,
-) -> BenchmarkSummary:
-    """Run all benchmark cases and return aggregate summary."""
+) -> List[BenchmarkExecutionDetail]:
+    """Run benchmark cases and return detailed execution artifacts."""
     compressor = SemanticCompressor(
         similarity_threshold=similarity_threshold,
         skeleton_ratio=skeleton_ratio,
     )
 
-    results: List[BenchmarkResult] = []
-    precision_values: list[float] = []
-    recall_values: list[float] = []
-    f1_values: list[float] = []
+    details: List[BenchmarkExecutionDetail] = []
     for case in cases:
         file_id = f"bench_{case.case_id}"
         response = compressor.ingest_file(case.text, file_id)
@@ -190,9 +198,6 @@ def run_benchmark_cases(
                 selected_node_ids=selected_node_ids,
                 top_k=5,
             )
-            precision_values.append(precision_at_k)
-            recall_values.append(recall_at_k)
-            f1_values.append(f1_at_k)
 
         result = BenchmarkResult(
             case_id=case.case_id,
@@ -209,8 +214,32 @@ def run_benchmark_cases(
             recall_at_k=recall_at_k,
             f1_at_k=f1_at_k,
         )
-        results.append(result)
+        details.append(
+            BenchmarkExecutionDetail(
+                case=case,
+                result=result,
+                skeleton_text=response.skeleton_text,
+                node_map=dict(response.node_map),
+            )
+        )
 
+    return details
+
+
+def run_benchmark_cases(
+    cases: Iterable[BenchmarkCase],
+    mode: str = "baseline",
+    similarity_threshold: float = 0.75,
+    skeleton_ratio: float = 0.2,
+) -> BenchmarkSummary:
+    """Run all benchmark cases and return aggregate summary."""
+    details = run_benchmark_cases_detailed(
+        cases,
+        mode=mode,
+        similarity_threshold=similarity_threshold,
+        skeleton_ratio=skeleton_ratio,
+    )
+    results = [detail.result for detail in details]
     passed = sum(1 for item in results if item.passed)
     failed = len(results) - passed
     return BenchmarkSummary(
@@ -220,10 +249,10 @@ def run_benchmark_cases(
         failed_cases=failed,
         avg_compression_ratio=mean(item.compression_ratio for item in results),
         avg_token_savings_pct=mean(item.token_savings_pct for item in results),
-        avg_precision_at_k=mean(precision_values) if precision_values else 0.0,
-        avg_recall_at_k=mean(recall_values) if recall_values else 0.0,
-        avg_f1_at_k=mean(f1_values) if f1_values else 0.0,
-        quality_cases_count=len(precision_values),
+        avg_precision_at_k=mean(item.precision_at_k for item in results) if results else 0.0,
+        avg_recall_at_k=mean(item.recall_at_k for item in results) if results else 0.0,
+        avg_f1_at_k=mean(item.f1_at_k for item in results) if results else 0.0,
+        quality_cases_count=sum(1 for item in results if item.quality_metrics_available),
         results=results,
     )
 
@@ -254,3 +283,35 @@ def write_summary(summary: BenchmarkSummary, output_path: Path | str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(summary_to_dict(summary), indent=2), encoding="utf-8")
     return path
+
+
+def run_method_comparison(cases: Iterable[BenchmarkCase]) -> dict[str, object]:
+    """Compare semantic baseline against a local extractive baseline."""
+    case_list = list(cases)
+    semantic_summary = run_benchmark_cases(case_list, mode="baseline")
+    extractive = ExtractiveCompressor()
+    extractive_ratios: list[float] = []
+    extractive_savings: list[float] = []
+    for case in case_list:
+        result = extractive.compress_text(case.text, query=case.query, target_tokens=None)
+        ratio = (
+            result["original_tokens"] / result["compressed_tokens"]
+            if result["compressed_tokens"] > 0
+            else 0.0
+        )
+        extractive_ratios.append(ratio)
+        extractive_savings.append(_savings_pct(ratio))
+
+    return {
+        "total_cases": semantic_summary.total_cases,
+        "methods": {
+            "semantic_baseline": {
+                "avg_compression_ratio": semantic_summary.avg_compression_ratio,
+                "avg_token_savings_pct": semantic_summary.avg_token_savings_pct,
+            },
+            "extractive_baseline": {
+                "avg_compression_ratio": mean(extractive_ratios) if extractive_ratios else 0.0,
+                "avg_token_savings_pct": mean(extractive_savings) if extractive_savings else 0.0,
+            },
+        },
+    }

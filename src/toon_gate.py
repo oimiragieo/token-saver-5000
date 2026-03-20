@@ -5,7 +5,6 @@ Auto-benchmarks TOON vs JSON serialization and enables TOON
 only when benchmarks prove consistent token savings.
 """
 
-from dataclasses import dataclass
 from typing import Dict, List
 
 
@@ -27,11 +26,13 @@ class TOONGate:
             toon_tokens: Token count for TOON serialization
         """
         savings_pct = ((json_tokens - toon_tokens) / json_tokens * 100) if json_tokens > 0 else 0
-        self._benchmarks.append({
-            "json_tokens": json_tokens,
-            "toon_tokens": toon_tokens,
-            "savings_percent": savings_pct,
-        })
+        self._benchmarks.append(
+            {
+                "json_tokens": json_tokens,
+                "toon_tokens": toon_tokens,
+                "savings_percent": savings_pct,
+            }
+        )
 
     def is_enabled(self) -> bool:
         """Check if TOON should be enabled based on benchmarks."""

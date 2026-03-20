@@ -8,15 +8,11 @@ resource_manager, batch_manager, scar_compressor, file_sync_manager,
 observability, metrics, health, and smaller modules.
 """
 
-import asyncio
 import json
 import os
-import sys
-import time
 import threading
-from dataclasses import dataclass, asdict
-from pathlib import Path, PurePath
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch, mock_open
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -25,6 +21,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_context(**overrides):
     """Build a mock HandlerContext dict."""
@@ -53,6 +50,7 @@ def _make_mock_context(**overrides):
 # ============================================================================
 # 1. compression_handlers — list_documents metadata lines (789,797-802)
 # ============================================================================
+
 
 class TestListDocumentsMetadata:
     """Cover lines 789,797,799,801-802 — title/author/date/tags display."""
@@ -96,6 +94,7 @@ class TestListDocumentsMetadata:
 # ============================================================================
 # 2. compression_handlers — delete_document error paths (877-879,888-896)
 # ============================================================================
+
 
 class TestDeleteDocumentErrors:
     """Cover delete_document memory-error, storage-error, resource-manager-error."""
@@ -144,7 +143,9 @@ class TestDeleteDocumentErrors:
 
         ctx = self._make_delete_ctx()
         ctx["persistence"].delete_document.return_value = True
-        ctx["resource_manager"].unregister_document_async = AsyncMock(side_effect=Exception("rm fail"))
+        ctx["resource_manager"].unregister_document_async = AsyncMock(
+            side_effect=Exception("rm fail")
+        )
         ctx["sync_manager"].remove_metadata = MagicMock()
         ctx["version_manager"].delete_versions_async = AsyncMock()
         ctx["sync_manager"].export_metadata.return_value = {}
@@ -157,6 +158,7 @@ class TestDeleteDocumentErrors:
 # 3. compression_handlers — adapt_to_context_window error (968-969)
 # ============================================================================
 
+
 class TestAdaptToContextWindowError:
     @pytest.mark.asyncio
     async def test_adapt_raises_runtime_error(self):
@@ -167,14 +169,13 @@ class TestAdaptToContextWindowError:
         ctx["context_window_adapter"].adapt_to_context_window.side_effect = Exception("fail")
 
         with pytest.raises(RuntimeError, match="Failed to adapt"):
-            await handle_adapt_to_context_window(
-                ctx, {"file_id": "doc1", "available_tokens": 500}
-            )
+            await handle_adapt_to_context_window(ctx, {"file_id": "doc1", "available_tokens": 500})
 
 
 # ============================================================================
 # 4. compression_handlers — multilevel_encode error (1003-1008)
 # ============================================================================
+
 
 class TestMultilevelEncodeError:
     @pytest.mark.asyncio
@@ -186,14 +187,13 @@ class TestMultilevelEncodeError:
         ctx["multilevel_encoder"].generate_adaptive_skeleton.side_effect = Exception("encode fail")
 
         with pytest.raises(RuntimeError, match="Failed to generate multi-level encoding"):
-            await handle_multilevel_encode(
-                ctx, {"file_id": "doc1", "available_tokens": 1000}
-            )
+            await handle_multilevel_encode(ctx, {"file_id": "doc1", "available_tokens": 1000})
 
 
 # ============================================================================
 # 5. compression_handlers — recommend_fidelity validation (1058-1059)
 # ============================================================================
+
 
 class TestRecommendFidelityValidation:
     @pytest.mark.asyncio
@@ -233,6 +233,7 @@ class TestRecommendFidelityValidation:
 # 6. compression_handlers — batch_ingest rate limit (1142-1143)
 # ============================================================================
 
+
 class TestBatchIngestRateLimit:
     @pytest.mark.asyncio
     async def test_batch_ingest_rate_limit_exceeded(self):
@@ -254,6 +255,7 @@ class TestBatchIngestRateLimit:
 # 7. compression_handlers — ingest_directory paths (1358-1410, 1437-1456, 1498, 1522-1527)
 # ============================================================================
 
+
 class TestIngestDirectory:
     @pytest.mark.asyncio
     async def test_ingest_directory_recursive_glob_and_exclusions(self, tmp_path):
@@ -270,9 +272,6 @@ class TestIngestDirectory:
         ctx = _make_mock_context()
         ctx["path_validator"].validate.side_effect = lambda p: p
 
-        # The handler's BatchDocument doesn't accept file_path kwarg,
-        # so all files end up as skipped. This covers lines 1451-1453 (exception path)
-        # and 1455-1464 (read_failed status).
         result = await handle_ingest_directory(
             ctx,
             {
@@ -285,8 +284,7 @@ class TestIngestDirectory:
         )
 
         data = json.loads(result)
-        assert data["status"] in ("complete", "read_failed")
-        # Either way, we covered the glob/exclusion/skip paths
+        assert data["status"] == "complete"
 
     @pytest.mark.asyncio
     async def test_ingest_directory_no_matching_files(self, tmp_path):
@@ -310,19 +308,19 @@ class TestIngestDirectory:
     async def test_ingest_directory_file_read_failure(self, tmp_path):
         """Cover lines 1451-1453: exception reading file."""
         from src.handlers.compression_handlers import handle_ingest_directory
+        from unittest.mock import mock_open, patch
 
         (tmp_path / "bad.py").write_text("content")
         ctx = _make_mock_context()
         ctx["path_validator"].validate.side_effect = lambda p: p
 
-        # The BatchDocument constructor error covers the exception path already.
-        # But let's also test with an actual open error by mocking within the loop.
-        result = await handle_ingest_directory(
-            ctx,
-            {"directory": str(tmp_path), "patterns": ["*.py"], "max_files": 50},
-        )
+        with patch("builtins.open", mock_open()) as mocked_open:
+            mocked_open.side_effect = OSError("read failed")
+            result = await handle_ingest_directory(
+                ctx,
+                {"directory": str(tmp_path), "patterns": ["*.py"], "max_files": 50},
+            )
         data = json.loads(result)
-        # With the file_path kwarg issue, all files fail, giving read_failed
         assert data["status"] == "read_failed"
 
     @pytest.mark.asyncio
@@ -336,15 +334,13 @@ class TestIngestDirectory:
         ctx = _make_mock_context()
         ctx["path_validator"].validate.side_effect = lambda p: p
 
-        # All files will fail due to BatchDocument file_path issue
-        # but we still cover lines 1407-1410 (limiting logic)
         result = await handle_ingest_directory(
             ctx,
             {"directory": str(tmp_path), "patterns": ["*.py"], "max_files": 2},
         )
 
         data = json.loads(result)
-        assert data["status"] in ("complete", "read_failed")
+        assert data["status"] == "complete"
 
     @pytest.mark.asyncio
     async def test_ingest_directory_invalid_exclude_pattern(self, tmp_path):
@@ -365,18 +361,19 @@ class TestIngestDirectory:
             },
         )
         data = json.loads(result)
-        # Covers the exclusion path even though files fail at BatchDocument
-        assert data["status"] in ("complete", "read_failed")
+        assert data["status"] == "complete"
 
 
 # ============================================================================
 # 8. persistence — chromadb init, list, delete, load paths
 # ============================================================================
 
+
 class TestPersistenceChromaDB:
     def _make_pm(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_list_documents_json_with_exception(self, tmp_path):
@@ -453,10 +450,12 @@ class TestPersistenceChromaDB:
 # 9. persistence — load_graph_data_safe legacy pickle rejection (193-202, 236-238)
 # ============================================================================
 
+
 class TestPersistenceLoadGraphSafe:
     def _make_pm(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_load_graph_legacy_pickle_raises_valueerror(self, tmp_path):
@@ -509,10 +508,12 @@ class TestPersistenceLoadGraphSafe:
 # 10. persistence — AFM history (874-917, 938-940)
 # ============================================================================
 
+
 class TestPersistenceAFMHistory:
     def _make_pm(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_load_afm_legacy_pickle_raises(self, tmp_path):
@@ -556,6 +557,7 @@ class TestPersistenceAFMHistory:
 # 11. afm — TokenCounter fallback, LLMCompressor, HashingEmbedder, ImportanceClassifier
 # ============================================================================
 
+
 class TestAFMComponents:
     def test_token_counter_double_fallback(self):
         from src.afm import TokenCounter
@@ -576,6 +578,7 @@ class TestAFMComponents:
 
     def test_heuristic_compressor_empty_sentences(self):
         from src.afm import HeuristicCompressor, TokenCounter
+
         tc = TokenCounter()
         comp = HeuristicCompressor(tc)
         result = comp.compress("", 10)
@@ -583,6 +586,7 @@ class TestAFMComponents:
 
     def test_heuristic_compressor_truncation_fallback(self):
         from src.afm import HeuristicCompressor, TokenCounter
+
         tc = TokenCounter()
         comp = HeuristicCompressor(tc)
         result = comp.compress("Word " * 100, 5)
@@ -590,6 +594,7 @@ class TestAFMComponents:
 
     def test_llm_compressor_falls_back(self):
         from src.afm import LLMCompressor, TokenCounter
+
         tc = TokenCounter()
         comp = LLMCompressor(tc, api_key="fake", model="gpt-4o-mini")
         result = comp.compress("This is a test sentence. Another sentence here.", 20)
@@ -597,6 +602,7 @@ class TestAFMComponents:
 
     def test_llm_compressor_no_api_key(self):
         from src.afm import LLMCompressor, TokenCounter
+
         tc = TokenCounter()
         comp = LLMCompressor(tc, api_key=None)
         # LLMCompressor always falls back to heuristic - just verify it works
@@ -605,38 +611,48 @@ class TestAFMComponents:
 
     def test_hashing_embedder(self):
         from src.afm import HashingEmbedder
+
         emb = HashingEmbedder(dim=64)
         result = emb.encode(["hello world", "test"])
         assert result.shape == (2, 64)
 
     def test_hashing_embedder_empty_text(self):
         from src.afm import HashingEmbedder
+
         emb = HashingEmbedder(dim=64)
         result = emb.encode([""])
         assert result.shape == (1, 64)
 
     def test_importance_classifier_llm_mode(self):
         from src.afm import ImportanceClassifier, Message, ImportanceLevel
+
         clf = ImportanceClassifier(use_llm=True, api_key="fake")
         msg = Message(role="user", content="test", importance=ImportanceLevel.TRIVIAL, turn_index=0)
         level = clf._classify_llm(msg)
-        assert level in [ImportanceLevel.CRITICAL, ImportanceLevel.RELEVANT, ImportanceLevel.TRIVIAL]
+        assert level in [
+            ImportanceLevel.CRITICAL,
+            ImportanceLevel.RELEVANT,
+            ImportanceLevel.TRIVIAL,
+        ]
 
     def test_importance_classifier_no_apikey_warning(self):
         from src.afm import ImportanceClassifier
+
         clf = ImportanceClassifier(use_llm=True, api_key=None)
         assert clf.use_llm is False
 
     def test_focus_manager_system_preamble_too_large(self):
         from src.afm import FocusManager, AFMConfig
+
         with patch("src.afm.SENTENCE_TRANSFORMERS_AVAILABLE", False):
             fm = FocusManager(AFMConfig())
             packed = []
-            result = fm._try_add_system_preamble("x" * 10000, 5, packed)
+            fm._try_add_system_preamble("x" * 10000, 5, packed)
             assert len(packed) == 0  # skipped
 
     def test_focus_manager_llm_compression_config(self):
         from src.afm import FocusManager, AFMConfig
+
         cfg = AFMConfig(use_llm_compression=True, llm_api_key="fake")
         with patch("src.afm.SENTENCE_TRANSFORMERS_AVAILABLE", False):
             fm = FocusManager(cfg)
@@ -646,6 +662,7 @@ class TestAFMComponents:
 # ============================================================================
 # 12. embeddings_onnx — ONNX init and singleton
 # ============================================================================
+
 
 class TestONNXEmbeddings:
     def test_onnx_init_import_error(self):
@@ -658,6 +675,7 @@ class TestONNXEmbeddings:
 
     def test_onnx_singleton_creation(self):
         import src.embeddings_onnx as onnx_mod
+
         onnx_mod._onnx_manager_instance = None
 
         with patch.object(onnx_mod, "ONNXEmbeddingManager") as MockMgr:
@@ -697,7 +715,9 @@ class TestONNXEmbeddings:
         mgr._session = None
         with patch("psutil.Process") as MockProc:
             mock_proc = MagicMock()
-            mock_proc.memory_info.return_value = MagicMock(rss=100*1024*1024, vms=200*1024*1024)
+            mock_proc.memory_info.return_value = MagicMock(
+                rss=100 * 1024 * 1024, vms=200 * 1024 * 1024
+            )
             mock_proc.memory_percent.return_value = 5.0
             MockProc.return_value = mock_proc
 
@@ -709,9 +729,10 @@ class TestONNXEmbeddings:
 # 13. graph_visualizer — visualize_html and export_json edge cases
 # ============================================================================
 
+
 class TestGraphVisualizer:
     def test_export_json_node_not_in_chunks(self):
-        from src.graph_visualizer import GraphVisualizer, VisualizationConfig
+        from src.graph_visualizer import GraphVisualizer
         import networkx as nx
 
         compressor = MagicMock()
@@ -778,9 +799,11 @@ class TestGraphVisualizer:
 # 14. embeddings — tier fallback, cache, code embedder fallback
 # ============================================================================
 
+
 class TestEmbeddingManager:
     def _reset_singleton(self):
         from src.embeddings import EmbeddingManager
+
         EmbeddingManager._instance = None
 
     def test_encode_unknown_tier_raises(self):
@@ -810,7 +833,9 @@ class TestEmbeddingManager:
         mgr._cache_lock = threading.Lock()
 
         mock_model = MagicMock()
-        with patch.object(mgr, "_get_or_create_model", side_effect=[Exception("code fail"), mock_model]):
+        with patch.object(
+            mgr, "_get_or_create_model", side_effect=[Exception("code fail"), mock_model]
+        ):
             result = mgr.get_code_embedder("bad-model")
             assert result is mock_model
 
@@ -850,9 +875,11 @@ class TestEmbeddingManager:
 # 15. version_manager — diff error paths, prune, stats
 # ============================================================================
 
+
 class TestVersionManager:
     def _make_vm(self, tmp_path):
         from src.version_manager import VersionManager
+
         return VersionManager(storage_dir=str(tmp_path / "versions"))
 
     def test_add_version_relative_path_raises(self, tmp_path):
@@ -947,9 +974,11 @@ class TestVersionManager:
 # 16. resource_manager — check_health, memory_health, suggest_cleanup
 # ============================================================================
 
+
 class TestResourceManager:
     def test_check_health_at_capacity(self):
         from src.resource_manager import ResourceManager, ResourceLimits
+
         limits = ResourceLimits(max_total_storage_mb=10, max_documents=5)
         rm = ResourceManager(limits=limits)
         rm.document_sizes = {"d1": 5.0, "d2": 6.0}  # exceeds 10MB
@@ -958,6 +987,7 @@ class TestResourceManager:
 
     def test_check_health_warn_threshold(self):
         from src.resource_manager import ResourceManager, ResourceLimits
+
         limits = ResourceLimits(max_total_storage_mb=10, max_documents=100, warn_threshold=0.5)
         rm = ResourceManager(limits=limits)
         rm.document_sizes = {"d1": 6.0}  # 60% > 50% threshold
@@ -966,6 +996,7 @@ class TestResourceManager:
 
     def test_check_health_doc_count_limit(self):
         from src.resource_manager import ResourceManager, ResourceLimits
+
         limits = ResourceLimits(max_documents=2, max_total_storage_mb=100)
         rm = ResourceManager(limits=limits)
         rm.document_sizes = {"d1": 1.0, "d2": 1.0, "d3": 1.0}
@@ -974,6 +1005,7 @@ class TestResourceManager:
 
     def test_memory_health_exceeded(self):
         from src.resource_manager import ResourceManager, ResourceLimits
+
         limits = ResourceLimits(max_total_storage_mb=10)
         rm = ResourceManager(limits=limits)
         rm.document_sizes = {"d1": 15.0}
@@ -983,11 +1015,13 @@ class TestResourceManager:
 
     def test_suggest_cleanup_empty(self):
         from src.resource_manager import ResourceManager
+
         rm = ResourceManager()
         assert rm.suggest_cleanup() is None
 
     def test_suggest_cleanup_under_threshold(self):
         from src.resource_manager import ResourceManager, ResourceLimits
+
         limits = ResourceLimits(max_total_storage_mb=1000, warn_threshold=0.8)
         rm = ResourceManager(limits=limits)
         rm.document_sizes = {"d1": 1.0}
@@ -995,6 +1029,7 @@ class TestResourceManager:
 
     def test_get_stats_comprehensive(self):
         from src.resource_manager import ResourceManager
+
         rm = ResourceManager()
         rm.register_document("doc1", 1024 * 1024)
         stats = rm.get_stats()
@@ -1006,25 +1041,30 @@ class TestResourceManager:
 # 17. batch_manager — progress, callbacks, batch_ingest_from_files
 # ============================================================================
 
+
 class TestBatchManager:
     def test_progress_zero_total(self):
         from src.batch_manager import BatchProgress
+
         p = BatchProgress(total=0, completed=0, successful=0, failed=0)
         assert p.progress_percentage == 0.0
 
     def test_progress_zero_completed(self):
         from src.batch_manager import BatchProgress
+
         p = BatchProgress(total=5, completed=0, successful=0, failed=0)
         assert p.success_rate == 0.0
 
     def test_progress_str(self):
         from src.batch_manager import BatchProgress
+
         p = BatchProgress(total=10, completed=5, successful=3, failed=2)
         s = str(p)
         assert "50.0%" in s
 
     def test_progress_callback_error(self):
         from src.batch_manager import BatchProgressTracker
+
         tracker = BatchProgressTracker(
             total=2,
             on_progress=lambda _: (_ for _ in ()).throw(RuntimeError("boom")),
@@ -1039,9 +1079,7 @@ class TestBatchManager:
         compressor = MagicMock()
         compressor.ingest_text = MagicMock(return_value=MagicMock())
 
-        results = await batch_ingest_from_files(
-            compressor, [str(tmp_path / "nonexistent.txt")]
-        )
+        results = await batch_ingest_from_files(compressor, [str(tmp_path / "nonexistent.txt")])
         assert results == []  # empty list since no valid docs
 
     @pytest.mark.asyncio
@@ -1061,20 +1099,24 @@ class TestBatchManager:
 # 18. file_sync_manager — relative path, get_file_diff, check_all_sync
 # ============================================================================
 
+
 class TestFileSyncManager:
     def test_register_file_relative_path_raises(self):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
         with pytest.raises(ValueError, match="Security violation"):
             fsm.register_file("doc1", "content", "relative/path.txt")
 
     def test_get_file_diff_no_metadata(self):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
         assert fsm.get_file_diff("nonexistent") is None
 
     def test_get_file_diff_no_version_manager(self, tmp_path):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
 
         f = tmp_path / "test.txt"
@@ -1086,6 +1128,7 @@ class TestFileSyncManager:
 
     def test_get_file_diff_with_version_manager(self, tmp_path):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
 
         f = tmp_path / "test.txt"
@@ -1099,6 +1142,7 @@ class TestFileSyncManager:
 
     def test_get_file_diff_exception(self, tmp_path):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
 
         f = tmp_path / "test.txt"
@@ -1112,6 +1156,7 @@ class TestFileSyncManager:
 
     def test_check_sync_mtime_changed_content_same(self, tmp_path):
         from src.file_sync_manager import FileSyncManager
+
         fsm = FileSyncManager()
 
         f = tmp_path / "test.txt"
@@ -1129,9 +1174,11 @@ class TestFileSyncManager:
 # 19. observability — OpenTelemetry unavailable paths
 # ============================================================================
 
+
 class TestObservability:
     def test_manager_not_enabled(self):
         from src.observability import ObservabilityManager
+
         mgr = ObservabilityManager.__new__(ObservabilityManager)
         mgr._enabled = False
         mgr.tracer = None
@@ -1142,6 +1189,7 @@ class TestObservability:
 
     def test_shutdown_not_enabled(self):
         from src.observability import ObservabilityManager
+
         mgr = ObservabilityManager.__new__(ObservabilityManager)
         mgr._enabled = False
         result = mgr.shutdown()
@@ -1152,9 +1200,11 @@ class TestObservability:
 # 20. metrics — NoOp collector, validation, enabled methods
 # ============================================================================
 
+
 class TestMetrics:
     def test_noop_collector_methods(self):
         from src.metrics import NoOpMetricsCollector
+
         noop = NoOpMetricsCollector()
         noop.record_compression_ratio(5.0, "HIGH")
         noop.record_latency("ingest", 0.5)
@@ -1199,6 +1249,7 @@ class TestMetrics:
 
     def test_singleton_reset(self):
         from src.metrics import MetricsCollector
+
         MetricsCollector._instance = None
         mc = MetricsCollector.get_metrics()
         assert mc is not None
@@ -1210,10 +1261,12 @@ class TestMetrics:
 # 21. health — component check edge cases
 # ============================================================================
 
+
 class TestHealth:
     def test_health_psutil_unavailable(self):
         with patch("src.health.PSUTIL_AVAILABLE", False):
             from src.health import HealthChecker
+
             hc = HealthChecker.__new__(HealthChecker)
             hc._operation_latencies = {}
             hc._operation_errors = {}
@@ -1223,6 +1276,7 @@ class TestHealth:
 
     def test_health_disk_usage_error(self):
         from src.health import HealthChecker
+
         hc = HealthChecker.__new__(HealthChecker)
         hc._operation_latencies = {}
         hc._operation_errors = {}
@@ -1237,25 +1291,30 @@ class TestHealth:
 # 22. error_types — exception constructors
 # ============================================================================
 
+
 class TestErrorTypes:
     def test_operation_timeout(self):
         from src.error_types import OperationTimeoutError
+
         e = OperationTimeoutError("embed", timeout=30.0)
         assert "30" in str(e)
         assert e.operation == "embed"
 
     def test_circuit_breaker_open(self):
         from src.error_types import CircuitBreakerOpenError
+
         e = CircuitBreakerOpenError("persistence", failure_count=5)
         assert "5" in str(e)
 
     def test_circuit_breaker_no_count(self):
         from src.error_types import CircuitBreakerOpenError
+
         e = CircuitBreakerOpenError("persistence")
         assert "OPEN" in str(e)
 
     def test_retry_exhausted_with_exception(self):
         from src.error_types import RetryExhaustedError
+
         inner = ValueError("inner")
         e = RetryExhaustedError("op", max_retries=3, last_exception=inner)
         assert "3" in str(e)
@@ -1263,21 +1322,25 @@ class TestErrorTypes:
 
     def test_retry_exhausted_no_exception(self):
         from src.error_types import RetryExhaustedError
+
         e = RetryExhaustedError("op", max_retries=3)
         assert "3" in str(e)
 
     def test_rate_limit_exceeded_with_wait(self):
         from src.error_types import RateLimitExceededError
+
         e = RateLimitExceededError("ingest", rate=10.0, wait_time=5.0)
         assert "5.0" in str(e)
 
     def test_graceful_degradation(self):
         from src.error_types import GracefulDegradationError
+
         e = GracefulDegradationError("embed", "tfidf", reason="OOM")
         assert "OOM" in str(e)
 
     def test_graceful_degradation_no_reason(self):
         from src.error_types import GracefulDegradationError
+
         e = GracefulDegradationError("embed", "tfidf")
         assert "degraded" in str(e)
 
@@ -1286,30 +1349,31 @@ class TestErrorTypes:
 # 23. error_helpers — SmartError methods
 # ============================================================================
 
+
 class TestErrorHelpers:
     def test_file_id_not_found_with_matches(self):
         from src.error_helpers import SmartError
+
         err = SmartError.file_id_not_found("quantum_papper", ["quantum_paper", "neural_nets"])
         assert "quantum_paper" in str(err)
 
     def test_file_id_not_found_many_available(self):
         from src.error_helpers import SmartError
+
         ids = [f"doc{i}" for i in range(10)]
         err = SmartError.file_id_not_found("unknown", ids)
         assert "10 total" in str(err)
 
     def test_node_id_not_found(self):
         from src.error_helpers import SmartError
-        err = SmartError.node_id_not_found(
-            "doc_n99", ["doc_n0", "doc_n1"], "doc"
-        )
+
+        err = SmartError.node_id_not_found("doc_n99", ["doc_n0", "doc_n1"], "doc")
         assert "doc_n" in str(err)
 
     def test_invalid_enum_value(self):
         from src.error_helpers import SmartError
-        err = SmartError.invalid_enum_value(
-            "BALENCED", ["BALANCED", "HIGH", "LOW"], "fidelity"
-        )
+
+        err = SmartError.invalid_enum_value("BALENCED", ["BALANCED", "HIGH", "LOW"], "fidelity")
         assert "BALANCED" in str(err)
 
 
@@ -1317,25 +1381,30 @@ class TestErrorHelpers:
 # 24. compression_rewards — dataclass scores
 # ============================================================================
 
+
 class TestCompressionRewards:
     def test_schema_validation_scores(self):
         from src.compression_rewards import SchemaValidationResult
+
         r = SchemaValidationResult(input_valid=True, output_valid=False)
         assert r.score == 0.5
         assert not r.all_valid
 
     def test_fidelity_adherence_ratio_score_zero_target(self):
         from src.compression_rewards import FidelityAdherenceResult
+
         r = FidelityAdherenceResult(target_ratio=0)
         assert r.ratio_score == 0.0
 
     def test_composition_integrity_score(self):
         from src.compression_rewards import CompositionIntegrityResult
+
         r = CompositionIntegrityResult(graph_connected=False, orphan_nodes=5)
         assert r.score < 1.0
 
     def test_memory_discipline_zero_budget(self):
         from src.compression_rewards import MemoryDisciplineResult
+
         r = MemoryDisciplineResult(memory_budget_mb=0)
         assert r.memory_score == 0.0
 
@@ -1344,15 +1413,18 @@ class TestCompressionRewards:
 # 25. evidence_bundle — ContractCheck, ContractResult, QualityMetrics
 # ============================================================================
 
+
 class TestEvidenceBundle:
     def test_contract_check_from_dict(self):
         from src.evidence_bundle import ContractCheck, ContractStatus
+
         data = {"name": "test", "status": "passed", "message": "ok"}
         check = ContractCheck.from_dict(data)
         assert check.status == ContractStatus.PASSED
 
     def test_contract_result_add_error(self):
         from src.evidence_bundle import ContractResult
+
         cr = ContractResult()
         cr.add_error("check1", "something broke")
         assert not cr.overall_passed
@@ -1360,6 +1432,7 @@ class TestEvidenceBundle:
 
     def test_contract_result_roundtrip(self):
         from src.evidence_bundle import ContractResult
+
         cr = ContractResult()
         cr.add_check("test1", True, "ok")
         cr.add_check("test2", False, "bad")
@@ -1370,6 +1443,7 @@ class TestEvidenceBundle:
 
     def test_quality_metrics_roundtrip(self):
         from src.evidence_bundle import QualityMetrics
+
         qm = QualityMetrics(ssim_score=0.9, custom_metrics={"extra": 1.0})
         d = qm.to_dict()
         qm2 = QualityMetrics.from_dict(d)
@@ -1380,17 +1454,18 @@ class TestEvidenceBundle:
 # 26. benchmark_guard — evaluate violations
 # ============================================================================
 
+
 class TestBenchmarkGuard:
     def test_missing_thresholds(self):
         from src.benchmark_guard import evaluate_report_against_thresholds
-        violations = evaluate_report_against_thresholds(
-            mode="unknown", report={}, thresholds={}
-        )
+
+        violations = evaluate_report_against_thresholds(mode="unknown", report={}, thresholds={})
         assert len(violations) == 1
         assert "Missing thresholds" in violations[0].message
 
     def test_load_json(self, tmp_path):
         from src.benchmark_guard import load_json
+
         f = tmp_path / "test.json"
         f.write_text('{"key": "value"}')
         data = load_json(f)
@@ -1400,6 +1475,7 @@ class TestBenchmarkGuard:
 # ============================================================================
 # 27. scar_compressor — preservation loss, alignment, batch compress
 # ============================================================================
+
 
 class TestScarCompressor:
     def test_preservation_loss(self):
@@ -1414,6 +1490,7 @@ class TestScarCompressor:
 
     def test_compress_batch_numpy(self):
         from src.scar_compressor import LearnableSemanticCompressor as LearnableCompressor
+
         comp = LearnableCompressor(input_dim=8, compressed_dim=4)
         data = np.random.randn(3, 8).astype(np.float32)
         result = comp.compress_batch(data)
@@ -1442,6 +1519,7 @@ class TestScarCompressor:
 # ============================================================================
 # 28. resource_handlers — should_compress and check_environment edge cases
 # ============================================================================
+
 
 class TestResourceHandlers:
     @pytest.mark.asyncio
@@ -1506,9 +1584,9 @@ class TestResourceHandlers:
 # 29. adaptive_rate_allocator — forward pass
 # ============================================================================
 
+
 class TestAdaptiveRateAllocator:
     def test_forward_pass(self):
-        import torch
         import networkx as nx
         from src.adaptive_rate_allocator import AdaptiveRateAllocator
 
@@ -1525,6 +1603,7 @@ class TestAdaptiveRateAllocator:
 # ============================================================================
 # 30. multimodal_compressor — encode_image, get_skeleton_summary
 # ============================================================================
+
 
 class TestMultimodalCompressor:
     def test_encode_image_no_encoder(self):
@@ -1550,10 +1629,12 @@ class TestMultimodalCompressor:
 # 31. rate_limiter — acquire tokens
 # ============================================================================
 
+
 class TestRateLimiter:
     @pytest.mark.asyncio
     async def test_acquire_basic(self):
         from src.rate_limiter import RateLimiter
+
         rl = RateLimiter(rate=100.0, capacity=10, name="test")
         await rl.acquire()  # should succeed
 
@@ -1573,10 +1654,12 @@ class TestRateLimiter:
 # 32. persistence — save/load document JSON paths (537-546)
 # ============================================================================
 
+
 class TestPersistenceLoadDocJSON:
     def _make_pm(self, tmp_path):
         with patch("src.persistence.CHROMADB_AVAILABLE", False):
             from src.persistence import PersistenceManager
+
             return PersistenceManager(storage_dir=str(tmp_path / "storage"))
 
     def test_load_document_json_legacy_pickle_raises(self, tmp_path):
