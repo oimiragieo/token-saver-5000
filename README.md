@@ -43,6 +43,21 @@ There are two product surfaces in this repo:
 1. MCP server (`src.server`) for Claude/Desktop and agent workflows.
 2. Self-contained skill scripts (`skills/token-saver-context-compression`) that run locally without MCP.
 
+## Multi-Tenant SaaS Deployment
+
+Token Saver 5000 can also be used as a multi-tenant context service, not just a local MCP helper.
+
+The core scope fields are:
+
+1. `workspace_id`: isolates one customer or team workspace.
+2. `user_id`: isolates a person within that workspace.
+3. `agent_id`: isolates one automated agent or role.
+4. `session_id`: isolates one short-lived interaction thread.
+
+Use those fields consistently across memory, prompts, connector feeds, temporal exports, and handoff bundles when you expose the system behind a shared API gateway or multi-tenant worker.
+
+If you are deploying for multiple customers, read `docs/deployment/SAAS_MULTI_TENANT.md`.
+
 ## Local vs Docker
 
 You do not need Docker. Docker is optional.
@@ -52,7 +67,7 @@ Choose your runtime:
 1. Local Python:
    - Best for development and quick usage.
    - Direct access to scripts and source.
-   - Command: `python -m src.server`
+   - Command: `token-saver-mcp`
 2. Docker:
    - Best for reproducible deployment/team environments.
    - Avoids local dependency drift.
@@ -60,30 +75,64 @@ Choose your runtime:
 
 ## First 10 Minutes (Recommended Path)
 
-1. Get the code and install:
+1. Get the code:
 
 ```bash
 git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
-pip install -r requirements.txt
-python scripts/check_setup.py
 ```
 
-If you already have the folder locally (zip/internal mirror/another VCS), just run:
+2. Install it like a tool:
+
+**Option A: `uv` (recommended)**
 
 ```bash
-cd token-saver-5000
+uv tool install -e .
+```
+
+**Option B: `pipx`**
+
+```bash
+pipx install .
+```
+
+**Option C: developer/editable install**
+
+```bash
 pip install -r requirements.txt
+pip install -e .
+```
+
+3. Run guided setup:
+
+```bash
+token-saver-setup --auto
+```
+
+That command picks the most likely target for your environment:
+
+1. `desktop` for Claude Desktop-centric local use.
+2. `portable-project` when you run it inside a repo/workspace that looks project-scoped.
+
+If you want the low-level status report only:
+
+```bash
+token-saver-install-mcp --doctor --human
+```
+
+For a deeper, network-using verification pass that downloads the embedding model and runs a smoke test:
+
+```bash
 python scripts/check_setup.py
 ```
 
-2. Run a local example:
+4. Run a local example:
 
 ```bash
 python examples/example_usage.py
 ```
 
-3. Try the self-contained skill scripts:
+5. Try the self-contained skill scripts:
 
 ```bash
 python skills/token-saver-context-compression/scripts/profile_tokens.py --file tests/fixtures/skill_context_sample.txt --output-format auto
@@ -105,6 +154,14 @@ At a high level:
 If query-aware mode is used, scoring is biased toward the query.  
 If evidence-aware mode is used, it checks whether selected context likely contains enough answer-supporting evidence.
 
+`read_skeleton` now also returns a `pipeline` object so you can inspect which passes ran:
+
+1. `baseline`
+2. `query_guided`
+3. `evidence_aware`
+
+That makes it easier to debug why a document was compressed a certain way and to verify when evidence-aware retrieval expanded or changed the final anchor set.
+
 ## Core MCP Tools (The Ones Most Users Need)
 
 If you are new, start with these 7:
@@ -122,6 +179,32 @@ You can force this minimal surface with:
 ```bash
 MCP_TOOL_PROFILE=core_stable python -m src.server
 ```
+
+Or, after installing the tool:
+
+```bash
+MCP_TOOL_PROFILE=core_stable token-saver-mcp
+```
+
+## Prompt Cache Observability Tools
+
+If you are optimizing for prompt caching, the most relevant MCP tools are:
+
+1. `audit_prompt_cacheability`: checks section ordering and volatility before provider calls.
+2. `render_prompt_template`: produces a canonical cache-friendly prompt plus a `prompt_id`.
+3. `assess_cache_compatibility`: checks whether Gemini CLI, Claude Code, Codex, or raw provider APIs expose enough cache telemetry to validate real reuse.
+3. `capture_cache_telemetry`: normalizes provider cache-hit telemetry from Claude, OpenAI, and Gemini responses.
+4. `diagnose_cache_miss`: explains likely causes of unexpected misses, partial reuse, section drift, and cache-creation churn.
+
+The model-optimization layer now also exposes:
+
+1. provider-specific cache threshold guidance via `optimize_for_model`
+2. deterministic `prompt_cache_key` guidance for OpenAI/Codex-style routing stickiness
+3. local extractive compression and history-compaction primitives for lower-latency context trimming
+4. benchmark method comparisons between semantic and extractive baselines
+
+For usage guidance, see `docs/guides/PROMPT_CACHING.md`.
+For Gemini CLI, Claude, and Codex compatibility guidance, see `docs/guides/PROVIDER_CACHE_COMPATIBILITY.md`.
 
 ## Skill Scripts (No MCP Required)
 
@@ -174,8 +257,10 @@ Skill scripts support:
 ## Run The Server (MCP Mode)
 
 ```bash
-python -m src.server
+token-saver-mcp
 ```
+
+For web/API deployments, the repo also supports an HTTP server surface for health checks, metrics, and service-style runtime integrations. See `docs/deployment/DOCKER.md` and `docs/deployment/SAAS_MULTI_TENANT.md` for HTTP server, reverse proxy, and API gateway patterns.
 
 Claude Desktop config example:
 
@@ -183,13 +268,68 @@ Claude Desktop config example:
 {
   "mcpServers": {
     "token-saver": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/path/to/token-saver-5000"
     }
   }
 }
 ```
+
+The simplest setup path is:
+
+```bash
+token-saver-setup --auto
+```
+
+To install that entry automatically into Claude Desktop with the low-level installer:
+
+```bash
+token-saver-install-mcp
+```
+
+To generate a project-scoped `.claude\.mcp.json` for Claude Code or another MCP-aware workspace:
+
+```bash
+token-saver-install-mcp --project-config
+```
+
+To generate a **portable** project-scoped config for a shared repo using `${workspaceFolder}`:
+
+```bash
+token-saver-install-mcp --portable-project-config
+```
+
+If you want raw JSON instead of writing the project config file:
+
+```bash
+token-saver-install-mcp --print-config > .mcp.json
+```
+
+To inspect whether the command, Claude Desktop config, and project config are installed correctly:
+
+```bash
+token-saver-install-mcp --doctor --human
+```
+
+To uninstall cleanly:
+
+```bash
+token-saver-setup --uninstall-all
+```
+
+Or target just one surface:
+
+```bash
+token-saver-setup --uninstall --desktop
+token-saver-setup --uninstall --portable-project
+```
+
+The MCP server now also exposes first-class prompts and resources:
+
+1. Prompts for document compression, prompt-cache review, and MCP setup guidance.
+2. Resources for tool catalogs, workflow instructions, install modes, and live install status.
+3. A resource template at `token-saver://tool/{name}/help` for canonical per-tool help payloads.
 
 ## Test and Quality Commands
 
@@ -216,7 +356,7 @@ python -m black src tests scripts skills
 ## Version and Requirements
 
 1. Version: `0.10.0`
-2. Python: `3.10+`
+2. Python: `3.10-3.13`
 3. Suggested RAM: `~4GB` for embedding workloads
 
 Version source-of-truth:
@@ -232,7 +372,9 @@ Start here:
 2. `docs/guides/HOW_IT_WORKS.md`
 3. `docs/reference/ARCHITECTURE.md`
 4. `docs/guides/MCP_TOOLS_GUIDE.md`
-5. `CHANGELOG.md`
+5. `docs/guides/WORKFLOW_ORCHESTRATION.md`
+6. `docs/deployment/SAAS_MULTI_TENANT.md`
+7. `CHANGELOG.md`
 
 ## License
 

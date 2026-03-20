@@ -20,16 +20,35 @@ This guide shows you how to set up Token Saver 5000 as an MCP server for Claude 
 ```bash
 git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
-pip install -r requirements.txt
+uv tool install -e .
 ```
 
-### Step 2: Verify Installation
+Fallback options:
 
 ```bash
-python scripts/check_setup.py
+pipx install .
 ```
 
-### Step 3: Configure Claude Code
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+### Step 2: Configure Claude Code
+
+Recommended:
+
+```bash
+token-saver-setup --portable-project
+```
+
+If you want the installer to choose automatically based on the current workspace:
+
+```bash
+token-saver-setup --auto
+```
+
+Advanced/manual fallback:
 
 Create or edit `.mcp.json` in your project root:
 
@@ -37,8 +56,8 @@ Create or edit `.mcp.json` in your project root:
 {
   "mcpServers": {
     "token-saver": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/path/to/token-saver-5000"
     }
   }
@@ -47,7 +66,26 @@ Create or edit `.mcp.json` in your project root:
 
 **Important:** Replace `/path/to/token-saver-5000` with the actual absolute path.
 
-### Step 4: Restart Claude Code
+Or generate the project-scoped `.claude/.mcp.json` automatically:
+
+```bash
+token-saver-install-mcp --project-config
+```
+
+For a team-shared config that uses `${workspaceFolder}` instead of a machine-specific absolute path:
+
+```bash
+token-saver-install-mcp --portable-project-config
+```
+
+To inspect the current Token Saver MCP setup state:
+
+```bash
+token-saver-install-mcp --doctor
+token-saver-install-mcp --doctor --human
+```
+
+### Step 3: Restart Claude Code
 
 ```bash
 claude
@@ -496,8 +534,8 @@ Add to your project's `.mcp.json`:
 {
   "mcpServers": {
     "token-saver": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/absolute/path/to/token-saver-5000",
       "env": {
         "PYTHONPATH": "/absolute/path/to/token-saver-5000"
@@ -515,8 +553,8 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "token-saver": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/absolute/path/to/token-saver-5000"
     }
   }
@@ -529,8 +567,8 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "token-saver": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "C:/dev/projects/token-saver-5000"
     }
   }
@@ -553,7 +591,7 @@ Add to `~/.claude/settings.json`:
 ### Server doesn't start
 ```bash
 cd /path/to/token-saver-5000
-python -m src.server
+token-saver-mcp
 # Should hang (waiting for stdio) - this is correct!
 ```
 

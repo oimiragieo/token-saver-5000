@@ -72,37 +72,35 @@ This script:
 
 ## Installation Methods
 
-### Method 1: Manual Installation (Recommended for Development)
+### Method 1: Tool-Style Local Installation (Recommended for Most Users)
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
 
-# 2. Create virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# 2. Install the CLI/MCP tools
+uv tool install -e .
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Apply the recommended MCP config
+token-saver-setup --auto
 
-# 4. Verify installation
+# 4. Optional deep verification
 python scripts/check_setup.py
-
-# 5. Test the server
-python -m src.server  # Should start without errors (Ctrl+C to stop)
 ```
 
-### Method 2: Direct pip Install (Coming Soon)
+Fallback with `pipx`:
 
 ```bash
-# Future PyPI release
-pip install token-saver-5000
+pipx install .
 ```
 
-### Method 3: Docker (Not Yet Available)
+Fallback for development/editable installs:
 
-Docker support is planned for future releases.
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
 
 ---
 
@@ -129,12 +127,9 @@ Claude Desktop uses stdio transport for local MCP servers.
 ```json
 {
   "mcpServers": {
-    "token-saver-5000": {
-      "command": "python",
-      "args": [
-        "-m",
-        "src.server"
-      ],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/absolute/path/to/token-saver-5000",
       "env": {}
     }
@@ -142,7 +137,7 @@ Claude Desktop uses stdio transport for local MCP servers.
 }
 ```
 
-**Important**: Replace `/absolute/path/to/token-saver-5000` with the actual absolute path to your cloned repository.
+**Simpler option**: run `token-saver-setup --desktop` or `token-saver-setup --auto` instead of editing this by hand.
 
 **Example Paths**:
 - macOS/Linux: `/Users/username/projects/token-saver-5000`
@@ -163,9 +158,9 @@ If you already have other MCP servers configured:
       "command": "docker",
       "args": ["run", "-i", "--rm", "ghcr.io/github/github-mcp-server"]
     },
-    "token-saver-5000": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/absolute/path/to/token-saver-5000"
     }
   }
@@ -183,9 +178,9 @@ Claude Code CLI offers more flexible configuration scoping.
 cd /path/to/your-project
 
 # Add the server (project-scoped by default)
-claude mcp add-json token-saver-5000 '{
-  "command": "python",
-  "args": ["-m", "src.server"],
+claude mcp add-json token-saver '{
+  "command": "token-saver-mcp",
+  "args": [],
   "cwd": "/absolute/path/to/token-saver-5000"
 }'
 
@@ -200,13 +195,37 @@ Create or edit `.mcp.json` in your project directory:
 ```json
 {
   "mcpServers": {
-    "token-saver-5000": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/absolute/path/to/token-saver-5000"
     }
   }
 }
+```
+
+Recommended guided setup:
+
+```bash
+token-saver-setup --portable-project
+```
+
+Or generate the project-scoped `.claude/.mcp.json` automatically:
+
+```bash
+token-saver-install-mcp --project-config
+```
+
+For a team-shared config that uses `${workspaceFolder}` instead of a machine-specific absolute path:
+
+```bash
+token-saver-install-mcp --portable-project-config
+```
+
+To inspect command availability plus desktop/project MCP wiring:
+
+```bash
+token-saver-install-mcp --doctor --human
 ```
 
 #### Configuration Scopes
@@ -221,10 +240,10 @@ Claude Code supports three configuration scopes:
 
 ```bash
 # User-scoped (all projects)
-claude mcp add-json -s user token-saver-5000 '{...}'
+claude mcp add-json -s user token-saver '{...}'
 
 # Project-scoped (shared via git)
-claude mcp add-json -s project token-saver-5000 '{...}'
+claude mcp add-json -s project token-saver '{...}'
 
 # Add .mcp.json to .gitignore for local scope
 echo ".mcp.json" >> .gitignore
@@ -243,7 +262,7 @@ echo ".mcp.json" >> .gitignore
 **Claude Code CLI**:
 ```bash
 claude mcp list           # List all configured servers
-claude mcp get token-saver-5000  # Check specific server config
+claude mcp get token-saver       # Check specific server config
 ```
 
 ### 2. Test MCP Tools
@@ -386,7 +405,7 @@ rm -rf ~/.cache/huggingface
 
 3. **Test Server Manually**:
    ```bash
-   python -m src.server
+   token-saver-mcp
    # Should output: "🚀 Starting Semantic Modulator MCP Server"
    # Press Ctrl+C to stop
    ```
@@ -657,7 +676,7 @@ When reporting issues, include:
 
 3. **Logs**:
    - Claude Desktop: `~/Library/Logs/Claude/mcp-server-token-saver-5000.log`
-   - Server output: `python -m src.server` (capture output)
+   - Server output: `token-saver-mcp` (capture output)
 
 4. **Reproduction Steps**:
    - Minimal example to reproduce the issue

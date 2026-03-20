@@ -32,21 +32,39 @@ git clone https://github.com/oimiragieo/token-saver-5000.git
 cd token-saver-5000
 ```
 
-### 1.2 Install Dependencies
+### 1.2 Install as a Tool
 
-**Option A: Using pip (recommended)**
+**Option A: Using uv (recommended)**
+```bash
+uv tool install -e .
+```
+
+**Option B: Using pipx**
+```bash
+pipx install .
+```
+
+**Option C: Editable install for development**
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
-**Option B: Using uv (faster)**
+### 1.3 Configure MCP the Easy Way
+
+Run the guided setup command:
+
 ```bash
-uv pip install -r requirements.txt
+token-saver-setup --auto
 ```
 
-### 1.3 Verify Installation ✨ NEW!
+That chooses the most likely target automatically:
+- Claude Desktop users usually get `desktop`
+- repo/workspace users usually get `portable-project`
 
-Run the comprehensive setup verification script:
+### 1.4 Optional Deep Verification
+
+Run the comprehensive setup verification script if you want a full smoke test that also downloads the embedding model:
 
 ```bash
 python scripts/check_setup.py
@@ -326,9 +344,9 @@ pwd
 ```json
 {
   "mcpServers": {
-    "semantic-modulator": {
-      "command": "python",
-      "args": ["-m", "src.server"],
+    "token-saver": {
+      "command": "token-saver-mcp",
+      "args": [],
       "cwd": "/PASTE/YOUR/PATH/HERE/token-saver-5000",
       "env": {}
     }
@@ -337,6 +355,11 @@ pwd
 ```
 
 **Replace `/PASTE/YOUR/PATH/HERE/token-saver-5000`** with the path you copied!
+
+**Or install it automatically:**
+```bash
+token-saver-install-mcp
+```
 
 ### 4.3 Restart Claude Desktop
 
