@@ -80,5 +80,8 @@ faiss_index/
 # Benchmark result files (contain session IDs and raw API responses)
 benchmarks/results_*.json
 
+# Tensor-grep index (auto-generated)
+.tg_index
+
 # Persistence layer (v0.2.0+)
 .semantic_modulator_data/
