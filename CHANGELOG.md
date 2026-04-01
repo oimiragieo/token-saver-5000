@@ -34,6 +34,7 @@ All notable changes to Token Saver 5000.
   (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
   plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
 - **Total MCP tools**: 109 (was 108).
+- **Full test suite**: 2,700+ tests across 90+ test files, 92%+ coverage.
 - **CLI output optimizer** (`src/cli_output_optimizer.py`): RTK-inspired command-aware
   filtering for CLI tool output. Auto-detects 10 command types (git diff, pytest, npm install,
   lint, JSON, logs, progress bars, etc.) and applies optimal filtering strategy. Strips ANSI
