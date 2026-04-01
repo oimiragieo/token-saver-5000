@@ -1,0 +1,156 @@
+# Python Web Service Configuration Guide
+
+This guide covers the essential configuration for deploying a Python web service in production.
+Keep this reference handy when setting up new environments or debugging configuration issues.
+
+---
+
+## 1. Environment Variables
+
+Set all configuration via environment variables. Never hardcode secrets.
+
+### Required Variables
+
+```
+APP_ENV=production          # Environment: development, staging, production
+APP_SECRET_KEY=<random>     # 32-byte hex string for session signing
+APP_HOST=0.0.0.0            # Bind address
+APP_PORT=8000               # TCP port
+```
+
+### Optional Variables
+
+```
+APP_WORKERS=4               # Uvicorn worker count (default: CPU count)
+APP_LOG_LEVEL=info          # Logging level: debug, info, warning, error
+APP_RELOAD=false            # Auto-reload on file change (dev only)
+APP_TIMEOUT=30              # Request timeout in seconds
+```
+
+### Generating a Secret Key
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Store the result in your secrets manager (Vault, AWS Secrets Manager, etc.).
+Never commit `.env` files to version control.
+
+---
+
+## 2. Database Configuration
+
+The service uses PostgreSQL as its primary datastore.
+
+### Connection Variables
+
+```
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+DATABASE_POOL_SIZE=10
+DATABASE_MAX_OVERFLOW=20
+DATABASE_POOL_TIMEOUT=30
+DATABASE_ECHO=false         # Set true to log all SQL (dev only)
+```
+
+### Connection Pool Tuning
+
+For low-traffic services: `POOL_SIZE=5`, `MAX_OVERFLOW=10`.
+For high-traffic services: `POOL_SIZE=20`, `MAX_OVERFLOW=40`.
+
+The pool timeout controls how long a request waits for a connection.
+Set it below your request timeout to return clean 503 errors.
+
+### Migrations
+
+Run migrations before starting the service:
+
+```bash
+alembic upgrade head
+```
+
+Always test migrations against a staging database before production.
+Back up the database before running destructive migrations.
+
+---
+
+## 3. Logging Setup
+
+Structured JSON logging is required in production for log aggregation.
+
+### Log Level by Environment
+
+| Environment | Level   | Format  |
+|-------------|---------|---------|
+| development | debug   | human   |
+| staging     | info    | json    |
+| production  | warning | json    |
+
+### Configuration
+
+```python
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"class": "pythonjsonlogger.jsonlogger.JsonFormatter"},
+        "human": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "stdout": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "stream": "ext://sys.stdout",
+        }
+    },
+    "root": {"level": "INFO", "handlers": ["stdout"]},
+}
+```
+
+### Log Fields
+
+Always include these fields in structured log entries:
+- `request_id`: UUID per request (inject via middleware)
+- `user_id`: Authenticated user (if applicable)
+- `duration_ms`: Processing time
+- `status_code`: HTTP response code
+
+---
+
+## 4. Deployment Checklist
+
+Complete this checklist before every production deployment.
+
+### Pre-Deployment
+
+- [ ] All tests pass locally and in CI
+- [ ] Migrations tested against a copy of production data
+- [ ] `APP_SECRET_KEY` rotated if compromised
+- [ ] New environment variables documented and set in secrets manager
+- [ ] Dependency versions pinned in `requirements.txt`
+- [ ] Docker image built and scanned for vulnerabilities
+
+### Deployment Steps
+
+1. Tag the release commit: `git tag v1.2.3`
+2. Push tag to trigger CI/CD pipeline
+3. Monitor deployment logs for startup errors
+4. Verify health endpoint: `GET /health/liveness`
+5. Run smoke tests against the new version
+6. Monitor error rate for 10 minutes post-deploy
+
+### Rollback Procedure
+
+If error rate exceeds 1% after deployment:
+
+```bash
+kubectl rollout undo deployment/web-service
+```
+
+Always keep the previous two image versions available for instant rollback.
+Document the rollback in your incident log with timestamps and root cause.
+
+### Post-Deployment
+
+- [ ] Confirm all pods are healthy (`kubectl get pods`)
+- [ ] Verify metrics are flowing to Prometheus
+- [ ] Close the deployment ticket with duration and outcome

@@ -55,7 +55,8 @@ class TestSetupMCPTools:
         # - Structured handoff bundles: 4
         # - Model optimization: 6
         # - Prompt registry/cache audit/rendering: 8
-        assert len(tools) == 99, f"Expected 99 tools, got {len(tools)}"
+        # - Token Optimization: 4 (v0.11.0) - estimate_tokens, configure_for_client, set/get_compression_profile
+        assert len(tools) == 103, f"Expected 103 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""

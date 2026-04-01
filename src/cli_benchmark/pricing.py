@@ -1,0 +1,45 @@
+"""Cost computation for benchmark results."""
+
+from __future__ import annotations
+
+# Per million tokens pricing
+PRICING: dict[str, dict[str, float]] = {
+    # Claude models
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
+    "claude-opus-4-6": {"input": 15.0, "output": 75.0, "cache_read": 1.50},
+    "claude-haiku-4-5": {"input": 0.80, "output": 4.0, "cache_read": 0.08},
+    # Gemini models
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.0, "cache_read": 0.315},
+    "gemini-2.5-flash": {"input": 0.15, "output": 0.60, "cache_read": 0.0375},
+    "gemini-3.1-pro": {"input": 1.25, "output": 10.0, "cache_read": 0.315},
+    "gemini-3.1-flash": {"input": 0.15, "output": 0.60, "cache_read": 0.0375},
+    # GPT models
+    "gpt-4o": {"input": 2.50, "output": 10.0, "cache_read": 1.25},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60, "cache_read": 0.075},
+    # Codex CLI models
+    "gpt-5.1-codex": {"input": 2.50, "output": 10.0, "cache_read": 0.625},
+    "codex-mini": {"input": 1.50, "output": 6.0, "cache_read": 0.375},
+    # Default fallback
+    "default": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
+}
+
+
+def compute_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+) -> float:
+    """Compute cost in USD from token counts and model pricing."""
+    rates = PRICING.get(model, PRICING["default"])
+    cost = (
+        input_tokens * rates["input"]
+        + output_tokens * rates["output"]
+        + cache_read_tokens * rates.get("cache_read", 0.0)
+    ) / 1_000_000
+    return round(cost, 6)
+
+
+def get_model_rates(model: str) -> dict[str, float]:
+    """Get pricing rates for a model, falling back to default."""
+    return PRICING.get(model, PRICING["default"])

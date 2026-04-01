@@ -357,8 +357,170 @@ WHY: 10 seconds balances responsiveness with performance overhead.
 # Version Information
 # ============================================================================
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 """Current version of Token Saver 5000 (Single source of truth)"""
 
 VERSION_STRING = f"Token Saver 5000 v{VERSION}"
 """Full version string for logging and display"""
+
+# ============================================================================
+# Tool Result Formatting (v0.11.0 - Token Optimization)
+# ============================================================================
+
+TOOL_RESULT_SOFT_LIMIT_CHARS = int(os.getenv("TOOL_RESULT_SOFT_LIMIT", "40000"))
+"""
+Soft limit for MCP tool result size in characters.
+- When exceeded, metadata is stripped to reduce size
+- Claude Code caps tool results at 50K chars; this keeps us safely under
+- Environment variable: TOOL_RESULT_SOFT_LIMIT
+WHY: 40K is 80% of Claude Code's 50K limit, leaving headroom for JSON wrapping.
+"""
+
+TOOL_RESULT_HARD_LIMIT_CHARS = int(os.getenv("TOOL_RESULT_HARD_LIMIT", "49000"))
+"""
+Hard limit for MCP tool result size in characters.
+- When exceeded, response is paginated with a continuation token
+- Environment variable: TOOL_RESULT_HARD_LIMIT
+WHY: 49K stays under Claude Code's 50K per-tool cap with 1K safety margin.
+"""
+
+TOOL_RESULT_PREVIEW_CHARS = int(os.getenv("TOOL_RESULT_PREVIEW", "2000"))
+"""
+Preview size when response is paginated.
+- First N chars shown with continuation instructions
+- Matches Claude Code's preview size for persisted tool results
+- Environment variable: TOOL_RESULT_PREVIEW
+WHY: 2K preview matches Claude Code's disk-persisted preview convention.
+"""
+
+# ============================================================================
+# Known Model Context Windows (v0.11.0 - Client Configuration)
+# ============================================================================
+
+KNOWN_MODEL_CONTEXT_WINDOWS = {
+    # Anthropic Claude models (standard context)
+    "claude-opus-4-6": 200_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
+    "claude-opus-4-5": 200_000,
+    "claude-sonnet-4-5": 200_000,
+    "claude-opus-4-1": 200_000,
+    "claude-opus-4": 200_000,
+    "claude-sonnet-4": 200_000,
+    # Anthropic Claude models (1M context)
+    "claude-opus-4-6[1m]": 1_000_000,
+    "claude-sonnet-4-6[1m]": 1_000_000,
+    "claude-opus-4-5[1m]": 1_000_000,
+    "claude-sonnet-4-5[1m]": 1_000_000,
+    # OpenAI models
+    "gpt-4o": 128_000,
+    "gpt-4o-mini": 128_000,
+    "gpt-4-turbo": 128_000,
+    "gpt-4": 8_192,
+    "o1": 200_000,
+    "o1-mini": 128_000,
+    "o3": 200_000,
+    "o3-mini": 200_000,
+    "o4-mini": 200_000,
+    # Codex CLI models (v0.11.0 additions)
+    "gpt-5.1-codex": 200_000,
+    "codex-mini": 200_000,
+    # Google Gemini models (legacy)
+    "gemini-2.0-pro": 2_000_000,
+    "gemini-2.0-flash": 1_000_000,
+    "gemini-1.5-pro": 2_000_000,
+    "gemini-1.5-flash": 1_000_000,
+    # Google Gemini models (v0.12.0 additions)
+    "gemini-2.5-pro": 1_048_576,
+    "gemini-2.5-flash": 1_048_576,
+    "gemini-3.1-pro": 1_048_576,
+    "gemini-3.1-flash": 1_048_576,
+    "gemini-3.1-flash-lite": 1_048_576,
+    # Default fallback
+    "default": 100_000,
+}
+"""
+Known model context window sizes in tokens.
+- Used by configure_for_client tool to auto-detect appropriate compression ratios
+- Unknown models fall back to 'default' (100K tokens)
+- Clients can override via explicit context_window_tokens parameter
+WHY: Auto-tuning compression to available context improves token efficiency.
+"""
+
+KNOWN_MODEL_COMPRESSION_TRIGGERS = {
+    # Gemini CLI compresses at 50% of context window
+    "gemini-2.5-pro": 0.50,
+    "gemini-2.5-flash": 0.50,
+    "gemini-3.1-pro": 0.50,
+    "gemini-3.1-flash": 0.50,
+    "gemini-3.1-flash-lite": 0.50,
+    # Claude Code compresses at ~93% of context window
+    "claude-opus-4-6": 0.93,
+    "claude-sonnet-4-6": 0.93,
+    "claude-opus-4-6[1m]": 0.93,
+    "claude-sonnet-4-6[1m]": 0.93,
+    # GPT/other models don't auto-compress (ratio = 1.0)
+    "gpt-4o": 1.0,
+    # Codex CLI models compress at 80% (HISTORY_SOFT_CAP_RATIO = 0.8)
+    "gpt-5.1-codex": 0.80,
+    "codex-mini": 0.80,
+    "o3": 0.80,
+    "o4-mini": 0.80,
+    "default": 0.80,
+}
+"""
+Compression trigger ratios by model.
+Represents the % of context window at which the client typically starts compressing.
+Lower values mean the client is more aggressive about compression.
+Used to tune skeleton ratios: aggressive clients get more compressed output.
+"""
+
+DEFAULT_COMPRESSION_PROFILE = "balanced"
+"""
+Default compression profile name when no profile is explicitly set.
+WHY: Balanced provides good compression without sacrificing too much detail.
+"""
+
+# ============================================================================
+# Compression Profiles (v0.11.0 - Named Presets)
+# ============================================================================
+
+COMPRESSION_PROFILES = {
+    "minimal": {
+        "skeleton_ratio": 0.05,
+        "fidelity": "ABSTRACT",
+        "chunk_size": 256,
+        "description": "Maximum compression, navigation only",
+    },
+    "summary": {
+        "skeleton_ratio": 0.15,
+        "fidelity": "OUTLINE",
+        "chunk_size": 512,
+        "description": "Quick overview, fits in compacted context",
+    },
+    "balanced": {
+        "skeleton_ratio": 0.25,
+        "fidelity": "STRUCTURE",
+        "chunk_size": 512,
+        "description": "Default, good for most tasks",
+    },
+    "detailed": {
+        "skeleton_ratio": 0.50,
+        "fidelity": "DETAILED",
+        "chunk_size": 1024,
+        "description": "Code review, deep analysis",
+    },
+    "full": {
+        "skeleton_ratio": 0.80,
+        "fidelity": "RAW",
+        "chunk_size": 2048,
+        "description": "Near-original, minimal compression",
+    },
+}
+"""
+Named compression presets bundling multiple parameters.
+- Each profile defines skeleton_ratio, fidelity level, and chunk size
+- Users set a profile via set_compression_profile tool
+- Explicit parameters always override profile defaults
+WHY: Simplifies UX by replacing 3+ parameter decisions with a single choice.
+"""

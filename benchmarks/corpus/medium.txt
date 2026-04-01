@@ -1,0 +1,479 @@
+# Distributed Task Queue System — Architecture Specification
+
+Version: 2.4.0
+Status: Approved
+Last Updated: 2026-03-01
+
+---
+
+## Table of Contents
+
+1. System Overview
+2. Component Architecture
+   2.1 Workers
+   2.2 Scheduler
+   2.3 Message Broker
+   2.4 Result Store
+3. Data Flow
+4. Failure Handling
+5. Scaling Strategy
+6. Monitoring
+7. API Endpoints
+8. Configuration Reference
+
+---
+
+## 1. System Overview
+
+The Distributed Task Queue (DTQ) system enables asynchronous execution of compute tasks across
+a fleet of worker processes. It decouples task producers from task consumers, allowing independent
+scaling of each tier. Tasks are submitted via a REST API, queued in a message broker, consumed
+by workers, and results are stored in a result backend.
+
+### Design Goals
+
+- **Reliability**: Tasks must not be lost, even if a broker or worker crashes.
+- **Scalability**: The system must scale horizontally from 1 to 1,000 workers.
+- **Observability**: Every task must be traceable from submission to completion.
+- **Simplicity**: Operators must be able to run the full stack locally for development.
+
+### Key Constraints
+
+- Maximum task payload size: 256 KB
+- Maximum task execution time: 24 hours (configurable per queue)
+- Minimum scheduling resolution: 1 second
+- Target p99 task pickup latency: < 200 ms under normal load
+
+### System Boundaries
+
+The DTQ system does not:
+- Execute tasks that require GPU access (see ML Pipeline Service)
+- Guarantee ordering within a queue (use priority queues for ordering)
+- Provide task cancellation once a worker has acknowledged the task
+
+---
+
+## 2. Component Architecture
+
+The system comprises four primary components: Workers, Scheduler, Message Broker, and Result Store.
+Each component is independently deployable and scalable. Communication between components uses
+well-defined interfaces so any component can be replaced with a compatible implementation.
+
+```
+┌──────────────┐     ┌────────────────┐     ┌─────────────┐
+│   API Layer  │────▶│ Message Broker │────▶│   Workers   │
+└──────────────┘     └────────────────┘     └─────────────┘
+       │                      │                     │
+       │              ┌───────┴──────┐              │
+       │              │  Scheduler   │              │
+       │              └──────────────┘              │
+       │                                            │
+       └────────────────────────────────────────────┘
+                              │
+                     ┌────────▼────────┐
+                     │  Result Store   │
+                     └─────────────────┘
+```
+
+### 2.1 Workers
+
+Workers are stateless processes that poll the message broker for tasks, execute them, and store
+results. They are the computational units of the system.
+
+#### Worker Lifecycle
+
+1. **Registration**: On startup, a worker registers itself with a unique `worker_id` (UUID v4)
+   and announces its supported queue names and concurrency limit.
+2. **Polling**: Workers poll the broker using a long-poll connection with a 30-second timeout.
+   Each worker maintains one connection per concurrency slot.
+3. **Execution**: When a task is received, the worker forks a subprocess for isolation.
+   The subprocess runs the task function with its arguments and reports exit status.
+4. **Heartbeat**: Workers send a heartbeat to the broker every 10 seconds.
+   A worker missing two consecutive heartbeats is marked as `lost`.
+5. **Shutdown**: On SIGTERM, the worker stops accepting new tasks and waits up to 60 seconds
+   for in-flight tasks to complete before exiting.
+
+#### Worker Configuration
+
+| Parameter            | Default | Description                              |
+|----------------------|---------|------------------------------------------|
+| `WORKER_CONCURRENCY` | 4       | Max simultaneous tasks per worker        |
+| `WORKER_PREFETCH`    | 1       | Number of tasks to prefetch from broker  |
+| `WORKER_MAX_TASKS`   | 10000   | Restart worker after N tasks (memory leak guard) |
+| `WORKER_TIMEOUT`     | 300     | Default task timeout in seconds          |
+| `WORKER_LOG_LEVEL`   | info    | Logging verbosity                        |
+
+#### Worker Identity
+
+Each worker has a stable identity composed of:
+- `hostname`: System hostname
+- `pid`: Process ID
+- `worker_id`: Random UUID assigned at startup
+- `queue_names`: List of queues this worker services
+
+Worker identity is used for debugging, metrics labeling, and task ownership tracking.
+
+### 2.2 Scheduler
+
+The Scheduler is responsible for converting cron-style periodic tasks and delayed one-shot tasks
+into concrete task submissions at the appropriate time.
+
+#### Scheduler Responsibilities
+
+- Parse cron expressions and calculate next execution times
+- Submit tasks to the broker at the scheduled time
+- Track last-run timestamps to prevent duplicate submissions on restarts
+- Support per-task timezone configuration
+- Emit scheduling events for observability
+
+#### Scheduler Internals
+
+The Scheduler uses a min-heap (priority queue) internally, ordered by next execution time.
+On each tick (every 1 second), it pops all tasks whose `next_run <= now` and submits them.
+It then recalculates `next_run` for periodic tasks and re-inserts them into the heap.
+
+The Scheduler persists its state to the Result Store every 60 seconds, allowing it to resume
+after a restart without losing scheduled task state. On startup, it reads persisted state and
+adjusts for any time that elapsed while it was down (catching up missed runs if configured).
+
+#### Missed Run Policy
+
+When the Scheduler restarts after a downtime, it has three policies for missed runs:
+- `skip`: Ignore all missed runs (default)
+- `catchup`: Execute all missed runs immediately
+- `latest`: Execute only the most recent missed run
+
+Configure per-task: `missed_run_policy: catchup`.
+
+### 2.3 Message Broker
+
+The Message Broker is the central communication bus. All task submissions flow through it,
+and workers consume from it. The reference implementation uses Redis Streams, but the interface
+is designed to support RabbitMQ, Kafka, or any compatible backend.
+
+#### Broker Responsibilities
+
+- Accept task submissions and assign unique `task_id` (UUID v4)
+- Route tasks to the appropriate queue based on task type
+- Enforce queue capacity limits (backpressure)
+- Acknowledge successful delivery to workers
+- Re-queue tasks that were not acknowledged within the visibility timeout
+- Track in-flight tasks and ownership by worker
+
+#### Broker Guarantees
+
+The broker provides at-least-once delivery. Tasks may be delivered more than once if:
+- A worker crashes after acknowledging but before storing the result
+- The network partitions during acknowledgment
+
+Tasks MUST be idempotent. The `task_id` is stable across redeliveries and can be used to
+deduplicate results in the Result Store.
+
+#### Queue Management
+
+Each queue has independent configuration:
+
+```yaml
+queues:
+  default:
+    max_length: 100000
+    visibility_timeout: 300
+    dead_letter_queue: default.dlq
+    priority: normal
+  critical:
+    max_length: 10000
+    visibility_timeout: 60
+    dead_letter_queue: critical.dlq
+    priority: high
+  batch:
+    max_length: 500000
+    visibility_timeout: 7200
+    dead_letter_queue: batch.dlq
+    priority: low
+```
+
+When a queue reaches `max_length`, the broker returns HTTP 429 (Too Many Requests) to producers.
+
+#### Dead Letter Queue
+
+Tasks are moved to the dead letter queue (DLQ) when:
+- They have been retried `max_retries` times and still fail
+- They exceed the maximum execution time
+- The task function raises a non-retryable exception (subclass of `FatalError`)
+
+DLQ entries are retained for 30 days. Operators can inspect and replay DLQ entries via the API.
+
+### 2.4 Result Store
+
+The Result Store persists task results, metadata, and status transitions. It provides the query
+interface used by producers to poll for completion and retrieve results.
+
+#### Result Lifecycle
+
+Tasks transition through these states:
+
+```
+PENDING → QUEUED → RUNNING → SUCCESS
+                           → FAILURE → RETRYING → RUNNING (loop)
+                                                 → DEAD
+```
+
+Each transition is timestamped and recorded. The full state history is queryable.
+
+#### Storage Backend
+
+The reference implementation uses Redis for hot results (TTL: 24 hours) with automatic archival
+to PostgreSQL for long-term storage. Archival runs every 5 minutes for results older than 1 hour.
+
+#### Result Retention
+
+| State   | Redis TTL | PostgreSQL Retention |
+|---------|-----------|----------------------|
+| SUCCESS | 24 hours  | 90 days              |
+| FAILURE | 24 hours  | 180 days             |
+| DEAD    | 7 days    | 365 days             |
+
+---
+
+## 3. Data Flow
+
+This section describes the complete lifecycle of a task from submission to result retrieval.
+
+### 3.1 Task Submission
+
+1. Producer calls `POST /api/v1/tasks` with task type, arguments, and options.
+2. API layer validates the payload (size, schema, auth).
+3. API layer assigns `task_id = uuid4()` and `submitted_at = now()`.
+4. API layer publishes the task to the broker's default queue (or specified queue).
+5. Broker assigns the task to an internal stream and responds with `202 Accepted`.
+6. API returns `{"task_id": "<uuid>", "status": "QUEUED"}` to the producer.
+
+### 3.2 Task Execution
+
+1. A worker's polling loop receives the task from the broker.
+2. Worker updates task status to `RUNNING` in the Result Store.
+3. Worker spawns a subprocess with the task arguments.
+4. Subprocess executes the task function and exits with code 0 (success) or non-zero (failure).
+5. Worker captures stdout/stderr from the subprocess.
+6. Worker stores the result in the Result Store and updates status to `SUCCESS` or `FAILURE`.
+7. Worker sends acknowledgment to the broker.
+
+### 3.3 Result Retrieval
+
+1. Producer calls `GET /api/v1/tasks/{task_id}` to poll for status.
+2. API layer queries the Result Store.
+3. If `status == SUCCESS`, response includes `result` field with task output.
+4. If `status == FAILURE`, response includes `error` and `traceback` fields.
+5. Producers should use exponential backoff when polling: 1s, 2s, 4s, 8s, max 30s.
+
+---
+
+## 4. Failure Handling
+
+Distributed systems fail. This section documents every known failure mode and the system's
+response to each one.
+
+### 4.1 Worker Crash
+
+**Detection**: Broker detects missing heartbeat after 20 seconds (2 missed intervals).
+**Response**: Broker marks the worker as `lost` and re-queues all in-flight tasks owned by it.
+**Recovery**: Kubernetes restarts the worker pod. Worker re-registers with a new `worker_id`.
+**Risk**: If the worker completed the task but crashed before acknowledging, the task is retried.
+Task idempotency handles this case.
+
+### 4.2 Broker Outage
+
+**Detection**: API layer gets connection errors when publishing tasks.
+**Response**: API returns `503 Service Unavailable` to producers. No tasks are accepted.
+**Recovery**: Redis Sentinel or Cluster provides automatic failover in < 30 seconds.
+**Risk**: Tasks in-flight during the outage may be lost if Redis loses data. Use Redis persistence
+(`appendfsync: always`) to minimize this window.
+
+### 4.3 Result Store Outage
+
+**Detection**: Workers get connection errors when writing results.
+**Response**: Worker retries 3 times with exponential backoff before marking the task as failed.
+**Recovery**: Reconnects automatically when the store recovers.
+**Risk**: Results written to Redis but not yet archived to PostgreSQL may be lost during a
+correlated Redis + archival service outage.
+
+### 4.4 Network Partition
+
+**Detection**: Workers lose connectivity to broker or result store.
+**Response**: Workers pause polling and retry connections with backoff.
+**Recovery**: Automatic reconnect when network recovers.
+**Risk**: Visibility timeout may expire during a partition, causing task redelivery.
+
+### 4.5 Scheduler Crash
+
+**Detection**: Kubernetes liveness probe fails.
+**Response**: Kubernetes restarts the Scheduler pod.
+**Recovery**: Scheduler reads persisted state from Result Store on startup.
+**Risk**: Tasks scheduled during the restart window may be delayed by up to 60 seconds
+(state persistence interval).
+
+---
+
+## 5. Scaling Strategy
+
+The DTQ system scales horizontally at every tier. This section documents scaling triggers,
+limits, and procedures.
+
+### 5.1 Scaling Workers
+
+Workers are stateless and scale linearly. Add workers by increasing the Kubernetes Deployment
+replica count. Each worker consumes:
+- ~50 MB memory base
+- ~50 MB memory per concurrent task slot
+- 2 CPU cores under full load
+
+**Scale up trigger**: Queue depth > 1,000 tasks per worker for > 5 minutes.
+**Scale down trigger**: Queue depth < 100 tasks per worker for > 15 minutes.
+**Maximum workers**: 200 (limited by broker connection pool size).
+
+Use Kubernetes HPA with a custom metric exported from the broker:
+```yaml
+metrics:
+  - type: External
+    external:
+      metric:
+        name: dtq_queue_depth_per_worker
+      target:
+        type: AverageValue
+        averageValue: "500"
+```
+
+### 5.2 Scaling the Broker
+
+Redis Cluster shards tasks across multiple nodes. Scale by adding shards.
+Each shard handles up to 100,000 tasks/second at < 1ms latency.
+Resharding requires a maintenance window of approximately 30 minutes.
+
+### 5.3 Scaling the Result Store
+
+The hot tier (Redis) scales identically to the Broker.
+The cold tier (PostgreSQL) scales via read replicas for query load and connection pooling
+(PgBouncer) for connection overhead. Writes go to the primary; reads are distributed.
+
+---
+
+## 6. Monitoring
+
+All components export Prometheus metrics on `:9090/metrics`. Dashboards are in Grafana.
+
+### 6.1 Key Metrics
+
+| Metric                         | Type      | Description                          |
+|--------------------------------|-----------|--------------------------------------|
+| `dtq_queue_depth`              | Gauge     | Number of tasks waiting in queue     |
+| `dtq_task_pickup_latency_ms`   | Histogram | Time from submission to worker start |
+| `dtq_task_execution_duration`  | Histogram | Task execution time                  |
+| `dtq_task_success_total`       | Counter   | Completed successful tasks           |
+| `dtq_task_failure_total`       | Counter   | Failed tasks (by queue, error type)  |
+| `dtq_worker_count`             | Gauge     | Active registered workers            |
+| `dtq_dlq_depth`                | Gauge     | Dead letter queue depth              |
+| `dtq_broker_latency_ms`        | Histogram | Broker round-trip latency            |
+
+### 6.2 Alerting Rules
+
+```yaml
+groups:
+  - name: dtq
+    rules:
+      - alert: HighQueueDepth
+        expr: dtq_queue_depth > 50000
+        for: 10m
+        severity: warning
+      - alert: HighDLQDepth
+        expr: dtq_dlq_depth > 1000
+        for: 5m
+        severity: critical
+      - alert: HighPickupLatency
+        expr: histogram_quantile(0.99, dtq_task_pickup_latency_ms) > 5000
+        for: 5m
+        severity: warning
+      - alert: WorkerCountLow
+        expr: dtq_worker_count < 2
+        for: 2m
+        severity: critical
+```
+
+### 6.3 Distributed Tracing
+
+Every task carries a `trace_id` derived from the HTTP request's `X-Trace-ID` header.
+The trace propagates from the API layer through the broker, worker, and result store.
+Traces are exported to Jaeger via OTLP.
+
+---
+
+## 7. API Endpoints
+
+### Submit Task
+
+**POST** `/api/v1/tasks`
+
+Request body:
+```json
+{
+  "task_type": "send_email",
+  "args": {"to": "user@example.com", "subject": "Hello"},
+  "queue": "default",
+  "priority": 5,
+  "max_retries": 3,
+  "countdown": 0
+}
+```
+
+Response `202 Accepted`:
+```json
+{"task_id": "550e8400-e29b-41d4-a716-446655440000", "status": "QUEUED"}
+```
+
+### Get Task Status
+
+**GET** `/api/v1/tasks/{task_id}`
+
+Response `200 OK`:
+```json
+{
+  "task_id": "550e8400-...",
+  "status": "SUCCESS",
+  "result": {"sent": true},
+  "submitted_at": "2026-03-01T10:00:00Z",
+  "started_at": "2026-03-01T10:00:01Z",
+  "completed_at": "2026-03-01T10:00:02Z"
+}
+```
+
+### List Tasks
+
+**GET** `/api/v1/tasks?queue=default&status=FAILURE&limit=50`
+
+### Cancel Task
+
+**DELETE** `/api/v1/tasks/{task_id}` (only effective if status is QUEUED)
+
+### Get Queue Stats
+
+**GET** `/api/v1/queues/{queue_name}/stats`
+
+---
+
+## 8. Configuration Reference
+
+### Environment Variables
+
+| Variable                    | Default    | Description                                  |
+|-----------------------------|------------|----------------------------------------------|
+| `DTQ_BROKER_URL`            | required   | Redis connection URL                         |
+| `DTQ_RESULT_BACKEND`        | required   | Redis or PostgreSQL URL for results          |
+| `DTQ_DEFAULT_QUEUE`         | `default`  | Queue name if not specified                  |
+| `DTQ_MAX_TASK_PAYLOAD_KB`   | `256`      | Maximum task payload in kilobytes            |
+| `DTQ_VISIBILITY_TIMEOUT`    | `300`      | Seconds before unacked task is re-queued     |
+| `DTQ_MAX_RETRIES`           | `3`        | Default retry count for failed tasks         |
+| `DTQ_RETRY_BACKOFF`         | `exponential` | Retry strategy: fixed or exponential      |
+| `DTQ_SCHEDULER_INTERVAL`    | `1`        | Scheduler tick interval in seconds           |
+| `DTQ_RESULT_TTL`            | `86400`    | Result retention in seconds (Redis hot tier) |
+| `DTQ_API_RATE_LIMIT`        | `1000`     | Max task submissions per second per client   |
+| `DTQ_TRACING_ENABLED`       | `true`     | Enable OpenTelemetry tracing                 |
+| `DTQ_METRICS_PORT`          | `9090`     | Prometheus metrics port                      |

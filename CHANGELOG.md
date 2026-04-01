@@ -4,6 +4,69 @@ All notable changes to Token Saver 5000.
 
 ## [Unreleased]
 
+### Added (v0.11.0 - Cross-Platform Token Optimization)
+- **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken
+  (accurate), `len//4` fast, `len//2` JSON-density, Gemini-compatible (0.25/ASCII, 1.3/non-ASCII),
+  and raw byte count. Exposed as `estimate_tokens` MCP tool.
+- **Response formatter** (`src/response_formatter.py`): size-aware MCP tool response formatting.
+  Enforces soft limit (40K chars) and hard limit (49K chars) to stay within Claude Code's 50K
+  per-tool cap. Three truncation strategies: `paginate` (default, continuation token),
+  `proportional` (20% head + 80% tail, matches Gemini CLI), `head` (first N chars).
+  Optional `_header` field (< 200 chars) survives any truncation strategy.
+- **Client configuration** (`src/client_config.py`): model-aware compression tuning.
+  Maps model IDs to context window sizes and compression trigger ratios. Auto-tunes skeleton
+  ratio based on window size and client compression aggressiveness. Supports Claude (200K/1M,
+  triggers at 93%), Gemini (1M, triggers at 50%), GPT (128K, no auto-compress), and explicit
+  overrides. Session-scoped via `SessionConfigStore`.
+- **Compression profiles** (`src/compression_profiles.py`): named presets
+  (minimal/summary/balanced/detailed/full) bundling skeleton_ratio, fidelity, and chunk_size.
+  Session-scoped via `ProfileManager`. Urgency support: `compact` (cap ratio 0.15) and
+  `emergency` (force ratio 0.05, ABSTRACT fidelity) for tight context budgets.
+- **4 new MCP tools**: `estimate_tokens`, `configure_for_client`, `set_compression_profile`,
+  `get_compression_profile` -- all routed via `token_optimization_handlers.py`.
+- **Model database**: `KNOWN_MODEL_CONTEXT_WINDOWS` expanded with 5 Gemini models
+  (2.5-pro/flash, 3.1-pro/flash/flash-lite at 1,048,576 tokens).
+  New `KNOWN_MODEL_COMPRESSION_TRIGGERS` dict for per-model compression aggressiveness.
+- **Schema stability**: tool schemas now sorted alphabetically for prompt cache stability.
+  Dynamic content (version strings, temporal language) removed from 2 tool descriptions.
+- **156 new tests** across 6 test files: `test_response_formatter.py` (19),
+  `test_token_estimation.py` (23), `test_client_config.py` (20), `test_compression_profiles.py`
+  (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
+  plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
+- **Total MCP tools**: 103 (was 99).
+- **Codex CLI support**: Added `gpt-5.1-codex` and `codex-mini` to model database
+  (200K context, 0.80 compression trigger). Codex pricing in `pricing.py`.
+  Codex JSONL output parser in `providers.py`. 30 new Codex tests.
+- **Cross-platform benchmark harness** (`src/cli_benchmark/`, `scripts/benchmark_token_savings.py`):
+  Measures real API token usage with vs without Token Saver compression across Claude Code,
+  Gemini CLI, and Codex. Two modes: skill-based (pre-compression) and MCP-based (live
+  integration). Ships with 3 corpus files (small/medium/large) and 62 benchmark tests.
+  Supports `--dry-run`, `--providers`, `--sizes`, `--output` JSON results + ASCII table.
+- **Proven benchmark results** (large corpus, 2,206 lines, 16K tokens, with token refinement):
+  - Document compression: 13.0x (16,461 -> 1,269 tokens), up from 5.9x before refinement
+  - Claude Code: 26.4% input savings, up to 50.3% cost savings
+  - Codex: 38.2% input savings, 36.3% cost savings
+  - Gemini CLI: 55.7% input savings, 54.4% cost savings
+- **Findings documents**: `docs/claude-code-token-optimization-enhancements.md`,
+  `docs/gemini-cli-token-optimization-enhancements.md`,
+  `docs/codex-cli-token-optimization-enhancements.md`
+- **Cache-stable response ordering** (`src/response_formatter.py`): provider-aware key
+  ordering that maximizes prompt cache hits. Stable fields (status, file_id) first for
+  Claude/Gemini prefix caching; mirrored at tail for Codex middle-truncation resilience.
+- **Provider format hints** (`src/client_config.py`): auto-detects provider from model ID
+  (anthropic/google/openai) and sets optimal output format, truncation strategy, and
+  cache ordering per provider. Claude gets TOON+paginate, Gemini gets JSON+proportional,
+  Codex gets TOON+head.
+- **Token-level skeleton refinement** (`src/token_refiner.py`): LLMLingua-inspired
+  post-processing that removes low-importance tokens (articles, fillers, hedges) from
+  compressed skeletons while preserving semantic anchors (numbers, code identifiers,
+  URLs, acronyms). Achieves 20-40% additional reduction on top of semantic compression.
+  Pure Python, no external dependencies. 45 tests.
+- **TurboQuant-inspired embedding quantization** (`src/embedding_quantizer.py`): reduces
+  384-dim float32 embeddings to 96-dim int8 (13x memory reduction) using random orthogonal
+  rotation (PolarQuant) + int8 quantization + 1-bit residual error correction (QJL).
+  >0.99 cosine fidelity in reduced space. Pure numpy. 22 tests.
+
 ### Changed
 - Added a local extractive compression baseline plus reusable segment-level compression cache for lower-latency token trimming experiments.
 - Added stable-prefix-preserving history compaction utilities for conversation workflows.

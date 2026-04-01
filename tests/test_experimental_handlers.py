@@ -574,7 +574,7 @@ class TestMCPCoreIntegration:
         from src.handlers.mcp_core import setup_mcp_tools
 
         tools = setup_mcp_tools()
-        assert len(tools) == 99, f"Expected 99 tools, got {len(tools)}"
+        assert len(tools) == 103, f"Expected 103 tools, got {len(tools)}"
 
     def test_experimental_tools_have_experimental_in_description(self):
         """Verify all experimental tool descriptions mention EXPERIMENTAL."""

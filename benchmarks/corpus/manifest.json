@@ -1,0 +1,20 @@
+{
+  "prompt_template": "You are given the following document as context.\n\n<context>\n{context}\n</context>\n\nAnswer the following questions based ONLY on the document above:\n1. List the three most important concepts or components mentioned.\n2. What are the key architectural decisions or trade-offs described?\n3. Summarize the document in exactly 3 bullet points.\n\nRespond in JSON with keys: \"concepts\", \"decisions\", \"summary\".",
+  "files": [
+    {
+      "name": "small",
+      "file": "small.txt",
+      "description": "Short configuration guide (~100 lines). Minimal redundancy, expect little compression benefit."
+    },
+    {
+      "name": "medium",
+      "file": "medium.txt",
+      "description": "Architecture specification (~500 lines). Moderate redundancy, expect 40-60% savings."
+    },
+    {
+      "name": "large",
+      "file": "large.txt",
+      "description": "API reference with repetitive patterns (~2000 lines). High redundancy, expect 75-90% savings."
+    }
+  ]
+}

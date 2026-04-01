@@ -1,0 +1,2206 @@
+# TaskFlow REST API Reference
+
+Version: 3.0.0
+Base URL: `https://api.taskflow.io/v3`
+Authentication: Bearer token in `Authorization` header
+
+---
+
+## Table of Contents
+
+1. Authentication
+2. Users — CRUD
+3. Projects — CRUD
+4. Tasks — CRUD
+5. Comments — CRUD
+6. Webhooks — CRUD
+7. Error Reference
+
+---
+
+## 1. Authentication
+
+All endpoints require a valid API token. Obtain tokens via the OAuth2 flow or API key management
+in the dashboard. Tokens expire after 24 hours; use the refresh endpoint to extend.
+
+### 1.1 Obtain Token
+
+**POST** `/auth/token`
+
+Authenticate and receive an access token.
+
+**Request Headers**
+
+| Header         | Required | Description              |
+|----------------|----------|--------------------------|
+| Content-Type   | Yes      | `application/json`       |
+
+**Request Body**
+
+```json
+{
+  "grant_type": "password",
+  "username": "user@example.com",
+  "password": "s3cr3t"
+}
+```
+
+**Parameters**
+
+| Field        | Type   | Required | Description                  |
+|--------------|--------|----------|------------------------------|
+| `grant_type` | string | Yes      | Must be `password` or `api_key` |
+| `username`   | string | Cond.    | Required for password grant  |
+| `password`   | string | Cond.    | Required for password grant  |
+| `api_key`    | string | Cond.    | Required for api_key grant   |
+
+**Response** `200 OK`
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                     |
+|------|--------|---------------------------------|
+| 1001 | 400    | Missing required field          |
+| 1002 | 401    | Invalid credentials             |
+| 1003 | 429    | Too many attempts, try again later |
+
+---
+
+### 1.2 Refresh Token
+
+**POST** `/auth/refresh`
+
+Exchange a refresh token for a new access token.
+
+**Request Headers**
+
+| Header         | Required | Description              |
+|----------------|----------|--------------------------|
+| Content-Type   | Yes      | `application/json`       |
+
+**Request Body**
+
+```json
+{
+  "refresh_token": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
+}
+```
+
+**Parameters**
+
+| Field           | Type   | Required | Description              |
+|-----------------|--------|----------|--------------------------|
+| `refresh_token` | string | Yes      | Token from `/auth/token` |
+
+**Response** `200 OK`
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": "bmV3IHJlZnJlc2ggdG9rZW4..."
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 1004 | 400    | Missing refresh_token        |
+| 1005 | 401    | Invalid or expired token     |
+
+---
+
+### 1.3 Revoke Token
+
+**DELETE** `/auth/token`
+
+Revoke an access token immediately.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 1006 | 401    | Invalid or missing token     |
+
+---
+
+## 2. Users
+
+User management endpoints for creating, reading, updating, and deleting user accounts.
+
+---
+
+### 2.1 Create User
+
+**POST** `/users`
+
+Create a new user account.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Request Body**
+
+```json
+{
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "role": "member",
+  "password": "SecurePassword123!"
+}
+```
+
+**Parameters**
+
+| Field      | Type   | Required | Description                          |
+|------------|--------|----------|--------------------------------------|
+| `email`    | string | Yes      | Must be unique, valid email format   |
+| `name`     | string | Yes      | Display name, 2–100 characters       |
+| `role`     | string | No       | `admin`, `member`, `viewer` (default: `member`) |
+| `password` | string | Yes      | Min 8 chars, must include uppercase  |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "role": "member",
+  "created_at": "2026-03-01T10:00:00Z",
+  "updated_at": "2026-03-01T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                          |
+|------|--------|--------------------------------------|
+| 2001 | 400    | Invalid email format                 |
+| 2002 | 400    | Password does not meet requirements  |
+| 2003 | 409    | Email already in use                 |
+| 2004 | 422    | Missing required field               |
+
+---
+
+### 2.2 Get User
+
+**GET** `/users/{user_id}`
+
+Retrieve a user by their ID.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter  | Type   | Required | Description     |
+|------------|--------|----------|-----------------|
+| `user_id`  | string | Yes      | User identifier |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "role": "member",
+  "created_at": "2026-03-01T10:00:00Z",
+  "updated_at": "2026-03-01T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 2005 | 404    | User not found           |
+| 2006 | 403    | Insufficient permissions |
+
+---
+
+### 2.3 List Users
+
+**GET** `/users`
+
+List all users. Supports pagination and filtering.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Query Parameters**
+
+| Parameter  | Type    | Required | Default | Description                    |
+|------------|---------|----------|---------|--------------------------------|
+| `page`     | integer | No       | 1       | Page number (1-indexed)        |
+| `per_page` | integer | No       | 20      | Items per page (max 100)       |
+| `role`     | string  | No       | —       | Filter by role                 |
+| `q`        | string  | No       | —       | Search by name or email        |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+      "email": "alice@example.com",
+      "name": "Alice Smith",
+      "role": "member",
+      "created_at": "2026-03-01T10:00:00Z",
+      "updated_at": "2026-03-01T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 142,
+    "total_pages": 8
+  }
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 2007 | 400    | Invalid query parameter      |
+| 2008 | 403    | Insufficient permissions     |
+
+---
+
+### 2.4 Update User
+
+**PATCH** `/users/{user_id}`
+
+Update a user's profile fields. Only include fields you want to change.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter  | Type   | Required | Description     |
+|------------|--------|----------|-----------------|
+| `user_id`  | string | Yes      | User identifier |
+
+**Request Body**
+
+```json
+{
+  "name": "Alice Johnson",
+  "role": "admin"
+}
+```
+
+**Parameters**
+
+| Field    | Type   | Required | Description                        |
+|----------|--------|----------|------------------------------------|
+| `name`   | string | No       | Display name, 2–100 characters     |
+| `role`   | string | No       | `admin`, `member`, or `viewer`     |
+| `email`  | string | No       | New email (requires re-verification) |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "email": "alice@example.com",
+  "name": "Alice Johnson",
+  "role": "admin",
+  "created_at": "2026-03-01T10:00:00Z",
+  "updated_at": "2026-03-01T12:30:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 2005 | 404    | User not found                    |
+| 2006 | 403    | Insufficient permissions          |
+| 2001 | 400    | Invalid email format              |
+| 2009 | 409    | Email already taken by another user |
+
+---
+
+### 2.5 Delete User
+
+**DELETE** `/users/{user_id}`
+
+Permanently delete a user account.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter  | Type   | Required | Description     |
+|------------|--------|----------|-----------------|
+| `user_id`  | string | Yes      | User identifier |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 2005 | 404    | User not found                    |
+| 2006 | 403    | Insufficient permissions          |
+| 2010 | 409    | User owns resources; transfer first |
+
+---
+
+## 3. Projects
+
+Project management endpoints. A project is the top-level container for tasks and team members.
+
+---
+
+### 3.1 Create Project
+
+**POST** `/projects`
+
+Create a new project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Request Body**
+
+```json
+{
+  "name": "Website Redesign",
+  "description": "Q2 website refresh project",
+  "visibility": "private",
+  "owner_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT"
+}
+```
+
+**Parameters**
+
+| Field         | Type   | Required | Description                               |
+|---------------|--------|----------|-------------------------------------------|
+| `name`        | string | Yes      | Project name, 2–200 characters            |
+| `description` | string | No       | Optional description, max 2000 chars      |
+| `visibility`  | string | No       | `private` or `public` (default: `private`) |
+| `owner_id`    | string | No       | Defaults to the authenticated user        |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "Website Redesign",
+  "description": "Q2 website refresh project",
+  "visibility": "private",
+  "owner_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "created_at": "2026-03-01T11:00:00Z",
+  "updated_at": "2026-03-01T11:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                          |
+|------|--------|--------------------------------------|
+| 3001 | 400    | Invalid project name                 |
+| 3002 | 403    | Cannot create projects (plan limit)  |
+| 3003 | 422    | Missing required field               |
+
+---
+
+### 3.2 Get Project
+
+**GET** `/projects/{project_id}`
+
+Retrieve a project by its ID.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "Website Redesign",
+  "description": "Q2 website refresh project",
+  "visibility": "private",
+  "owner_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "task_count": 42,
+  "member_count": 5,
+  "created_at": "2026-03-01T11:00:00Z",
+  "updated_at": "2026-03-01T11:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 3004 | 404    | Project not found            |
+| 3005 | 403    | Not a member of this project |
+
+---
+
+### 3.3 List Projects
+
+**GET** `/projects`
+
+List accessible projects with optional filters.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Query Parameters**
+
+| Parameter    | Type    | Required | Default | Description                         |
+|--------------|---------|----------|---------|-------------------------------------|
+| `page`       | integer | No       | 1       | Page number (1-indexed)             |
+| `per_page`   | integer | No       | 20      | Items per page (max 100)            |
+| `visibility` | string  | No       | —       | Filter by `private` or `public`     |
+| `owner_id`   | string  | No       | —       | Filter by owner                     |
+| `q`          | string  | No       | —       | Search by project name              |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+      "name": "Website Redesign",
+      "visibility": "private",
+      "task_count": 42,
+      "created_at": "2026-03-01T11:00:00Z",
+      "updated_at": "2026-03-01T11:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 20, "total": 7, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 3006 | 400    | Invalid query parameter  |
+
+---
+
+### 3.4 Update Project
+
+**PATCH** `/projects/{project_id}`
+
+Update a project's name, description, or visibility.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Request Body**
+
+```json
+{
+  "name": "Website Redesign 2026",
+  "visibility": "public"
+}
+```
+
+**Parameters**
+
+| Field         | Type   | Required | Description                         |
+|---------------|--------|----------|-------------------------------------|
+| `name`        | string | No       | New project name                    |
+| `description` | string | No       | New description                     |
+| `visibility`  | string | No       | `private` or `public`               |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "Website Redesign 2026",
+  "description": "Q2 website refresh project",
+  "visibility": "public",
+  "owner_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "created_at": "2026-03-01T11:00:00Z",
+  "updated_at": "2026-03-02T09:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 3004 | 404    | Project not found            |
+| 3005 | 403    | Not a project owner/admin    |
+| 3001 | 400    | Invalid project name         |
+
+---
+
+### 3.5 Delete Project
+
+**DELETE** `/projects/{project_id}`
+
+Permanently delete a project and all its tasks.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description               |
+|------|--------|---------------------------|
+| 3004 | 404    | Project not found         |
+| 3005 | 403    | Only the owner can delete |
+
+---
+
+## 4. Tasks
+
+Task management endpoints. Tasks belong to a project and can be assigned to users.
+
+---
+
+### 4.1 Create Task
+
+**POST** `/projects/{project_id}/tasks`
+
+Create a new task within a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Request Body**
+
+```json
+{
+  "title": "Design homepage mockup",
+  "description": "Create wireframe and high-fidelity mockup for the new homepage",
+  "assignee_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "status": "todo",
+  "priority": "high",
+  "due_date": "2026-03-15",
+  "labels": ["design", "frontend"]
+}
+```
+
+**Parameters**
+
+| Field         | Type     | Required | Description                                   |
+|---------------|----------|----------|-----------------------------------------------|
+| `title`       | string   | Yes      | Task title, 2–500 characters                  |
+| `description` | string   | No       | Detailed description, max 10000 chars         |
+| `assignee_id` | string   | No       | User ID to assign the task to                 |
+| `status`      | string   | No       | `todo`, `in_progress`, `done` (default: `todo`) |
+| `priority`    | string   | No       | `low`, `medium`, `high`, `critical` (default: `medium`) |
+| `due_date`    | string   | No       | ISO 8601 date: `YYYY-MM-DD`                   |
+| `labels`      | string[] | No       | Array of label strings (max 10)               |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "title": "Design homepage mockup",
+  "description": "Create wireframe and high-fidelity mockup for the new homepage",
+  "assignee_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "status": "todo",
+  "priority": "high",
+  "due_date": "2026-03-15",
+  "labels": ["design", "frontend"],
+  "created_by": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "created_at": "2026-03-01T12:00:00Z",
+  "updated_at": "2026-03-01T12:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                          |
+|------|--------|--------------------------------------|
+| 4001 | 400    | Missing or invalid title             |
+| 4002 | 400    | Invalid status value                 |
+| 4003 | 400    | Invalid priority value               |
+| 4004 | 400    | Invalid due_date format              |
+| 4005 | 404    | Project not found                    |
+| 4006 | 403    | Not a project member                 |
+| 4007 | 404    | Assignee user not found              |
+
+---
+
+### 4.2 Get Task
+
+**GET** `/projects/{project_id}/tasks/{task_id}`
+
+Retrieve a single task by its ID.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "title": "Design homepage mockup",
+  "description": "Create wireframe and high-fidelity mockup for the new homepage",
+  "assignee_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "status": "in_progress",
+  "priority": "high",
+  "due_date": "2026-03-15",
+  "labels": ["design", "frontend"],
+  "comment_count": 3,
+  "created_by": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "created_at": "2026-03-01T12:00:00Z",
+  "updated_at": "2026-03-02T08:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 4005 | 404    | Project not found        |
+| 4008 | 404    | Task not found           |
+| 4006 | 403    | Not a project member     |
+
+---
+
+### 4.3 List Tasks
+
+**GET** `/projects/{project_id}/tasks`
+
+List tasks within a project with filtering, sorting, and pagination.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Query Parameters**
+
+| Parameter     | Type    | Required | Default      | Description                          |
+|---------------|---------|----------|--------------|--------------------------------------|
+| `page`        | integer | No       | 1            | Page number (1-indexed)              |
+| `per_page`    | integer | No       | 20           | Items per page (max 100)             |
+| `status`      | string  | No       | —            | Filter: `todo`, `in_progress`, `done` |
+| `priority`    | string  | No       | —            | Filter: `low`, `medium`, `high`, `critical` |
+| `assignee_id` | string  | No       | —            | Filter by assignee                   |
+| `label`       | string  | No       | —            | Filter by label (repeatable)         |
+| `due_before`  | string  | No       | —            | ISO 8601 date filter                 |
+| `due_after`   | string  | No       | —            | ISO 8601 date filter                 |
+| `sort`        | string  | No       | `created_at` | Sort field                           |
+| `order`       | string  | No       | `desc`       | `asc` or `desc`                      |
+| `q`           | string  | No       | —            | Full-text search in title/description |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+      "title": "Design homepage mockup",
+      "status": "todo",
+      "priority": "high",
+      "assignee_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+      "due_date": "2026-03-15",
+      "created_at": "2026-03-01T12:00:00Z",
+      "updated_at": "2026-03-01T12:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 20, "total": 42, "total_pages": 3}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 4005 | 404    | Project not found            |
+| 4006 | 403    | Not a project member         |
+| 4009 | 400    | Invalid sort or filter param |
+
+---
+
+### 4.4 Update Task
+
+**PATCH** `/projects/{project_id}/tasks/{task_id}`
+
+Update one or more fields of a task.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Request Body**
+
+```json
+{
+  "status": "in_progress",
+  "priority": "critical",
+  "due_date": "2026-03-10"
+}
+```
+
+**Parameters**
+
+| Field         | Type     | Required | Description                         |
+|---------------|----------|----------|-------------------------------------|
+| `title`       | string   | No       | New task title                      |
+| `description` | string   | No       | New description                     |
+| `assignee_id` | string   | No       | New assignee (null to unassign)     |
+| `status`      | string   | No       | New status                          |
+| `priority`    | string   | No       | New priority                        |
+| `due_date`    | string   | No       | New due date or null to remove      |
+| `labels`      | string[] | No       | Replace label set entirely          |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "title": "Design homepage mockup",
+  "status": "in_progress",
+  "priority": "critical",
+  "due_date": "2026-03-10",
+  "assignee_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "labels": ["design", "frontend"],
+  "created_at": "2026-03-01T12:00:00Z",
+  "updated_at": "2026-03-02T09:30:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 4005 | 404    | Project not found            |
+| 4008 | 404    | Task not found               |
+| 4006 | 403    | Not a project member         |
+| 4002 | 400    | Invalid status value         |
+| 4003 | 400    | Invalid priority value       |
+
+---
+
+### 4.5 Delete Task
+
+**DELETE** `/projects/{project_id}/tasks/{task_id}`
+
+Permanently delete a task.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 4005 | 404    | Project not found            |
+| 4008 | 404    | Task not found               |
+| 4006 | 403    | Not a project member         |
+
+---
+
+## 5. Comments
+
+Comment endpoints for threaded discussion on tasks.
+
+---
+
+### 5.1 Create Comment
+
+**POST** `/projects/{project_id}/tasks/{task_id}/comments`
+
+Add a comment to a task.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Request Body**
+
+```json
+{
+  "body": "I've started working on the wireframes. Will share a draft by EOD.",
+  "parent_id": null
+}
+```
+
+**Parameters**
+
+| Field       | Type   | Required | Description                          |
+|-------------|--------|----------|--------------------------------------|
+| `body`      | string | Yes      | Comment text, 1–10000 characters     |
+| `parent_id` | string | No       | Parent comment ID for replies        |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "cmt_04QANXDKSUV5TRPF0XO9GALQW",
+  "task_id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "author_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "body": "I've started working on the wireframes. Will share a draft by EOD.",
+  "parent_id": null,
+  "created_at": "2026-03-02T10:00:00Z",
+  "updated_at": "2026-03-02T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 5001 | 400    | Comment body is empty             |
+| 5002 | 400    | Comment body exceeds 10000 chars  |
+| 5003 | 404    | Task not found                    |
+| 5004 | 404    | Parent comment not found          |
+| 5005 | 403    | Not a project member              |
+
+---
+
+### 5.2 Get Comment
+
+**GET** `/projects/{project_id}/tasks/{task_id}/comments/{comment_id}`
+
+Retrieve a single comment.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description         |
+|--------------|--------|----------|---------------------|
+| `project_id` | string | Yes      | Project identifier  |
+| `task_id`    | string | Yes      | Task identifier     |
+| `comment_id` | string | Yes      | Comment identifier  |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "cmt_04QANXDKSUV5TRPF0XO9GALQW",
+  "task_id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "author_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "body": "I've started working on the wireframes. Will share a draft by EOD.",
+  "parent_id": null,
+  "reply_count": 2,
+  "created_at": "2026-03-02T10:00:00Z",
+  "updated_at": "2026-03-02T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 5003 | 404    | Task not found           |
+| 5006 | 404    | Comment not found        |
+| 5005 | 403    | Not a project member     |
+
+---
+
+### 5.3 List Comments
+
+**GET** `/projects/{project_id}/tasks/{task_id}/comments`
+
+List all top-level comments on a task, with replies nested.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Query Parameters**
+
+| Parameter  | Type    | Required | Default | Description              |
+|------------|---------|----------|---------|--------------------------|
+| `page`     | integer | No       | 1       | Page number (1-indexed)  |
+| `per_page` | integer | No       | 50      | Items per page (max 200) |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "cmt_04QANXDKSUV5TRPF0XO9GALQW",
+      "author_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+      "body": "I've started working on the wireframes. Will share a draft by EOD.",
+      "parent_id": null,
+      "reply_count": 2,
+      "created_at": "2026-03-02T10:00:00Z",
+      "updated_at": "2026-03-02T10:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 50, "total": 3, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 5003 | 404    | Task not found           |
+| 5005 | 403    | Not a project member     |
+
+---
+
+### 5.4 Update Comment
+
+**PATCH** `/projects/{project_id}/tasks/{task_id}/comments/{comment_id}`
+
+Edit a comment's body. Only the author may edit.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description         |
+|--------------|--------|----------|---------------------|
+| `project_id` | string | Yes      | Project identifier  |
+| `task_id`    | string | Yes      | Task identifier     |
+| `comment_id` | string | Yes      | Comment identifier  |
+
+**Request Body**
+
+```json
+{
+  "body": "Updated: sharing the wireframe link here: https://figma.com/..."
+}
+```
+
+**Parameters**
+
+| Field  | Type   | Required | Description                      |
+|--------|--------|----------|----------------------------------|
+| `body` | string | Yes      | Updated comment text             |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "cmt_04QANXDKSUV5TRPF0XO9GALQW",
+  "task_id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "author_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "body": "Updated: sharing the wireframe link here: https://figma.com/...",
+  "parent_id": null,
+  "created_at": "2026-03-02T10:00:00Z",
+  "updated_at": "2026-03-02T11:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 5006 | 404    | Comment not found                 |
+| 5007 | 403    | Only the author can edit          |
+| 5001 | 400    | Body is empty                     |
+| 5002 | 400    | Body exceeds 10000 chars          |
+
+---
+
+### 5.5 Delete Comment
+
+**DELETE** `/projects/{project_id}/tasks/{task_id}/comments/{comment_id}`
+
+Delete a comment. Only the author or project admin may delete.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description         |
+|--------------|--------|----------|---------------------|
+| `project_id` | string | Yes      | Project identifier  |
+| `task_id`    | string | Yes      | Task identifier     |
+| `comment_id` | string | Yes      | Comment identifier  |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 5006 | 404    | Comment not found                 |
+| 5007 | 403    | Not the author or project admin   |
+
+---
+
+## 6. Webhooks
+
+Webhook endpoints for subscribing to real-time events from TaskFlow.
+
+---
+
+### 6.1 Create Webhook
+
+**POST** `/webhooks`
+
+Register a new webhook endpoint to receive events.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Request Body**
+
+```json
+{
+  "url": "https://myapp.example.com/webhooks/taskflow",
+  "events": ["task.created", "task.status_changed", "comment.created"],
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "secret": "my-webhook-signing-secret"
+}
+```
+
+**Parameters**
+
+| Field        | Type     | Required | Description                                    |
+|--------------|----------|----------|------------------------------------------------|
+| `url`        | string   | Yes      | HTTPS endpoint URL to receive events           |
+| `events`     | string[] | Yes      | List of event types to subscribe to            |
+| `project_id` | string   | No       | Scope to a project (omit for org-wide events)  |
+| `secret`     | string   | No       | Used to sign payloads for verification         |
+
+**Supported Event Types**
+
+| Event                  | Description                         |
+|------------------------|-------------------------------------|
+| `task.created`         | A new task was created              |
+| `task.updated`         | A task field was modified           |
+| `task.status_changed`  | Task status changed                 |
+| `task.deleted`         | A task was deleted                  |
+| `comment.created`      | A comment was posted                |
+| `comment.updated`      | A comment was edited                |
+| `comment.deleted`      | A comment was deleted               |
+| `project.created`      | A new project was created           |
+| `project.updated`      | Project settings changed            |
+| `member.added`         | A user was added to a project       |
+| `member.removed`       | A user was removed from a project   |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "whk_05RBOYELFVW6USPG1YP0HBMRX",
+  "url": "https://myapp.example.com/webhooks/taskflow",
+  "events": ["task.created", "task.status_changed", "comment.created"],
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "active": true,
+  "created_at": "2026-03-01T14:00:00Z",
+  "updated_at": "2026-03-01T14:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                          |
+|------|--------|--------------------------------------|
+| 6001 | 400    | URL must use HTTPS                   |
+| 6002 | 400    | Invalid or unknown event type        |
+| 6003 | 400    | Events list is empty                 |
+| 6004 | 404    | Project not found                    |
+| 6005 | 403    | Not a project admin                  |
+| 6006 | 409    | Webhook for this URL already exists  |
+
+---
+
+### 6.2 Get Webhook
+
+**GET** `/webhooks/{webhook_id}`
+
+Retrieve a webhook's configuration.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description          |
+|--------------|--------|----------|----------------------|
+| `webhook_id` | string | Yes      | Webhook identifier   |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "whk_05RBOYELFVW6USPG1YP0HBMRX",
+  "url": "https://myapp.example.com/webhooks/taskflow",
+  "events": ["task.created", "task.status_changed", "comment.created"],
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "active": true,
+  "last_delivery_at": "2026-03-02T08:00:00Z",
+  "last_delivery_status": 200,
+  "created_at": "2026-03-01T14:00:00Z",
+  "updated_at": "2026-03-01T14:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 6007 | 404    | Webhook not found        |
+| 6005 | 403    | Not authorized           |
+
+---
+
+### 6.3 List Webhooks
+
+**GET** `/webhooks`
+
+List all webhooks for the organization or a specific project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Query Parameters**
+
+| Parameter    | Type    | Required | Default | Description                         |
+|--------------|---------|----------|---------|-------------------------------------|
+| `page`       | integer | No       | 1       | Page number (1-indexed)             |
+| `per_page`   | integer | No       | 20      | Items per page (max 100)            |
+| `project_id` | string  | No       | —       | Filter by project                   |
+| `active`     | boolean | No       | —       | Filter by active status             |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "whk_05RBOYELFVW6USPG1YP0HBMRX",
+      "url": "https://myapp.example.com/webhooks/taskflow",
+      "events": ["task.created", "task.status_changed"],
+      "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+      "active": true,
+      "created_at": "2026-03-01T14:00:00Z",
+      "updated_at": "2026-03-01T14:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 20, "total": 3, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 6008 | 400    | Invalid query parameter  |
+
+---
+
+### 6.4 Update Webhook
+
+**PATCH** `/webhooks/{webhook_id}`
+
+Update a webhook's URL, events, or active status.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description          |
+|--------------|--------|----------|----------------------|
+| `webhook_id` | string | Yes      | Webhook identifier   |
+
+**Request Body**
+
+```json
+{
+  "events": ["task.created", "task.updated", "task.deleted"],
+  "active": true
+}
+```
+
+**Parameters**
+
+| Field    | Type     | Required | Description                          |
+|----------|----------|----------|--------------------------------------|
+| `url`    | string   | No       | New HTTPS endpoint URL               |
+| `events` | string[] | No       | Replace event subscription list      |
+| `secret` | string   | No       | Update signing secret                |
+| `active` | boolean  | No       | Enable or disable the webhook        |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "whk_05RBOYELFVW6USPG1YP0HBMRX",
+  "url": "https://myapp.example.com/webhooks/taskflow",
+  "events": ["task.created", "task.updated", "task.deleted"],
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "active": true,
+  "created_at": "2026-03-01T14:00:00Z",
+  "updated_at": "2026-03-02T09:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 6007 | 404    | Webhook not found                 |
+| 6005 | 403    | Not authorized                    |
+| 6001 | 400    | URL must use HTTPS                |
+| 6002 | 400    | Invalid event type                |
+
+---
+
+### 6.5 Delete Webhook
+
+**DELETE** `/webhooks/{webhook_id}`
+
+Permanently delete a webhook.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description          |
+|--------------|--------|----------|----------------------|
+| `webhook_id` | string | Yes      | Webhook identifier   |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 6007 | 404    | Webhook not found        |
+| 6005 | 403    | Not authorized           |
+
+---
+
+### 6.6 Redeliver Webhook Event
+
+**POST** `/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver`
+
+Retry a failed webhook delivery.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter     | Type   | Required | Description           |
+|---------------|--------|----------|-----------------------|
+| `webhook_id`  | string | Yes      | Webhook identifier    |
+| `delivery_id` | string | Yes      | Delivery identifier   |
+
+**Response** `202 Accepted`
+
+```json
+{
+  "delivery_id": "dlv_06SCPZFMGWX7VTQH2ZQ1ICNSY",
+  "status": "queued"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                  |
+|------|--------|------------------------------|
+| 6007 | 404    | Webhook not found            |
+| 6009 | 404    | Delivery not found           |
+| 6010 | 422    | Delivery is not in failed state |
+
+---
+
+## 7. Error Reference
+
+All error responses follow a consistent structure:
+
+```json
+{
+  "error": {
+    "code": 4008,
+    "message": "Task not found",
+    "details": null,
+    "request_id": "req_07TDQAGNHXY8WURJ3AR2JDOTZ"
+  }
+}
+```
+
+### Global Error Codes
+
+| Code | Status | Description                            |
+|------|--------|----------------------------------------|
+| 400  | 400    | Bad request — malformed input          |
+| 401  | 401    | Authentication required                |
+| 403  | 403    | Forbidden — insufficient permissions   |
+| 404  | 404    | Resource not found                     |
+| 409  | 409    | Conflict — resource already exists     |
+| 422  | 422    | Unprocessable entity — validation error |
+| 429  | 429    | Too many requests — rate limit hit     |
+| 500  | 500    | Internal server error                  |
+| 503  | 503    | Service unavailable                    |
+
+### Rate Limiting
+
+All endpoints are rate-limited. Limits are applied per API token.
+
+| Tier   | Requests/minute | Burst |
+|--------|-----------------|-------|
+| Free   | 60              | 10    |
+| Pro    | 600             | 100   |
+| Enterprise | 6000        | 500   |
+
+Rate limit headers are included on every response:
+
+```
+X-RateLimit-Limit: 600
+X-RateLimit-Remaining: 598
+X-RateLimit-Reset: 1743510060
+```
+
+When the rate limit is exceeded, the API returns `429 Too Many Requests` with a
+`Retry-After` header indicating the seconds until the limit resets.
+
+### Pagination
+
+All list endpoints use cursor-less page-based pagination.
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "page": 2,
+    "per_page": 20,
+    "total": 142,
+    "total_pages": 8
+  }
+}
+```
+
+Navigate pages with `?page=N`. Pages are 1-indexed.
+The `total` field reflects the count after any filters are applied.
+
+### Idempotency
+
+Mutating endpoints (`POST`, `PATCH`, `DELETE`) support idempotent requests via the
+`Idempotency-Key` header. Provide a unique key per logical operation; if the request
+is retried with the same key within 24 hours, the original response is returned without
+re-executing the operation.
+
+```
+Idempotency-Key: a8098c1a-f86e-11da-bd1a-00112444be1e
+```
+
+---
+
+## 8. Members
+
+Project membership endpoints for managing team access.
+
+---
+
+### 8.1 Add Member
+
+**POST** `/projects/{project_id}/members`
+
+Add a user to a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Request Body**
+
+```json
+{
+  "user_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "role": "member"
+}
+```
+
+**Parameters**
+
+| Field     | Type   | Required | Description                              |
+|-----------|--------|----------|------------------------------------------|
+| `user_id` | string | Yes      | The user to add                          |
+| `role`    | string | No       | `admin`, `member`, or `viewer` (default: `member`) |
+
+**Response** `201 Created`
+
+```json
+{
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "user_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "role": "member",
+  "joined_at": "2026-03-03T09:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 7001 | 404    | Project not found                 |
+| 7002 | 404    | User not found                    |
+| 7003 | 409    | User is already a member          |
+| 7004 | 403    | Only admins can add members       |
+
+---
+
+### 8.2 Get Member
+
+**GET** `/projects/{project_id}/members/{user_id}`
+
+Retrieve a specific member's role in a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `user_id`    | string | Yes      | User identifier    |
+
+**Response** `200 OK`
+
+```json
+{
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "user_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "role": "member",
+  "joined_at": "2026-03-03T09:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 7001 | 404    | Project not found        |
+| 7005 | 404    | Member not found         |
+
+---
+
+### 8.3 List Members
+
+**GET** `/projects/{project_id}/members`
+
+List all members of a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Query Parameters**
+
+| Parameter  | Type    | Required | Default | Description                      |
+|------------|---------|----------|---------|----------------------------------|
+| `page`     | integer | No       | 1       | Page number (1-indexed)          |
+| `per_page` | integer | No       | 50      | Items per page (max 200)         |
+| `role`     | string  | No       | —       | Filter by role                   |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+      "user_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+      "role": "admin",
+      "joined_at": "2026-03-01T11:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 50, "total": 5, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 7001 | 404    | Project not found        |
+| 7004 | 403    | Not a project member     |
+
+---
+
+### 8.4 Update Member Role
+
+**PATCH** `/projects/{project_id}/members/{user_id}`
+
+Change a member's role within a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `user_id`    | string | Yes      | User identifier    |
+
+**Request Body**
+
+```json
+{
+  "role": "admin"
+}
+```
+
+**Parameters**
+
+| Field  | Type   | Required | Description                        |
+|--------|--------|----------|------------------------------------|
+| `role` | string | Yes      | New role: `admin`, `member`, `viewer` |
+
+**Response** `200 OK`
+
+```json
+{
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "user_id": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "role": "admin",
+  "joined_at": "2026-03-03T09:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                         |
+|------|--------|-------------------------------------|
+| 7001 | 404    | Project not found                   |
+| 7005 | 404    | Member not found                    |
+| 7004 | 403    | Only admins can change roles        |
+| 7006 | 409    | Cannot demote the last admin        |
+
+---
+
+### 8.5 Remove Member
+
+**DELETE** `/projects/{project_id}/members/{user_id}`
+
+Remove a user from a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `user_id`    | string | Yes      | User identifier    |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                         |
+|------|--------|-------------------------------------|
+| 7001 | 404    | Project not found                   |
+| 7005 | 404    | Member not found                    |
+| 7004 | 403    | Only admins can remove members      |
+| 7006 | 409    | Cannot remove the last admin        |
+
+---
+
+## 9. Labels
+
+Label management endpoints for organizing tasks.
+
+---
+
+### 9.1 Create Label
+
+**POST** `/projects/{project_id}/labels`
+
+Create a new label for a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Request Body**
+
+```json
+{
+  "name": "bug",
+  "color": "#e11d48",
+  "description": "Something isn't working"
+}
+```
+
+**Parameters**
+
+| Field         | Type   | Required | Description                         |
+|---------------|--------|----------|-------------------------------------|
+| `name`        | string | Yes      | Label name, 1–50 characters         |
+| `color`       | string | No       | Hex color code (default: `#64748b`) |
+| `description` | string | No       | Optional description, max 200 chars |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "lbl_08UDRAZNOYX9WVQK4BS1JEPUA",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "bug",
+  "color": "#e11d48",
+  "description": "Something isn't working",
+  "task_count": 0,
+  "created_at": "2026-03-03T10:00:00Z",
+  "updated_at": "2026-03-03T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description                       |
+|------|--------|-----------------------------------|
+| 8001 | 400    | Invalid label name                |
+| 8002 | 400    | Invalid color format              |
+| 8003 | 409    | Label name already exists         |
+| 8004 | 403    | Not a project member              |
+
+---
+
+### 9.2 Get Label
+
+**GET** `/projects/{project_id}/labels/{label_id}`
+
+Retrieve a label by its ID.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `label_id`   | string | Yes      | Label identifier   |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "lbl_08UDRAZNOYX9WVQK4BS1JEPUA",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "bug",
+  "color": "#e11d48",
+  "description": "Something isn't working",
+  "task_count": 7,
+  "created_at": "2026-03-03T10:00:00Z",
+  "updated_at": "2026-03-03T10:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 8005 | 404    | Label not found          |
+| 8004 | 403    | Not a project member     |
+
+---
+
+### 9.3 List Labels
+
+**GET** `/projects/{project_id}/labels`
+
+List all labels in a project.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+
+**Query Parameters**
+
+| Parameter  | Type    | Required | Default | Description              |
+|------------|---------|----------|---------|--------------------------|
+| `page`     | integer | No       | 1       | Page number (1-indexed)  |
+| `per_page` | integer | No       | 50      | Items per page (max 200) |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "lbl_08UDRAZNOYX9WVQK4BS1JEPUA",
+      "name": "bug",
+      "color": "#e11d48",
+      "task_count": 7,
+      "created_at": "2026-03-03T10:00:00Z",
+      "updated_at": "2026-03-03T10:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 50, "total": 12, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 8004 | 403    | Not a project member     |
+
+---
+
+### 9.4 Update Label
+
+**PATCH** `/projects/{project_id}/labels/{label_id}`
+
+Update a label's name, color, or description.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+| Content-Type    | Yes      | `application/json`       |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `label_id`   | string | Yes      | Label identifier   |
+
+**Request Body**
+
+```json
+{
+  "color": "#dc2626",
+  "description": "Something is broken in production"
+}
+```
+
+**Parameters**
+
+| Field         | Type   | Required | Description               |
+|---------------|--------|----------|---------------------------|
+| `name`        | string | No       | New label name            |
+| `color`       | string | No       | New hex color code        |
+| `description` | string | No       | New description           |
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "lbl_08UDRAZNOYX9WVQK4BS1JEPUA",
+  "project_id": "prj_02KXNWBHFST3RQND8VM7EYJCU",
+  "name": "bug",
+  "color": "#dc2626",
+  "description": "Something is broken in production",
+  "task_count": 7,
+  "created_at": "2026-03-03T10:00:00Z",
+  "updated_at": "2026-03-03T11:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 8005 | 404    | Label not found          |
+| 8004 | 403    | Not a project admin      |
+| 8002 | 400    | Invalid color format     |
+
+---
+
+### 9.5 Delete Label
+
+**DELETE** `/projects/{project_id}/labels/{label_id}`
+
+Delete a label. The label is removed from all tasks it was applied to.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `label_id`   | string | Yes      | Label identifier   |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 8005 | 404    | Label not found          |
+| 8004 | 403    | Not a project admin      |
+
+---
+
+## 10. Attachments
+
+File attachment endpoints for adding documents and images to tasks.
+
+---
+
+### 10.1 Upload Attachment
+
+**POST** `/projects/{project_id}/tasks/{task_id}/attachments`
+
+Upload a file and attach it to a task. Uses `multipart/form-data`.
+
+**Request Headers**
+
+| Header          | Required | Description                   |
+|-----------------|----------|-------------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`       |
+| Content-Type    | Yes      | `multipart/form-data`         |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Form Fields**
+
+| Field    | Type | Required | Description                           |
+|----------|------|----------|---------------------------------------|
+| `file`   | file | Yes      | File to upload (max 25 MB)            |
+| `name`   | text | No       | Override display name for the file    |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "att_09VESBAPOZYA XWRL5CT2KFQVB",
+  "task_id": "tsk_03PZMVCJRTU4SROE9WN8FZKHV",
+  "name": "homepage-mockup-v1.figma",
+  "content_type": "application/octet-stream",
+  "size_bytes": 4096000,
+  "url": "https://cdn.taskflow.io/attachments/att_09VESBAPOZYA...",
+  "uploaded_by": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+  "created_at": "2026-03-03T14:00:00Z"
+}
+```
+
+**Error Codes**
+
+| Code  | Status | Description                       |
+|-------|--------|-----------------------------------|
+| 9001  | 400    | File exceeds 25 MB limit          |
+| 9002  | 400    | File type not allowed             |
+| 9003  | 404    | Task not found                    |
+| 9004  | 403    | Not a project member              |
+| 9005  | 507    | Storage quota exceeded            |
+
+---
+
+### 10.2 List Attachments
+
+**GET** `/projects/{project_id}/tasks/{task_id}/attachments`
+
+List all attachments on a task.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter    | Type   | Required | Description        |
+|--------------|--------|----------|--------------------|
+| `project_id` | string | Yes      | Project identifier |
+| `task_id`    | string | Yes      | Task identifier    |
+
+**Response** `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "att_09VESBAPOZYA XWRL5CT2KFQVB",
+      "name": "homepage-mockup-v1.figma",
+      "content_type": "application/octet-stream",
+      "size_bytes": 4096000,
+      "url": "https://cdn.taskflow.io/attachments/att_09...",
+      "uploaded_by": "usr_01HV3B9ZQPK8MQNF7RM5XWDGT",
+      "created_at": "2026-03-03T14:00:00Z"
+    }
+  ],
+  "meta": {"page": 1, "per_page": 20, "total": 4, "total_pages": 1}
+}
+```
+
+**Error Codes**
+
+| Code | Status | Description              |
+|------|--------|--------------------------|
+| 9003 | 404    | Task not found           |
+| 9004 | 403    | Not a project member     |
+
+---
+
+### 10.3 Delete Attachment
+
+**DELETE** `/projects/{project_id}/tasks/{task_id}/attachments/{attachment_id}`
+
+Delete an attachment. The file is permanently removed from storage.
+
+**Request Headers**
+
+| Header          | Required | Description              |
+|-----------------|----------|--------------------------|
+| Authorization   | Yes      | `Bearer <access_token>`  |
+
+**Path Parameters**
+
+| Parameter       | Type   | Required | Description           |
+|-----------------|--------|----------|-----------------------|
+| `project_id`    | string | Yes      | Project identifier    |
+| `task_id`       | string | Yes      | Task identifier       |
+| `attachment_id` | string | Yes      | Attachment identifier |
+
+**Response** `204 No Content`
+
+**Error Codes**
+
+| Code | Status | Description                          |
+|------|--------|--------------------------------------|
+| 9006 | 404    | Attachment not found                 |
+| 9007 | 403    | Only the uploader or admin can delete |

@@ -186,6 +186,74 @@ Or, after installing the tool:
 MCP_TOOL_PROFILE=core_stable token-saver-mcp
 ```
 
+## Client-Aware Token Optimization Tools
+
+If you use Token Saver with a specific LLM client (Claude Code, Gemini CLI, etc.),
+these tools auto-tune compression for your model's context window and behavior:
+
+1. `configure_for_client`: set model ID or explicit context window size. Auto-tunes
+   skeleton ratio based on window size and how aggressively the client compresses.
+   Supports Claude, Gemini, GPT, and explicit overrides.
+2. `estimate_tokens`: multi-method token estimation (tiktoken, fast len/4, Gemini-compatible,
+   JSON-density, raw bytes). Use to budget context before ingestion.
+3. `set_compression_profile`: named presets (minimal/summary/balanced/detailed/full) that
+   bundle skeleton_ratio, fidelity, and chunk_size into one setting.
+4. `get_compression_profile`: view the active profile and available profiles.
+
+Example: configure for Gemini CLI (1M context, aggressive compression at 50%):
+
+```bash
+# Via MCP tool call
+configure_for_client(model_id="gemini-2.5-pro")
+# -> skeleton_ratio ~0.31 (vs ~0.50 for Claude with same window)
+```
+
+For details, see `docs/claude-code-token-optimization-enhancements.md`,
+`docs/gemini-cli-token-optimization-enhancements.md`, and
+`docs/codex-cli-token-optimization-enhancements.md`.
+
+## Proven Benchmark Results
+
+Real API measurements on a 2,206-line API reference document (16,461 tokens).
+With token refinement enabled, Token Saver achieves **13x document compression** (up from 5.9x):
+
+| Provider | Input Tokens (baseline) | Input Tokens (compressed) | Savings | Cost Savings |
+|----------|------------------------|--------------------------|---------|-------------|
+| Claude Code (Opus 4.6) | 61,399 | 45,206 | 26.4% | 13.5% |
+| Codex (gpt-5.1-codex) | 37,504 | 23,179 | 38.2% | 36.3% |
+| Gemini CLI (2.5 Flash) | 69,163 | 30,663 | **55.7%** | **54.4%** |
+
+Token Saver compresses documents **13x** (semantic compression + token-level refinement).
+Real-world API savings depend on system prompt overhead: smaller system prompts (Gemini,
+Codex) see proportionally larger total savings.
+
+Run benchmarks yourself:
+
+```bash
+# Dry run (no API calls, validates setup)
+python scripts/benchmark_token_savings.py --dry-run --verbose
+
+# Full benchmark across all providers
+python scripts/benchmark_token_savings.py --mode skill --verbose --output results.json
+
+# Single provider, single corpus size
+python scripts/benchmark_token_savings.py --providers claude --sizes large --verbose
+```
+
+## Cache Optimization Features
+
+Token Saver automatically optimizes for each provider's caching behavior:
+
+1. **Cache-stable response ordering**: tool responses are key-ordered so stable metadata
+   (status, file_id) sits at the prefix for Claude/Gemini cache hits, and is mirrored at
+   the tail for Codex's middle-truncation pattern.
+2. **Token-level refinement**: LLMLingua-inspired post-processing removes articles, fillers,
+   and hedges from compressed skeletons (20-40% additional reduction). Preserves numbers,
+   code identifiers, URLs, and sentence boundaries.
+3. **TurboQuant-inspired embedding quantization**: 384-dim float32 embeddings compressed to
+   96-dim int8 (13x memory reduction) using random orthogonal rotation + int8 quantization +
+   1-bit residual error correction. >0.99 fidelity in the compressed subspace.
+
 ## Prompt Cache Observability Tools
 
 If you are optimizing for prompt caching, the most relevant MCP tools are:

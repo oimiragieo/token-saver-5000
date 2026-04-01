@@ -13,24 +13,24 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 ### Audit Status: HEALTHY ✅
 **No unused, orphaned, or legacy files detected. Codebase is clean and well-maintained.**
 
-### Key Metrics (v0.10.0)
+### Key Metrics (v0.11.0)
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Source Modules** | 71 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
-| **Handler Modules** | 10 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 49 tools defined | ✅ All routed |
-| **Test Files** | 78 test modules | ✅ 1,171+ tests |
-| **Test Coverage** | 73%+ overall | ✅ Exceeds 70% threshold |
-| **Documentation** | 49 markdown files | ⚠️ Minor updates needed |
+| **Source Modules** | 75 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
+| **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
+| **MCP Tools** | 103 tools defined | ✅ All routed |
+| **Test Files** | 84 test modules | ✅ 1,327+ tests |
+| **Test Coverage** | 92%+ overall | ✅ Exceeds 70% threshold |
+| **Documentation** | 51 markdown files | ⚠️ Minor updates needed |
 
 ### Version Alignment
-- **pyproject.toml**: v0.10.0 ✅ (updated from 0.7.0)
-- **README.md**: 44 MCP tools ✅ (updated from 35)
-- **CHANGELOG.md**: Latest dated release v0.10.0 ✅ (added 2026-02-26)
+- **pyproject.toml**: v0.11.0 ✅ (updated from 0.10.0)
+- **README.md**: 103 MCP tools ✅ (updated from 99)
+- **CHANGELOG.md**: Latest unreleased v0.11.0 ✅
 
 ### Architecture Summary
 ```
-src/                              # 71 modules, ~25,000 lines
+src/                              # 75 modules, ~26,000 lines
 ├── Core Compression (4 modules)  # semantic_compressor, code_compressor, adapter, multimodal
 ├── Embeddings (4 modules)        # 3-tier system: SBERT → ONNX → TF-IDF
 ├── Dialogue/Context (2 modules)  # AFM (dialogue), ACE (context)
@@ -39,9 +39,10 @@ src/                              # 71 modules, ~25,000 lines
 ├── Observability (4 modules)     # logging, metrics, tracing, health
 ├── Reliability (3 modules)       # timeout, circuit breaker, retry
 ├── Security (2 modules)          # path_validator, graceful_degradation
+├── Token Optimization (4 modules) # token_estimation, response_formatter, client_config, compression_profiles
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
 ├── semantic_modulator/           # subpackage (additional modules)
-└── handlers/ (10 modules)        # 49 MCP tool implementations
+└── handlers/ (11 modules)        # 103 MCP tool implementations
 ```
 
 ### Experimental Features Status
@@ -179,14 +180,40 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - Always run linting before committing (`ruff check src/`)
 - Use `black` for consistent code formatting
 
-## Token Saver 5000 Project Specifics (v0.10.0 - Experimental Module Exposure - IN PROGRESS)
+## Token Saver 5000 Project Specifics (v0.11.0 - Cross-Platform Token Optimization)
 
 ### Project Overview
 **Token Saver 5000** is an MCP server implementing research-backed semantic compression for AI interactions. It achieves **85-90% token reduction (proven: 87.4%)** through graph-based semantic analysis.
 
 > **Proven Performance:** 7.9× compression (485 → 61 tokens) on real quantum computing document. See `demo_proof.py`.
 
-**Current Release (v0.10.0 - Experimental Module Exposure - IN PROGRESS):**
+**Current Release (v0.11.0 - Cross-Platform Token Optimization - IN PROGRESS):**
+- ✅ **Token Estimation Module** (`src/token_estimation.py`):
+  - Multi-method estimation: tiktoken (accurate), len/4 (fast), len/2 (JSON), Gemini-compatible (0.25/ASCII, 1.3/non-ASCII), raw bytes
+  - New MCP tool: `estimate_tokens`
+- ✅ **Response Formatter** (`src/response_formatter.py`):
+  - Size-aware response formatting with soft limit (40K) and hard limit (49K)
+  - Three truncation strategies: `paginate` (Claude Code), `proportional` (Gemini CLI), `head`
+  - Optional `_header` field (< 200 chars) survives any truncation strategy
+- ✅ **Client Configuration** (`src/client_config.py`):
+  - Model-aware compression tuning for Claude, Gemini, GPT, and custom models
+  - Compression trigger ratios: Gemini (0.50) gets ~37% more aggressive compression than Claude (0.93)
+  - New MCP tool: `configure_for_client`
+- ✅ **Compression Profiles** (`src/compression_profiles.py`):
+  - Named presets: minimal/summary/balanced/detailed/full
+  - Urgency support: `compact` (cap ratio 0.15) and `emergency` (force ratio 0.05)
+  - New MCP tools: `set_compression_profile`, `get_compression_profile`
+- ✅ **Schema Stability**: tools sorted alphabetically, dynamic content removed from descriptions
+- ✅ **Model Database**: 5 Gemini models + 2 Codex models added, compression trigger ratios for all providers
+- ✅ **Codex CLI Support**: `gpt-5.1-codex`, `codex-mini` (200K context, 0.80 trigger), JSONL parser, pricing
+- ✅ **Cross-Platform Benchmark Harness** (`src/cli_benchmark/`, `scripts/benchmark_token_savings.py`):
+  - Real API measurements across Claude Code, Gemini CLI, and Codex
+  - Proven results (large corpus, 13x compression): Claude 26.4%, Codex 38.2%, Gemini 55.7% input savings
+  - 3 corpus files (small/medium/large), dry-run mode, JSON + ASCII table output
+- ✅ **248 new tests** across 9 test files, 0 regressions
+- ✅ **Total MCP tools**: 103 (was 99)
+
+**Previous Release (v0.10.0 - Experimental Module Exposure - COMPLETE):**
 - ✅ **Experimental Handlers (5 new MCP tools):**
   - **New Handler File:** `src/handlers/experimental_handlers.py` (300+ lines)
   - **New Test File:** `tests/test_experimental_handlers.py` (30+ tests)
@@ -379,8 +406,16 @@ Claude Code has unique capabilities that set it apart from generic agent configu
   - 24 memory optimization tests (all optional with graceful degradation)
   - Dependencies added: pyvis, onnxruntime, optimum, msgpack
 
-- ✅ **1,171 comprehensive tests** (1,159 passed, 12 skipped, 73% coverage - v0.10.0 Audit)
-  - Was 1,075 in v0.8.0 initial, 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+- ✅ **1,327+ comprehensive tests** (~2,612 passed, 12 skipped, 92%+ coverage - v0.11.0)
+  - Was 1,171 in v0.10.0, 1,075 in v0.8.0 initial, 1,064 in v0.7.0 Week 7-8 initial, 1,032 in v0.7.0 Week 5-6, 864 in v0.7.0 Week 3-4, 764 in v0.7.0 Week 1-2, 735 in v0.6.1, 665 in Phase 1, 630 in post-ace, 591 in post-v0.6.0, 506 in v0.6.0, 446 in v0.5.0-beta, 427 in v0.4.3
+  - 156 new tests added in v0.11.0 Cross-Platform Token Optimization:
+    * 19 response formatter tests (size limits, truncation strategies, pagination, headers)
+    * 23 token estimation tests (tiktoken, fast, JSON, Gemini, bytes, fallback)
+    * 20 client config tests (model database, ratios, sessions, compression triggers)
+    * 22 compression profile tests (presets, session management, apply_profile)
+    * 11 schema stability tests (ordering, determinism, no dynamic content)
+    * 56 Gemini enhancement tests (estimation, proportional truncation, urgency, model DB)
+    * 5 tool count updates in existing test files
   - 32 new tests added in v0.7.0 Week 7-8 DevOps infrastructure:
     * 32 HTTP server tests (endpoints, integration, configuration, lifecycle, edge cases - 100% pass rate)
   - 168 new tests added in v0.7.0 Week 5-6 observability infrastructure:
@@ -470,6 +505,14 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - `tests/test_metrics.py` - Prometheus metrics (29 tests - v0.7.0 Week 5-6 - NEW!)
 - `tests/test_observability.py` - OpenTelemetry tracing (53 tests - v0.7.0 Week 5-6 - NEW!)
 - `tests/test_health.py` - Health checks & diagnostics (43 tests - v0.7.0 Week 5-6 - NEW!)
+- `tests/test_response_formatter.py` - Response size formatting & truncation (19 tests - v0.11.0 - NEW!)
+- `tests/test_token_estimation.py` - Multi-method token estimation (23 tests - v0.11.0 - NEW!)
+- `tests/test_client_config.py` - Model-aware client config (20 tests - v0.11.0 - NEW!)
+- `tests/test_compression_profiles.py` - Named compression presets (22 tests - v0.11.0 - NEW!)
+- `tests/test_schema_stability.py` - Tool schema stability & cache-friendliness (11 tests - v0.11.0 - NEW!)
+- `tests/test_gemini_enhancements.py` - Gemini CLI token optimization (56 tests - v0.11.0 - NEW!)
+- `tests/test_codex_enhancements.py` - Codex CLI token optimization (30 tests - v0.11.0 - NEW!)
+- `tests/test_cli_benchmark.py` - Cross-platform benchmark harness (62 tests - v0.11.0 - NEW!)
 
 ### Important Implementation Details
 **Path Validation Security (v0.6.1 - CWE-22 Prevention):**
@@ -824,6 +867,7 @@ Token Saver 5000 provides 49 MCP tools via stdio transport. Configure in your Cl
 - **Experimental** (5 tools): TOON encode/decode, SCAR compress/stats, multimodal_ingest
 - **Discovery** (3 tools): list_documents, delete_document, tool_help
 - **Fidelity** (1 tool): recommend_fidelity
+- **Token Optimization** (4 tools, v0.11.0): estimate_tokens, configure_for_client, set/get_compression_profile
 
 See `docs/guides/MCP_TOOLS_GUIDE.md` for complete tool documentation.
 

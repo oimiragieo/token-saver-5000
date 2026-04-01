@@ -37,6 +37,7 @@ from . import experimental_handlers as exp
 from . import experiment_handlers as eh
 from . import memory_handlers as mh
 from . import prompt_handlers as ph
+from . import token_optimization_handlers as toh
 
 # Import structured logging for operation tracking
 from ..structured_logging import get_logger
@@ -723,12 +724,12 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             name="should_compress",
             description=(
                 "[PRE-CHECK] TOKEN-EFFICIENT PRE-CHECK: Estimate token count for a file WITHOUT reading content. "
-                "Uses file size heuristics + binary content detection (v0.9.2). "
+                "Uses file size heuristics and binary content detection. "
                 "CRITICAL: Call this BEFORE reading or ingesting any file. "
                 "Detects binary files (PDF, DOCX, images) that need conversion before compression. "
                 "Returns recommendation: SKIP (<100 tokens), DIRECT_READ (100-500), COMPRESS (>500), "
                 "or CONVERT_THEN_COMPRESS (binary files with MarkItDown suggestion). "
-                "v0.9.2 fields: needs_conversion, is_text_readable, conversion_tool, reason."
+                "Fields: needs_conversion, is_text_readable, conversion_tool, reason."
             ),
             inputSchema={
                 "type": "object",
@@ -2608,7 +2609,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
         Tool(
             name="evict_stale",
             description=(
-                "Find and list stale documents that haven't been accessed recently. "
+                "Find and list stale documents that have not been accessed within a given time window. "
                 "Helps keep context budget tight by identifying candidates for eviction."
             ),
             inputSchema={
@@ -2674,7 +2675,92 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # === TOKEN OPTIMIZATION TOOLS (v0.11.0) ===
+        Tool(
+            name="estimate_tokens",
+            description=(
+                "Estimate token count for a given text using multiple methods. "
+                "Returns accurate count (tiktoken), fast estimate (bytes/4), "
+                "JSON-optimized estimate (bytes/2), and raw byte count. "
+                "Useful for budgeting context window usage before ingestion."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Text to estimate token count for",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
+        Tool(
+            name="configure_for_client",
+            description=(
+                "Configure compression parameters for a specific LLM client or model. "
+                "Accepts a model identifier (e.g. claude-opus-4-6, gpt-4o) or explicit "
+                "context window size. Auto-tunes skeleton ratio, chunk sizes, and "
+                "fidelity defaults to maximize token efficiency for the target model."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model_id": {
+                        "type": "string",
+                        "description": "Model identifier (e.g. claude-opus-4-6, gpt-4o, gemini-2.0-pro)",
+                    },
+                    "context_window_tokens": {
+                        "type": "integer",
+                        "description": "Explicit context window size in tokens (overrides model lookup)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="set_compression_profile",
+            description=(
+                "Set a named compression profile for the session. "
+                "Profiles bundle skeleton_ratio, fidelity, and chunk_size into presets: "
+                "minimal (max compression), summary (quick overview), balanced (default), "
+                "detailed (deep analysis), full (near-original). "
+                "Explicit parameters in subsequent tool calls override profile defaults."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "profile_name": {
+                        "type": "string",
+                        "enum": ["minimal", "summary", "balanced", "detailed", "full"],
+                        "description": "Compression profile to activate",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["profile_name"],
+            },
+        ),
+        Tool(
+            name="get_compression_profile",
+            description=(
+                "Get the active compression profile for the session. "
+                "Returns the profile name and its parameter values "
+                "(skeleton_ratio, fidelity, chunk_size)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
     ]
+    # Sort tools alphabetically for prompt cache stability (v0.11.0).
+    # Claude Code and other MCP clients cache the prompt prefix including tool
+    # schemas. Deterministic ordering prevents cache invalidation when tools are
+    # added or reordered internally.
+    all_tools.sort(key=lambda t: t.name)
     return _tools_for_profile(all_tools, profile)
 
 
@@ -2833,6 +2919,11 @@ async def route_tool_call(
         "advise_context": ch.handle_advise_context,
         "get_compression_insights": ch.handle_get_compression_insights,
         "generate_rewrite_prompt": ch.handle_generate_rewrite_prompt,
+        # Token Optimization (v0.11.0)
+        "estimate_tokens": toh.handle_estimate_tokens,
+        "configure_for_client": toh.handle_configure_for_client,
+        "set_compression_profile": toh.handle_set_compression_profile,
+        "get_compression_profile": toh.handle_get_compression_profile,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)
