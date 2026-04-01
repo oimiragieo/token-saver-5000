@@ -215,13 +215,24 @@ For details, see `docs/claude-code-token-optimization-enhancements.md`,
 ## Proven Benchmark Results
 
 Real API measurements on a 2,206-line API reference document (16,461 tokens).
-With token refinement enabled, Token Saver achieves **13x document compression** (up from 5.9x):
+Token Saver achieves **13x document compression** via semantic graph + token-level refinement:
 
 | Provider | Input Tokens (baseline) | Input Tokens (compressed) | Savings | Cost Savings |
 |----------|------------------------|--------------------------|---------|-------------|
-| Claude Code (Opus 4.6) | 61,399 | 45,206 | 26.4% | 13.5% |
-| Codex (gpt-5.1-codex) | 37,504 | 23,179 | 38.2% | 36.3% |
-| Gemini CLI (2.5 Flash) | 69,163 | 30,663 | **55.7%** | **54.4%** |
+| Claude Code (Opus 4.6) | 61,364 | 45,171 | **26.4%** | 3.5-50%* |
+| Codex (gpt-5.1-codex) | 37,504 | 23,179 | **38.2%** | 36.8% |
+| Gemini CLI (Flash) | 69,137 | 30,637 | **55.7%** | 53.8% |
+
+*Claude cost savings depend on prompt cache hit/miss patterns across runs.
+All savings measured using total content tokens (cache-independent) for stability.
+
+All sizes:
+
+| Corpus | Claude | Codex | Gemini |
+|--------|--------|-------|--------|
+| small (156 lines) | 2.1% | 3.7% | 7.9% |
+| medium (479 lines) | 8.6% | 14.3% | 25.6% |
+| large (2,206 lines) | **26.4%** | **38.2%** | **55.7%** |
 
 Token Saver compresses documents **13x** (semantic compression + token-level refinement).
 Real-world API savings depend on system prompt overhead: smaller system prompts (Gemini,

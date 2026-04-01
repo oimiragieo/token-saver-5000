@@ -54,9 +54,12 @@ All notable changes to Token Saver 5000.
   Supports `--dry-run`, `--providers`, `--sizes`, `--output` JSON results + ASCII table.
 - **Proven benchmark results** (large corpus, 2,206 lines, 16K tokens, with token refinement):
   - Document compression: 13.0x (16,461 -> 1,269 tokens), up from 5.9x before refinement
-  - Claude Code: 26.4% input savings, up to 50.3% cost savings
-  - Codex: 38.2% input savings, 36.3% cost savings
-  - Gemini CLI: 55.7% input savings, 54.4% cost savings
+  - Claude Code: 26.4% input savings, 3.5-50% cost savings (varies with cache)
+  - Codex: 38.2% input savings, 36.8% cost savings
+  - Gemini CLI: 55.7% input savings, 53.8% cost savings
+  - All savings measured using total content tokens (cache-independent) for stability
+- **Gemini benchmark fix:** switched from `input` (billed, cache-dependent) to `prompt`
+  (total content, cache-independent) for stable savings comparison across runs
 - **Findings documents**: `docs/claude-code-token-optimization-enhancements.md`,
   `docs/gemini-cli-token-optimization-enhancements.md`,
   `docs/codex-cli-token-optimization-enhancements.md`

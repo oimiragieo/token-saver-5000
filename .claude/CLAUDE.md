@@ -18,7 +18,7 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 |--------|-------|--------|
 | **Source Modules** | 75 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
 | **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 103 tools defined | ✅ All routed |
+| **MCP Tools** | 105 tools defined | ✅ All routed |
 | **Test Files** | 84 test modules | ✅ 1,327+ tests |
 | **Test Coverage** | 92%+ overall | ✅ Exceeds 70% threshold |
 | **Documentation** | 51 markdown files | ⚠️ Minor updates needed |
@@ -208,10 +208,15 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - ✅ **Codex CLI Support**: `gpt-5.1-codex`, `codex-mini` (200K context, 0.80 trigger), JSONL parser, pricing
 - ✅ **Cross-Platform Benchmark Harness** (`src/cli_benchmark/`, `scripts/benchmark_token_savings.py`):
   - Real API measurements across Claude Code, Gemini CLI, and Codex
-  - Proven results (large corpus, 13x compression): Claude 26.4%, Codex 38.2%, Gemini 55.7% input savings
+  - Proven results (large corpus, 13x compression): Claude 26.4%, Codex 38.2%, Gemini 55.7% input savings (cache-independent)
+  - Gemini benchmark uses `prompt` tokens (total content) not `input` (billed) for stable comparison
   - 3 corpus files (small/medium/large), dry-run mode, JSON + ASCII table output
 - ✅ **248 new tests** across 9 test files, 0 regressions
-- ✅ **Total MCP tools**: 103 (was 99)
+- ✅ **Total MCP tools**: 105 (was 103)
+- ✅ **arXiv Paper Techniques** (v0.12.0):
+  - Meta-Tokens (arXiv 2506.00307): lossless LZ77 n-gram substitution, `compress_meta_tokens` MCP tool
+  - COMI MIG (arXiv 2602.01719): query-aware token scoring via Marginal Information Gain
+  - PoC Quality Floor (arXiv 2603.19733): quality-floor profile selection, `recommend_compression` MCP tool
 
 **Previous Release (v0.10.0 - Experimental Module Exposure - COMPLETE):**
 - ✅ **Experimental Handlers (5 new MCP tools):**
