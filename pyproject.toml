@@ -29,6 +29,7 @@ dependencies = [
 token-saver-mcp = "src.server:main"
 token-saver-install-mcp = "src.mcp_install:main"
 token-saver-setup = "src.setup_cli:main"
+token-saver-proxy = "scripts.token_saver_proxy:main"
 
 [project.optional-dependencies]
 # chromadb is optional: server gracefully falls back to JSON persistence when absent.

@@ -251,6 +251,42 @@ python scripts/benchmark_token_savings.py --mode skill --verbose --output result
 python scripts/benchmark_token_savings.py --providers claude --sizes large --verbose
 ```
 
+## MCP Proxy Mode (NEW)
+
+Wrap ANY MCP server transparently -- compress tool responses automatically with zero code changes:
+
+```bash
+# Compress any MCP server's output
+token-saver-proxy npx some-mcp-server --provider anthropic
+
+# Enable schema compression (N tools -> 3 meta-tools, ~96% token reduction)
+token-saver-proxy python -m my_server --schema-compression
+```
+
+In Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "my-server-compressed": {
+      "command": "token-saver-proxy",
+      "args": ["npx", "some-mcp-server", "--provider", "anthropic"]
+    }
+  }
+}
+```
+
+The proxy applies TokenRefiner + MetaTokenCompressor to every tool response. Optional `--schema-compression` replaces all upstream tools with 3 meta-tools (search_tools, get_tool_schema, invoke_tool).
+
+## Session Continuity (NEW)
+
+Token Saver now survives conversation compaction. A SQLite-backed journal records all ingestions, configurations, and tool calls. After the CLI compacts your conversation:
+
+```
+# Call recover_session to get a compact summary of everything that happened
+recover_session(session_id="my-session")
+# -> {ingested_files: [...], client_config: {...}, active_profile: "balanced", total_tokens_saved: 14500}
+```
+
 ## Research-Backed Compression Techniques
 
 Token Saver integrates techniques from recent AI research papers:

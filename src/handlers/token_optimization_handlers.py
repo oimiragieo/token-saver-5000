@@ -32,6 +32,18 @@ _session_config_store = SessionConfigStore()
 _profile_manager = ProfileManager()
 _token_estimator = TokenEstimator()
 
+# Module-level journal cache (keyed by session_id)
+_session_journals: dict = {}
+
+
+def _get_journal(session_id: str) -> Any:
+    """Return the SessionJournal for *session_id*, creating it on first access."""
+    from ..session_journal import SessionJournal
+
+    if session_id not in _session_journals:
+        _session_journals[session_id] = SessionJournal(session_id)
+    return _session_journals[session_id]
+
 
 def get_session_config_store() -> SessionConfigStore:
     """Get the module-level session config store."""
@@ -87,6 +99,16 @@ async def handle_configure_for_client(context: Dict[str, Any], args: Dict[str, A
 
     _session_config_store.set_config(session_id, config)
 
+    # Journal the configuration for session recovery
+    _get_journal(session_id).write_event(
+        "configure",
+        {
+            "model_id": config.model_id,
+            "provider": config.provider,
+            "context_window_tokens": config.context_window_tokens,
+        },
+    )
+
     return json.dumps(
         {
             "status": "success",
@@ -129,6 +151,9 @@ async def handle_set_compression_profile(context: Dict[str, Any], args: Dict[str
         profile = get_profile(profile_name)
     except ValueError as e:
         return json.dumps({"error": str(e), "available_profiles": list_profiles()})
+
+    # Journal the profile change for session recovery
+    _get_journal(session_id).write_event("profile", {"profile_name": profile_name})
 
     return json.dumps(
         {
@@ -243,5 +268,29 @@ async def handle_recommend_compression(context: Dict[str, Any], args: Dict[str, 
                 f"Profile '{recommended}' is the most compressed option "
                 f"meeting quality floor {quality_floor:.0%}."
             ),
+        }
+    )
+
+
+async def handle_recover_session(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle recover_session tool call.
+
+    Returns a compact summary of all prior ingestions, configurations, and tool
+    calls for the given session, enabling a new conversation to resume where a
+    compacted one left off.
+    """
+    session_id = args.get("session_id", "default")
+    journal = _get_journal(session_id)
+    summary = journal.recover()
+    return json.dumps(
+        {
+            "status": "success",
+            "session_id": summary.session_id,
+            "event_count": summary.event_count,
+            "ingested_files": summary.ingested_files,
+            "client_config": summary.client_config,
+            "active_profile": summary.active_profile,
+            "tool_call_stats": summary.tool_call_stats,
+            "total_tokens_saved": summary.total_tokens_saved,
         }
     )

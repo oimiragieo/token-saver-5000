@@ -33,7 +33,18 @@ All notable changes to Token Saver 5000.
   `test_token_estimation.py` (23), `test_client_config.py` (20), `test_compression_profiles.py`
   (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
   plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
-- **Total MCP tools**: 105 (was 103).
+- **Total MCP tools**: 108 (was 105).
+- **Transparent MCP proxy** (`src/proxy/`, `scripts/token_saver_proxy.py`): drop-in proxy
+  that wraps ANY MCP server and compresses tool responses automatically. Pipeline: TokenRefiner
+  -> MetaTokenCompressor -> ResponseFormatter. Separate entry point: `token-saver-proxy`.
+  Optionally replaces N upstream tools with 3 meta-tools (`--schema-compression`).
+  49 proxy tests.
+- **Session continuity** (`src/session_journal.py`): SQLite-backed event journal that survives
+  conversation compaction. Records ingestions, configs, profiles, tool calls. New MCP tool:
+  `recover_session` returns compact summary of all prior work. 16 tests.
+- **Tensor-grep integration** (`src/tensor_grep_integration.py`): optional AST-aware code
+  compression via `tg map` (repo structure) and `tg search` (trigram index). New MCP tools:
+  `compress_codebase`, `search_code`. Graceful fallback when tg not installed. 14 tests.
 - **Meta-token compression** (`src/meta_tokens.py`): lossless LZ77-inspired subsequence
   replacement (arXiv 2506.00307). Finds repeated token n-grams, replaces with §N symbols +
   prepended dictionary. Fully reversible via `decompress()`. New MCP tool: `compress_meta_tokens`.

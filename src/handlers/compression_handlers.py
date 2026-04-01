@@ -2250,3 +2250,84 @@ async def handle_generate_rewrite_prompt(context: HandlerContext, args: Dict[str
 
     prompt = generate_rewrite_prompt(text, target_ratio, preserve_keywords or None)
     return json.dumps(prompt, indent=2)
+
+
+async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Handle compress_codebase tool call.
+
+    Uses tensor-grep AST analysis when available; falls back to a plain
+    directory glob when tensor-grep is not installed.
+    """
+    import glob
+    from pathlib import Path as _Path
+
+    from ..tensor_grep_integration import code_search, get_repo_map, is_available
+
+    directory = args.get("directory", ".")
+    query = args.get("query")
+    max_files = int(args.get("max_files", 50))
+
+    tg_available = is_available()
+    result: Dict[str, Any] = {
+        "status": "success",
+        "tensor_grep_available": tg_available,
+        "directory": directory,
+    }
+
+    if tg_available:
+        repo_map = get_repo_map(directory)
+        result["files_found"] = len(repo_map.files)
+        result["symbols_found"] = len(repo_map.symbols)
+        files = repo_map.files[:max_files]
+        if query:
+            search = code_search(query, directory)
+            matched_files = list({m.get("file", "") for m in search.matches})
+            result["query_matched_files"] = len(matched_files)
+            files = matched_files[:max_files] if matched_files else files
+        result["selected_files"] = files
+    else:
+        # Fallback: list directory using glob patterns
+        py_files = glob.glob(str(_Path(directory) / "**/*.py"), recursive=True)
+        js_files = glob.glob(str(_Path(directory) / "**/*.js"), recursive=True)
+        ts_files = glob.glob(str(_Path(directory) / "**/*.ts"), recursive=True)
+        files = sorted(set(py_files + js_files + ts_files))[:max_files]
+        result["files_found"] = len(files)
+        result["selected_files"] = files
+
+    result["message"] = (
+        f"Found {len(result.get('selected_files', []))} files. "
+        "Use ingest_context on individual files to compress them."
+    )
+    return json.dumps(result, default=str)
+
+
+async def handle_search_code(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Handle search_code tool call.
+
+    Fast regex or literal code search using tensor-grep trigram index.
+    Falls back gracefully if tensor-grep is not installed.
+    """
+    from ..tensor_grep_integration import code_search, is_available
+
+    pattern = args.get("pattern", "")
+    directory = args.get("directory", ".")
+
+    if not is_available():
+        return json.dumps(
+            {
+                "status": "fallback",
+                "message": "tensor-grep not installed. Install with: pip install tensor-grep",
+                "tensor_grep_available": False,
+            }
+        )
+
+    result = code_search(pattern, directory)
+    return json.dumps(
+        {
+            "status": "success",
+            "pattern": result.pattern,
+            "total_matches": result.total_matches,
+            "matches": result.matches[:50],
+            "tensor_grep_available": result.available,
+        }
+    )

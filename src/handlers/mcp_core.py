@@ -2825,6 +2825,67 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["text"],
             },
         ),
+        # === SESSION JOURNAL (v0.13.0) ===
+        Tool(
+            name="recover_session",
+            description=(
+                "Recover session state after conversation compaction. "
+                "Returns a compact summary of all prior ingestions, configurations, "
+                "and tool calls for the given session."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Session ID to recover"},
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        # === TENSOR-GREP INTEGRATION (v0.13.0) ===
+        Tool(
+            name="compress_codebase",
+            description=(
+                "Compress a codebase directory into a semantic skeleton. "
+                "Uses tensor-grep AST analysis when available for structure extraction. "
+                "Falls back to directory scanning without tensor-grep. "
+                "Optionally filter by query or file patterns."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directory": {"type": "string", "description": "Path to codebase directory"},
+                    "query": {
+                        "type": "string",
+                        "description": "Optional query to focus on relevant code",
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Maximum files to include",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["directory"],
+            },
+        ),
+        Tool(
+            name="search_code",
+            description=(
+                "Fast regex or literal code search using tensor-grep trigram index. "
+                "Returns file paths and matching lines. "
+                "Chain with ingest_context for targeted compression of search results. "
+                "Falls back gracefully if tensor-grep is not installed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex or literal pattern"},
+                    "directory": {"type": "string", "description": "Directory to search"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["pattern"],
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -2997,6 +3058,11 @@ async def route_tool_call(
         # arXiv paper techniques (v0.12.0)
         "compress_meta_tokens": toh.handle_compress_meta_tokens,
         "recommend_compression": toh.handle_recommend_compression,
+        # Session Journal (v0.13.0)
+        "recover_session": toh.handle_recover_session,
+        # Tensor-Grep Integration (v0.13.0)
+        "compress_codebase": ch.handle_compress_codebase,
+        "search_code": ch.handle_search_code,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)
