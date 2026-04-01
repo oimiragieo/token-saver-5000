@@ -46,7 +46,8 @@ GEMINI_FIXTURE = {
             "gemini-2.5-flash": {
                 "api": {"totalRequests": 1, "totalErrors": 0, "totalLatencyMs": 4200},
                 "tokens": {
-                    "input": 12800,
+                    "input": 9800,  # billed (net of cache)
+                    "prompt": 12800,  # total content tokens (cache-independent)
                     "candidates": 400,
                     "total": 13200,
                     "cached": 3000,

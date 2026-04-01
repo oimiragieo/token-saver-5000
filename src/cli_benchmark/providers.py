@@ -197,13 +197,18 @@ def _parse_gemini_result(data: dict, raw: str, model: str | None) -> CLIResult:
     """Parse Gemini CLI JSON output into CLIResult.
 
     Gemini's stats are nested per-model: stats.models.{name}.tokens.{field}.
-    We aggregate across all models. If the flat stats format is present (older
-    Gemini CLI versions), we use that as fallback.
+    We aggregate across all models.
+
+    IMPORTANT: Gemini's ``input`` field is NET of cache (billed tokens only),
+    while ``prompt`` is the TOTAL content tokens sent. For compression savings
+    comparison we use ``prompt`` (stable measure), and for cost we use ``input``
+    (billed). Cache read tokens are tracked separately.
     """
     stats = data.get("stats", {})
 
     # Aggregate from per-model breakdown (current Gemini CLI format)
-    input_tokens = 0
+    prompt_tokens = 0  # total content tokens (stable for savings comparison)
+    billed_input = 0  # net of cache (for cost calculation)
     output_tokens = 0
     cached = 0
     wall_time_ms = 0.0
@@ -214,19 +219,21 @@ def _parse_gemini_result(data: dict, raw: str, model: str | None) -> CLIResult:
             if not detected_model:
                 detected_model = model_name
             tokens = model_stats.get("tokens", {})
-            input_tokens += tokens.get("input", 0)
+            prompt_tokens += tokens.get("prompt", tokens.get("input", 0))
+            billed_input += tokens.get("input", 0)
             output_tokens += tokens.get("candidates", 0)
             cached += tokens.get("cached", 0)
             api = model_stats.get("api", {})
             wall_time_ms += api.get("totalLatencyMs", 0)
     else:
         # Fallback: flat stats format (stream-json or older versions)
-        input_tokens = stats.get("input_tokens", 0)
+        prompt_tokens = stats.get("input_tokens", 0)
+        billed_input = prompt_tokens
         output_tokens = stats.get("output_tokens", 0)
         cached = stats.get("cached", 0)
         wall_time_ms = stats.get("duration_ms", 0.0)
 
-    cost = compute_cost(detected_model or "gemini-2.5-flash", input_tokens, output_tokens, cached)
+    cost = compute_cost(detected_model or "gemini-2.5-flash", billed_input, output_tokens, cached)
 
     # Tool call count from stats.tools if present
     tools_stats = stats.get("tools", {})
@@ -235,7 +242,7 @@ def _parse_gemini_result(data: dict, raw: str, model: str | None) -> CLIResult:
     return CLIResult(
         provider="gemini",
         model=detected_model,
-        input_tokens=input_tokens,
+        input_tokens=prompt_tokens,  # total content tokens (cache-independent)
         output_tokens=output_tokens,
         cache_read_tokens=cached,
         total_cost_usd=cost,
