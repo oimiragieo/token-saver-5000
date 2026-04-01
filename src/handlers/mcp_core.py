@@ -2886,6 +2886,32 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["pattern"],
             },
         ),
+        # === CLI OUTPUT OPTIMIZER ===
+        Tool(
+            name="filter_cli_output",
+            description=(
+                "Filter CLI command output to reduce token usage. "
+                "Auto-detects command type (git, pytest, npm, lint, etc.) and applies "
+                "optimal filtering strategy. Strips ANSI codes, extracts stats, groups "
+                "errors, removes progress bars."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Raw CLI output to filter"},
+                    "command_hint": {
+                        "type": "string",
+                        "description": (
+                            "Optional hint: git_diff, git_status, test_output, "
+                            "install_output, lint_output, json_output, ansi_output, "
+                            "progress_output, tree_output, log_output"
+                        ),
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3063,6 +3089,8 @@ async def route_tool_call(
         # Tensor-Grep Integration (v0.13.0)
         "compress_codebase": ch.handle_compress_codebase,
         "search_code": ch.handle_search_code,
+        # CLI Output Optimizer
+        "filter_cli_output": toh.handle_filter_cli_output,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

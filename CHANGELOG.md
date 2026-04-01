@@ -33,7 +33,13 @@ All notable changes to Token Saver 5000.
   `test_token_estimation.py` (23), `test_client_config.py` (20), `test_compression_profiles.py`
   (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
   plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
-- **Total MCP tools**: 108 (was 105).
+- **Total MCP tools**: 109 (was 108).
+- **CLI output optimizer** (`src/cli_output_optimizer.py`): RTK-inspired command-aware
+  filtering for CLI tool output. Auto-detects 10 command types (git diff, pytest, npm install,
+  lint, JSON, logs, progress bars, etc.) and applies optimal filtering strategy. Strips ANSI
+  codes, extracts stats, groups errors, focuses on failures, deduplicates logs.
+  Integrated into proxy pipeline as Stage 0 (before TokenRefiner). Optional RTK binary
+  fallback when installed. New MCP tool: `filter_cli_output`. 51 tests.
 - **Transparent MCP proxy** (`src/proxy/`, `scripts/token_saver_proxy.py`): drop-in proxy
   that wraps ANY MCP server and compresses tool responses automatically. Pipeline: TokenRefiner
   -> MetaTokenCompressor -> ResponseFormatter. Separate entry point: `token-saver-proxy`.

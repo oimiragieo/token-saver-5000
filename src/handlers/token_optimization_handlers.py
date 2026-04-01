@@ -294,3 +294,32 @@ async def handle_recover_session(context: Dict[str, Any], args: Dict[str, Any]) 
             "total_tokens_saved": summary.total_tokens_saved,
         }
     )
+
+
+async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle filter_cli_output tool call.
+
+    Auto-detects CLI command type and applies an appropriate filtering strategy
+    to reduce token usage. Strips ANSI codes, summarizes git diffs, focuses on
+    test failures, groups lint errors, removes progress bars, etc.
+    """
+    from ..cli_output_optimizer import CLIOutputOptimizer
+
+    text = args.get("text", "")
+    if not isinstance(text, str):
+        return json.dumps({"error": "text must be a string"})
+
+    hint = args.get("command_hint") or None
+    optimizer = CLIOutputOptimizer()
+    result = optimizer.filter(text, command_hint=hint)
+    return json.dumps(
+        {
+            "status": "success",
+            "filtered_text": result.filtered_text,
+            "command_detected": result.command_detected,
+            "strategy_applied": result.strategy_applied,
+            "original_lines": result.original_lines,
+            "filtered_lines": result.filtered_lines,
+            "compression_pct": round(result.compression_pct, 1),
+        }
+    )

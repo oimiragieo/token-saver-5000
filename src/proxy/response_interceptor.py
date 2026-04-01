@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from ..token_refiner import TokenRefiner
 from ..meta_tokens import MetaTokenCompressor
+from ..cli_output_optimizer import CLIOutputOptimizer
 
 # Minimum text length (characters) before compression is attempted.
 # Texts shorter than this pass through unchanged to avoid skeleton overhead
@@ -31,6 +32,8 @@ class ResponseInterceptor:
 
     Pipeline applied in order:
 
+    0. :class:`~src.cli_output_optimizer.CLIOutputOptimizer` — CLI output filtering
+       (optional, enabled via *enable_cli_filters*).
     1. :class:`~src.token_refiner.TokenRefiner` — removes low-value filler tokens.
     2. :class:`~src.meta_tokens.MetaTokenCompressor` — lossless n-gram deduplication.
 
@@ -39,30 +42,41 @@ class ResponseInterceptor:
             :meth:`~src.token_refiner.TokenRefiner.refine` as *target_ratio*.
             Default ``0.7`` (keep 70%, remove up to 30% filler).
         enable_meta_tokens: Whether to apply the MetaToken stage.  Default ``True``.
+        enable_cli_filters: Whether to apply Stage 0 CLI output filtering before
+            the token refinement stage.  Default ``False`` to preserve backward
+            compatibility.
     """
 
     def __init__(
         self,
         refiner_ratio: float = 0.7,
         enable_meta_tokens: bool = True,
+        enable_cli_filters: bool = False,
     ) -> None:
         self._refiner = TokenRefiner()
         self._meta: MetaTokenCompressor | None = (
             MetaTokenCompressor() if enable_meta_tokens else None
         )
         self._refiner_ratio = refiner_ratio
+        self._cli_optimizer: CLIOutputOptimizer | None = (
+            CLIOutputOptimizer() if enable_cli_filters else None
+        )
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def intercept_text(self, text: str) -> tuple[str, InterceptionStats]:
+    def intercept_text(
+        self, text: str, tool_name: str | None = None
+    ) -> tuple[str, InterceptionStats]:
         """Compress *text* through the pipeline.
 
         Texts shorter than ``_MIN_COMPRESS_CHARS`` pass through unchanged.
 
         Args:
-            text: The tool-response text to compress.
+            text:      The tool-response text to compress.
+            tool_name: Optional MCP tool name used as a command hint for
+                       Stage 0 CLI filtering (e.g. ``"filter_cli_output"``).
 
         Returns:
             Tuple of ``(compressed_text, stats)``.  When the text is too short
@@ -78,6 +92,13 @@ class ResponseInterceptor:
 
         current = text
         stages: list[str] = []
+
+        # Stage 0: CLI output filtering (optional)
+        if self._cli_optimizer is not None:
+            cli_result = self._cli_optimizer.filter(current, command_hint=tool_name)
+            if cli_result.strategy_applied != "passthrough":
+                current = cli_result.filtered_text
+                stages.append(f"cli_filter:{cli_result.strategy_applied}")
 
         # Stage 1: Token refinement
         refined_result = self._refiner.refine(current, target_ratio=self._refiner_ratio)

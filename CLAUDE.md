@@ -63,7 +63,7 @@ MCP Client → stdio → Server (src/server.py)
 **Handler modules** (`src/handlers/`):
 - Each module handles a category: compression, AFM (dialogue memory), ACE (context engineering), file sync, visualization, detection, experimental, etc.
 - All handlers are async, receive `HandlerContext` dict, return JSON-serializable dicts
-- 19 handler files, ~108 MCP tools total
+- 19 handler files, ~109 MCP tools total
 
 **Core compression** (`src/semantic_compressor.py`, `src/code_compressor.py`):
 - `SemanticCompressor`: text chunking → embedding → graph construction → PageRank → skeleton

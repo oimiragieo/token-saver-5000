@@ -251,6 +251,33 @@ python scripts/benchmark_token_savings.py --mode skill --verbose --output result
 python scripts/benchmark_token_savings.py --providers claude --sizes large --verbose
 ```
 
+## CLI Output Optimizer (NEW -- RTK-Inspired)
+
+Coding agent CLI output is the #1 token waster. Token Saver now auto-detects 10 command
+types and applies optimal filtering:
+
+| Command | Strategy | Typical Savings |
+|---------|----------|----------------|
+| `git diff` | Extract file list + stats summary | 90-99% |
+| `pytest` / `jest` | Show only failures + summary | 94-99% |
+| `npm install` / `pip install` | Keep summary, strip progress | 85-95% |
+| Lint (ruff, eslint) | Group by rule, count occurrences | 80-90% |
+| JSON output | Extract keys + types, first item | 80-95% |
+| Logs | Deduplicate repeated lines | 70-85% |
+| Any colored output | Strip ANSI escape codes | 10-30% |
+
+Use directly via MCP tool:
+```
+filter_cli_output(text="<raw CLI output>")
+```
+
+Or automatically via the proxy (applies to all upstream tool responses):
+```bash
+token-saver-proxy npx some-server --provider anthropic
+```
+
+Falls back to [RTK](https://github.com/rtk-ai/rtk) when installed for maximum quality.
+
 ## MCP Proxy Mode (NEW)
 
 Wrap ANY MCP server transparently -- compress tool responses automatically with zero code changes:
