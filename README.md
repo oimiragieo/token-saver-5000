@@ -240,6 +240,19 @@ python scripts/benchmark_token_savings.py --mode skill --verbose --output result
 python scripts/benchmark_token_savings.py --providers claude --sizes large --verbose
 ```
 
+## Research-Backed Compression Techniques
+
+Token Saver integrates techniques from recent AI research papers:
+
+1. `compress_meta_tokens`: lossless LZ77-inspired compression (arXiv 2506.00307). Replaces
+   repeated token subsequences with §N symbols + dictionary header. Fully reversible.
+2. `recommend_compression`: quality-floor-based profile selection (arXiv 2603.19733). Specify
+   minimum acceptable quality (e.g. 0.85) instead of manually choosing a compression profile.
+   Auto-selects the most aggressive profile that meets your quality target.
+3. **COMI MIG scoring** (arXiv 2602.01719): query-aware token refinement. When a query is
+   provided, the token refiner uses Marginal Information Gain to keep relevant tokens and
+   remove redundant ones, instead of simple filler-word removal.
+
 ## Cache Optimization Features
 
 Token Saver automatically optimizes for each provider's caching behavior:

@@ -2755,6 +2755,76 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # === ARXIV PAPER TECHNIQUES (v0.12.0) ===
+        Tool(
+            name="compress_meta_tokens",
+            description=(
+                "[COMPRESS] Lossless meta-token compression (arXiv 2506.00307). "
+                "Finds repeated token subsequences and replaces them with compact "
+                "dictionary symbols (§1, §2, …). Fully reversible. "
+                "Best for repetitive text with recurring phrases. "
+                "Returns compressed_text, dictionary, and token savings."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Text to compress using meta-token substitution",
+                    },
+                    "min_length": {
+                        "type": "integer",
+                        "description": "Minimum n-gram length to substitute (default: 2)",
+                        "default": 2,
+                        "minimum": 2,
+                    },
+                    "min_frequency": {
+                        "type": "integer",
+                        "description": "Minimum occurrence count for substitution (default: 2)",
+                        "default": 2,
+                        "minimum": 2,
+                    },
+                    "max_entries": {
+                        "type": "integer",
+                        "description": "Maximum dictionary entries (default: 50)",
+                        "default": 50,
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
+        Tool(
+            name="recommend_compression",
+            description=(
+                "[ADVISE] Recommend the optimal compression profile for a document. "
+                "Simulates each profile, predicts quality (entity retention + coverage), "
+                "and returns the most compressed profile meeting your quality floor. "
+                "Useful before ingesting to choose between minimal/summary/balanced/detailed/full."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Text to evaluate compression profiles for",
+                    },
+                    "quality_floor": {
+                        "type": "number",
+                        "description": "Minimum acceptable quality (0.0–1.0, default: 0.7)",
+                        "default": 0.7,
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional query for relevance-aware quality scoring",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -2924,6 +2994,9 @@ async def route_tool_call(
         "configure_for_client": toh.handle_configure_for_client,
         "set_compression_profile": toh.handle_set_compression_profile,
         "get_compression_profile": toh.handle_get_compression_profile,
+        # arXiv paper techniques (v0.12.0)
+        "compress_meta_tokens": toh.handle_compress_meta_tokens,
+        "recommend_compression": toh.handle_recommend_compression,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

@@ -10,6 +10,8 @@ All handlers are model-agnostic -- they benefit any MCP client,
 not just Claude Code.
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any, Dict
 
@@ -17,9 +19,12 @@ from ..token_estimation import TokenEstimator
 from ..client_config import ClientConfig, SessionConfigStore
 from ..compression_profiles import (
     ProfileManager,
+    auto_select_profile,
     get_profile,
     list_profiles,
 )
+from ..meta_tokens import MetaTokenCompressor
+from ..quality_predictor import QualityPredictor
 
 
 # Module-level singletons for session state
@@ -162,5 +167,81 @@ async def handle_get_compression_profile(context: Dict[str, Any], args: Dict[str
                 "description": profile.description,
             },
             "available_profiles": list_profiles(),
+        }
+    )
+
+
+async def handle_compress_meta_tokens(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle compress_meta_tokens tool call.
+
+    Applies lossless meta-token compression to the given text, replacing
+    repeated token subsequences with compact dictionary symbols (§1, §2, …).
+    """
+    text = args.get("text", "")
+    if not isinstance(text, str):
+        return json.dumps({"error": "text must be a string"})
+
+    min_length = int(args.get("min_length", 2))
+    min_frequency = int(args.get("min_frequency", 2))
+    max_entries = int(args.get("max_entries", 50))
+
+    compressor = MetaTokenCompressor(
+        min_length=min_length,
+        min_frequency=min_frequency,
+        max_entries=max_entries,
+    )
+    result = compressor.compress(text)
+
+    return json.dumps(
+        {
+            "status": "success",
+            "original_tokens": result.original_tokens,
+            "compressed_tokens": result.compressed_tokens,
+            "savings_tokens": result.savings_tokens,
+            "compression_ratio": result.compression_ratio,
+            "dictionary_entries": len(result.dictionary),
+            "dictionary": [
+                {
+                    "symbol": e.symbol,
+                    "expansion": " ".join(e.expansion),
+                    "frequency": e.frequency,
+                    "savings": e.savings,
+                }
+                for e in result.dictionary
+            ],
+            "compressed_text": result.compressed_text,
+        }
+    )
+
+
+async def handle_recommend_compression(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle recommend_compression tool call.
+
+    Predicts the quality of each compression profile for the given text and
+    recommends the most compressed profile that meets the quality floor.
+    """
+    text = args.get("text", "")
+    if not isinstance(text, str):
+        return json.dumps({"error": "text must be a string"})
+
+    quality_floor = float(args.get("quality_floor", 0.7))
+    query = args.get("query") or None
+
+    predictor = QualityPredictor()
+    profile_scores = predictor.predict_all_profiles(text, query=query)
+    recommended = auto_select_profile(text, quality_floor=quality_floor, query=query)
+
+    return json.dumps(
+        {
+            "status": "success",
+            "recommended_profile": recommended,
+            "quality_floor": quality_floor,
+            "profile_scores": {
+                name: round(score, 4) for name, score in sorted(profile_scores.items())
+            },
+            "message": (
+                f"Profile '{recommended}' is the most compressed option "
+                f"meeting quality floor {quality_floor:.0%}."
+            ),
         }
     )

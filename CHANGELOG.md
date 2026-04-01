@@ -33,7 +33,17 @@ All notable changes to Token Saver 5000.
   `test_token_estimation.py` (23), `test_client_config.py` (20), `test_compression_profiles.py`
   (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
   plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
-- **Total MCP tools**: 103 (was 99).
+- **Total MCP tools**: 105 (was 103).
+- **Meta-token compression** (`src/meta_tokens.py`): lossless LZ77-inspired subsequence
+  replacement (arXiv 2506.00307). Finds repeated token n-grams, replaces with §N symbols +
+  prepended dictionary. Fully reversible via `decompress()`. New MCP tool: `compress_meta_tokens`.
+  26 tests.
+- **COMI MIG scoring** (`src/token_refiner.py`): Marginal Information Gain token scoring
+  (arXiv 2602.01719, ICLR 2026). Query-aware scoring that balances relevance vs redundancy.
+  New `MIGScorer` class, `scoring_mode="mig"` option on `TokenRefiner`. 17 tests.
+- **PoC quality predictor** (`src/quality_predictor.py`): performance-oriented compression
+  (arXiv 2603.19733). Specify quality floor instead of ratio. Auto-selects most aggressive
+  profile meeting the floor. New MCP tool: `recommend_compression`. 27 tests.
 - **Codex CLI support**: Added `gpt-5.1-codex` and `codex-mini` to model database
   (200K context, 0.80 compression trigger). Codex pricing in `pricing.py`.
   Codex JSONL output parser in `providers.py`. 30 new Codex tests.

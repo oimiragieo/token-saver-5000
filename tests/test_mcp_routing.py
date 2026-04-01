@@ -31,7 +31,7 @@ class TestSetupMCPTools:
         """Test that all MCP tools are registered."""
         tools = mcp_core.setup_mcp_tools()
 
-        # Expected count: 99 tools total
+        # Expected count: 105 tools total
         # - Document Compression: 9
         # - Batch Processing: 1 (NEW in v0.6.0)
         # - Directory Ingestion: 1 (NEW in v0.9.0)
@@ -56,7 +56,8 @@ class TestSetupMCPTools:
         # - Model optimization: 6
         # - Prompt registry/cache audit/rendering: 8
         # - Token Optimization: 4 (v0.11.0) - estimate_tokens, configure_for_client, set/get_compression_profile
-        assert len(tools) == 103, f"Expected 103 tools, got {len(tools)}"
+        # - arXiv paper techniques: 2 (v0.12.0) - compress_meta_tokens, recommend_compression
+        assert len(tools) == 105, f"Expected 105 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""

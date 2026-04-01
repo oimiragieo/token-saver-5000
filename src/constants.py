@@ -524,3 +524,48 @@ Named compression presets bundling multiple parameters.
 - Explicit parameters always override profile defaults
 WHY: Simplifies UX by replacing 3+ parameter decisions with a single choice.
 """
+
+# ============================================================================
+# MIG Scoring Parameters (arXiv 2602.01719 — COMI)
+# ============================================================================
+
+MIG_DEFAULT_LAMBDA = float(os.getenv("MIG_DEFAULT_LAMBDA", "0.5"))
+"""
+Redundancy penalty weight for Marginal Information Gain scoring.
+- Range: 0.0 (no redundancy penalty) to 1.0 (full penalty)
+- Environment variable: MIG_DEFAULT_LAMBDA
+WHY: 0.5 balances relevance maximisation and redundancy minimisation per COMI paper.
+"""
+
+MIG_MIN_CORPUS_TOKENS = int(os.getenv("MIG_MIN_CORPUS_TOKENS", "10"))
+"""
+Minimum token count before attempting TF-IDF vectorisation in MIG scorer.
+- Below this threshold the scorer falls back to heuristic scoring.
+- Environment variable: MIG_MIN_CORPUS_TOKENS
+WHY: TF-IDF vocabulary is too sparse for very short inputs.
+"""
+
+# ============================================================================
+# Quality Predictor Weights (PoC quality predictor)
+# ============================================================================
+
+QUALITY_ENTITY_WEIGHT = float(os.getenv("QUALITY_ENTITY_WEIGHT", "0.4"))
+"""
+Weight for entity-retention component in quality prediction.
+- Environment variable: QUALITY_ENTITY_WEIGHT
+WHY: Named entities are high-value semantic anchors; 0.4 gives them priority.
+"""
+
+QUALITY_COVERAGE_WEIGHT = float(os.getenv("QUALITY_COVERAGE_WEIGHT", "0.3"))
+"""
+Weight for sentence-coverage component in quality prediction.
+- Environment variable: QUALITY_COVERAGE_WEIGHT
+WHY: Coverage ensures broad topic representation; 0.3 is secondary to entities.
+"""
+
+QUALITY_RELEVANCE_WEIGHT = float(os.getenv("QUALITY_RELEVANCE_WEIGHT", "0.3"))
+"""
+Weight for query-relevance component in quality prediction.
+- Environment variable: QUALITY_RELEVANCE_WEIGHT
+WHY: Relevance is query-dependent and optional; 0.3 keeps it symmetrical with coverage.
+"""

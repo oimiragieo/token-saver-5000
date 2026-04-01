@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing import Optional
+
 from src.constants import COMPRESSION_PROFILES, DEFAULT_COMPRESSION_PROFILE
 
 
@@ -198,3 +200,42 @@ def apply_profile(params: dict, profile: CompressionProfile) -> dict:
     if "chunk_size" not in result:
         result["chunk_size"] = profile.chunk_size
     return result
+
+
+def auto_select_profile(
+    text: str,
+    quality_floor: float = 0.7,
+    query: Optional[str] = None,
+) -> str:
+    """Select the most compressed profile that meets *quality_floor*.
+
+    Simulates compression for each profile (ordered from most to least
+    compressed) and returns the first one whose predicted quality meets
+    *quality_floor*.  Falls back to ``'full'`` when nothing qualifies.
+
+    Args:
+        text: Original text to evaluate.
+        quality_floor: Minimum acceptable quality score (0.0–1.0).
+        query: Optional query for relevance-aware quality prediction.
+
+    Returns:
+        Profile name string (e.g. ``'minimal'``, ``'balanced'``, ``'full'``).
+    """
+    # Import here to avoid circular dependency
+    from src.quality_predictor import QualityPredictor
+
+    predictor = QualityPredictor()
+
+    # Order from most compressed to least — return first that meets floor
+    ordered = ["minimal", "summary", "balanced", "detailed", "full"]
+
+    for profile_name in ordered:
+        if profile_name not in COMPRESSION_PROFILES:
+            continue
+        simulated = predictor.simulate_compression(text, profile_name)
+        score = predictor.predict_quality(text, simulated, query)
+        if score >= quality_floor:
+            return profile_name
+
+    # If nothing meets the floor, return the least-compressed option
+    return ordered[-1]
