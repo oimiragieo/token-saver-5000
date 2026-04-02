@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .compressor import compress_text
 from .corpus import CORPUS_DIR, CorpusEntry, build_prompt, load_all_corpus, load_corpus
 from .project_scaffold import cleanup, create_vanilla, create_with_mcp
 from .providers import is_available, run_prompt
 from .results import BenchmarkReport, CLIResult, ComparisonResult
+
+if TYPE_CHECKING:
+    from ..search_compress_pipeline import SearchCompressResult
 
 
 def run_benchmark(
@@ -117,6 +121,56 @@ def run_benchmark(
                         )
 
     return report
+
+
+def run_search_compress_benchmark(
+    corpus_dir: Path,
+    queries: list[str] | None = None,
+    verbose: bool = False,
+) -> list[SearchCompressResult]:
+    """Run search-then-compress benchmark on code corpus.
+
+    Searches the code corpus for each query, compresses only the matched files,
+    and compares against naive (all-files) and compress-all baselines.
+
+    Args:
+        corpus_dir: Path to the benchmarks directory (parent of corpus/).
+        queries: List of search queries; uses 3 built-in defaults if None.
+        verbose: Print per-query progress to stdout.
+
+    Returns:
+        List of SearchCompressResult, one per query.
+    """
+    from ..search_compress_pipeline import search_then_compress
+
+    code_dir = corpus_dir / "corpus" / "code"
+    if not code_dir.exists():
+        if verbose:
+            print(f"Code corpus not found at {code_dir}")
+        return []
+
+    if queries is None:
+        queries = [
+            "authentication token JWT",
+            "database connection pool",
+            "rate limiting middleware API",
+        ]
+
+    results = []
+    for query in queries:
+        if verbose:
+            print(f"  Query: {query!r}")
+        result = search_then_compress(str(code_dir), query)
+        results.append(result)
+        if verbose:
+            print(f"    Files: {result.files_scanned} scanned, {result.files_matched} matched")
+            print(f"    Naive: {result.naive_all_tokens:,} tokens")
+            print(f"    Compress-all: {result.naive_compressed_tokens:,} tokens")
+            print(f"    Search+compress: {result.search_compress_tokens:,} tokens")
+            print(f"    vs naive: {result.search_vs_naive_savings_pct}% savings")
+            print(f"    vs compress-all: {result.search_vs_compress_all_savings_pct}% savings")
+
+    return results
 
 
 def _run_skill_comparison(
