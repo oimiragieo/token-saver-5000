@@ -34,7 +34,13 @@ All notable changes to Token Saver 5000.
   (22), `test_schema_stability.py` (11), `test_gemini_enhancements.py` (56),
   plus tool count updates in `test_mcp_routing.py` and `test_experimental_handlers.py`.
 - **Total MCP tools**: 109 (was 108).
-- **Full test suite**: 2,700+ tests across 90+ test files, 92%+ coverage.
+- **Token savings tracker** (`src/savings_tracker.py`): real-time ROI tracking for every
+  compression operation. Computes tokens saved, dollar savings (model-aware), compression
+  ratios, monthly projections, ROI vs Pro plan ($29/mo), and breakeven analysis.
+  Per-tool breakdown shows which operations save the most. Persists to SQLite via
+  SessionJournal. New MCP tools: `get_savings_report`, `get_savings_inline`. 26 tests.
+- **Total MCP tools**: 111 (was 109).
+- **Full test suite**: 3,045+ tests across 90+ test files.
 - **CLI output optimizer** (`src/cli_output_optimizer.py`): RTK-inspired command-aware
   filtering for CLI tool output. Auto-detects 10 command types (git diff, pytest, npm install,
   lint, JSON, logs, progress bars, etc.) and applies optimal filtering strategy. Strips ANSI

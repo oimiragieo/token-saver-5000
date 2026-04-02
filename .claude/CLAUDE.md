@@ -18,7 +18,7 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 |--------|-------|--------|
 | **Source Modules** | 75 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
 | **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 109 tools defined | ✅ All routed |
+| **MCP Tools** | 111 tools defined | ✅ All routed |
 | **Test Files** | 84 test modules | ✅ 1,327+ tests |
 | **Test Coverage** | 92%+ overall | ✅ Exceeds 70% threshold |
 | **Documentation** | 51 markdown files | ⚠️ Minor updates needed |

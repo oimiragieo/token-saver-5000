@@ -2912,6 +2912,40 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["text"],
             },
         ),
+        # === SAVINGS TRACKER (v0.14.0) ===
+        Tool(
+            name="get_savings_report",
+            description=(
+                "Get a detailed report of token savings for this session. "
+                "Shows total tokens saved, dollars saved, compression ratios, "
+                "per-tool breakdown, monthly projection, and ROI vs the Pro plan. "
+                "Use this to justify the value of token compression to your team."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {
+                        "type": "string",
+                        "description": "Model for cost calculation (default: from session config)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="get_savings_inline",
+            description=(
+                "Get a compact one-line savings summary. "
+                "Embed this in other tool responses to show real-time savings. "
+                "Example: 'Saved 3,400 tokens ($0.051) | Session: $2.34 saved (8.1x ROI)'"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3091,6 +3125,9 @@ async def route_tool_call(
         "search_code": ch.handle_search_code,
         # CLI Output Optimizer
         "filter_cli_output": toh.handle_filter_cli_output,
+        # Savings Tracker (v0.14.0)
+        "get_savings_report": toh.handle_get_savings_report,
+        "get_savings_inline": toh.handle_get_savings_inline,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

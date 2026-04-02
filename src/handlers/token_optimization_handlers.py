@@ -25,6 +25,7 @@ from ..compression_profiles import (
 )
 from ..meta_tokens import MetaTokenCompressor
 from ..quality_predictor import QualityPredictor
+from ..savings_tracker import SavingsTracker
 
 
 # Module-level singletons for session state
@@ -34,6 +35,9 @@ _token_estimator = TokenEstimator()
 
 # Module-level journal cache (keyed by session_id)
 _session_journals: dict = {}
+
+# Module-level savings tracker cache (keyed by session_id)
+_savings_trackers: dict[str, SavingsTracker] = {}
 
 
 def _get_journal(session_id: str) -> Any:
@@ -323,3 +327,78 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
             "compression_pct": round(result.compression_pct, 1),
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Savings Tracker helpers and handlers (v0.14.0)
+# ---------------------------------------------------------------------------
+
+
+def _get_tracker(session_id: str, model: str = "claude-sonnet-4-6") -> SavingsTracker:
+    """Return (or create) the SavingsTracker for *session_id*."""
+    if session_id not in _savings_trackers:
+        _savings_trackers[session_id] = SavingsTracker(session_id, model)
+    tracker = _savings_trackers[session_id]
+    if model and model != tracker.model:
+        tracker.model = model
+    return tracker
+
+
+async def handle_get_savings_report(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle get_savings_report tool call.
+
+    Returns a detailed report of token savings and ROI for the session.
+    """
+    session_id = args.get("session_id", "default")
+    model = args.get("model")
+    config = _session_config_store.get_config(session_id)
+    tracker = _get_tracker(session_id, model or config.model_id)
+    report = tracker.get_report()
+
+    return json.dumps(
+        {
+            "status": "success",
+            "session_id": report.session_id,
+            "model": report.model,
+            "total_operations": report.total_operations,
+            "total_tokens_saved": report.total_tokens_saved,
+            "total_dollars_saved": report.total_dollars_saved,
+            "avg_compression_ratio": report.avg_compression_ratio,
+            "avg_savings_pct": report.avg_savings_pct,
+            "monthly_projected_savings": report.monthly_projected_savings,
+            "roi_vs_pro_plan": report.roi_vs_pro_plan,
+            "breakeven_operations": report.breakeven_operations,
+            "by_tool": report.by_tool,
+            "message": (
+                f"Session savings: {report.total_tokens_saved:,} tokens "
+                f"(${report.total_dollars_saved:.2f}). "
+                f"Projected monthly: ${report.monthly_projected_savings:.2f} "
+                f"({report.roi_vs_pro_plan}x ROI vs $29/mo Pro plan)."
+            ),
+        }
+    )
+
+
+async def handle_get_savings_inline(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle get_savings_inline tool call.
+
+    Returns a compact one-line savings summary for embedding in tool responses.
+    """
+    session_id = args.get("session_id", "default")
+    config = _session_config_store.get_config(session_id)
+    tracker = _get_tracker(session_id, config.model_id)
+    report = tracker.get_report()
+
+    if report.total_operations == 0:
+        return json.dumps(
+            {"status": "success", "summary": "No compression operations recorded yet."}
+        )
+
+    summary = (
+        f"Saved {report.total_tokens_saved:,} tokens "
+        f"(${report.total_dollars_saved:.2f}) across {report.total_operations} operations"
+    )
+    if report.roi_vs_pro_plan > 0:
+        summary += f" | {report.roi_vs_pro_plan}x ROI vs Pro plan"
+
+    return json.dumps({"status": "success", "summary": summary})

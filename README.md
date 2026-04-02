@@ -251,6 +251,27 @@ python scripts/benchmark_token_savings.py --mode skill --verbose --output result
 python scripts/benchmark_token_savings.py --providers claude --sizes large --verbose
 ```
 
+## Token Savings Tracker (NEW)
+
+Every compression operation is tracked with exact dollar savings. See your ROI in real-time:
+
+```
+get_savings_report(session_id="my-session")
+# -> {
+#   "total_tokens_saved": 142,500,
+#   "total_dollars_saved": 2.14,
+#   "avg_compression_ratio": 13.0,
+#   "monthly_projected_savings": 64.20,
+#   "roi_vs_pro_plan": 2.2,
+#   "breakeven_operations": 14,
+#   "by_tool": {"ingest_context": {"operations": 8, "dollars_saved": 1.87}, ...}
+# }
+```
+
+The tracker computes: tokens saved, dollar savings (model-aware pricing), compression ratios,
+monthly projections, ROI vs the $29/mo Pro plan, and breakeven analysis. Persists to SQLite
+so savings accumulate across sessions.
+
 ## CLI Output Optimizer (NEW -- RTK-Inspired)
 
 Coding agent CLI output is the #1 token waster. Token Saver now auto-detects 10 command

@@ -570,11 +570,11 @@ class TestMCPCoreIntegration:
             assert name in tool_names, f"Tool schema missing: {name}"
 
     def test_tool_count_is_48(self):
-        """Verify total tool count includes cache telemetry additions."""
+        """Verify total tool count includes savings tracker additions."""
         from src.handlers.mcp_core import setup_mcp_tools
 
         tools = setup_mcp_tools()
-        assert len(tools) == 109, f"Expected 109 tools, got {len(tools)}"
+        assert len(tools) == 111, f"Expected 111 tools, got {len(tools)}"
 
     def test_experimental_tools_have_experimental_in_description(self):
         """Verify all experimental tool descriptions mention EXPERIMENTAL."""
