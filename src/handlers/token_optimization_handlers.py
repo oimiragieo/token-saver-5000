@@ -403,6 +403,60 @@ async def handle_advise_cache_strategy(context: Dict[str, Any], args: Dict[str, 
     )
 
 
+async def handle_generate_structural_summary(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle generate_structural_summary tool call.
+
+    Returns a compact structural outline of the provided source code, preserving
+    imports, class definitions, and function signatures while omitting bodies.
+    """
+    from ..structural_summary import generate_structural_summary
+
+    text = args.get("text", "")
+    if not isinstance(text, str):
+        return json.dumps({"error": "text must be a string"})
+
+    file_path = args.get("file_path", "")
+    result = generate_structural_summary(text, file_path)
+    return json.dumps(
+        {
+            "status": "success",
+            "summary": result.summary_text,
+            "original_tokens": result.original_tokens,
+            "summary_tokens": result.summary_tokens,
+            "savings_pct": result.savings_pct,
+            "symbol_count": result.symbol_count,
+            "language": result.language,
+            "line_count": result.line_count,
+        }
+    )
+
+
+async def handle_detect_dead_code(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle detect_dead_code tool call.
+
+    Scans a directory for Python files that are never imported by other files,
+    returning a dead file list with estimated token savings.
+    """
+    from ..dead_code_detector import detect_dead_files
+
+    directory = args.get("directory", ".")
+    if not isinstance(directory, str):
+        return json.dumps({"error": "directory must be a string"})
+
+    report = detect_dead_files(directory)
+    return json.dumps(
+        {
+            "status": "success",
+            "total_files": report.total_files,
+            "dead_files": report.dead_files,
+            "dead_file_count": report.dead_file_count,
+            "live_file_count": report.live_file_count,
+            "tokens_saved": report.tokens_saved,
+            "entry_points": report.entry_points,
+        }
+    )
+
+
 async def handle_get_savings_inline(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle get_savings_inline tool call.
 

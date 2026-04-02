@@ -6,7 +6,7 @@ Semantic Modulator server. It maps tool names to their corresponding handler
 functions across all handler modules.
 
 Functions:
-- setup_mcp_tools: Returns list of all 52 MCP tool schemas
+- setup_mcp_tools: Returns list of all 54 MCP tool schemas
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
@@ -2969,6 +2969,58 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["model_id"],
             },
         ),
+        # === STRUCTURAL SUMMARY (v0.15.0) ===
+        Tool(
+            name="generate_structural_summary",
+            description=(
+                "Generate a compact structural outline of a code file. "
+                "Extracts imports, class definitions, and function signatures (with type hints). "
+                "Replaces function bodies with `...`. Achieves ~80-90% token reduction while "
+                "preserving the full API surface. Ideal for codebase exploration, "
+                "API discovery, and context-window-efficient code review. "
+                "Supports Python (AST-based) and other languages (regex fallback)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Source code text to summarize",
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": (
+                            "Optional file path (used to detect language from extension "
+                            "and to label the output header)"
+                        ),
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
+        # === DEAD CODE DETECTOR (v0.15.0) ===
+        Tool(
+            name="detect_dead_code",
+            description=(
+                "Detect Python files in a directory that are never imported by other files. "
+                "Uses regex-based import graph analysis to identify unreachable modules. "
+                "Entry points (main.py, server.py, __init__.py, test_*.py, etc.) are always "
+                "considered live. Returns dead file list with estimated token savings -- "
+                "useful for excluding dead code before compression to reduce noise."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory path to scan for Python files (scans recursively)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["directory"],
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3153,6 +3205,9 @@ async def route_tool_call(
         "get_savings_inline": toh.handle_get_savings_inline,
         # Cache Strategy Advisor
         "advise_cache_strategy": toh.handle_advise_cache_strategy,
+        # Structural Summary + Dead Code Detector (v0.15.0)
+        "generate_structural_summary": toh.handle_generate_structural_summary,
+        "detect_dead_code": toh.handle_detect_dead_code,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

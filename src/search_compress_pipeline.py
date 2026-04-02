@@ -40,6 +40,10 @@ class SearchCompressResult:
     search_compress_tokens: int = 0
     search_vs_naive_savings_pct: float = 0.0
     search_vs_compress_all_savings_pct: float = 0.0
+    # Dead code exclusion (optional phase 2.5)
+    dead_files_excluded: int = 0
+    # Structural summary (optional pre-compress phase)
+    structural_summary_used: bool = False
     # Trace
     stages: list[str] = field(default_factory=list)
 
@@ -95,15 +99,19 @@ def search_then_compress(
     query: str,
     max_files: int = 20,
     refine: bool = True,
+    exclude_dead_code: bool = False,
+    use_structural_summary: bool = False,
 ) -> SearchCompressResult:
     """Execute the search-then-compress pipeline.
 
     Phases:
     1. Collect ALL .py files (for naive baseline measurement).
     2. Search directory for files relevant to query (tensor-grep or glob fallback).
+    2.5. (Optional) Dead code exclusion: remove unreachable files from matched set.
     3. Read all files to establish naive token count.
     4. Compress ALL files (compress-all baseline).
-    5. Read and compress ONLY matched files (search-first path).
+    5. Read and compress ONLY matched files (search-first path); or generate
+       structural summaries when use_structural_summary=True.
     6. Calculate and attach comparison metrics.
 
     Args:
@@ -111,6 +119,11 @@ def search_then_compress(
         query: Natural-language or keyword search query.
         max_files: Maximum number of matched files to compress.
         refine: Whether to apply token-level refinement after compression.
+        exclude_dead_code: If True, remove files not reachable via imports before
+            compression. Reduces noise from unreferenced modules.
+        use_structural_summary: If True, replace semantic compression with a
+            lightweight structural outline (imports + signatures). Much faster
+            and produces smaller output for API-surface exploration.
 
     Returns:
         Populated SearchCompressResult with all metrics filled in.
@@ -151,6 +164,17 @@ def search_then_compress(
 
     result.files_matched = len(result.matched_files)
 
+    # Phase 2.5: Dead code exclusion
+    if exclude_dead_code and result.matched_files:
+        from .dead_code_detector import detect_dead_files
+
+        dead_report = detect_dead_files(directory, files=result.matched_files)
+        if dead_report.dead_files:
+            live_set = set(dead_report.live_files)
+            result.matched_files = [f for f in result.matched_files if f in live_set]
+            result.dead_files_excluded = dead_report.dead_file_count
+            result.stages.append("dead_code_exclusion")
+
     # Phase 3: Read all files (for naive token count)
     all_content = ""
     for fpath in all_py_files:
@@ -180,15 +204,32 @@ def search_then_compress(
 
         result.total_original_tokens = _count_tokens(matched_content)
 
-        try:
-            matched_compressed = compress_text(matched_content, refine=refine)
-            result.total_compressed_tokens = matched_compressed.compressed_tokens
-            result.search_compress_tokens = matched_compressed.compressed_tokens
-        except Exception:
-            result.total_compressed_tokens = result.total_original_tokens
-            result.search_compress_tokens = result.total_original_tokens
+        if use_structural_summary and result.matched_files:
+            from .structural_summary import generate_structural_summary
 
-        result.stages.append("compress_matched")
+            summaries = []
+            for fpath in result.matched_files:
+                try:
+                    content = Path(fpath).read_text(encoding="utf-8", errors="replace")
+                    summary = generate_structural_summary(content, fpath)
+                    summaries.append(summary.summary_text)
+                except OSError:
+                    continue
+            combined = "\n\n".join(summaries)
+            result.total_compressed_tokens = _count_tokens(combined)
+            result.search_compress_tokens = result.total_compressed_tokens
+            result.structural_summary_used = True
+            result.stages.append("structural_summary")
+        else:
+            try:
+                matched_compressed = compress_text(matched_content, refine=refine)
+                result.total_compressed_tokens = matched_compressed.compressed_tokens
+                result.search_compress_tokens = matched_compressed.compressed_tokens
+            except Exception:
+                result.total_compressed_tokens = result.total_original_tokens
+                result.search_compress_tokens = result.total_original_tokens
+
+            result.stages.append("compress_matched")
 
     # Phase 6: Calculate metrics
     if result.total_original_tokens > 0:

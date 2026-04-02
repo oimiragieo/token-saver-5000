@@ -61,7 +61,8 @@ class TestSetupMCPTools:
         # - Tensor-Grep Integration: 2 (v0.13.0) - compress_codebase, search_code
         # - Savings Tracker: 2 (v0.14.0) - get_savings_report, get_savings_inline
         # - Cache Strategy Advisor: 1 - advise_cache_strategy
-        assert len(tools) == 112, f"Expected 112 tools, got {len(tools)}"
+        # - Structural Summary + Dead Code Detector: 2 (v0.15.0)
+        assert len(tools) == 114, f"Expected 114 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""
