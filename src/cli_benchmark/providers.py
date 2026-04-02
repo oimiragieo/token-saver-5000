@@ -294,7 +294,10 @@ def _parse_opencode_result(stdout: str, model: str | None) -> CLIResult:
             continue
 
     # Extract tokens from step_finish event
-    input_tokens = 0
+    # IMPORTANT: OpenCode's `input` is BILLED tokens (net of cache), not total content.
+    # Total content = input + cache.read. We use total for savings comparison (stable),
+    # and billed for cost calculation.
+    billed_input = 0
     output_tokens = 0
     cache_read = 0
     cache_write = 0
@@ -303,7 +306,7 @@ def _parse_opencode_result(stdout: str, model: str | None) -> CLIResult:
         if event.get("type") == "step_finish":
             part = event.get("part", {})
             tokens = part.get("tokens", {})
-            input_tokens += tokens.get("input", 0)
+            billed_input += tokens.get("input", 0)
             output_tokens += tokens.get("output", 0)
             cache = tokens.get("cache", {})
             cache_read += cache.get("read", 0)
@@ -319,16 +322,16 @@ def _parse_opencode_result(stdout: str, model: str | None) -> CLIResult:
             if text:
                 raw_response += text
 
-    # Total input includes cache write (creation cost)
-    total_input = input_tokens + cache_write
+    # Total content tokens = billed input + cache reads (cache-independent measure)
+    total_content = billed_input + cache_read
 
-    if cost_usd == 0.0 and total_input > 0:
-        cost_usd = compute_cost(model or "default", total_input, output_tokens, cache_read)
+    if cost_usd == 0.0 and total_content > 0:
+        cost_usd = compute_cost(model or "default", billed_input, output_tokens, cache_read)
 
     return CLIResult(
         provider="opencode",
         model=model or "",
-        input_tokens=total_input,
+        input_tokens=total_content,  # total content tokens (cache-independent)
         output_tokens=output_tokens,
         cache_read_tokens=cache_read,
         cache_creation_tokens=cache_write,
