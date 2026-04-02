@@ -29,7 +29,7 @@ dependencies = [
 token-saver-mcp = "src.server:main"
 token-saver-install-mcp = "src.mcp_install:main"
 token-saver-setup = "src.setup_cli:main"
-token-saver-proxy = "scripts.token_saver_proxy:main"
+token-saver-proxy = "src.proxy_cli:main"
 
 [project.optional-dependencies]
 # chromadb is optional: server gracefully falls back to JSON persistence when absent.
@@ -68,6 +68,9 @@ all = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
