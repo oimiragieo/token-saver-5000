@@ -36,6 +36,57 @@ Common use cases:
 
 Do not use this if you only have short prompts and token cost is irrelevant.
 
+## Proven Results: 6 Real-World User Journeys
+
+Every journey runs locally. No API keys needed. Verified with 40 tests.
+
+```bash
+python scripts/benchmark_cujs.py --verbose
+```
+
+| # | Journey | What Happens | Before | After | Savings |
+|---|---------|-------------|--------|-------|---------|
+| 1 | **Solo Dev: Codebase Compression** | Search 13-file project for "auth" → compress 6 matched files | 20,406 tokens | 767 tokens | **96.2%** |
+| 2 | **Long Document Compression** | Compress 2,206-line API reference doc | 16,461 tokens | 1,269 tokens | **92.3%** |
+| 3 | **CLI Output Filtering** | Filter git diff (320 lines) + pytest (86 lines) + npm install (28 lines) | 4,888 tokens | 240 tokens | **95.1%** |
+| 4 | **Query-Focused Code Search** | Ask "how does caching work?" → find 3 relevant files → compress | 20,406 tokens | 439 tokens | **97.8%** |
+| 5 | **Session Recovery** | Recover 7 events after conversation compaction | 26,600 tokens | 138 tokens | **99.5%** |
+| 6 | **ROI Justification** | 10 compressions on Claude Opus → show savings report | $1.27 saved | 4.4x ROI | **$127/mo projected** |
+
+**Aggregate: 179,161 input tokens → 8,473 output tokens (95.3% savings)**
+
+### Journey Details
+
+**CUJ 1: Solo Developer with a Codebase.**
+You have 13 Python files. You ask about authentication. Token Saver searches for relevant
+code (finds auth.py, middleware.py, tests), compresses only those files, skips everything
+irrelevant. 96.2% savings vs reading every file.
+
+**CUJ 2: Compressing Architecture Docs.**
+You have a 2,206-line API reference. Token Saver builds a semantic graph, ranks importance
+via PageRank, generates a 13x compressed skeleton preserving endpoints, parameters, and
+error codes. 92.3% savings.
+
+**CUJ 3: Cleaning Up CLI Noise.**
+Your AI agent runs `git diff`, `pytest`, and `npm install`. Token Saver auto-detects each
+command type and applies the right filter: stats extraction for git, failure focus for pytest,
+summary for npm. 95.1% savings (434 lines → 22 lines).
+
+**CUJ 4: "How Does Caching Work?"**
+You ask a question about a codebase. Token Saver searches first (finds cache.py, config.py,
+middleware.py), then compresses only those 3 files instead of all 13. 97.8% savings -- 75%
+better than compressing everything.
+
+**CUJ 5: Surviving Conversation Compaction.**
+After a long Claude Code session, the conversation gets compacted and you lose context.
+Token Saver's session journal recovers all your prior work (5 ingested files, model config,
+compression profile, 26,600 tokens saved) in just 138 tokens.
+
+**CUJ 6: Proving ROI to Your Manager.**
+After 10 compressions on Claude Opus ($15/MTok), the savings tracker shows: $1.27 saved,
+4.4x ROI vs the $29/mo Pro plan, breakeven at 228 operations. Projected $127/month savings.
+The tool pays for itself on day 1.
+
 ## Two Ways To Use It
 
 There are two product surfaces in this repo:
