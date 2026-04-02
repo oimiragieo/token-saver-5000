@@ -11,7 +11,6 @@ Covers:
 from src.response_formatter import ResponseFormatter, cache_stable_format
 from src.client_config import ClientConfig, _detect_provider
 
-
 # ============================================================================
 # cache_stable_format — key ordering
 # ============================================================================

@@ -8,7 +8,6 @@ from src.handlers.help_handlers import handle_tool_help
 from src.handlers.mcp_core import route_tool_call, setup_mcp_tools
 from src.prompt_registry import PromptRegistry
 
-
 PROMPT_TOOL_NAMES = {
     "create_prompt_template",
     "update_prompt_template",

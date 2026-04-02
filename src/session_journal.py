@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 _DEFAULT_STORAGE_DIR = Path(".semantic_modulator_data") / "sessions"
 
 
@@ -75,8 +74,7 @@ class SessionJournal:
 
     def _init_schema(self) -> None:
         """Create the events table and index if they do not exist."""
-        self._conn.executescript(
-            """
+        self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS events (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_type  TEXT    NOT NULL,
@@ -84,8 +82,7 @@ class SessionJournal:
                 data_json   TEXT    NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_events_type ON events (event_type);
-            """
-        )
+            """)
         self._conn.commit()
 
     # ------------------------------------------------------------------

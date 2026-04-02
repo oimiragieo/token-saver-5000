@@ -19,7 +19,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 _UNTRAINED_WARNING_EMITTED = False
 logger = logging.getLogger(__name__)
 

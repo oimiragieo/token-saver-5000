@@ -8,7 +8,6 @@ from __future__ import annotations
 from src.quality_predictor import QualityPredictor
 from src.compression_profiles import auto_select_profile
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

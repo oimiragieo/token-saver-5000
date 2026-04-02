@@ -18,7 +18,6 @@ import pytest
 from src.handlers import compression_handlers, afm_handlers, ace_handlers, file_sync_handlers
 from src.semantic_compressor import FidelityLevel
 
-
 # ============================================================================
 # Research Paper Workflow Tests
 # ============================================================================
@@ -174,14 +173,11 @@ We use a 5-layer CNN with ReLU activations and max pooling layers.
 
         # Version 2: Add results section
         await asyncio.sleep(0.1)
-        v2_content = (
-            v1_content
-            + """
+        v2_content = v1_content + """
 Results:
 Our model achieves 90% accuracy after data augmentation improvements.
 Training took 6 hours on a single GPU with batch size 64.
 """
-        )
         paper_path.write_text(v2_content)
 
         # Refresh to create v2

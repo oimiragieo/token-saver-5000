@@ -21,7 +21,6 @@ import pytest
 from src.client_config import ClientConfig, SessionConfigStore
 from src.constants import KNOWN_MODEL_CONTEXT_WINDOWS
 
-
 # ============================================================================
 # ClientConfig.from_model — known models
 # ============================================================================

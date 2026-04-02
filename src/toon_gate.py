@@ -7,7 +7,6 @@ only when benchmarks prove consistent token savings.
 
 from typing import Dict, List
 
-
 MIN_BENCHMARKS = 3
 MIN_SAVINGS_PERCENT = 10.0  # Require at least 10% savings to enable
 

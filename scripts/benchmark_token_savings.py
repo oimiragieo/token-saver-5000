@@ -9,6 +9,7 @@ Usage:
     python scripts/benchmark_token_savings.py --mode skill --sizes small --providers claude
     python scripts/benchmark_token_savings.py --mode both --output results.json --verbose
 """
+
 from __future__ import annotations
 
 import argparse

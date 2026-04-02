@@ -15,7 +15,6 @@ import pytest
 from unittest.mock import MagicMock, patch
 from src.identity_scope import compose_scoped_file_id
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================

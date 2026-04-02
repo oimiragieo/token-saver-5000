@@ -13,7 +13,6 @@ from src.fidelity_advisor import FidelityAdvisor, UseCase, FidelityLevel
 from src.error_helpers import SmartError, suggest_file_id, suggest_node_id, suggest_enum
 from src.compression_advisor import CompressionAdvisor, estimate_compression_size
 
-
 # ===========================
 # Fidelity Advisor Tests (Day 7)
 # ===========================

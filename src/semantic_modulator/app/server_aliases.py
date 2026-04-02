@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Mapping
 
-
 SERVER_ALIAS_KEYS: tuple[str, ...] = (
     "CodeCompressionAdapter",
     "BlindSpotDetector",

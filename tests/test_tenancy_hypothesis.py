@@ -9,7 +9,6 @@ from src.identity_scope import (
     scope_matches,
 )
 
-
 safe_text = st.text(
     alphabet=st.characters(
         blacklist_categories=("Cs",),

@@ -18,7 +18,6 @@ from unittest.mock import patch
 
 from src.token_estimation import TokenEstimator
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from src.token_refiner import FILLER_WORDS, PRESERVE_PATTERNS, RefinedResult, TokenRefiner
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

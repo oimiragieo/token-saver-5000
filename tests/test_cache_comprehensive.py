@@ -28,7 +28,6 @@ import pytest
 
 from src.embedding_cache import LRUEmbeddingCache, get_embedding_cache
 
-
 # ===========================
 # Fixtures
 # ===========================

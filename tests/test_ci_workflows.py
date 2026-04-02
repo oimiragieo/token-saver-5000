@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 LEGACY_TEST_WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"

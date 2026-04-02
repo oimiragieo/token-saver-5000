@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.scar_compressor import SCAREnhancedCompressor
 
-
 # Sample test documents of varying sizes
 SMALL_DOCUMENT = """
 Quantum computing leverages quantum mechanics for computation.

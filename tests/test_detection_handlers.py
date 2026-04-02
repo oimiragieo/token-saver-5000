@@ -17,7 +17,6 @@ from src.handlers.detection_handlers import (
     handle_detect_hallucination,
 )
 
-
 # ============================================================================
 # Mock Data Classes (matching blind_spot_detector.py structure)
 # ============================================================================

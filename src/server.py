@@ -39,7 +39,6 @@ from .structured_logging import configure_structlog, get_logger
 from .types import HandlerContext  # TypedDict for handler context
 from .version_manager import VersionManager  # noqa: F401
 
-
 # Configure structured logging
 configure_structlog(log_level="INFO")
 logger = get_logger("semantic-modulator")

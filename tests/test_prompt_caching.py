@@ -19,7 +19,6 @@ import pytest
 
 from src.ace_framework import ACEBullet, ACEContext, BulletType
 
-
 # ============================================================================
 # Issue 1: ACE Bullet/Context volatile field exclusion
 # ============================================================================

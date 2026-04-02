@@ -27,7 +27,6 @@ from ..meta_tokens import MetaTokenCompressor
 from ..quality_predictor import QualityPredictor
 from ..savings_tracker import SavingsTracker
 
-
 # Module-level singletons for session state
 _session_config_store = SessionConfigStore()
 _profile_manager = ProfileManager()

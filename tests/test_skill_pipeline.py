@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_SCRIPTS = ROOT / "skills" / "token-saver-context-compression" / "scripts"
 if str(SKILL_SCRIPTS) not in sys.path:

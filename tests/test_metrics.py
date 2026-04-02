@@ -38,7 +38,6 @@ from src.metrics import (
     PROMETHEUS_AVAILABLE,
 )
 
-
 # ===========================
 # Fixtures
 # ===========================

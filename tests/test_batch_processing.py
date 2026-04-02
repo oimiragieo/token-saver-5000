@@ -25,7 +25,6 @@ from src.batch_manager import (
 from src.semantic_compressor import SemanticCompressor
 from src.handlers import compression_handlers
 
-
 # ===========================
 # Fixtures
 # ===========================

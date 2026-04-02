@@ -20,7 +20,6 @@ from src.mcp_install import (
     uninstall_project_mcp,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

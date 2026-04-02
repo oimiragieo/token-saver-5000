@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from src.semantic_compressor import compute_adaptive_ratio, SemanticCompressor
 from src.metrics import compute_cost_savings
 
-
 # =========================================================================
 # compute_adaptive_ratio validation
 # =========================================================================

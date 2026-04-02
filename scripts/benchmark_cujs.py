@@ -10,6 +10,7 @@ Usage:
     python scripts/benchmark_cujs.py --journey 1  # run single journey
     python scripts/benchmark_cujs.py --output cujs_baseline.json
 """
+
 from __future__ import annotations
 
 import argparse

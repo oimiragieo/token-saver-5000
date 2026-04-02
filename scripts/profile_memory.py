@@ -640,8 +640,7 @@ def run_full_profile() -> None:
     print("\n" + "=" * 70)
     print("  RECOMMENDATIONS")
     print("=" * 70)
-    print(
-        """
+    print("""
 1. EmbeddingManager Singleton: Monitor cache growth over time
 2. Document Cycles: Ensure delete_document() fully cleans up
 3. ACE Contexts: Implement context pruning for long-running servers
@@ -659,8 +658,7 @@ Next Steps:
 - Review identified leaks
 - Implement fixes in Week 3 Day 13-14
 - Re-run this profiler after fixes
-"""
-    )
+""")
 
 
 def main():

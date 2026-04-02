@@ -20,7 +20,6 @@ import tiktoken
 from src.semantic_compressor import SemanticCompressor
 from src.semantic_ssim import SemanticSSIM, interpret_ssim_score
 
-
 # ===========================
 # Fixtures
 # ===========================

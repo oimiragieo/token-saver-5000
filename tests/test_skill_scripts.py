@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "skill_context_sample.txt"
 SKILL_ROOT = ROOT / "skills" / "token-saver-context-compression"

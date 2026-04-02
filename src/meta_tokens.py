@@ -19,7 +19,6 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-
 _NL_PLACEHOLDER = "__NL__"
 """Sentinel token used in place of newline characters during processing."""
 

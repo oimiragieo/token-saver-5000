@@ -18,7 +18,6 @@ from src.code_compressor import (
     CodeLanguage,
 )
 
-
 # Sample code for testing
 SAMPLE_PYTHON_CODE = '''
 import numpy as np
@@ -770,13 +769,11 @@ class TestCodeCompressorEdgeCases:
         # Generate very long code (100 functions - realistic long file)
         functions = []
         for i in range(100):
-            functions.append(
-                f'''
+            functions.append(f'''
 def function_{i}(x):
     """Function number {i}"""
     return x + {i}
-'''
-            )
+''')
         long_code = "\n".join(functions)
 
         stats = compressor.ingest_code_file(code=long_code, file_id="long_file", filepath="long.py")

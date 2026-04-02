@@ -13,7 +13,6 @@ from typing import Any
 
 from .cli_benchmark.pricing import get_model_rates
 
-
 logger = logging.getLogger("semantic-modulator")
 
 

@@ -8,7 +8,6 @@ from src.handlers.help_handlers import handle_tool_help
 from src.handlers.mcp_core import route_tool_call, setup_mcp_tools
 from src.memory_api import MemoryAPI
 
-
 MEMORY_TOOL_NAMES = {
     "add_memory",
     "search_memory",

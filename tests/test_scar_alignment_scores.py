@@ -5,7 +5,6 @@ import pytest
 from src.scar_compressor import SCAREnhancedCompressor
 from src.semantic_compressor import SemanticCompressor
 
-
 TEST_DOC = """
 Service retries are bounded and use exponential backoff.
 Errors include timeout, dependency failure, and invalid payload.

@@ -14,7 +14,6 @@ import pytest
 
 from src.semantic_compressor import SemanticCompressor
 
-
 # ============================================================================
 # Feature A: Adaptive Compression Ratio
 # ============================================================================

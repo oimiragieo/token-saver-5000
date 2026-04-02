@@ -199,9 +199,7 @@ class TestHandleDiffCachedFile:
             ingestion_time=1234567890.0,
             size_bytes=1000,
         )
-        mock_context[
-            "version_manager"
-        ].diff_with_current_file_async.return_value = """
+        mock_context["version_manager"].diff_with_current_file_async.return_value = """
 --- a/file.txt
 +++ b/file.txt
 @@ -1,3 +1,3 @@

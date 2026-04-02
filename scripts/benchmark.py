@@ -143,21 +143,17 @@ def benchmark_document_ingestion(iterations: int = 10):
     small_doc = "Quantum computing uses qubits. " * 10
 
     # Medium document (~500 tokens)
-    medium_doc = (
-        """
+    medium_doc = """
     Quantum computing is a revolutionary technology that uses quantum mechanics.
     Unlike classical computers that use bits (0 or 1), quantum computers use qubits.
     Qubits can exist in superposition, meaning they can be both 0 and 1 simultaneously.
 
     This property enables quantum computers to solve certain problems exponentially faster.
     Applications include cryptography, drug discovery, and optimization problems.
-    """
-        * 20
-    )
+    """ * 20
 
     # Large document (~2000 tokens)
-    large_doc = (
-        """
+    large_doc = """
     Quantum Error Correction is essential for practical quantum computing.
     Physical qubits are prone to errors from decoherence and noise.
     Error correction codes like surface codes can protect quantum information.
@@ -174,9 +170,7 @@ def benchmark_document_ingestion(iterations: int = 10):
 
     Recent progress has been encouraging, with several groups demonstrating
     improved error rates and longer coherence times.
-    """
-        * 30
-    )
+    """ * 30
 
     compressor = SemanticCompressor()
 
@@ -243,14 +237,11 @@ def benchmark_fidelity_modulation(iterations: int = 10):
     compressor = SemanticCompressor()
 
     # Prepare document
-    doc = (
-        """
+    doc = """
     Quantum computing represents a paradigm shift in computation.
     By harnessing quantum mechanics, these systems can solve problems
     that are intractable for classical computers.
-    """
-        * 20
-    )
+    """ * 20
 
     compressor.ingest_file(doc, "fidelity_test")
     node_ids = [nid for nid in compressor.chunks.keys() if nid.startswith("fidelity_test")][:5]

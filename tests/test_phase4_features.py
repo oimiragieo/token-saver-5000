@@ -9,7 +9,6 @@ TDD: Written BEFORE implementation (Red phase).
 
 import pytest
 
-
 # ============================================================================
 # Feature 1: Citation Provenance Tags
 # ============================================================================

@@ -13,7 +13,6 @@ import pytest
 
 from src.semantic_compressor import SemanticCompressor, SemanticNode
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

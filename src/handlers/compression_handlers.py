@@ -40,7 +40,6 @@ from ..node_identity import collect_file_ids, extract_file_id_from_node
 from ..temporal_graph import coerce_timestamp, format_timestamp
 from ..compression_pipeline import run_read_skeleton_pipeline
 
-
 logger = logging.getLogger("semantic-modulator")
 
 

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from src.meta_tokens import MetaTokenCompressor, MetaTokenEntry, MetaTokenResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

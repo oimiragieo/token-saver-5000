@@ -12,7 +12,6 @@ from pathlib import Path
 
 from src.session_journal import JournalEvent, SessionJournal, SessionSummary
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

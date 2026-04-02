@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from src.token_refiner import MIGConfig, MIGScorer, TokenRefiner
 
-
 # ---------------------------------------------------------------------------
 # MIGConfig defaults
 # ---------------------------------------------------------------------------

@@ -35,7 +35,6 @@ from scripts.benchmark_cujs import (
     run_cuj_6_savings_report,
 )
 
-
 # ---------------------------------------------------------------------------
 # CUJ 1: Solo Dev Codebase Compression
 # ---------------------------------------------------------------------------

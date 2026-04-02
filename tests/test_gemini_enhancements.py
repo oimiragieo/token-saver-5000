@@ -18,7 +18,6 @@ from src.compression_profiles import apply_urgency
 from src.constants import KNOWN_MODEL_CONTEXT_WINDOWS, KNOWN_MODEL_COMPRESSION_TRIGGERS
 from src.client_config import ClientConfig, get_recommended_ratio
 
-
 # ============================================================================
 # TokenEstimator.estimate_gemini — Gemini token estimation
 # ============================================================================

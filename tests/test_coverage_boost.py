@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-
 # =============================================================================
 # 1. Visualization Handlers (lines 46-156)
 # =============================================================================

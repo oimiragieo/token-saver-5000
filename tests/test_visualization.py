@@ -23,7 +23,6 @@ from src.graph_visualizer import GraphVisualizer, VisualizationConfig
 from src.semantic_compressor import SemanticCompressor
 from src.handlers import visualization_handlers
 
-
 # ===========================
 # Fixtures
 # ===========================

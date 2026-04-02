@@ -17,7 +17,6 @@ import pytest
 from src.savings_tracker import SavingsEvent, SavingsReport, SavingsTracker
 from src.cli_benchmark.pricing import PRICING
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

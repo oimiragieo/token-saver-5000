@@ -29,7 +29,6 @@ from src.file_sync_manager import FileSyncManager
 from src.version_manager import VersionManager
 from src.handlers import compression_handlers, afm_handlers, ace_handlers, file_sync_handlers
 
-
 # ===========================
 # 1. BASIC WORKFLOWS (10 tests)
 # ===========================

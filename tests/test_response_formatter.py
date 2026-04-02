@@ -17,7 +17,6 @@ import pytest
 from src.response_formatter import ResponseFormatter
 from src.constants import TOOL_RESULT_SOFT_LIMIT_CHARS, TOOL_RESULT_HARD_LIMIT_CHARS
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

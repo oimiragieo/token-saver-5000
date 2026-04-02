@@ -33,7 +33,6 @@ from src.compression_profiles import (
 )
 from src.constants import COMPRESSION_PROFILES, DEFAULT_COMPRESSION_PROFILE
 
-
 # ============================================================================
 # Individual profile value tests
 # ============================================================================

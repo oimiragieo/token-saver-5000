@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.semantic_compressor import SemanticCompressor
 
-
 TEST_DOCUMENT = """
 Quantum error correction protects fragile qubits from decoherence.
 Surface codes use repeated stabilizer checks to detect errors.

@@ -22,7 +22,6 @@ from src.semantic_compressor import SemanticCompressor, FidelityLevel
 from src.blind_spot_detector import BlindSpotDetector
 from src.scar_compressor import SCAREnhancedCompressor
 
-
 SAMPLE_DOCUMENT = """
 Quantum Error Correction Overview
 

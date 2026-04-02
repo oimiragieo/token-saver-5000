@@ -35,7 +35,6 @@ import pytest
 from src.persistence import PersistenceManager
 from src.semantic_compressor import SemanticNode
 
-
 # ===========================
 # Fixtures
 # ===========================

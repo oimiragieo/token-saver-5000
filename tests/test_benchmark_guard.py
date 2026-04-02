@@ -7,7 +7,6 @@ from pathlib import Path
 
 from src.benchmark_guard import evaluate_report_against_thresholds
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

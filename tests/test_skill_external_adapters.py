@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_SCRIPTS = ROOT / "skills" / "token-saver-context-compression" / "scripts"
 if str(SKILL_SCRIPTS) not in sys.path:

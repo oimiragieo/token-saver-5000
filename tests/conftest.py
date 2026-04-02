@@ -29,7 +29,6 @@ from src.ace_framework import ACEFramework
 from src.batch_manager import BatchDocument
 from src.path_validator import PathValidator
 
-
 # ===========================
 # Rate Limiter Reset
 # ===========================
@@ -207,8 +206,7 @@ def sample_text_medium():
 @pytest.fixture
 def sample_text_large():
     """Large text sample for performance and load testing."""
-    return (
-        """
+    return """
     Deep learning has revolutionized artificial intelligence across multiple domains.
     Convolutional neural networks excel at computer vision tasks, processing images
     through hierarchical feature extraction. Recurrent neural networks and transformers
@@ -231,9 +229,7 @@ def sample_text_large():
     similarity captures semantic relationships. Adaptive fidelity allows trading
     detail for efficiency. This enables efficient AI interactions by reducing
     context window usage while maintaining comprehension.
-    """
-        * 5
-    )  # Repeat 5x for ~2000 tokens
+    """ * 5  # Repeat 5x for ~2000 tokens
 
 
 @pytest.fixture
@@ -340,8 +336,7 @@ def temp_file(temp_dir):
 def temp_code_file(temp_dir):
     """Create a temporary Python file with sample code."""
     file_path = temp_dir / "test_code.py"
-    file_path.write_text(
-        '''
+    file_path.write_text('''
 def hello_world():
     """Print hello world."""
     print("Hello, World!")
@@ -353,8 +348,7 @@ def add(a: int, b: int) -> int:
 if __name__ == "__main__":
     hello_world()
     print(add(2, 3))
-'''
-    )
+''')
     yield file_path
 
 

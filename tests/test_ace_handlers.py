@@ -28,7 +28,6 @@ from src.handlers.ace_handlers import (
 )
 from src.ace_framework import BulletType
 
-
 # ============================================================================
 # Test Fixtures
 # ============================================================================
