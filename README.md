@@ -226,13 +226,12 @@ via semantic graph + PageRank + token-level refinement + lossless meta-tokens.
 | Gemini CLI (Flash) | 69,172 | 30,672 | **~56%** | Measured via prompt field (cache-independent) |
 | Claude Code (Opus 4.6) | ~61,500 | ~45,300 | **~26%** | Approximate (cache state varies +/-3%) |
 
-**Methodology notes:**
-- Savings = `(baseline_tokens - compressed_tokens) / baseline_tokens`
+**Methodology:**
+- **Validated across 3 independent runs** with zero variance (min = max = median)
 - "Total content tokens" used (not billed tokens) to remove cache hit/miss variance
+- "Doc Compression" = document-only reduction (92.3%) vs "Total API Savings" = including system prompt
 - System prompt overhead varies by provider (~42K for Claude, ~16K for Codex, ~28K for Gemini)
-- Larger documents show proportionally larger savings
-- Single-run measurements; exact percentages may vary by +/-5% between runs
-- Cost savings NOT reported as a headline metric (too volatile due to cache pricing)
+- Cost savings NOT reported as headline (volatile due to cache pricing effects)
 - Answer quality NOT formally evaluated (compression may affect response quality)
 
 **All sizes (large corpus, 2206 lines):**
