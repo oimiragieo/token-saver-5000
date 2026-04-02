@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+import sys
+from datetime import datetime, timezone
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
+else:
+    UTC = timezone.utc
 from statistics import mean
 from threading import RLock
 from typing import Any, Optional

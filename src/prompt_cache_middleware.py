@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+import sys
+from datetime import datetime, timezone
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
+else:
+    UTC = timezone.utc
 from typing import Any
 from uuid import uuid4
 
