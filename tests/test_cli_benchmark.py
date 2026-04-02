@@ -449,6 +449,33 @@ class TestComparisonResult:
             compressed=compressed,
         )
 
+    def _make_result_with_doc(
+        self,
+        baseline_tokens: int,
+        compressed_tokens: int,
+        doc_original: int,
+        doc_compressed: int,
+    ):
+        from src.cli_benchmark.results import CLIResult, ComparisonResult
+
+        baseline = CLIResult(
+            input_tokens=baseline_tokens,
+            total_cost_usd=baseline_tokens * 3.0 / 1_000_000,
+        )
+        compressed = CLIResult(
+            input_tokens=compressed_tokens,
+            total_cost_usd=compressed_tokens * 3.0 / 1_000_000,
+        )
+        return ComparisonResult(
+            corpus_name="test",
+            provider="claude",
+            mode="skill",
+            baseline=baseline,
+            compressed=compressed,
+            document_original_tokens=doc_original,
+            document_compressed_tokens=doc_compressed,
+        )
+
     def test_comparison_savings_calculation(self):
         """ComparisonResult auto-computes input_token_savings_pct correctly."""
         result = self._make_result(10000, 1000)
@@ -474,6 +501,28 @@ class TestComparisonResult:
         """Negative savings (expansion) is calculated correctly."""
         result = self._make_result(1000, 1200)
         assert result.input_token_savings_pct < 0
+
+    def test_document_savings_pct_computed(self):
+        """document_savings_pct is auto-computed from document token counts."""
+        result = self._make_result_with_doc(10000, 1000, 5000, 500)
+        assert result.document_savings_pct == pytest.approx(90.0, abs=0.1)
+
+    def test_document_savings_partial(self):
+        """document_savings_pct handles partial compression (50%)."""
+        result = self._make_result_with_doc(10000, 5000, 2000, 1000)
+        assert result.document_savings_pct == pytest.approx(50.0, abs=0.1)
+
+    def test_document_savings_zero_original(self):
+        """No division by zero when document_original_tokens is 0."""
+        result = self._make_result_with_doc(10000, 1000, 0, 0)
+        assert result.document_savings_pct == 0.0
+
+    def test_document_savings_defaults_to_zero(self):
+        """document fields default to 0 when not provided."""
+        result = self._make_result(10000, 1000)
+        assert result.document_original_tokens == 0
+        assert result.document_compressed_tokens == 0
+        assert result.document_savings_pct == 0.0
 
 
 class TestBenchmarkReport:
@@ -544,6 +593,198 @@ class TestBenchmarkReport:
         data = json.loads(out_path.read_text())
         assert data["metadata"]["test"] is True
         assert "timestamp" in data
+
+    def test_report_table_single_run_label(self):
+        """to_table() marks a single-run entry with '(1 run)'."""
+        from src.cli_benchmark.results import BenchmarkReport
+
+        report = BenchmarkReport()
+        report.add(self._make_comparison("small"))
+        table = report.to_table()
+        assert "(1 run)" in table
+
+    def test_report_table_methodology_footer(self):
+        """to_table() includes a methodology footer explaining savings columns."""
+        from src.cli_benchmark.results import BenchmarkReport
+
+        report = BenchmarkReport()
+        report.add(self._make_comparison("small"))
+        table = report.to_table()
+        assert "Total API Savings" in table
+        assert "Doc Compression" in table
+
+    def test_report_table_doc_savings_shown(self):
+        """to_table() shows document savings when document_original_tokens > 0."""
+        from src.cli_benchmark.results import CLIResult, ComparisonResult, BenchmarkReport
+
+        r = ComparisonResult(
+            corpus_name="small",
+            provider="claude",
+            mode="skill",
+            baseline=CLIResult(input_tokens=10000, total_cost_usd=0.03),
+            compressed=CLIResult(input_tokens=1000, total_cost_usd=0.003),
+            document_original_tokens=5000,
+            document_compressed_tokens=500,
+        )
+        report = BenchmarkReport()
+        report.add(r)
+        table = report.to_table()
+        # 90% doc savings should appear
+        assert "90.0%" in table
+
+    def test_to_summary_table_delegates_to_to_table(self):
+        """to_summary_table() returns the same output as to_table()."""
+        from src.cli_benchmark.results import BenchmarkReport
+
+        report = BenchmarkReport()
+        report.add(self._make_comparison("small"))
+        assert report.to_summary_table() == report.to_table()
+
+
+# ---------------------------------------------------------------------------
+# _aggregate_repeats tests
+# ---------------------------------------------------------------------------
+
+
+class TestAggregateRepeats:
+    def _make_comp(
+        self,
+        name: str,
+        provider: str,
+        mode: str,
+        baseline_tokens: int,
+        compressed_tokens: int,
+        doc_orig: int = 0,
+        doc_comp: int = 0,
+    ):
+        from src.cli_benchmark.results import CLIResult, ComparisonResult
+
+        return ComparisonResult(
+            corpus_name=name,
+            provider=provider,
+            mode=mode,
+            baseline=CLIResult(
+                input_tokens=baseline_tokens,
+                total_cost_usd=baseline_tokens * 3.0 / 1_000_000,
+            ),
+            compressed=CLIResult(
+                input_tokens=compressed_tokens,
+                total_cost_usd=compressed_tokens * 3.0 / 1_000_000,
+            ),
+            document_original_tokens=doc_orig,
+            document_compressed_tokens=doc_comp,
+        )
+
+    def test_single_run_aggregates_correctly(self):
+        """_aggregate_repeats with 1 run returns n=1 and correct median."""
+        from src.cli_benchmark.results import _aggregate_repeats
+
+        r = self._make_comp("small", "claude", "skill", 10000, 1000)
+        agg = _aggregate_repeats([r])
+        key = ("small", "claude", "skill")
+        assert key in agg
+        assert agg[key]["n"] == 1
+        assert agg[key]["median"] == pytest.approx(90.0, abs=0.1)
+
+    def test_multi_run_median(self):
+        """_aggregate_repeats with 3 runs returns median savings."""
+        from src.cli_benchmark.results import _aggregate_repeats
+
+        runs = [
+            self._make_comp("small", "claude", "skill", 10000, 800),  # 92%
+            self._make_comp("small", "claude", "skill", 10000, 1000),  # 90%
+            self._make_comp("small", "claude", "skill", 10000, 1200),  # 88%
+        ]
+        agg = _aggregate_repeats(runs)
+        key = ("small", "claude", "skill")
+        assert agg[key]["n"] == 3
+        assert agg[key]["median"] == pytest.approx(90.0, abs=0.1)
+        assert agg[key]["min"] == pytest.approx(88.0, abs=0.1)
+        assert agg[key]["max"] == pytest.approx(92.0, abs=0.1)
+
+    def test_multi_run_groups_by_key(self):
+        """_aggregate_repeats groups separately by (corpus, provider, mode)."""
+        from src.cli_benchmark.results import _aggregate_repeats
+
+        runs = [
+            self._make_comp("small", "claude", "skill", 10000, 1000),
+            self._make_comp("medium", "claude", "skill", 20000, 2000),
+            self._make_comp("small", "gemini", "skill", 10000, 1000),
+        ]
+        agg = _aggregate_repeats(runs)
+        assert len(agg) == 3
+        assert ("small", "claude", "skill") in agg
+        assert ("medium", "claude", "skill") in agg
+        assert ("small", "gemini", "skill") in agg
+
+    def test_zero_baseline_handled(self):
+        """_aggregate_repeats handles runs with zero baseline tokens gracefully."""
+        from src.cli_benchmark.results import _aggregate_repeats
+
+        r = self._make_comp("small", "claude", "skill", 0, 0)
+        agg = _aggregate_repeats([r])
+        key = ("small", "claude", "skill")
+        assert agg[key]["n"] == 1
+        assert agg[key]["median"] == 0
+
+    def test_doc_savings_aggregated(self):
+        """_aggregate_repeats computes doc_savings_median across runs."""
+        from src.cli_benchmark.results import _aggregate_repeats
+
+        runs = [
+            self._make_comp("small", "claude", "skill", 10000, 1000, 5000, 400),  # 92%
+            self._make_comp("small", "claude", "skill", 10000, 1000, 5000, 500),  # 90%
+            self._make_comp("small", "claude", "skill", 10000, 1000, 5000, 600),  # 88%
+        ]
+        agg = _aggregate_repeats(runs)
+        key = ("small", "claude", "skill")
+        assert agg[key]["doc_savings_median"] == pytest.approx(90.0, abs=0.1)
+
+    def test_multi_run_table_shows_runs_label(self):
+        """to_table() shows '(N runs)' label when multi-run results exist."""
+        from src.cli_benchmark.results import BenchmarkReport, _aggregate_repeats
+
+        report = BenchmarkReport()
+        for _ in range(3):
+            from src.cli_benchmark.results import CLIResult, ComparisonResult
+
+            report.add(
+                ComparisonResult(
+                    corpus_name="small",
+                    provider="claude",
+                    mode="skill",
+                    baseline=CLIResult(input_tokens=10000, total_cost_usd=0.03),
+                    compressed=CLIResult(input_tokens=1000, total_cost_usd=0.003),
+                )
+            )
+        table = report.to_table()
+        assert "(3 runs)" in table
+        # Multi-run note should appear
+        assert "median" in table.lower()
+
+    def test_multi_run_table_single_row_per_key(self):
+        """to_table() deduplicates: 3 runs for same key = 1 table row."""
+        from src.cli_benchmark.results import BenchmarkReport, CLIResult, ComparisonResult
+
+        report = BenchmarkReport()
+        for _ in range(3):
+            report.add(
+                ComparisonResult(
+                    corpus_name="small",
+                    provider="claude",
+                    mode="skill",
+                    baseline=CLIResult(input_tokens=10000, total_cost_usd=0.03),
+                    compressed=CLIResult(input_tokens=1000, total_cost_usd=0.003),
+                )
+            )
+        table = report.to_table()
+        # "small" should appear exactly once as a data row (excluding header/footer)
+        data_lines = [
+            line
+            for line in table.splitlines()
+            if "small" in line and "Corpus" not in line and not line.startswith("*")
+        ]
+        assert len(data_lines) == 1
 
 
 # ---------------------------------------------------------------------------

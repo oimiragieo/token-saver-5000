@@ -48,11 +48,9 @@ def run_prompt(
     """
     cmd = _build_command(provider, model)
 
-    # OpenCode takes prompt as positional arg; others use stdin
+    # All providers read the prompt from stdin to avoid Windows ~8KB command-line length limits.
+    # OpenCode reads from stdin when no positional message args are given (same as Claude Code).
     stdin_prompt = prompt
-    if provider == "opencode":
-        cmd.append(prompt)
-        stdin_prompt = None
 
     if dry_run:
         print(f"[DRY RUN] Would execute: {cmd[0]} ... ({len(cmd) - 1} args)")
@@ -135,8 +133,8 @@ def _build_command(provider: str, model: str | None) -> list[str]:
         cli = _find_cli("opencode")
         if cli is None:
             raise RuntimeError("opencode CLI not found on PATH")
-        # opencode run "prompt" --format json: structured JSON event output
-        # Prompt goes as positional arg after "run"
+        # opencode run --format json: structured JSON event output
+        # Prompt is sent via stdin (no positional arg) to avoid Windows ~8KB command-line limit
         cmd = [cli, "run", "--format", "json"]
         if model:
             cmd.extend(["--model", model])

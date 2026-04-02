@@ -132,6 +132,8 @@ def _run_skill_comparison(
         print(f"  [{provider}] Skill mode: {entry.name} ({entry.line_count} lines)")
 
     # Compress the corpus (skipped in dry-run to avoid subprocess overhead)
+    doc_original_tokens = 0
+    doc_compressed_tokens = 0
     if dry_run:
         compressed_text_str = entry.content
         compression_ratio = 0.0
@@ -141,6 +143,8 @@ def _run_skill_comparison(
         compressed = compress_text(entry.content)
         compressed_text_str = compressed.compressed_text
         compression_ratio = compressed.compression_ratio
+        doc_original_tokens = compressed.original_tokens
+        doc_compressed_tokens = compressed.compressed_tokens
         if verbose:
             print(
                 f"    Compression: {compressed.original_tokens} -> {compressed.compressed_tokens} tokens "
@@ -168,6 +172,8 @@ def _run_skill_comparison(
         baseline=baseline,
         compressed=compressed_result,
         compression_ratio=compression_ratio,
+        document_original_tokens=doc_original_tokens,
+        document_compressed_tokens=doc_compressed_tokens,
     )
 
 
