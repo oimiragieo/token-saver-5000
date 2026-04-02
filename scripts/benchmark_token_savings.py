@@ -42,7 +42,7 @@ def main() -> int:
     parser.add_argument(
         "--providers",
         nargs="+",
-        choices=["claude", "gemini", "codex", "all"],
+        choices=["claude", "gemini", "codex", "opencode", "all"],
         default=["all"],
         help="CLI providers to test (default: all available)",
     )
@@ -57,6 +57,7 @@ def main() -> int:
     parser.add_argument("--model-claude", type=str, default=None, help="Override Claude model")
     parser.add_argument("--model-gemini", type=str, default=None, help="Override Gemini model")
     parser.add_argument("--model-codex", type=str, default=None, help="Override Codex model")
+    parser.add_argument("--model-opencode", type=str, default=None, help="Override OpenCode model")
     parser.add_argument("--verbose", action="store_true", help="Print progress")
 
     args = parser.parse_args()
@@ -81,6 +82,7 @@ def main() -> int:
         model_claude=args.model_claude,
         model_gemini=args.model_gemini,
         model_codex=args.model_codex,
+        model_opencode=args.model_opencode,
         verbose=args.verbose,
     )
 

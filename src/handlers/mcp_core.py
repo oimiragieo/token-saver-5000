@@ -2946,6 +2946,29 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # === CACHE STRATEGY ADVISOR ===
+        Tool(
+            name="advise_cache_strategy",
+            description=(
+                "Get the optimal prompt caching strategy for your model. "
+                "Each LLM provider handles caching differently -- Anthropic uses explicit markers, "
+                "OpenAI is automatic, Gemini has implicit+explicit modes. "
+                "Returns specific tips for maximizing cache hits and cost savings."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model_id": {
+                        "type": "string",
+                        "description": (
+                            "Model identifier (e.g., claude-4-sonnet, gpt-4.1, gemini-2.5-flash)"
+                        ),
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["model_id"],
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3128,6 +3151,8 @@ async def route_tool_call(
         # Savings Tracker (v0.14.0)
         "get_savings_report": toh.handle_get_savings_report,
         "get_savings_inline": toh.handle_get_savings_inline,
+        # Cache Strategy Advisor
+        "advise_cache_strategy": toh.handle_advise_cache_strategy,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

@@ -21,6 +21,7 @@ def run_benchmark(
     model_claude: str | None = None,
     model_gemini: str | None = None,
     model_codex: str | None = None,
+    model_opencode: str | None = None,
     verbose: bool = False,
 ) -> BenchmarkReport:
     """Run the full benchmark suite.
@@ -35,6 +36,7 @@ def run_benchmark(
         model_claude: Override Claude model
         model_gemini: Override Gemini model
         model_codex: Override Codex model
+        model_opencode: Override OpenCode model
         verbose: Print progress
     """
     report = BenchmarkReport(
@@ -45,6 +47,7 @@ def run_benchmark(
             "model_claude": model_claude,
             "model_gemini": model_gemini,
             "model_codex": model_codex,
+            "model_opencode": model_opencode,
         }
     )
 
@@ -54,7 +57,7 @@ def run_benchmark(
         entries = [load_corpus(s, corpus_dir) for s in sizes]
 
     if providers is None or providers == ["all"]:
-        providers = ["claude", "gemini", "codex"]
+        providers = ["claude", "gemini", "codex", "opencode"]
 
     available = {p for p in providers if is_available(p) or dry_run}
     skipped = set(providers) - available
@@ -67,6 +70,8 @@ def run_benchmark(
                 model = model_claude
             elif provider == "gemini":
                 model = model_gemini
+            elif provider == "opencode":
+                model = model_opencode
             else:
                 model = model_codex
 

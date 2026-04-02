@@ -335,6 +335,26 @@ recover_session(session_id="my-session")
 # -> {ingested_files: [...], client_config: {...}, active_profile: "balanced", total_tokens_saved: 14500}
 ```
 
+## Cache Strategy Advisor (NEW)
+
+Every LLM provider handles caching differently. The advisor tells you exactly what to do:
+
+```
+advise_cache_strategy(model_id="claude-4-sonnet")
+# -> Anthropic: explicit cache, 90% discount, add ephemeral markers, 5min TTL
+
+advise_cache_strategy(model_id="gpt-4.1")
+# -> OpenAI: automatic cache, 50% discount, keep 1024+ token prefix stable
+
+advise_cache_strategy(model_id="gemini-2.5-flash")
+# -> Google: implicit cache, 90% discount, no client action needed
+
+advise_cache_strategy(model_id="groq-llama-4-scout")
+# -> Groq: no caching, focus on small prompts for fastest inference
+```
+
+Supports: Anthropic, OpenAI, Google Gemini, Groq, XAI (Grok), Azure, Bedrock, local/Ollama.
+
 ## Research-Backed Compression Techniques
 
 Token Saver integrates techniques from recent AI research papers:

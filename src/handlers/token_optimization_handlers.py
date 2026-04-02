@@ -379,6 +379,31 @@ async def handle_get_savings_report(context: Dict[str, Any], args: Dict[str, Any
     )
 
 
+async def handle_advise_cache_strategy(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle advise_cache_strategy tool call.
+
+    Returns provider-specific caching recommendations for the given model.
+    """
+    from ..cache_strategy_advisor import advise_cache_strategy
+
+    model_id = args.get("model_id", "default")
+    strategy = advise_cache_strategy(model_id)
+    return json.dumps(
+        {
+            "status": "success",
+            "provider": strategy.provider,
+            "model": strategy.model,
+            "cache_type": strategy.cache_type,
+            "min_prefix_tokens": strategy.min_prefix_tokens,
+            "cache_discount_pct": strategy.cache_discount_pct,
+            "ttl": strategy.ttl_description,
+            "client_action": strategy.client_action,
+            "tips": strategy.tips,
+            "supports_cache": strategy.supports_cache,
+        }
+    )
+
+
 async def handle_get_savings_inline(context: Dict[str, Any], args: Dict[str, Any]) -> str:
     """Handle get_savings_inline tool call.
 

@@ -28,6 +28,8 @@ def is_available(provider: str) -> bool:
         return _find_cli("gemini") is not None
     elif provider == "codex":
         return _find_cli("codex") is not None
+    elif provider == "opencode":
+        return _find_cli("opencode") is not None
     return False
 
 
@@ -75,6 +77,8 @@ def run_prompt(
     raw_json = _parse_json_output(result.stdout)
     if provider == "claude":
         return _parse_claude_result(raw_json, result.stdout)
+    elif provider == "opencode":
+        return _parse_opencode_result(raw_json, result.stdout, model)
     else:
         return _parse_gemini_result(raw_json, result.stdout, model)
 
@@ -118,6 +122,16 @@ def _build_command(provider: str, model: str | None) -> list[str]:
         # --dangerously-bypass-approvals-and-sandbox: non-interactive headless mode
         # Prompt is sent via stdin
         cmd = [cli, "exec", "--json", "--dangerously-bypass-approvals-and-sandbox"]
+        if model:
+            cmd.extend(["--model", model])
+        return cmd
+    elif provider == "opencode":
+        cli = _find_cli("opencode")
+        if cli is None:
+            raise RuntimeError("opencode CLI not found on PATH")
+        # -p: print/headless mode, -f json: structured JSON output
+        # Prompt is sent via stdin
+        cmd = [cli, "-p", "-f", "json"]
         if model:
             cmd.extend(["--model", model])
         return cmd
@@ -250,6 +264,49 @@ def _parse_gemini_result(data: dict, raw: str, model: str | None) -> CLIResult:
         tool_calls=tool_calls,
         num_turns=0,
         raw_response=data.get("response", ""),
+        raw_json=data,
+    )
+
+
+def _parse_opencode_result(data: dict, raw: str, model: str | None) -> CLIResult:
+    """Parse OpenCode CLI JSON output into CLIResult.
+
+    OpenCode outputs a JSON object similar to Gemini's format.
+    We look for token counts in the ``usage`` or ``stats`` blocks.
+    Falls back gracefully when fields are absent (headless mode may
+    omit some fields depending on the provider model used).
+    """
+    detected_model = model or data.get("model", "")
+
+    # Try top-level usage block first
+    usage = data.get("usage", {})
+    input_tokens = usage.get("input_tokens", usage.get("inputTokens", 0))
+    output_tokens = usage.get("output_tokens", usage.get("outputTokens", 0))
+    cache_read = usage.get("cache_read_input_tokens", usage.get("cacheReadInputTokens", 0))
+
+    # Fall back to stats block (Gemini-style format)
+    if input_tokens == 0 and output_tokens == 0:
+        stats = data.get("stats", {})
+        input_tokens = stats.get("input_tokens", 0)
+        output_tokens = stats.get("output_tokens", 0)
+        cache_read = stats.get("cached", 0)
+
+    wall_time_ms = data.get("duration_ms", data.get("durationMs", 0.0))
+    raw_response = data.get("result", data.get("response", data.get("output", "")))
+
+    cost = compute_cost(detected_model or "default", input_tokens, output_tokens, cache_read)
+
+    return CLIResult(
+        provider="opencode",
+        model=detected_model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read,
+        total_cost_usd=cost,
+        wall_time_ms=wall_time_ms,
+        tool_calls=0,
+        num_turns=data.get("num_turns", 0),
+        raw_response=raw_response,
         raw_json=data,
     )
 

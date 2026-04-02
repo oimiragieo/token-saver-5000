@@ -40,6 +40,15 @@ All notable changes to Token Saver 5000.
   Per-tool breakdown shows which operations save the most. Persists to SQLite via
   SessionJournal. New MCP tools: `get_savings_report`, `get_savings_inline`. 26 tests.
 - **Total MCP tools**: 111 (was 109).
+- **OpenCode CLI support** (`docs/opencode-token-optimization-enhancements.md`): full analysis
+  of OpenCode's 12+ provider, 50+ model architecture. Added 16 models to KNOWN_MODEL_CONTEXT_WINDOWS
+  (GPT-4.1 family, Groq Llama-4, Grok-3, DeepSeek R1, etc.) with pricing and compression triggers.
+  OpenCode benchmark provider added to harness. 52 new tests.
+- **Cache strategy advisor** (`src/cache_strategy_advisor.py`): provider-aware caching recommendations.
+  Returns optimal strategy per model: Anthropic (explicit, 90% discount), OpenAI (automatic, 50%),
+  Gemini 2.5+ (implicit, 90%), Groq/XAI/Local (none/limited). New MCP tool: `advise_cache_strategy`.
+- **Provider detection extended**: `_detect_provider()` now handles groq, xai, local, ollama prefixes.
+- **Total MCP tools**: 112 (was 111).
 - **Full test suite**: 3,045+ tests across 90+ test files.
 - **CLI output optimizer** (`src/cli_output_optimizer.py`): RTK-inspired command-aware
   filtering for CLI tool output. Auto-detects 10 command types (git diff, pytest, npm install,

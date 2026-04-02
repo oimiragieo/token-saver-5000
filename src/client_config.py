@@ -30,6 +30,12 @@ def _detect_provider(model_id: str) -> str:
         return "google"
     if any(model_lower.startswith(p) for p in ("gpt", "o1", "o3", "o4", "codex")):
         return "openai"
+    if model_lower.startswith("groq"):
+        return "groq"
+    if model_lower.startswith("grok"):
+        return "xai"
+    if any(model_lower.startswith(p) for p in ("local", "ollama")):
+        return "local"
     return "unknown"
 
 

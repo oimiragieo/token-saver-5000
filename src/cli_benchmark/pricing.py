@@ -19,6 +19,16 @@ PRICING: dict[str, dict[str, float]] = {
     # Codex CLI models
     "gpt-5.1-codex": {"input": 2.50, "output": 10.0, "cache_read": 0.625},
     "codex-mini": {"input": 1.50, "output": 6.0, "cache_read": 0.375},
+    # OpenCode additional models
+    "gpt-4.1": {"input": 2.0, "output": 8.0, "cache_read": 0.50},
+    "gpt-4.1-mini": {"input": 0.40, "output": 1.60, "cache_read": 0.10},
+    "gpt-4.1-nano": {"input": 0.10, "output": 0.40, "cache_read": 0.025},
+    "o1-pro": {"input": 2.0, "output": 8.0, "cache_read": 0.50},
+    "groq-llama-4-scout": {"input": 0.11, "output": 0.34, "cache_read": 0.0},
+    "groq-llama-4-maverick": {"input": 0.50, "output": 2.0, "cache_read": 0.0},
+    "groq-deepseek-r1": {"input": 0.75, "output": 0.99, "cache_read": 0.0},
+    "grok-3": {"input": 3.0, "output": 15.0, "cache_read": 0.0},
+    "grok-3-mini": {"input": 0.30, "output": 0.50, "cache_read": 0.0},
     # Default fallback
     "default": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
 }
