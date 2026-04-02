@@ -48,16 +48,22 @@ def run_prompt(
     """
     cmd = _build_command(provider, model)
 
+    # OpenCode takes prompt as positional arg; others use stdin
+    stdin_prompt = prompt
+    if provider == "opencode":
+        cmd.append(prompt)
+        stdin_prompt = None
+
     if dry_run:
-        print(f"[DRY RUN] Would execute: {' '.join(cmd)}")
+        print(f"[DRY RUN] Would execute: {cmd[0]} ... ({len(cmd) - 1} args)")
         if cwd:
             print(f"[DRY RUN] Working directory: {cwd}")
-        print(f"[DRY RUN] Prompt length: {len(prompt)} chars (via stdin)")
+        print(f"[DRY RUN] Prompt length: {len(prompt)} chars")
         return CLIResult(provider=provider, model=model or "", is_dry_run=True)
 
     result = subprocess.run(
         cmd,
-        input=prompt,
+        input=stdin_prompt,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -73,12 +79,12 @@ def run_prompt(
 
     if provider == "codex":
         return _parse_codex_result(result.stdout)
+    if provider == "opencode":
+        return _parse_opencode_result(result.stdout, model)
 
     raw_json = _parse_json_output(result.stdout)
     if provider == "claude":
         return _parse_claude_result(raw_json, result.stdout)
-    elif provider == "opencode":
-        return _parse_opencode_result(raw_json, result.stdout, model)
     else:
         return _parse_gemini_result(raw_json, result.stdout, model)
 
@@ -129,9 +135,9 @@ def _build_command(provider: str, model: str | None) -> list[str]:
         cli = _find_cli("opencode")
         if cli is None:
             raise RuntimeError("opencode CLI not found on PATH")
-        # -p: print/headless mode, -f json: structured JSON output
-        # Prompt is sent via stdin
-        cmd = [cli, "-p", "-f", "json"]
+        # opencode run "prompt" --format json: structured JSON event output
+        # Prompt goes as positional arg after "run"
+        cmd = [cli, "run", "--format", "json"]
         if model:
             cmd.extend(["--model", model])
         return cmd
@@ -268,46 +274,67 @@ def _parse_gemini_result(data: dict, raw: str, model: str | None) -> CLIResult:
     )
 
 
-def _parse_opencode_result(data: dict, raw: str, model: str | None) -> CLIResult:
-    """Parse OpenCode CLI JSON output into CLIResult.
+def _parse_opencode_result(stdout: str, model: str | None) -> CLIResult:
+    """Parse OpenCode CLI JSONL output into CLIResult.
 
-    OpenCode outputs a JSON object similar to Gemini's format.
-    We look for token counts in the ``usage`` or ``stats`` blocks.
-    Falls back gracefully when fields are absent (headless mode may
-    omit some fields depending on the provider model used).
+    OpenCode ``run --format json`` emits one JSON object per line:
+    - ``step_start``: marks beginning of a step
+    - ``text``: contains the response text in ``part.text``
+    - ``step_finish``: contains token usage in ``part.tokens``
+      (input, output, reasoning, cache.write, cache.read) and ``part.cost``
     """
-    detected_model = model or data.get("model", "")
+    events: list[dict] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
 
-    # Try top-level usage block first
-    usage = data.get("usage", {})
-    input_tokens = usage.get("input_tokens", usage.get("inputTokens", 0))
-    output_tokens = usage.get("output_tokens", usage.get("outputTokens", 0))
-    cache_read = usage.get("cache_read_input_tokens", usage.get("cacheReadInputTokens", 0))
+    # Extract tokens from step_finish event
+    input_tokens = 0
+    output_tokens = 0
+    cache_read = 0
+    cache_write = 0
+    cost_usd = 0.0
+    for event in events:
+        if event.get("type") == "step_finish":
+            part = event.get("part", {})
+            tokens = part.get("tokens", {})
+            input_tokens += tokens.get("input", 0)
+            output_tokens += tokens.get("output", 0)
+            cache = tokens.get("cache", {})
+            cache_read += cache.get("read", 0)
+            cache_write += cache.get("write", 0)
+            cost_usd += part.get("cost", 0.0)
 
-    # Fall back to stats block (Gemini-style format)
-    if input_tokens == 0 and output_tokens == 0:
-        stats = data.get("stats", {})
-        input_tokens = stats.get("input_tokens", 0)
-        output_tokens = stats.get("output_tokens", 0)
-        cache_read = stats.get("cached", 0)
+    # Extract response text from text events
+    raw_response = ""
+    for event in events:
+        if event.get("type") == "text":
+            part = event.get("part", {})
+            text = part.get("text", "")
+            if text:
+                raw_response += text
 
-    wall_time_ms = data.get("duration_ms", data.get("durationMs", 0.0))
-    raw_response = data.get("result", data.get("response", data.get("output", "")))
+    # Total input includes cache write (creation cost)
+    total_input = input_tokens + cache_write
 
-    cost = compute_cost(detected_model or "default", input_tokens, output_tokens, cache_read)
+    if cost_usd == 0.0 and total_input > 0:
+        cost_usd = compute_cost(model or "default", total_input, output_tokens, cache_read)
 
     return CLIResult(
         provider="opencode",
-        model=detected_model,
-        input_tokens=input_tokens,
+        model=model or "",
+        input_tokens=total_input,
         output_tokens=output_tokens,
         cache_read_tokens=cache_read,
-        total_cost_usd=cost,
-        wall_time_ms=wall_time_ms,
-        tool_calls=0,
-        num_turns=data.get("num_turns", 0),
+        cache_creation_tokens=cache_write,
+        total_cost_usd=cost_usd,
         raw_response=raw_response,
-        raw_json=data,
+        raw_json={"events": events},
     )
 
 
