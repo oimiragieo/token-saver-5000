@@ -262,6 +262,8 @@ def test_inspect_mcp_installation_reports_desktop_config(tmp_path: Path, monkeyp
     desktop_path = appdata / "Claude" / "claude_desktop_config.json"
 
     install_mcp(config_path=desktop_path, root=tmp_path / "repo")
+    # Ensure inspect uses the same path (detect_claude_config_path is platform-dependent)
+    monkeypatch.setattr("src.mcp_install.detect_claude_config_path", lambda: desktop_path)
     status = inspect_mcp_installation(root=tmp_path / "repo")
 
     assert status["desktop"]["configured"] is True
