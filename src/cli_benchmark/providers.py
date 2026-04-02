@@ -46,18 +46,16 @@ def run_prompt(
     Calls the native CLIs directly to get full JSON output with usage data.
     The omega wrappers strip usage fields, so we bypass them for benchmarking.
     """
-    cmd = _build_command(provider, model)
-
-    # All providers read the prompt from stdin to avoid Windows ~8KB command-line length limits.
-    # OpenCode reads from stdin when no positional message args are given (same as Claude Code).
-    stdin_prompt = prompt
-
     if dry_run:
-        print(f"[DRY RUN] Would execute: {cmd[0]} ... ({len(cmd) - 1} args)")
+        # Don't call _build_command in dry-run mode -- the CLI may not be installed
+        print(f"[DRY RUN] Would execute: {provider} ...")
         if cwd:
             print(f"[DRY RUN] Working directory: {cwd}")
         print(f"[DRY RUN] Prompt length: {len(prompt)} chars")
         return CLIResult(provider=provider, model=model or "", is_dry_run=True)
+
+    cmd = _build_command(provider, model)
+    stdin_prompt = prompt
 
     result = subprocess.run(
         cmd,

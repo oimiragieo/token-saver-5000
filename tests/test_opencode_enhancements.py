@@ -325,8 +325,8 @@ class TestBenchmarkProvider(unittest.TestCase):
 
             cmd = _build_command("opencode", None)
             assert cmd[0] == "/usr/bin/opencode"
-            assert "-p" in cmd
-            assert "-f" in cmd
+            assert "run" in cmd
+            assert "--format" in cmd
             assert "json" in cmd
 
     def test_opencode_build_command_with_model(self) -> None:
