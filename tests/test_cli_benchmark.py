@@ -742,7 +742,7 @@ class TestAggregateRepeats:
 
     def test_multi_run_table_shows_runs_label(self):
         """to_table() shows '(N runs)' label when multi-run results exist."""
-        from src.cli_benchmark.results import BenchmarkReport, _aggregate_repeats
+        from src.cli_benchmark.results import BenchmarkReport
 
         report = BenchmarkReport()
         for _ in range(3):

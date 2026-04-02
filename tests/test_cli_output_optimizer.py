@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from src.cli_output_optimizer import CLIOutputOptimizer, FilterResult
 

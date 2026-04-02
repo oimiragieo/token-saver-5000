@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.savings_tracker import SavingsEvent, SavingsReport, SavingsTracker
+from src.savings_tracker import SavingsEvent, SavingsTracker
 from src.cli_benchmark.pricing import PRICING
 
 # ---------------------------------------------------------------------------
@@ -188,7 +187,7 @@ class TestROICalculations:
         # inject events with a wide enough time span to trigger projection
         t0 = time.time() - 7200  # 2 hours ago
         for i in range(10):
-            ev = tracker.record("ingest_context", 10_000, 1_000)
+            tracker.record("ingest_context", 10_000, 1_000)
             # backdate the event by spacing them over the span
             tracker._events[-1].timestamp = t0 + i * 720  # 12 min apart
 
