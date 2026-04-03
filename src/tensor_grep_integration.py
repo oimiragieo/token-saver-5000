@@ -8,6 +8,7 @@ ImportError or FileNotFoundError.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -111,7 +112,15 @@ def code_search(
         return CodeSearchResult(pattern=pattern, available=False)
 
     try:
-        cmd = ["tg", pattern, str(directory), "--json"]
+        # Multi-word queries: convert "auth token JWT" to "auth|token|JWT" regex
+        # alternation so tg matches files containing ANY keyword (not the exact phrase).
+        terms = pattern.split()
+        if len(terms) > 1:
+            tg_pattern = "|".join(re.escape(t) for t in terms)
+        else:
+            tg_pattern = pattern
+
+        cmd = ["tg", tg_pattern, str(directory), "--json"]
         if use_index:
             cmd.append("--index")
 

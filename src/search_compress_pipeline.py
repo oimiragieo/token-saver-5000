@@ -146,10 +146,19 @@ def search_then_compress(
             matched_paths = list(
                 {m.get("file", "") for m in search_result.matches if m.get("file")}
             )
-            # Resolve to absolute paths
-            matched_paths = [
-                os.path.join(directory, p) if not os.path.isabs(p) else p for p in matched_paths
-            ]
+            # Resolve paths: tg may return paths relative to CWD (already including
+            # the directory prefix) or relative to the search directory. Avoid double-joining.
+            resolved = []
+            for p in matched_paths:
+                if os.path.isabs(p):
+                    resolved.append(p)
+                elif os.path.exists(p):
+                    resolved.append(str(Path(p).resolve()))
+                elif os.path.exists(os.path.join(directory, p)):
+                    resolved.append(str(Path(os.path.join(directory, p)).resolve()))
+                else:
+                    resolved.append(str(Path(p).resolve()))
+            matched_paths = resolved
             result.matched_files = sorted(matched_paths[:max_files])
             result.search_method = "tensor_grep"
             result.stages.append("tensor_grep_search")
