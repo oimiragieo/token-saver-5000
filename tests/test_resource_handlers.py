@@ -208,12 +208,7 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_healthy_state(self, mock_context):
         """Test health check with healthy system state"""
-        # Setup - use default healthy state from fixture
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "Storage" in result
         assert "45.2 MB" in result
@@ -228,7 +223,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_with_warnings(self, mock_context):
         """Test health check with system warnings"""
-        # Setup (v0.8.0: use check_health_async instead of check_health)
         mock_context["resource_manager"].check_health_async.return_value = {
             "healthy": True,
             "metrics": {
@@ -250,11 +244,7 @@ class TestHandleCheckResourceHealth:
                 "Increase storage limit if needed",
             ],
         }
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "[WARN]" in result  # Warning indicators
         assert "84" in result
@@ -267,7 +257,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_critical_state(self, mock_context):
         """Test health check with critical resource usage"""
-        # Setup (v0.8.0: use check_health_async instead of check_health)
         mock_context["resource_manager"].check_health_async.return_value = {
             "healthy": False,
             "metrics": {
@@ -289,11 +278,7 @@ class TestHandleCheckResourceHealth:
                 "Delete documents or increase limits",
             ],
         }
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "[CRIT]" in result  # Critical indicators
         assert "100" in result
@@ -305,7 +290,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_with_memory_metrics(self, mock_context):
         """Test health check with optional memory metrics"""
-        # Setup (v0.8.0: use check_health_async instead of check_health)
         mock_context["resource_manager"].check_health_async.return_value = {
             "healthy": True,
             "metrics": {
@@ -321,11 +305,7 @@ class TestHandleCheckResourceHealth:
             "warnings": [],
             "recommendations": [],
         }
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "Memory" in result
         assert "128.5 MB" in result
@@ -334,23 +314,13 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_without_memory_metrics(self, mock_context):
         """Test health check without optional memory metrics"""
-        # Setup - use default fixture (no memory metrics)
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "Memory" not in result  # Should not show memory section
 
     async def test_check_health_no_warnings_or_recommendations(self, mock_context):
         """Test health check with no warnings or recommendations"""
-        # Setup - use default fixture (empty warnings/recommendations)
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "Healthy" in result
         # Should not have warnings or recommendations sections
@@ -359,7 +329,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_only_warnings_no_recommendations(self, mock_context):
         """Test health check with warnings but no recommendations"""
-        # Setup (v0.8.0: use check_health_async instead of check_health)
         mock_context["resource_manager"].check_health_async.return_value = {
             "healthy": True,
             "metrics": {
@@ -375,18 +344,13 @@ class TestHandleCheckResourceHealth:
             "warnings": ["Storage at 80% threshold"],
             "recommendations": [],
         }
-
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Warnings:" in result
         assert "Storage at 80% threshold" in result
         assert "Recommendations:" not in result
 
     async def test_check_health_formatting_consistency(self, mock_context):
         """Test that health check output has consistent formatting"""
-        # Execute (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
 
         # Verify formatting elements
@@ -402,7 +366,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_resource_manager_called(self, mock_context):
         """Test that resource manager check_health_async is called correctly"""
-        # Execute (v0.8.0: handler is now async)
         await handle_check_resource_health(mock_context, {})
 
         # Verify (v0.8.0: check_health_async instead of check_health)
@@ -410,7 +373,6 @@ class TestHandleCheckResourceHealth:
 
     async def test_check_health_handles_missing_optional_fields(self, mock_context):
         """Test health check with minimal required fields only"""
-        # Setup with only required fields (v0.8.0: use check_health_async)
         mock_context["resource_manager"].check_health_async.return_value = {
             "healthy": True,
             "metrics": {
@@ -426,11 +388,7 @@ class TestHandleCheckResourceHealth:
             "warnings": [],
             "recommendations": [],
         }
-
-        # Execute - should not raise KeyError (v0.8.0: handler is now async)
         result = await handle_check_resource_health(mock_context, {})
-
-        # Verify
         assert "Resource Health" in result
         assert "Healthy" in result
 

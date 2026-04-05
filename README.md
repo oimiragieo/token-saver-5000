@@ -647,13 +647,25 @@ Skill scripts support:
 6. `tests/` - unit/integration/regression tests.
 7. `docs/` - detailed guides and reference docs.
 
+**Present but not wired into the default runtime:**
+
+- `src/reliability.py` — timeout, circuit breaker, and retry primitives. Fully tested but not yet integrated into the server hot path. Best first integration target: async batch compression in `compression_handlers.py`.
+- `src/multimodal_compressor.py`, `src/training_utils.py` — experimental research modules. Gated behind `"experimental": true` in handler responses. Not part of the core MCP tool surface.
+
 ## Run The Server (MCP Mode)
 
 ```bash
 token-saver-mcp
 ```
 
-For web/API deployments, the repo also supports an HTTP server surface for health checks, metrics, and service-style runtime integrations. See `docs/deployment/DOCKER.md` and `docs/deployment/SAAS_MULTI_TENANT.md` for HTTP server, reverse proxy, and API gateway patterns.
+For web/API deployments, set `HTTP_ENABLED=true` to start an HTTP server with health/metrics endpoints alongside the MCP server:
+
+```bash
+HTTP_ENABLED=true HTTP_PORT=8080 token-saver-mcp
+```
+
+Endpoints: `/health/liveness`, `/health/readiness`, `/health/diagnostics`, `/metrics` (Prometheus).
+See `docs/deployment/DOCKER.md` and `docs/deployment/SAAS_MULTI_TENANT.md` for reverse proxy and API gateway patterns.
 
 Claude Desktop config example:
 

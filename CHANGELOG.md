@@ -101,6 +101,11 @@ All notable changes to Token Saver 5000.
   as a background task when `HTTP_ENABLED=true`, matching documented Docker/K8s behavior.
 - **Dead code removed**: deleted `memory_hooks.py` (orphaned hook manager) and
   `toon_gate.py` (orphaned production gate) — zero runtime references in src/.
+- **Codebase slop cleanup**: trimmed verbose docstrings in `http_server.py` (−120 lines),
+  removed redundant `# Check:` comments from `compression_verifier.py` (−15 lines),
+  removed emoji from `toon_serializer.py` demo, removed `# Setup / Execute / Verify`
+  AAA section comments from `test_resource_handlers.py` (−42 lines), parametrized 11
+  import-existence tests in `test_gtm_benchmarks.py` into a single test.
 
 ### Added (v0.11.0 - Cross-Platform Token Optimization)
 - **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken

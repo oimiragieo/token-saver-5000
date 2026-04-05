@@ -30,6 +30,15 @@ repos:
       - id: ruff
         args: ['--fix', '--exit-non-zero-on-fix']
 
+  - repo: local
+    hooks:
+      - id: claude-folder-guides-sync
+        name: claude folder guides synced
+        entry: python scripts/check_claude_folder_guides_sync.py
+        language: system
+        pass_filenames: false
+        files: ^(src|tests|scripts)/.*\.py$|^scripts/(generate_claude_folder_guides|check_claude_folder_guides_sync)\.py$
+
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:

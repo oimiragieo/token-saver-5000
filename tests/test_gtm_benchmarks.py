@@ -10,6 +10,7 @@ Validates all go-to-market claims with reproducible benchmarks:
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 
@@ -314,61 +315,30 @@ class TestToolCountClaims:
 
 # --- Feature existence validation ---------------------------------------------
 
+# Single parametrized test replaces 11 individual import-assert-not-None tests.
+_GTM_IMPORTS = [
+    ("src.savings_tracker", "SavingsTracker"),
+    ("src.savings_dashboard", "SavingsDashboard"),
+    ("src.budget_monitor", "TokenBudgetMonitor"),
+    ("src.team_export", "TeamExporter"),
+    ("src.filter_rules", "FilterRuleEngine"),
+    ("src.tee_recovery", "TeeStore"),
+    ("src.savings_discover", "ContextAnalyzer"),
+    ("src.handlers.token_optimization_handlers", "handle_calculate_roi"),
+    ("src.proxy.schema_compressor", "SchemaCompressor"),
+    ("src.code_compressor", "CodeSemanticCompressor"),
+]
+
 
 class TestFeatureExistence:
     """Validate that all GTM-claimed features exist and are importable."""
 
-    def test_savings_tracker_exists(self):
-        from src.savings_tracker import SavingsTracker
+    @pytest.mark.parametrize("module_path,symbol", _GTM_IMPORTS, ids=[s for _, s in _GTM_IMPORTS])
+    def test_gtm_feature_importable(self, module_path, symbol):
+        mod = importlib.import_module(module_path)
+        assert getattr(mod, symbol, None) is not None
 
-        assert SavingsTracker is not None
-
-    def test_savings_dashboard_exists(self):
-        from src.savings_dashboard import SavingsDashboard
-
-        assert SavingsDashboard is not None
-
-    def test_budget_monitor_exists(self):
-        from src.budget_monitor import TokenBudgetMonitor
-
-        assert TokenBudgetMonitor is not None
-
-    def test_team_exporter_exists(self):
-        from src.team_export import TeamExporter
-
-        assert TeamExporter is not None
-
-    def test_filter_rules_exists(self):
-        from src.filter_rules import FilterRuleEngine
-
-        assert FilterRuleEngine is not None
-
-    def test_tee_recovery_exists(self):
-        from src.tee_recovery import TeeStore
-
-        assert TeeStore is not None
-
-    def test_context_analyzer_exists(self):
-        from src.savings_discover import ContextAnalyzer
-
-        assert ContextAnalyzer is not None
-
-    def test_roi_handler_exists(self):
-        from src.handlers.token_optimization_handlers import handle_calculate_roi
-
-        assert handle_calculate_roi is not None
-
-    def test_proxy_schema_compressor_exists(self):
-        from src.proxy.schema_compressor import SchemaCompressor
-
-        assert SchemaCompressor is not None
-
-    def test_code_compressor_exists(self):
-        from src.code_compressor import CodeSemanticCompressor
-
-        assert CodeSemanticCompressor is not None
-
-    def test_multi_agent_setup_exists(self):
+    def test_multi_agent_setup_has_enough_configs(self):
         from src.mcp_install import AGENT_CONFIGS
 
-        assert len(AGENT_CONFIGS) >= 5, "Need configs for 5+ agents"
+        assert len(AGENT_CONFIGS) >= 5

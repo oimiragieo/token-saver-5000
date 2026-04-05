@@ -48,9 +48,13 @@ jobs:
         run: |
           python -m ruff check src tests scripts
 
+      - name: Folder guides (claude.md) in sync
+        run: |
+          python scripts/check_claude_folder_guides_sync.py
+
       - name: Workflow and packaging contracts
         run: |
-          pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_mcp_packaging.py
+          pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_claude_folder_guides.py tests/test_mcp_packaging.py
 
   compatibility:
     name: Python Compatibility ${{ matrix.python-version }}

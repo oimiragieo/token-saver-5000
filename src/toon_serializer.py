@@ -502,18 +502,11 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
 # ============================================================================
 
 if __name__ == "__main__":
-    import sys
-    import io
-
-    # Ensure UTF-8 encoding for emoji support
-    if sys.stdout.encoding != "utf-8":
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-
-    print("🎯 TOON Serialization Demo for Token Saver 5000\n")
+    print("TOON Serialization Demo for Token Saver 5000\n")
     print("=" * 70)
 
     # Example 1: Search Results
-    print("\n📊 Example 1: Search Results\n")
+    print("\nExample 1: Search Results\n")
 
     search_results = [
         {
@@ -549,14 +542,14 @@ if __name__ == "__main__":
 
     # Savings
     savings = estimate_token_savings(json_output, toon_output)
-    print(f"\n💰 Token Savings: {savings['savings_percentage']}%")
+    print(f"\nToken Savings: {savings['savings_percentage']}%")
     print(f"   JSON: ~{savings['json_tokens']} tokens")
     print(f"   TOON: ~{savings['toon_tokens']} tokens")
     print(f"   Saved: ~{savings['tokens_saved']} tokens")
 
     # Example 2: Document Inventory
     print("\n" + "=" * 70)
-    print("\n📚 Example 2: Document Inventory\n")
+    print("\nExample 2: Document Inventory\n")
 
     documents = [
         {
@@ -582,13 +575,13 @@ if __name__ == "__main__":
     print(toon_output)
 
     savings = estimate_token_savings(json_output, toon_output)
-    print(f"\n💰 Token Savings: {savings['savings_percentage']}%")
+    print(f"\nToken Savings: {savings['savings_percentage']}%")
 
     # Combined savings
     print("\n" + "=" * 70)
-    print("\n🚀 Combined Token Savings (Semantic + TOON)\n")
+    print("\nCombined Token Savings (Semantic + TOON)\n")
     print("Original document:      45,000 tokens")
     print("After Semantic:          2,300 tokens (94.9% savings)")
     print("After TOON on output:    ~1,400 tokens (96.9% savings)")
-    print("\n✨ Total: 96.9% token reduction!")
-    print("   That's 45,000 → 1,400 tokens (32× compression)")
+    print("\nTotal: 96.9% token reduction!")
+    print("   That's 45,000 -> 1,400 tokens (32x compression)")

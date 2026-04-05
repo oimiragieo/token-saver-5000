@@ -20,8 +20,10 @@ def test_ci_workflow_exists_and_runs_canonical_validation():
     assert 'python-version: ["3.10", "3.11", "3.12"]' in content
     assert "python -m black --check src tests scripts" in content
     assert "python -m ruff check src tests scripts" in content
+    assert "python scripts/check_claude_folder_guides_sync.py" in content
     assert (
-        'pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_mcp_packaging.py' in content
+        'pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_claude_folder_guides.py '
+        "tests/test_mcp_packaging.py" in content
     )
     assert (
         "python -m pytest tests/ -q --cov=src --cov-report=term --cov-fail-under=70"

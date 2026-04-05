@@ -10,6 +10,46 @@ Token Saver 5000 is an MCP server that performs semantic compression of text and
 **Python:** 3.10-3.13 (chromadb only works on 3.10-3.12)
 **Transport:** stdio (default), optional HTTP for Kubernetes
 
+## Codebase map (folder guides)
+
+This file is the **master index** for humans and AI tools. Each first-class code directory also has a lowercase **`claude.md`** that lists **every file in that folder**, the **first line of the module docstring** (when present), and **top-level** `class` / `def` / `async def` names (nested helpers are omitted).
+
+**How to use:** start here for intent and commands; open the folder `claude.md` when you need a file-by-file symbol index without loading whole modules.
+
+**Regenerate** all folder guides after large refactors:
+
+```bash
+python scripts/generate_claude_folder_guides.py
+```
+
+**Verify** (same check as CI / pre-commit — compares only `**/claude.md` under `src/`, `tests/`, `scripts/`):
+
+```bash
+python scripts/check_claude_folder_guides_sync.py
+```
+
+**Determinism:** guides are UTF-8 with **LF-only** newlines (`pathlib.write_text(..., newline="\n")`), directory listings and `os.walk` branches are **sorted**, and `.gitattributes` sets `**/claude.md text eol=lf` so Git does not reintroduce CRLF on Windows.
+
+| Directory | Folder guide | What lives here (summary) |
+|-----------|----------------|---------------------------|
+| `src/` | [src/claude.md](src/claude.md) | Main library: compression, embeddings, persistence, MCP-facing services, HTTP, CLIs, token economy, prompts/cache, multimodal, experiments—modules at repo “core” granularity. |
+| `src/handlers/` | [src/handlers/claude.md](src/handlers/claude.md) | Async MCP **tool handlers** (`handle_*`), grouped by domain; delegates to `src/` services. |
+| `src/semantic_modulator/` | [src/semantic_modulator/claude.md](src/semantic_modulator/claude.md) | Nested package root (`__init__` only). |
+| `src/semantic_modulator/app/` | [src/semantic_modulator/app/claude.md](src/semantic_modulator/app/claude.md) | **Server wiring**: factory, router binding, lifecycle, tool profiles, ACE context manager, service adapter. |
+| `src/semantic_modulator/api/` | [src/semantic_modulator/api/claude.md](src/semantic_modulator/api/claude.md) | API subpackage re-exports. |
+| `src/semantic_modulator/api/mcp/` | [src/semantic_modulator/api/mcp/claude.md](src/semantic_modulator/api/mcp/claude.md) | MCP registry/router helpers for the `semantic_modulator.api` layer. |
+| `src/cli_benchmark/` | [src/cli_benchmark/claude.md](src/cli_benchmark/claude.md) | Reusable **CLI benchmark** harness (corpus, pricing, providers, results). |
+| `src/connectors/` | [src/connectors/claude.md](src/connectors/claude.md) | Optional **data connectors** (GitHub, S3, Slack export, web) built on `connectors/base.py`. |
+| `src/proxy/` | [src/proxy/claude.md](src/proxy/claude.md) | **MCP proxy** server, upstream client, schema compression, response interception. |
+| `tests/` | [tests/claude.md](tests/claude.md) | Pytest modules colocated at the test tree root (`test_*.py`, `conftest.py`). |
+| `tests/fixtures/` | [tests/fixtures/claude.md](tests/fixtures/claude.md) | Shared static/json fixtures for integration-style tests. |
+| `tests/fixtures/parity/` | [tests/fixtures/parity/claude.md](tests/fixtures/parity/claude.md) | Parity / golden-path fixture payloads. |
+| `scripts/` | [scripts/claude.md](scripts/claude.md) | Maintainer **scripts**: setup check, benchmarks, proxy helper, quickstart, migration. |
+| `scripts/benchmarks/` | [scripts/benchmarks/claude.md](scripts/benchmarks/claude.md) | Benchmark guard and benchmark runner entrypoints. |
+| `scripts/skills/` | [scripts/skills/claude.md](scripts/skills/claude.md) | Skill-oriented CLIs (`compress_context`, workflow runner, evidence validation) also mirrored under `.claude/skills/`. |
+
+**Related (not auto-generated):** `.claude/` holds Claude Code hooks, commands, and packaged skills; use that tree for editor integration, not runtime MCP packaging.
+
 ## Commands
 
 ```bash

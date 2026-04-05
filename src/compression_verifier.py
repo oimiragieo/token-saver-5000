@@ -154,22 +154,18 @@ class CompressionContract:
         """
         result = ContractResult()
 
-        # Check: non-empty document
         result.add_check("non_empty_document", len(document) > 0, "Document must be non-empty")
 
-        # Check: document is string
         result.add_check(
             "document_is_string", isinstance(document, str), "Document must be a string"
         )
 
-        # Check: valid UTF-8
         try:
             document.encode("utf-8")
             result.add_check("valid_utf8", True)
         except UnicodeEncodeError as e:
             result.add_check("valid_utf8", False, f"Invalid UTF-8: {e}")
 
-        # Check: document size limit
         doc_size_mb = len(document.encode("utf-8")) / (1024 * 1024)
         result.add_check(
             "document_size_limit",
@@ -177,7 +173,6 @@ class CompressionContract:
             f"Document size {doc_size_mb:.2f}MB exceeds {MAX_DOCUMENT_SIZE_MB}MB limit",
         )
 
-        # Check: valid fidelity level
         valid_levels = {"ABSTRACT", "OUTLINE", "STRUCTURE", "DETAILED", "RAW", "BALANCED"}
         result.add_check(
             "valid_fidelity_level",
@@ -185,14 +180,12 @@ class CompressionContract:
             f"Fidelity level must be one of {valid_levels}",
         )
 
-        # Check: no null bytes (potential security issue)
         result.add_check(
             "no_null_bytes",
             "\x00" not in document,
             "Document contains null bytes (potential binary content)",
         )
 
-        # Check: file path safety (if provided)
         if file_path:
             path_safe = not any(seq in file_path for seq in ["../", "..\\", "/etc/", "C:\\Windows"])
             result.add_check(
@@ -233,22 +226,18 @@ class CompressionContract:
         """
         result = ContractResult()
 
-        # Check: skeleton is non-empty
         result.add_check("skeleton_non_empty", len(skeleton_text) > 0, "Skeleton must be non-empty")
 
-        # Check: skeleton within token limit
         result.add_check(
             "skeleton_token_limit",
             skeleton_tokens <= MAX_SKELETON_TOKENS,
             f"Skeleton {skeleton_tokens} tokens exceeds {MAX_SKELETON_TOKENS} limit",
         )
 
-        # Check: node map is valid dict
         result.add_check(
             "valid_node_map", isinstance(node_map, dict), "Node map must be a dictionary"
         )
 
-        # Check: node map has entries (unless very short document)
         if fidelity_level.upper() == "RAW":
             result.add_check("node_map_populated", True, "RAW mode - node map optional")
         elif original_tokens > 50:
@@ -260,7 +249,6 @@ class CompressionContract:
         else:
             result.add_check("node_map_populated", True, "Skipped for small document")
 
-        # Check: compression achieved (with tolerance)
         target_ratios = {
             "ABSTRACT": 10.0,
             "OUTLINE": 5.0,
@@ -281,7 +269,6 @@ class CompressionContract:
         else:
             result.add_check("compression_achieved", True, "RAW mode - no compression expected")
 
-        # Check: tokens reduced (unless RAW)
         if fidelity_level.upper() != "RAW":
             result.add_check(
                 "tokens_reduced",
@@ -291,7 +278,6 @@ class CompressionContract:
         else:
             result.add_check("tokens_reduced", True, "RAW mode - no reduction expected")
 
-        # Check: valid node IDs
         if node_map:
             valid_ids = all(
                 isinstance(k, str) and len(k) > 0 and isinstance(v, str)
@@ -330,7 +316,6 @@ class CompressionContract:
         result = ContractResult()
         node_set = set(node_ids)
 
-        # Check: edge endpoints exist
         missing_nodes = set()
         for src, tgt in edges:
             if src not in node_set:
@@ -344,7 +329,6 @@ class CompressionContract:
             f"Edges reference {len(missing_nodes)} missing nodes: {list(missing_nodes)[:5]}",
         )
 
-        # Check: no duplicate edges
         edge_set = set(edges)
         result.add_check(
             "no_duplicate_edges",
@@ -352,7 +336,6 @@ class CompressionContract:
             f"Found {len(edges) - len(edge_set)} duplicate edges",
         )
 
-        # Check: skeleton references valid nodes (if it references any)
         # Look for patterns like [node_123] or (node_abc)
         node_refs = re.findall(r"\[([^\]]+)\]|\(node_([^\)]+)\)", skeleton_text)
         if node_refs:

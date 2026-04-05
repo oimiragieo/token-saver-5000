@@ -1,0 +1,2 @@
+# Enforce LF for generated folder guides so Windows checkouts match Linux CI.
+**/claude.md text eol=lf
