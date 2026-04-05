@@ -61,6 +61,19 @@ All notable changes to Token Saver 5000.
 - **Full test suite**: 3,409+ tests across 90+ test files.
 - **Benchmark results**: medium corpus 4.97x, large corpus 7.80x, avg 83.5% savings.
 
+### Fixed
+- **ROI calculator** (`token_optimization_handlers.py`): safe dict access for model pricing
+  rates — prevents `KeyError` on unknown models.
+- **Team export handler** (`token_optimization_handlers.py`): type guard on member items —
+  non-dict entries in `members` list are now skipped instead of crashing.
+- **Filter rules regex** (`filter_rules.py`): catch `re.error` on user-supplied regex
+  patterns in strip/keep pipeline stages — invalid patterns skip the stage gracefully.
+- **Prometheus label injection** (`team_export.py`): escape backslashes, quotes, and
+  newlines in `user_id` labels to prevent metric format corruption.
+- **Filter rules dead code** (`cli_output_optimizer.py`): `FilterRuleEngine` is now wired
+  as a post-filter stage in `CLIOutputOptimizer` — user-defined `.gotcontext.toml` rules
+  are applied after the built-in strategy.
+
 ### Added (v0.11.0 - Cross-Platform Token Optimization)
 - **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken
   (accurate), `len//4` fast, `len//2` JSON-density, Gemini-compatible (0.25/ASCII, 1.3/non-ASCII),

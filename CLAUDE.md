@@ -74,17 +74,18 @@ MCP Client → stdio → Server (src/server.py)
 **CLI Output Optimizer** (`src/cli_output_optimizer.py`):
 - 11 command-specific filtering strategies (git_diff, test_output, lint_output, docker_output, etc.)
 - Auto-detection of command type from output content
+- User-defined `.gotcontext.toml` rules applied as post-filter stage via `FilterRuleEngine`
 - Optional RTK binary fallback for additional coverage
 
 **Token Economy** (`src/savings_tracker.py`, `src/savings_dashboard.py`, `src/budget_monitor.py`, `src/team_export.py`):
 - `SavingsTracker`: per-session token/cost tracking with persistence
 - `SavingsDashboard`: cross-session aggregation CLI (`token-saver-stats`)
 - `TokenBudgetMonitor`: configurable per-session/daily/monthly budget limits
-- `TeamExporter`: JSON/CSV/Prometheus team data export
+- `TeamExporter`: JSON/CSV/Prometheus team data export (user_id labels escaped)
 
 **Filter Rules** (`src/filter_rules.py`):
 - User-defined output filtering via `.gotcontext.toml` TOML DSL
-- 8-stage pipeline with inline tests
+- 8-stage pipeline with inline tests, safe regex compilation
 
 **Tee/Recovery** (`src/tee_recovery.py`):
 - Original content preservation before compression
