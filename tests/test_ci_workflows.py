@@ -23,7 +23,10 @@ def test_ci_workflow_exists_and_runs_canonical_validation():
     assert (
         'pytest -q -o addopts="" tests/test_ci_workflows.py tests/test_mcp_packaging.py' in content
     )
-    assert "python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py" in content
+    assert (
+        "python -m pytest tests/ -q --cov=src --cov-report=term --cov-fail-under=70"
+        " --ignore=tests/test_performance.py" in content
+    )
     assert "python -m build" in content
     assert "python -m twine check dist/*" in content
     assert "token-saver-install-mcp" in content
