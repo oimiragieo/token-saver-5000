@@ -3113,6 +3113,109 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # === ROI CALCULATOR (v0.16.0) ===
+        Tool(
+            name="calculate_roi",
+            description=(
+                "Calculate ROI of using gotcontext compression vs raw token usage. "
+                "Shows monthly cost comparison: without vs with compression, Pro plan cost, "
+                "net savings, and ROI multiplier. Powers the website ROI calculator."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {
+                        "type": "string",
+                        "description": (
+                            "Model identifier (e.g., claude-sonnet-4-6, gpt-4o, gemini-2.5-pro)"
+                        ),
+                    },
+                    "tokens_per_day": {
+                        "type": "integer",
+                        "description": "Estimated input tokens per day per user (default 500000)",
+                    },
+                    "team_size": {
+                        "type": "integer",
+                        "description": "Number of team members (default 1)",
+                    },
+                    "compression_ratio": {
+                        "type": "number",
+                        "description": "Expected compression ratio 0-1 (default 0.85 = 85%)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        # === BUDGET MONITORING (v0.16.0) ===
+        Tool(
+            name="check_budget",
+            description=(
+                "Check token budget usage against configured limits. "
+                "Supports per-session, daily, and monthly budgets. "
+                "Returns usage status, alert level, and projected usage."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_limit": {
+                        "type": "integer",
+                        "description": "Session token budget limit (0 = unlimited)",
+                    },
+                    "daily_limit": {
+                        "type": "integer",
+                        "description": "Daily token budget limit (0 = unlimited)",
+                    },
+                    "monthly_limit": {
+                        "type": "integer",
+                        "description": "Monthly token budget limit (0 = unlimited)",
+                    },
+                    "record_tokens": {
+                        "type": "integer",
+                        "description": "Record new token usage before checking budget",
+                    },
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Name of tool that consumed the tokens (for tracking)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        # === TEAM EXPORT (v0.16.0) ===
+        Tool(
+            name="export_team_data",
+            description=(
+                "Export aggregated team savings data. "
+                "Supports JSON, CSV, and Prometheus exposition formats. "
+                "Use for team dashboards, monitoring, and cost reporting."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "members": {
+                        "type": "array",
+                        "description": "Team member stats to aggregate",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "user_id": {"type": "string"},
+                                "sessions": {"type": "integer"},
+                                "original_tokens": {"type": "integer"},
+                                "compressed_tokens": {"type": "integer"},
+                                "operations": {"type": "integer"},
+                            },
+                            "required": ["user_id"],
+                        },
+                    },
+                    "format": {
+                        "type": "string",
+                        "description": "Export format: json (default), csv, prometheus",
+                        "enum": ["json", "csv", "prometheus"],
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3306,6 +3409,12 @@ async def route_tool_call(
         "tee_store_stats": toh.handle_tee_store_stats,
         # Discover Savings (v0.16.0)
         "discover_savings": toh.handle_discover_savings,
+        # ROI Calculator (v0.16.0)
+        "calculate_roi": toh.handle_calculate_roi,
+        # Budget Monitor (v0.16.0)
+        "check_budget": toh.handle_check_budget,
+        # Team Export (v0.16.0)
+        "export_team_data": toh.handle_export_team_data,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

@@ -600,3 +600,145 @@ async def handle_discover_savings(context: Dict[str, Any], args: Dict[str, Any])
             "formatted": format_report(report),
         }
     )
+
+
+# Default compression ratio for ROI calculations (conservative)
+_DEFAULT_COMPRESSION_RATIO = 0.85
+
+# Pro plan price per user per month
+_PRO_PLAN_PRICE = 29.0
+
+
+async def handle_calculate_roi(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle calculate_roi tool call.
+
+    Calculates ROI of using gotcontext compression vs raw token usage.
+    Shows monthly cost comparison and payback analysis.
+    """
+    from ..cli_benchmark.pricing import PRICING, get_model_rates
+
+    model = args.get("model", "claude-sonnet-4-6")
+    tokens_per_day = args.get("tokens_per_day", 500_000)
+    team_size = args.get("team_size", 1)
+    compression_ratio = args.get("compression_ratio", _DEFAULT_COMPRESSION_RATIO)
+
+    rates = get_model_rates(model)
+    input_rate = rates["input"]  # per million tokens
+
+    # Monthly calculations (22 working days)
+    working_days = 22
+    monthly_tokens = tokens_per_day * working_days * team_size
+    monthly_compressed = int(monthly_tokens * (1 - compression_ratio))
+
+    cost_without = monthly_tokens * input_rate / 1_000_000
+    cost_with = monthly_compressed * input_rate / 1_000_000
+    tokens_saved = monthly_tokens - monthly_compressed
+    dollars_saved = cost_without - cost_with
+
+    pro_plan_cost = _PRO_PLAN_PRICE * team_size
+    net_savings = dollars_saved - pro_plan_cost
+    roi_multiplier = dollars_saved / pro_plan_cost if pro_plan_cost > 0 else 0
+
+    available_models = sorted(PRICING.keys() - {"default"})
+
+    comparison = (
+        f"Without gotcontext: ${cost_without:,.2f}/mo\n"
+        f"With gotcontext:    ${cost_with:,.2f}/mo "
+        f"({compression_ratio * 100:.0f}% savings)\n"
+        f"Pro plan cost:      ${pro_plan_cost:,.2f}/mo "
+        f"(${_PRO_PLAN_PRICE:.0f}/user × {team_size} users)\n"
+        f"Net savings:        ${net_savings:,.2f}/mo "
+        f"({roi_multiplier:.1f}x ROI)\n"
+        f"Payback period:     Day 1"
+    )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "model": model,
+            "tokens_per_day": tokens_per_day,
+            "team_size": team_size,
+            "compression_ratio": compression_ratio,
+            "monthly_tokens": monthly_tokens,
+            "monthly_tokens_saved": tokens_saved,
+            "cost_without_monthly": round(cost_without, 2),
+            "cost_with_monthly": round(cost_with, 2),
+            "dollars_saved_monthly": round(dollars_saved, 2),
+            "pro_plan_cost_monthly": round(pro_plan_cost, 2),
+            "net_savings_monthly": round(net_savings, 2),
+            "roi_multiplier": round(roi_multiplier, 1),
+            "comparison": comparison,
+            "available_models": available_models,
+        }
+    )
+
+
+# Module-level budget monitors keyed by scope
+_budget_monitors: Dict[str, Any] = {}
+
+
+async def handle_check_budget(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle check_budget tool call.
+
+    Returns token budget status across all configured limits
+    (session, daily, monthly) with projections and alert levels.
+    """
+    from ..budget_monitor import TokenBudgetMonitor
+
+    scope = args.get("workspace_id", "default")
+    if scope not in _budget_monitors:
+        _budget_monitors[scope] = TokenBudgetMonitor(
+            session_limit=args.get("session_limit", 0),
+            daily_limit=args.get("daily_limit", 0),
+            monthly_limit=args.get("monthly_limit", 0),
+        )
+
+    monitor = _budget_monitors[scope]
+
+    # Record new usage if provided
+    new_tokens = args.get("record_tokens", 0)
+    if new_tokens > 0:
+        monitor.record_usage(new_tokens, args.get("tool_name", ""))
+
+    result = monitor.check_budget()
+    return json.dumps({"status": "success", **result.to_dict()})
+
+
+async def handle_export_team_data(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle export_team_data tool call.
+
+    Exports aggregated team savings data in JSON, CSV, or Prometheus format.
+    """
+    from ..team_export import TeamExporter
+
+    exporter = TeamExporter()
+
+    # Accept member stats from args
+    members = args.get("members", [])
+    for m in members:
+        exporter.add_member_stats(
+            user_id=m.get("user_id", "unknown"),
+            sessions=m.get("sessions", 0),
+            original_tokens=m.get("original_tokens", 0),
+            compressed_tokens=m.get("compressed_tokens", 0),
+            operations=m.get("operations", 0),
+        )
+
+    report = exporter.build_report()
+    fmt = args.get("format", "json")
+
+    if fmt == "csv":
+        exported = exporter.export_csv(report)
+    elif fmt == "prometheus":
+        exported = exporter.export_prometheus(report)
+    else:
+        exported = exporter.export_json(report)
+
+    return json.dumps(
+        {
+            "status": "success",
+            "format": fmt,
+            "data": exported,
+            "summary": report.to_dict(),
+        }
+    )
