@@ -48,12 +48,12 @@ python scripts/benchmark_cujs.py --verbose
 |---|---------|-------------|--------|-------|---------|
 | 1 | **Solo Dev: Codebase Compression** | Search 13-file project for "auth" → compress 6 matched files | 20,406 tokens | 767 tokens | **96.2%** |
 | 2 | **Long Document Compression** | Compress 2,206-line API reference doc | 16,461 tokens | 1,269 tokens | **92.3%** |
-| 3 | **CLI Output Filtering** | Filter git diff (320 lines) + pytest (86 lines) + npm install (28 lines) | 4,888 tokens | 240 tokens | **95.1%** |
+| 3 | **CLI Output Filtering** | Filter git diff (320 lines) + pytest (86 lines) + npm install (28 lines) | 4,888 tokens | 777 tokens | **84.1%** |
 | 4 | **Query-Focused Code Search** | Ask "how does caching work?" → find 3 relevant files → compress | 20,406 tokens | 439 tokens | **97.8%** |
 | 5 | **Session Recovery** | Recover 7 events after conversation compaction | 26,600 tokens | 138 tokens | **99.5%** |
 | 6 | **ROI Justification** | 10 compressions on Claude Opus → show savings report | $1.27 saved | 4.4x ROI | **$127/mo projected** |
 
-**Aggregate: 179,161 input tokens → 8,473 output tokens (95.3% savings)**
+**Aggregate: 179,161 input tokens → 9,010 output tokens (95.0% savings)**
 
 ### Journey Details
 
@@ -70,7 +70,7 @@ error codes. 92.3% savings.
 **CUJ 3: Cleaning Up CLI Noise.**
 Your AI agent runs `git diff`, `pytest`, and `npm install`. Token Saver auto-detects each
 command type and applies the right filter: stats extraction for git, failure focus for pytest,
-summary for npm. 95.1% savings (434 lines → 22 lines).
+summary for npm. 84.1% savings (434 lines → 67 lines).
 
 **CUJ 4: "How Does Caching Work?"**
 You ask a question about a codebase. Token Saver searches first (finds cache.py, config.py,
