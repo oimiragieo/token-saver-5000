@@ -42,6 +42,42 @@ class ProxyConfig:
     enable_meta_tokens: bool = True
 
 
+@dataclass
+class ProxySessionMetrics:
+    """Cumulative metrics for a proxy session."""
+
+    total_calls: int = 0
+    total_original_chars: int = 0
+    total_compressed_chars: int = 0
+    total_tokens_saved: int = 0
+    by_tool: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    @property
+    def savings_pct(self) -> float:
+        if self.total_original_chars == 0:
+            return 0.0
+        return round((1 - self.total_compressed_chars / self.total_original_chars) * 100, 1)
+
+    def record(self, tool_name: str, stats: dict[str, Any]) -> None:
+        """Accumulate stats from a single tool call."""
+        self.total_calls += 1
+        self.total_original_chars += stats.get("original_chars", 0)
+        self.total_compressed_chars += stats.get("compressed_chars", 0)
+        self.total_tokens_saved += stats.get("tokens_saved_estimate", 0)
+
+        entry = self.by_tool.setdefault(tool_name, {"calls": 0, "tokens_saved": 0})
+        entry["calls"] += 1
+        entry["tokens_saved"] += stats.get("tokens_saved_estimate", 0)
+
+    def summary_line(self) -> str:
+        """One-line summary suitable for stderr."""
+        return (
+            f"{self.total_calls} calls | "
+            f"{self.total_tokens_saved:,} tokens saved | "
+            f"{self.savings_pct:.0f}% avg compression"
+        )
+
+
 class ProxyServer:
     """Transparent MCP proxy that compresses upstream responses.
 
@@ -64,6 +100,7 @@ class ProxyServer:
             enable_meta_tokens=config.enable_meta_tokens,
         )
         self._schema_compressor: SchemaCompressor | None = None
+        self.metrics = ProxySessionMetrics()
 
     # ------------------------------------------------------------------
     # Setup
@@ -117,15 +154,18 @@ class ProxyServer:
         Returns:
             Tuple of ``(compressed_text, stats_dict)``.  *stats_dict* has the
             keys ``original_chars``, ``compressed_chars``,
-            ``tokens_saved_estimate``, and ``pipeline_stages``.
+            ``tokens_saved_estimate``, ``savings_pct``, and ``pipeline_stages``.
         """
         compressed, stats = self._interceptor.intercept_text(result_text)
-        return compressed, {
+        stats_dict = {
             "original_chars": stats.original_chars,
             "compressed_chars": stats.compressed_chars,
             "tokens_saved_estimate": stats.tokens_saved_estimate,
+            "savings_pct": stats.savings_pct,
             "pipeline_stages": stats.pipeline_stages,
         }
+        self.metrics.record(tool_name, stats_dict)
+        return compressed, stats_dict
 
     # ------------------------------------------------------------------
     # Meta-tool dispatch

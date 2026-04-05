@@ -26,6 +26,23 @@ class InterceptionStats:
     tokens_saved_estimate: int
     pipeline_stages: list[str] = field(default_factory=list)
 
+    @property
+    def savings_pct(self) -> float:
+        """Percentage of characters saved (0.0–100.0)."""
+        if self.original_chars == 0:
+            return 0.0
+        return round((1 - self.compressed_chars / self.original_chars) * 100, 1)
+
+    @property
+    def original_tokens_estimate(self) -> int:
+        """Rough token count for the original text (1 token ≈ 4 chars)."""
+        return self.original_chars // 4
+
+    @property
+    def compressed_tokens_estimate(self) -> int:
+        """Rough token count for the compressed text (1 token ≈ 4 chars)."""
+        return self.compressed_chars // 4
+
 
 class ResponseInterceptor:
     """Compresses MCP tool responses through the Token Saver pipeline.

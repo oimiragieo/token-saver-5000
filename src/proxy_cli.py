@@ -30,6 +30,9 @@ def main() -> int:
         "--no-meta-tokens", action="store_true", help="Disable lossless meta-token compression"
     )
     parser.add_argument("--dry-run", action="store_true", help="Print config and exit")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Log per-call compression stats to stderr"
+    )
 
     args = parser.parse_args()
 
@@ -67,10 +70,9 @@ def main() -> int:
         from src.savings_tracker import SavingsTracker
 
         tracker = SavingsTracker(session_id="proxy", model=args.provider or "default")
-        total_calls = 0
+        verbose = args.verbose
 
         async def run_proxy():
-            nonlocal total_calls
             server_params = StdioServerParameters(
                 command=config.upstream_command,
                 args=config.upstream_args,
@@ -105,7 +107,6 @@ def main() -> int:
 
                     @mcp_server.call_tool()
                     async def handle_call_tool(name: str, arguments: dict | None):
-                        nonlocal total_calls
                         arguments = arguments or {}
                         meta_result = proxy.handle_meta_tool_call(name, arguments)
                         if meta_result:
@@ -120,7 +121,7 @@ def main() -> int:
                         for item in result.content:
                             if hasattr(item, "text") and item.text:
                                 compressed_text, stats = proxy.process_tool_result(name, item.text)
-                                orig_tokens = (
+                                orig_tokens = stats.get("original_tokens_estimate") or (
                                     stats.get("tokens_saved_estimate", 0)
                                     + len(compressed_text) // 4
                                 )
@@ -131,12 +132,20 @@ def main() -> int:
                                         original_tokens=orig_tokens,
                                         compressed_tokens=comp_tokens,
                                     )
+                                if verbose:
+                                    pct = stats.get("savings_pct", 0)
+                                    saved = stats.get("tokens_saved_estimate", 0)
+                                    stages = ",".join(stats.get("pipeline_stages", []))
+                                    print(
+                                        f"[proxy] {name}: {saved} tokens saved "
+                                        f"({pct:.0f}%) [{stages or 'passthrough'}]",
+                                        file=sys.stderr,
+                                    )
                                 compressed_content.append(
                                     TextContent(type="text", text=compressed_text)
                                 )
                             else:
                                 compressed_content.append(item)
-                        total_calls += 1
                         return compressed_content
 
                     async with stdio_server() as (srv_read, srv_write):
@@ -152,14 +161,27 @@ def main() -> int:
         print(f"Proxy error: {e}", file=sys.stderr)
         return 1
     finally:
-        if "tracker" in dir() and total_calls > 0:
+        if "tracker" in dir() and "proxy" in dir() and proxy.metrics.total_calls > 0:
             report = tracker.get_report()
+            m = proxy.metrics
             print(
-                f"\nProxy session: {total_calls} calls, "
-                f"{report.total_tokens_saved:,} tokens saved, "
-                f"${report.total_dollars_saved:.4f} saved",
+                f"\n--- Proxy Session Summary ---\n"
+                f"  Calls:         {m.total_calls}\n"
+                f"  Tokens saved:  {m.total_tokens_saved:,}\n"
+                f"  Compression:   {m.savings_pct:.0f}% average\n"
+                f"  Cost saved:    ${report.total_dollars_saved:.4f}",
                 file=sys.stderr,
             )
+            if m.by_tool:
+                print("  By tool:", file=sys.stderr)
+                for tool, info in sorted(
+                    m.by_tool.items(), key=lambda x: x[1]["tokens_saved"], reverse=True
+                ):
+                    print(
+                        f"    {tool}: {info['calls']} calls, "
+                        f"{info['tokens_saved']:,} tokens saved",
+                        file=sys.stderr,
+                    )
     return 0
 
 
