@@ -3076,6 +3076,43 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 },
             },
         ),
+        # === DISCOVER SAVINGS (v0.16.0) ===
+        Tool(
+            name="discover_savings",
+            description=(
+                "Discover missed token savings opportunities. "
+                "Scans a directory or list of text items to estimate what could be compressed. "
+                "Returns ranked opportunities with estimated savings per file. "
+                "Use before ingesting content to prioritize which files benefit most."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory path to scan for compressible files",
+                    },
+                    "items": {
+                        "type": "array",
+                        "description": "List of text items to analyze",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "label": {"type": "string"},
+                                "file_ext": {"type": "string"},
+                            },
+                            "required": ["text"],
+                        },
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "description": "Max files to scan in directory mode (default 500)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3267,6 +3304,8 @@ async def route_tool_call(
         "get_original_output": toh.handle_get_original_output,
         "list_tee_entries": toh.handle_list_tee_entries,
         "tee_store_stats": toh.handle_tee_store_stats,
+        # Discover Savings (v0.16.0)
+        "discover_savings": toh.handle_discover_savings,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

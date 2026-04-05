@@ -557,3 +557,46 @@ async def handle_tee_store_stats(context: Dict[str, Any], args: Dict[str, Any]) 
     session_id = args.get("session_id", "default")
     store = _get_tee_store(session_id)
     return json.dumps({"status": "success", **store.stats()})
+
+
+async def handle_discover_savings(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle discover_savings tool call.
+
+    Analyzes files or text items to discover compression opportunities.
+    Accepts either a directory path or a list of text items.
+    """
+    from ..savings_discover import ContextAnalyzer, format_report
+
+    analyzer = ContextAnalyzer()
+
+    directory = args.get("directory")
+    items = args.get("items")
+
+    if directory:
+        # Validate path through PathValidator if available
+        path_validator = context.get("path_validator")
+        if path_validator:
+            try:
+                directory = path_validator.validate(directory)
+            except Exception as e:
+                return json.dumps({"status": "error", "error": str(e)})
+
+        max_files = args.get("max_files", 500)
+        report = analyzer.scan_directory(directory, max_files=max_files)
+    elif items:
+        report = analyzer.analyze_items(items)
+    else:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "Provide either 'directory' (path) or 'items' (list of text blobs)",
+            }
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "report": report.to_dict(),
+            "formatted": format_report(report),
+        }
+    )
