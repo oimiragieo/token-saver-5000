@@ -64,7 +64,13 @@ def main() -> int:
         from mcp.server.stdio import stdio_server
         from mcp.types import TextContent, Tool
 
+        from src.savings_tracker import SavingsTracker
+
+        tracker = SavingsTracker(session_id="proxy", model=args.provider or "default")
+        total_calls = 0
+
         async def run_proxy():
+            nonlocal total_calls
             server_params = StdioServerParameters(
                 command=config.upstream_command,
                 args=config.upstream_args,
@@ -99,6 +105,7 @@ def main() -> int:
 
                     @mcp_server.call_tool()
                     async def handle_call_tool(name: str, arguments: dict | None):
+                        nonlocal total_calls
                         arguments = arguments or {}
                         meta_result = proxy.handle_meta_tool_call(name, arguments)
                         if meta_result:
@@ -112,12 +119,24 @@ def main() -> int:
                         compressed_content = []
                         for item in result.content:
                             if hasattr(item, "text") and item.text:
-                                compressed_text, _stats = proxy.process_tool_result(name, item.text)
+                                compressed_text, stats = proxy.process_tool_result(name, item.text)
+                                orig_tokens = (
+                                    stats.get("tokens_saved_estimate", 0)
+                                    + len(compressed_text) // 4
+                                )
+                                comp_tokens = len(compressed_text) // 4
+                                if orig_tokens > comp_tokens:
+                                    tracker.record(
+                                        tool_name=name,
+                                        original_tokens=orig_tokens,
+                                        compressed_tokens=comp_tokens,
+                                    )
                                 compressed_content.append(
                                     TextContent(type="text", text=compressed_text)
                                 )
                             else:
                                 compressed_content.append(item)
+                        total_calls += 1
                         return compressed_content
 
                     async with stdio_server() as (srv_read, srv_write):
@@ -132,6 +151,15 @@ def main() -> int:
     except Exception as e:
         print(f"Proxy error: {e}", file=sys.stderr)
         return 1
+    finally:
+        if "tracker" in dir() and total_calls > 0:
+            report = tracker.get_report()
+            print(
+                f"\nProxy session: {total_calls} calls, "
+                f"{report.total_tokens_saved:,} tokens saved, "
+                f"${report.total_dollars_saved:.4f} saved",
+                file=sys.stderr,
+            )
     return 0
 
 

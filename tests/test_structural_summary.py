@@ -6,10 +6,13 @@ as the primary test fixture.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-import pytest
+from src.structural_summary import (
+    StructuralSummary,
+    generate_structural_summary,
+    _detect_language,
+)
 
 # Path to the benchmark corpus
 CORPUS_DIR = Path(__file__).parent.parent / "benchmarks" / "corpus" / "code"
@@ -23,17 +26,6 @@ def _auth_code() -> str:
 def _auth_path() -> str:
     return str(AUTH_PY)
 
-
-# ---------------------------------------------------------------------------
-# Import under test
-# ---------------------------------------------------------------------------
-from src.structural_summary import (
-    StructuralSummary,
-    generate_structural_summary,
-    _detect_language,
-    _summarize_python,
-    _summarize_generic,
-)
 
 # ---------------------------------------------------------------------------
 # Language detection

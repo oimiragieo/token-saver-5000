@@ -6,19 +6,23 @@ import argparse
 from pathlib import Path
 
 from .mcp_install import (
+    AGENT_CONFIGS,
     build_status_report,
     inspect_mcp_installation,
+    install_agent_config,
     install_mcp,
     install_portable_project_mcp,
     install_project_mcp,
     recommend_setup_target,
     resolve_project_root_for_cli,
+    uninstall_agent_config,
     uninstall_mcp,
     uninstall_project_mcp,
 )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    agent_names = [k for k in AGENT_CONFIGS.keys() if k not in ("claude-desktop", "claude-project")]
     parser = argparse.ArgumentParser(
         description="Guide Token Saver MCP setup and apply the recommended configuration."
     )
@@ -33,6 +37,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--portable-project",
         action="store_true",
         help="Write portable .claude/.mcp.json for the current workspace using ${workspaceFolder}.",
+    )
+    parser.add_argument(
+        "--agent",
+        choices=agent_names,
+        help=f"Install config for a specific agent: {', '.join(agent_names)}",
     )
     parser.add_argument(
         "--project-root",
@@ -103,6 +112,20 @@ def main() -> None:
     if args.uninstall_all:
         print(_remove_target("desktop", project_root))
         print(_remove_target("portable-project", project_root))
+        print("")
+        status = inspect_mcp_installation(project_root)
+        print(build_status_report(status, recommend_setup_target(project_root)))
+        return
+
+    if args.agent:
+        desc = AGENT_CONFIGS[args.agent]["description"]
+        if args.uninstall:
+            changed = uninstall_agent_config(args.agent, root=project_root)
+            msg = "Removed" if changed else "Did not find"
+            print(f"{msg} Token Saver config for {desc}.")
+        else:
+            path = install_agent_config(args.agent, root=project_root)
+            print(f"Installed Token Saver config for {desc} at: {path}")
         print("")
         status = inspect_mcp_installation(project_root)
         print(build_status_report(status, recommend_setup_target(project_root)))

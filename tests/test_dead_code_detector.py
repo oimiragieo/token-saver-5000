@@ -10,13 +10,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
-
-CORPUS_DIR = Path(__file__).parent.parent / "benchmarks" / "corpus" / "code"
-
-# ---------------------------------------------------------------------------
-# Import under test
-# ---------------------------------------------------------------------------
 from src.dead_code_detector import (
     DeadCodeReport,
     detect_dead_files,
@@ -25,6 +18,8 @@ from src.dead_code_detector import (
     _is_never_dead,
     DEFAULT_ENTRY_PATTERNS,
 )
+
+CORPUS_DIR = Path(__file__).parent.parent / "benchmarks" / "corpus" / "code"
 
 # ---------------------------------------------------------------------------
 # Unit helpers

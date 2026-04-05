@@ -13,6 +13,50 @@ from typing import Any
 SERVER_KEY = "token-saver"
 WORKSPACE_FOLDER_VAR = "${workspaceFolder}"
 
+# Agent config file locations (relative to project root unless noted)
+AGENT_CONFIGS: dict[str, dict[str, Any]] = {
+    "claude-desktop": {
+        "description": "Claude Desktop (global)",
+        "format": "mcp_json",
+        "detect": "detect_claude_config_path",
+    },
+    "claude-project": {
+        "description": "Claude Code (project-scoped)",
+        "format": "mcp_json",
+        "path_relative": ".claude/.mcp.json",
+    },
+    "cursor": {
+        "description": "Cursor",
+        "format": "mcp_json",
+        "path_relative": ".cursor/mcp.json",
+    },
+    "windsurf": {
+        "description": "Windsurf",
+        "format": "mcp_json",
+        "path_relative": ".windsurf/mcp.json",
+    },
+    "cline": {
+        "description": "Cline / Roo Code",
+        "format": "mcp_json",
+        "path_relative": ".cline/mcp.json",
+    },
+    "vscode-copilot": {
+        "description": "VS Code Copilot",
+        "format": "mcp_json",
+        "path_relative": ".vscode/mcp.json",
+    },
+    "codex": {
+        "description": "Codex / Jules",
+        "format": "agents_md",
+        "path_relative": "AGENTS.md",
+    },
+    "gemini": {
+        "description": "Gemini CLI",
+        "format": "gemini_json",
+        "path_global": ".gemini/settings.json",
+    },
+}
+
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -256,8 +300,177 @@ def install_portable_project_mcp(config_path: Path | None = None, root: Path | N
     )
 
 
+def detect_agent_config_path(agent: str, root: Path | None = None) -> Path:
+    """Return the config file path for the given agent."""
+    project_root = (root or repo_root()).resolve()
+    cfg = AGENT_CONFIGS.get(agent)
+    if not cfg:
+        raise ValueError(f"Unknown agent: {agent}. Known: {', '.join(AGENT_CONFIGS.keys())}")
+    if agent == "claude-desktop":
+        return detect_claude_config_path()
+    if "path_relative" in cfg:
+        return project_root / cfg["path_relative"]
+    if "path_global" in cfg:
+        return Path.home() / cfg["path_global"]
+    raise ValueError(f"No path defined for agent: {agent}")
+
+
+def _build_agents_md_section(root: Path | None = None) -> str:
+    """Generate an AGENTS.md section for Codex/Jules."""
+    project_root = (root or repo_root()).resolve()
+    command, args = detect_server_command()
+    args_str = " ".join(args) if args else ""
+    return (
+        "\n## Token Saver MCP Server\n\n"
+        "This project uses Token Saver for semantic compression of AI context.\n\n"
+        f"- **Command:** `{command} {args_str}`\n"
+        f"- **Working directory:** `{project_root}`\n"
+        "- **Protocol:** MCP (stdio)\n\n"
+        "Key tools: `ingest_context`, `query_context`, `compress_text`, "
+        "`filter_cli_output`, `get_savings_report`\n"
+    )
+
+
+def _build_gemini_config(root: Path | None = None) -> dict[str, Any]:
+    """Generate Gemini CLI settings.json mcpServers block."""
+    server_config = build_server_config(root)
+    return {"mcpServers": {SERVER_KEY: server_config}}
+
+
+def install_agent_config(
+    agent: str,
+    root: Path | None = None,
+    config_path: Path | None = None,
+    portable: bool = False,
+) -> Path:
+    """Install Token Saver MCP config for the specified agent.
+
+    For MCP-JSON agents (Cursor, Windsurf, Cline, VS Code Copilot, Gemini):
+      Merges server config into the agent's JSON config file.
+    For AGENTS.md agents (Codex):
+      Appends a section to the project's AGENTS.md file.
+    """
+    project_root = (root or repo_root()).resolve()
+    cfg = AGENT_CONFIGS.get(agent)
+    if not cfg:
+        raise ValueError(f"Unknown agent: {agent}. Known: {', '.join(AGENT_CONFIGS.keys())}")
+
+    target_path = config_path or detect_agent_config_path(agent, project_root)
+
+    fmt = cfg["format"]
+    if fmt == "mcp_json":
+        return write_merged_mcp_config(target_path, project_root, portable=portable)
+
+    if fmt == "gemini_json":
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = load_existing_config(target_path)
+        mcp_block = existing.get("mcpServers", {})
+        mcp_block[SERVER_KEY] = build_server_config(project_root)
+        existing["mcpServers"] = mcp_block
+        target_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        return target_path
+
+    if fmt == "agents_md":
+        section = _build_agents_md_section(project_root)
+        marker = "## Token Saver MCP Server"
+        if target_path.exists():
+            content = target_path.read_text(encoding="utf-8")
+            if marker in content:
+                # Replace existing section
+                before = content.split(marker)[0].rstrip()
+                remaining = content.split(marker, 1)[1]
+                after_parts = remaining.split("\n## ", 1)
+                after = ("\n## " + after_parts[1]) if len(after_parts) > 1 else ""
+                content = before + section + after
+            else:
+                content = content.rstrip() + "\n" + section
+        else:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            content = f"# AI Agent Instructions\n{section}"
+        target_path.write_text(content, encoding="utf-8")
+        return target_path
+
+    raise ValueError(f"Unsupported format: {fmt}")
+
+
+def uninstall_agent_config(
+    agent: str,
+    root: Path | None = None,
+    config_path: Path | None = None,
+) -> bool:
+    """Remove Token Saver config from the specified agent."""
+    project_root = (root or repo_root()).resolve()
+    cfg = AGENT_CONFIGS.get(agent)
+    if not cfg:
+        raise ValueError(f"Unknown agent: {agent}")
+
+    target_path = config_path or detect_agent_config_path(agent, project_root)
+
+    fmt = cfg["format"]
+    if fmt in ("mcp_json", "gemini_json"):
+        if not target_path.exists():
+            return False
+        return remove_mcp_server_from_file(target_path, SERVER_KEY)
+
+    if fmt == "agents_md":
+        if not target_path.exists():
+            return False
+        content = target_path.read_text(encoding="utf-8")
+        marker = "## Token Saver MCP Server"
+        if marker not in content:
+            return False
+        before = content.split(marker)[0].rstrip()
+        remaining = content.split(marker, 1)[1]
+        after_parts = remaining.split("\n## ", 1)
+        after = ("\n## " + after_parts[1]) if len(after_parts) > 1 else ""
+        target_path.write_text((before + after).strip() + "\n", encoding="utf-8")
+        return True
+
+    return False
+
+
+def inspect_all_agents(root: Path | None = None) -> dict[str, dict[str, Any]]:
+    """Check installation status for all known agents."""
+    project_root = (root or repo_root()).resolve()
+    results: dict[str, dict[str, Any]] = {}
+    for agent, cfg in AGENT_CONFIGS.items():
+        try:
+            path = detect_agent_config_path(agent, project_root)
+            exists = path.exists()
+            configured = False
+            if exists:
+                fmt = cfg["format"]
+                if fmt in ("mcp_json", "gemini_json"):
+                    data = load_existing_config(path)
+                    configured = SERVER_KEY in data.get("mcpServers", {})
+                elif fmt == "agents_md":
+                    content = path.read_text(encoding="utf-8")
+                    configured = "## Token Saver MCP Server" in content
+            results[agent] = {
+                "description": cfg["description"],
+                "path": str(path),
+                "exists": exists,
+                "configured": configured,
+            }
+        except Exception as exc:
+            results[agent] = {
+                "description": cfg["description"],
+                "path": "unknown",
+                "exists": False,
+                "configured": False,
+                "error": str(exc),
+            }
+    return results
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
+    agent_names = [k for k in AGENT_CONFIGS.keys() if k not in ("claude-desktop", "claude-project")]
     parser = argparse.ArgumentParser(description="Install or print Token Saver MCP configuration.")
+    parser.add_argument(
+        "--agent",
+        choices=agent_names,
+        help=f"Install config for a specific agent: {', '.join(agent_names)}",
+    )
     parser.add_argument(
         "--project-config",
         action="store_true",
@@ -284,6 +497,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Print MCP installation status for command, desktop config, and project config.",
     )
     parser.add_argument(
+        "--doctor-all",
+        action="store_true",
+        help="Print MCP installation status for ALL known agents.",
+    )
+    parser.add_argument(
         "--human",
         action="store_true",
         help="Print doctor output as a human-readable summary instead of JSON.",
@@ -306,10 +524,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_all_agents_report(status: dict[str, dict[str, Any]]) -> str:
+    """Format multi-agent doctor report as human-readable text."""
+    lines = ["Token Saver — Agent Configuration Status", "=" * 45]
+    for agent, info in status.items():
+        check = "✓" if info["configured"] else "✗"
+        lines.append(f"  [{check}] {info['description']:<25} {info['path']}")
+    configured = sum(1 for v in status.values() if v["configured"])
+    lines.append(f"\n{configured}/{len(status)} agents configured.")
+    return "\n".join(lines)
+
+
 def main() -> None:
     args = build_arg_parser().parse_args()
     if args.print_config:
         print(json.dumps(render_mcp_config(args.project_root, args.server_key), indent=2))
+        return
+
+    if args.doctor_all:
+        project_root = resolve_project_root_for_cli(args.project_root)
+        status = inspect_all_agents(project_root)
+        if args.human:
+            print(_format_all_agents_report(status))
+        else:
+            print(json.dumps(status, indent=2))
         return
 
     if args.doctor:
@@ -319,6 +557,19 @@ def main() -> None:
             print(build_status_report(status, recommend_setup_target(project_root)))
         else:
             print(json.dumps(status, indent=2))
+        return
+
+    if args.agent:
+        project_root = resolve_project_root_for_cli(args.project_root)
+        if args.uninstall:
+            changed = uninstall_agent_config(args.agent, root=project_root)
+            msg = "Removed" if changed else "Did not find"
+            desc = AGENT_CONFIGS[args.agent]["description"]
+            print(f"{msg} Token Saver config for {desc}.")
+        else:
+            path = install_agent_config(args.agent, root=project_root)
+            desc = AGENT_CONFIGS[args.agent]["description"]
+            print(f"Installed Token Saver config for {desc} at: {path}")
         return
 
     if args.project_config:

@@ -30,6 +30,7 @@ token-saver-mcp = "src.server:main"
 token-saver-install-mcp = "src.mcp_install:main"
 token-saver-setup = "src.setup_cli:main"
 token-saver-proxy = "src.proxy_cli:main"
+token-saver-stats = "src.savings_dashboard:main"
 
 [project.optional-dependencies]
 # chromadb is optional: server gracefully falls back to JSON persistence when absent.
