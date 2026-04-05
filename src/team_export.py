@@ -193,9 +193,9 @@ class TeamExporter:
             "# TYPE gotcontext_member_tokens_saved counter",
         ]
         for member in report.members:
+            safe_id = member.user_id.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "")
             lines.append(
-                f'gotcontext_member_tokens_saved{{user_id="{member.user_id}"}} '
-                f"{member.tokens_saved}"
+                f'gotcontext_member_tokens_saved{{user_id="{safe_id}"}} ' f"{member.tokens_saved}"
             )
         lines.append("")
         return "\n".join(lines)

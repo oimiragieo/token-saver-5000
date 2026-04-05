@@ -72,13 +72,19 @@ class FilterRule:
 
         # Stage 2: strip lines matching patterns
         if self.strip_lines_matching:
-            compiled = [re.compile(p) for p in self.strip_lines_matching]
-            lines = [line for line in lines if not any(r.search(line) for r in compiled)]
+            try:
+                compiled = [re.compile(p) for p in self.strip_lines_matching]
+                lines = [line for line in lines if not any(r.search(line) for r in compiled)]
+            except re.error:
+                pass  # skip stage on invalid regex
 
         # Stage 3: keep only lines matching patterns
         if self.keep_lines_matching:
-            compiled = [re.compile(p) for p in self.keep_lines_matching]
-            lines = [line for line in lines if any(r.search(line) for r in compiled)]
+            try:
+                compiled = [re.compile(p) for p in self.keep_lines_matching]
+                lines = [line for line in lines if any(r.search(line) for r in compiled)]
+            except re.error:
+                pass  # skip stage on invalid regex
 
         # Stage 4: truncate lines
         if self.truncate_lines_at > 0:

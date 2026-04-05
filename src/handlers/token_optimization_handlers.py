@@ -623,7 +623,7 @@ async def handle_calculate_roi(context: Dict[str, Any], args: Dict[str, Any]) ->
     compression_ratio = args.get("compression_ratio", _DEFAULT_COMPRESSION_RATIO)
 
     rates = get_model_rates(model)
-    input_rate = rates["input"]  # per million tokens
+    input_rate = rates.get("input", 0)  # per million tokens
 
     # Monthly calculations (22 working days)
     working_days = 22
@@ -716,6 +716,8 @@ async def handle_export_team_data(context: Dict[str, Any], args: Dict[str, Any])
     # Accept member stats from args
     members = args.get("members", [])
     for m in members:
+        if not isinstance(m, dict):
+            continue
         exporter.add_member_stats(
             user_id=m.get("user_id", "unknown"),
             sessions=m.get("sessions", 0),

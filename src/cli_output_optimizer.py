@@ -113,6 +113,19 @@ class CLIOutputOptimizer:
 
     def __init__(self, tee_store: Optional[object] = None):
         self._tee_store = tee_store
+        self._rule_engine = self._load_rule_engine()
+
+    @staticmethod
+    def _load_rule_engine() -> Optional[object]:
+        """Load user-defined filter rules from .gotcontext.toml (if present)."""
+        try:
+            from .filter_rules import FilterRuleEngine
+
+            engine = FilterRuleEngine()
+            engine.load_rules()
+            return engine if engine.rules else None
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------
     # Public API
@@ -199,6 +212,13 @@ class CLIOutputOptimizer:
         else:
             filtered_text = working_text
             applied = "passthrough"
+
+        # --- Apply user-defined TOML filter rules (post-filter) ---
+        if self._rule_engine and command_type:
+            rule_result = self._rule_engine.apply(filtered_text, command_type)
+            if rule_result is not None and rule_result != filtered_text:
+                filtered_text = rule_result
+                applied = f"{applied}+user_rules"
 
         filtered_lines = len(filtered_text.splitlines())
         result = FilterResult(
