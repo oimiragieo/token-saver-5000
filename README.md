@@ -413,6 +413,109 @@ advise_cache_strategy(model_id="groq-llama-4-scout")
 
 Supports: Anthropic, OpenAI, Google Gemini, Groq, XAI (Grok), Azure, Bedrock, local/Ollama.
 
+## Multi-Agent Setup (NEW)
+
+Install Token Saver for any AI coding agent with a single command:
+
+```bash
+token-saver-setup --auto                    # Auto-detect your environment
+token-saver-install-mcp --agent cursor      # Cursor
+token-saver-install-mcp --agent windsurf    # Windsurf
+token-saver-install-mcp --agent cline       # Cline / Roo Code
+token-saver-install-mcp --agent codex       # OpenAI Codex CLI
+token-saver-install-mcp --agent gemini      # Gemini CLI
+token-saver-install-mcp --agent copilot     # VS Code Copilot
+token-saver-install-mcp --doctor-all        # Check all agent configs
+```
+
+8 agents supported: Claude Desktop, Claude Code (project), Cursor, Windsurf, Cline, VS Code Copilot, Codex, and Gemini CLI.
+
+## Savings Dashboard (NEW)
+
+Track your token savings across sessions:
+
+```bash
+token-saver-stats                  # All-time summary
+token-saver-stats --daily          # Day-by-day breakdown
+token-saver-stats --weekly         # Weekly summary
+token-saver-stats --by-tool        # Per-tool breakdown
+token-saver-stats --cost           # Cost savings with model pricing
+token-saver-stats --json           # Machine-readable output
+token-saver-stats --csv            # Spreadsheet export
+```
+
+## ROI Calculator (NEW)
+
+Calculate your return on investment via the `calculate_roi` MCP tool:
+
+```
+Input:  model=claude-opus-4-6, tokens_per_day=500000, team_size=10
+Output:
+  Without gotcontext: $1,650.00/mo
+  With gotcontext:      $247.50/mo (85% savings)
+  Pro plan cost:        $290.00/mo ($29/user × 10 users)
+  Net savings:        $1,112.50/mo (5.7x ROI)
+```
+
+Supports 20+ models with real pricing data.
+
+## Token Budget Monitoring (NEW)
+
+Set per-session, daily, or monthly token budgets via `check_budget` MCP tool or environment variables:
+
+```bash
+TOKEN_BUDGET_SESSION=500000 TOKEN_BUDGET_DAILY=2000000 token-saver-mcp
+```
+
+Returns usage status, alert levels (ok/info/warning/critical), and projected usage.
+
+## Team Dashboard Export (NEW)
+
+Export aggregated team savings data via `export_team_data` MCP tool:
+
+1. **JSON**: For API consumption and custom dashboards.
+2. **CSV**: For spreadsheet analysis.
+3. **Prometheus**: For Grafana/Datadog monitoring.
+
+## Tee/Recovery System (NEW)
+
+When compression drops information, the original is saved for recovery:
+
+```bash
+TEE_MODE=failures token-saver-mcp    # Tee on high compression (default)
+TEE_MODE=always token-saver-mcp      # Tee everything
+```
+
+MCP tools: `get_original_output`, `list_tee_entries`, `tee_store_stats`.
+
+## Custom Filter Rules (NEW)
+
+Define project-specific output filtering rules in `.gotcontext.toml`:
+
+```toml
+[filters.my_build_output]
+match_command = "my-build-tool"
+strip_ansi = true
+strip_lines_matching = ["^Progress:", "^\\s*$"]
+keep_lines_matching = ["^ERROR", "^WARNING"]
+head_lines = 50
+tail_lines = 20
+max_lines = 100
+```
+
+Supports 8-stage pipeline, inline tests, project + user-global precedence.
+
+## Missed Savings Discovery (NEW)
+
+The `discover_savings` MCP tool scans directories to find files that would benefit from compression:
+
+```
+discover_savings(directory="/path/to/project")
+→ README.md: ~2,400 tokens → ~300 compressed (87% savings)
+→ src/main.py: ~800 tokens → ~200 compressed (75% savings)
+→ Total opportunity: ~12,000 tokens saveable
+```
+
 ## Research-Backed Compression Techniques
 
 Token Saver integrates techniques from recent AI research papers:

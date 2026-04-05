@@ -18,8 +18,8 @@ pip install -r requirements.txt && pip install -e .
 # Run MCP server
 python -m src.server            # or: token-saver-mcp
 
-# Full test suite (skips performance tests)
-python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py
+# Full test suite (skips performance + mcp routing)
+python -m pytest tests/ -q --no-cov --ignore=tests/test_performance.py --ignore=tests/test_mcp_routing.py
 
 # Single test file
 pytest tests/test_functional.py -v
@@ -61,7 +61,7 @@ MCP Client → stdio → Server (src/server.py)
 ### Key Layers
 
 - **Server bootstrap** (`src/server.py` → `src/semantic_modulator/app/`): `ServerFactoryService` wires compressor, detectors, persistence, etc. Server uses async context manager for lifespan.
-- **Tool routing** (`src/handlers/mcp_core.py`): `setup_mcp_tools()` returns tool schemas; `route_tool_call()` dispatches by name to handler modules. Tool profiles: `"full"` (all ~112 tools) or `"core_stable"` (7 essential), via `MCP_TOOL_PROFILE` env var.
+- **Tool routing** (`src/handlers/mcp_core.py`): `setup_mcp_tools()` returns tool schemas; `route_tool_call()` dispatches by name to handler modules. Tool profiles: `"full"` (all ~121 tools) or `"core_stable"` (7 essential), via `MCP_TOOL_PROFILE` env var.
 - **Handler modules** (`src/handlers/`): 19 files, each handling a category (compression, AFM, ACE, file sync, visualization, etc.). All async, receive `HandlerContext` dict, return JSON-serializable dicts.
 - **Core compression** (`src/semantic_compressor.py`, `src/code_compressor.py`): `CodeCompressionAdapter` routes files to text vs code compressor by extension. Code compressor uses AST-aware chunking by functions/classes.
 - **Embeddings** (`src/embeddings.py`, `src/embeddings_onnx.py`, `src/embeddings_tfidf.py`): 3-tier fallback: SBERT (best quality) → ONNX (60-70% less memory) → TF-IDF (98% less memory). Singleton `EmbeddingManager` with LRU cache.

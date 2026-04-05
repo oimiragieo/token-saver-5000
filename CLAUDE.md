@@ -20,7 +20,8 @@ pip install -r requirements.txt && pip install -e .
 python -m src.server            # or: token-saver-mcp
 
 # Tests
-pytest tests/ -v                          # all tests (1171+, ~73% coverage)
+pytest tests/ -v                          # all tests (3400+)
+pytest tests/ -q --no-cov --ignore=tests/test_performance.py --ignore=tests/test_mcp_routing.py  # fast suite
 pytest tests/test_functional.py -v        # single file
 pytest tests/ -k "test_name"              # single test by name
 pytest tests/ --cov=src --cov-report=term # with coverage report
@@ -63,12 +64,35 @@ MCP Client → stdio → Server (src/server.py)
 **Handler modules** (`src/handlers/`):
 - Each module handles a category: compression, AFM (dialogue memory), ACE (context engineering), file sync, visualization, detection, experimental, etc.
 - All handlers are async, receive `HandlerContext` dict, return JSON-serializable dicts
-- 19 handler files, ~112 MCP tools total
+- 19 handler files, ~121 MCP tools total
 
 **Core compression** (`src/semantic_compressor.py`, `src/code_compressor.py`):
 - `SemanticCompressor`: text chunking → embedding → graph construction → PageRank → skeleton
 - `CodeSemanticCompressor`: AST-aware code compression (preserves structure)
 - `CodeCompressionAdapter`: routes files to text vs code compressor based on extension
+
+**CLI Output Optimizer** (`src/cli_output_optimizer.py`):
+- 11 command-specific filtering strategies (git_diff, test_output, lint_output, docker_output, etc.)
+- Auto-detection of command type from output content
+- Optional RTK binary fallback for additional coverage
+
+**Token Economy** (`src/savings_tracker.py`, `src/savings_dashboard.py`, `src/budget_monitor.py`, `src/team_export.py`):
+- `SavingsTracker`: per-session token/cost tracking with persistence
+- `SavingsDashboard`: cross-session aggregation CLI (`token-saver-stats`)
+- `TokenBudgetMonitor`: configurable per-session/daily/monthly budget limits
+- `TeamExporter`: JSON/CSV/Prometheus team data export
+
+**Filter Rules** (`src/filter_rules.py`):
+- User-defined output filtering via `.gotcontext.toml` TOML DSL
+- 8-stage pipeline with inline tests
+
+**Tee/Recovery** (`src/tee_recovery.py`):
+- Original content preservation before compression
+- LRU-evicting store with 3 modes (failures/always/never)
+
+**Missed Savings Discovery** (`src/savings_discover.py`):
+- Directory scanning for compression opportunities
+- Per-extension compression ratio estimates
 
 **Embeddings** (`src/embeddings.py`, `src/embeddings_onnx.py`, `src/embeddings_tfidf.py`):
 - 3-tier fallback: SBERT (best quality) → ONNX (60-70% less memory) → TF-IDF (98% less memory)
