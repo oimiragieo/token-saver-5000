@@ -480,3 +480,80 @@ async def handle_get_savings_inline(context: Dict[str, Any], args: Dict[str, Any
         summary += f" | {report.roi_vs_pro_plan}x ROI vs Pro plan"
 
     return json.dumps({"status": "success", "summary": summary})
+
+
+# Module-level tee store cache (keyed by session_id)
+_tee_stores: dict[str, Any] = {}
+
+
+def _get_tee_store(session_id: str = "default") -> Any:
+    """Return the TeeStore for *session_id*, creating it on first access."""
+    from ..tee_recovery import create_tee_store
+
+    if session_id not in _tee_stores:
+        _tee_stores[session_id] = create_tee_store(persist=True)
+    return _tee_stores[session_id]
+
+
+async def handle_get_original_output(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle get_original_output tool call.
+
+    Retrieves the original (pre-compression) content for a tee entry ID.
+    """
+    entry_id = args.get("entry_id", "")
+    if not entry_id:
+        return json.dumps({"status": "error", "error": "entry_id is required"})
+
+    session_id = args.get("session_id", "default")
+    store = _get_tee_store(session_id)
+    entry = store.get(entry_id)
+    if entry is None:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": f"No tee entry found with id '{entry_id}'",
+            }
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "entry_id": entry.entry_id,
+            "original_text": entry.original_text,
+            "source": entry.source,
+            "command_hint": entry.command_hint,
+            "compression_pct": round(entry.compression_pct, 1),
+            "timestamp": entry.timestamp,
+        }
+    )
+
+
+async def handle_list_tee_entries(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle list_tee_entries tool call.
+
+    Lists recent tee entries with metadata (no full text).
+    """
+    session_id = args.get("session_id", "default")
+    limit = args.get("limit", 20)
+    source = args.get("source")
+
+    store = _get_tee_store(session_id)
+    entries = store.list_entries(limit=limit, source=source)
+
+    return json.dumps(
+        {
+            "status": "success",
+            "entries": entries,
+            "stats": store.stats(),
+        }
+    )
+
+
+async def handle_tee_store_stats(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle tee_store_stats tool call.
+
+    Returns tee store statistics.
+    """
+    session_id = args.get("session_id", "default")
+    store = _get_tee_store(session_id)
+    return json.dumps({"status": "success", **store.stats()})

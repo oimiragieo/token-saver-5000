@@ -3021,6 +3021,61 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["directory"],
             },
         ),
+        # === TEE/RECOVERY (v0.16.0) ===
+        Tool(
+            name="get_original_output",
+            description=(
+                "Retrieve the original (pre-compression) content for a tee entry. "
+                "When compression is aggressive (>80%), the original is automatically saved. "
+                "Use this to recover full output when the compressed version lost important details."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entry_id": {
+                        "type": "string",
+                        "description": "Tee entry ID (returned in compressed output metadata)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["entry_id"],
+            },
+        ),
+        Tool(
+            name="list_tee_entries",
+            description=(
+                "List recent tee entries with metadata. "
+                "Shows what original content has been preserved for recovery. "
+                "Filter by source (cli_optimizer, proxy, compression)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max entries to return (default 20)",
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Filter by source: cli_optimizer, proxy, compression",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="tee_store_stats",
+            description=(
+                "Get tee store statistics: entry count, total size, mode, thresholds. "
+                "Use to monitor tee storage usage."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
     ]
     # Sort tools alphabetically for prompt cache stability (v0.11.0).
     # Claude Code and other MCP clients cache the prompt prefix including tool
@@ -3208,6 +3263,10 @@ async def route_tool_call(
         # Structural Summary + Dead Code Detector (v0.15.0)
         "generate_structural_summary": toh.handle_generate_structural_summary,
         "detect_dead_code": toh.handle_detect_dead_code,
+        # Tee/Recovery (v0.16.0)
+        "get_original_output": toh.handle_get_original_output,
+        "list_tee_entries": toh.handle_list_tee_entries,
+        "tee_store_stats": toh.handle_tee_store_stats,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

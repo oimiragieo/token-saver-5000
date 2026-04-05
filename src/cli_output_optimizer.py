@@ -61,6 +61,7 @@ class FilterResult:
     command_detected: str
     strategy_applied: str
     compression_pct: float = field(init=False)
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.original_lines > 0:
@@ -109,6 +110,9 @@ class CLIOutputOptimizer:
         print(result.filtered_text)
         print(f"{result.compression_pct:.1f}% compression")
     """
+
+    def __init__(self, tee_store: Optional[object] = None):
+        self._tee_store = tee_store
 
     # ------------------------------------------------------------------
     # Public API
@@ -197,7 +201,7 @@ class CLIOutputOptimizer:
             applied = "passthrough"
 
         filtered_lines = len(filtered_text.splitlines())
-        return FilterResult(
+        result = FilterResult(
             original_text=text,
             filtered_text=filtered_text,
             original_lines=original_lines,
@@ -205,6 +209,20 @@ class CLIOutputOptimizer:
             command_detected=command_type,
             strategy_applied=applied,
         )
+
+        # Tee original if compression is significant
+        if self._tee_store and result.compression_pct > 0:
+            tee_id = self._tee_store.store(
+                original_text=text,
+                compressed_text=filtered_text,
+                compression_pct=result.compression_pct,
+                source="cli_optimizer",
+                command_hint=command_type,
+            )
+            if tee_id:
+                result.metadata["tee_id"] = tee_id
+
+        return result
 
     def detect_command(self, text: str) -> str:
         """Detect the type of CLI output from its content.
