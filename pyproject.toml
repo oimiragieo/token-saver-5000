@@ -6,7 +6,7 @@ authors = [{name = "Token Saver Team"}]
 readme = "README.md"
 # Python 3.13+ breaks chromadb (pydantic-settings conflict) and has numpy>=2.0 incompatibility.
 # Upper bound enforces the supported range stated in CLAUDE.md.
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 dependencies = [
     "mcp>=0.9.0",
     "sentence-transformers>=3.1.0",  # Security: Fixes CVE-2024-11392/11393/11394
@@ -26,6 +26,12 @@ dependencies = [
 ]
 
 [project.scripts]
+# Primary gotcontext entry points (for gotcontext.ai branding)
+gotcontext-mcp = "src.server:main"
+gotcontext-setup = "src.setup_cli:main"
+gotcontext-stats = "src.savings_dashboard:main"
+gotcontext-proxy = "src.proxy_cli:main"
+# Legacy token-saver entry points (backward compatible)
 token-saver-mcp = "src.server:main"
 token-saver-install-mcp = "src.mcp_install:main"
 token-saver-setup = "src.setup_cli:main"
