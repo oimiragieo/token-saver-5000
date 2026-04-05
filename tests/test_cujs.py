@@ -325,16 +325,16 @@ def test_all_cujs_pass(full_baseline: CUJBaseline) -> None:
     )
 
 
-def test_baseline_has_six_journeys(full_baseline: CUJBaseline) -> None:
+def test_baseline_has_twelve_journeys(full_baseline: CUJBaseline) -> None:
     assert (
-        len(full_baseline.journeys) == 6
-    ), f"Expected 6 journeys, got {len(full_baseline.journeys)}"
+        len(full_baseline.journeys) == 12
+    ), f"Expected 12 journeys, got {len(full_baseline.journeys)}"
 
 
 def test_baseline_summary_populated(full_baseline: CUJBaseline) -> None:
     s = full_baseline.summary
-    assert s.get("total_journeys") == 6
-    assert s.get("passed") == 6
+    assert s.get("total_journeys") == 12
+    assert s.get("passed") == 12
     assert s.get("aggregate_input_tokens", 0) > 0
     assert s.get("aggregate_output_tokens", 0) > 0
     assert s.get("aggregate_savings_pct", 0) > 0
@@ -344,7 +344,7 @@ def test_baseline_output_json_serializable(full_baseline: CUJBaseline) -> None:
     raw = asdict(full_baseline)
     serialized = json.dumps(raw, default=str)
     recovered = json.loads(serialized)
-    assert recovered["summary"]["total_journeys"] == 6
+    assert recovered["summary"]["total_journeys"] == 12
 
 
 # ---------------------------------------------------------------------------

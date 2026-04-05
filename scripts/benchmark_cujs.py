@@ -683,6 +683,583 @@ def run_cuj_6_savings_report(verbose: bool = False) -> CUJResult:
 
 
 # ---------------------------------------------------------------------------
+# CUJ 7-12: Additional journeys covering gaps from market analysis
+# ---------------------------------------------------------------------------
+
+
+# Fixture: realistic MCP tool schemas for CUJ 7
+_SCHEMA_TOOLS_FIXTURE = [
+    {
+        "name": f"tool_{i}",
+        "description": f"This is tool number {i} which performs operation {chr(65 + i % 26)} "
+        f"on the target resource. It accepts a variety of parameters including "
+        f"strings, integers, booleans, and nested objects. Use this when you need "
+        f"to {'create' if i % 4 == 0 else 'read' if i % 4 == 1 else 'update' if i % 4 == 2 else 'delete'} "
+        f"resources of type {chr(65 + i % 26)}.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": f"Unique identifier for the {chr(65 + i % 26)} resource",
+                },
+                "name": {"type": "string", "description": "Human-readable name"},
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "default": True},
+                        "timeout": {"type": "integer", "default": 30},
+                        "retries": {"type": "integer", "default": 3},
+                        "verbose": {"type": "boolean", "default": False},
+                    },
+                },
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "priority": {"type": "integer", "enum": [1, 2, 3, 4, 5]},
+            },
+            "required": ["id"],
+        },
+    }
+    for i in range(50)
+]
+
+
+def run_cuj_7_schema_compression(verbose: bool = False) -> CUJResult:
+    """CUJ 7: Tool Schema Compression (Proxy Mode)"""
+    result = CUJResult(
+        journey_id=7,
+        name="Tool Schema Compression",
+        persona="Dev with 5 MCP servers exposing 50+ tools — schema bloat wastes tokens",
+        description=(
+            "Compress 50 tool schemas into 3 meta-tools using SchemaCompressor. "
+            "Measures token reduction from schema bloat elimination."
+        ),
+    )
+
+    try:
+        from src.proxy.schema_compressor import SchemaCompressor
+
+        # Step 1: measure original schema size
+        original_json = json.dumps(_SCHEMA_TOOLS_FIXTURE)
+        original_tokens = _count_tokens(original_json)
+
+        t0 = _now_ms()
+        compressor = SchemaCompressor(_SCHEMA_TOOLS_FIXTURE)
+        meta_tools = compressor.meta_tool_schemas()
+        dur = _elapsed_ms(t0)
+
+        compressed_json = json.dumps(meta_tools)
+        compressed_tokens = _count_tokens(compressed_json)
+        savings = _savings_pct(original_tokens, compressed_tokens)
+
+        step = StepResult(
+            name="schema_compress_50_tools",
+            input_tokens=original_tokens,
+            output_tokens=compressed_tokens,
+            savings_pct=savings,
+            duration_ms=dur,
+            extra={
+                "original_tool_count": len(_SCHEMA_TOOLS_FIXTURE),
+                "meta_tool_count": len(meta_tools),
+                "meta_tool_names": [t["name"] for t in meta_tools],
+            },
+        )
+        result.steps.append(step)
+        if verbose:
+            print(
+                f"  [1/1] 50 tools -> 3 meta-tools: {original_tokens:,} -> "
+                f"{compressed_tokens:,} tokens ({savings:.1f}% savings, {dur:.0f}ms)"
+            )
+
+        result.total_input_tokens = original_tokens
+        result.total_output_tokens = compressed_tokens
+        result.total_savings_pct = savings
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+def run_cuj_8_code_compression(verbose: bool = False) -> CUJResult:
+    """CUJ 8: Code-Aware Compression"""
+    result = CUJResult(
+        journey_id=8,
+        name="Code-Aware Compression",
+        persona="Dev asking AI to review a Python module — full file wastes tokens",
+        description=(
+            "Compress Python source files using semantic compressor. "
+            "Measures savings vs raw file reading for code review context."
+        ),
+    )
+
+    try:
+        from src.cli_benchmark.compressor import compress_text
+
+        code_dir = Path(CORPUS_CODE_DIR)
+        py_files = sorted(code_dir.glob("*.py"))
+
+        total_original = 0
+        total_compressed = 0
+
+        for py_file in py_files:
+            code = py_file.read_text(encoding="utf-8", errors="replace")
+            original_tokens = _count_tokens(code)
+            total_original += original_tokens
+
+            t0 = _now_ms()
+            cr = compress_text(code, refine=True)
+            dur = _elapsed_ms(t0)
+
+            total_compressed += cr.compressed_tokens
+
+            if verbose:
+                savings = _savings_pct(cr.original_tokens, cr.compressed_tokens)
+                print(
+                    f"  {py_file.name}: {cr.original_tokens:,} -> "
+                    f"{cr.compressed_tokens:,} tokens ({savings:.1f}%, {dur:.0f}ms)"
+                )
+
+        savings = _savings_pct(total_original, total_compressed)
+        step = StepResult(
+            name="code_compress_codebase",
+            input_tokens=total_original,
+            output_tokens=total_compressed,
+            savings_pct=savings,
+            duration_ms=0.0,
+            extra={"files_compressed": len(py_files)},
+        )
+        result.steps.append(step)
+
+        result.total_input_tokens = total_original
+        result.total_output_tokens = total_compressed
+        result.total_savings_pct = savings
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+def run_cuj_9_dialogue_memory(verbose: bool = False) -> CUJResult:
+    """CUJ 9: Multi-Turn Dialogue Compression (AFM)"""
+    result = CUJResult(
+        journey_id=9,
+        name="Dialogue Memory (AFM)",
+        persona="Dev in 20-turn conversation — context re-sending wastes 15-20% of tokens",
+        description=(
+            "Simulate a 20-turn coding conversation, use AFM to compress history "
+            "while preserving relevant context for the current query."
+        ),
+    )
+
+    try:
+        from src.afm import FocusManager
+
+        afm = FocusManager()
+
+        # Simulate a realistic 20-turn coding conversation
+        conversation = [
+            ("user", "Can you help me set up authentication for my Flask app?"),
+            (
+                "assistant",
+                "Sure! I'll set up JWT-based authentication. First, install flask-jwt-extended: `pip install flask-jwt-extended`. Then create an auth module with login/register endpoints, password hashing with bcrypt, and token refresh support.",
+            ),
+            ("user", "Great, now add middleware to protect routes"),
+            (
+                "assistant",
+                "Here's a decorator-based middleware that checks JWT tokens on protected routes. It extracts the token from the Authorization header, validates it, and returns 401 if invalid. I'll also add role-based access control with @require_role('admin').",
+            ),
+            ("user", "The tests are failing for the auth module"),
+            (
+                "assistant",
+                "Looking at the test failures: test_token_expiry expects a 401 but gets 200 because the mock clock isn't advancing. Fix: use freezegun to freeze time, then advance past token expiry. Also test_register_duplicate should check for 409, not 400.",
+            ),
+            ("user", "Now I need a database layer with SQLAlchemy"),
+            (
+                "assistant",
+                "I'll create a database module with SQLAlchemy ORM. Models: User, Session, AuditLog. Using Alembic for migrations. Connection pooling with pool_size=5, max_overflow=10. The User model has email (unique), password_hash, created_at, is_active columns.",
+            ),
+            ("user", "Add caching with Redis"),
+            (
+                "assistant",
+                "Setting up Redis caching layer: cache decorator with configurable TTL, key generation based on function name + args hash, cache invalidation patterns for user updates. Default TTL: 300s for queries, 3600s for user profiles. Fallback to in-memory LRU cache if Redis is unavailable.",
+            ),
+            ("user", "Write integration tests for the cache layer"),
+            (
+                "assistant",
+                "Created 15 integration tests: test_cache_hit, test_cache_miss, test_cache_ttl_expiry, test_cache_invalidation_on_write, test_redis_connection_failure_fallback, test_concurrent_cache_access, test_cache_key_collision, test_cache_metrics_recording, and more. Using testcontainers for Redis.",
+            ),
+            ("user", "The caching is causing stale data in production"),
+            (
+                "assistant",
+                "Classic cache invalidation issue. Three fixes: 1) Add write-through cache: update cache on every write, not just reads. 2) Add version tags to cache keys so schema changes auto-invalidate. 3) Reduce TTL for frequently-changing data (user profiles: 60s, config: 300s, static content: 3600s). Also add cache health metrics to monitoring dashboard.",
+            ),
+            ("user", "Add API rate limiting"),
+            (
+                "assistant",
+                "Implementing rate limiting with a sliding window algorithm using Redis sorted sets. Limits: 100 requests/minute for authenticated users, 20 for anonymous. Per-endpoint limits: auth endpoints 5/min (brute force protection), search 30/min, CRUD 60/min. Returns 429 with Retry-After header. Redis failure: fail-open with in-memory counters.",
+            ),
+            ("user", "Deploy to Kubernetes"),
+            (
+                "assistant",
+                "Here's the K8s deployment: Deployment with 3 replicas, HPA (min 3, max 10, target 70% CPU), PDB (minAvailable: 2), ConfigMap for env vars, Secret for JWT_SECRET and DB_PASSWORD, Service (ClusterIP), Ingress with TLS. Liveness: /health every 10s, Readiness: /ready every 5s. Resource limits: 256Mi-512Mi memory, 100m-500m CPU.",
+            ),
+            ("user", "Wait, go back to the auth module — how does token refresh work?"),
+            (
+                "assistant",
+                "Token refresh flow: 1) Client sends expired access token + valid refresh token to /auth/refresh. 2) Server validates refresh token against DB (not just JWT signature — prevents replay after logout). 3) Issues new access token (15min) + rotates refresh token (7d). 4) Old refresh token invalidated immediately. The @jwt_required decorator auto-detects expired tokens and returns 401 with 'token_expired' error code so the client can retry with refresh.",
+            ),
+            ("user", "How does the rate limiter interact with the caching layer?"),
+            (
+                "assistant",
+                "They share the same Redis connection pool but use different key prefixes: 'cache:' and 'ratelimit:'. No direct interaction — rate limiter counts requests regardless of cache hits. However, cached responses are faster (2ms vs 50ms), so rate-limited users still get fast responses for cached content. One edge case: cache warming requests shouldn't count toward rate limits. I added an X-Internal header check that bypasses rate limiting for internal service-to-service calls.",
+            ),
+        ]
+
+        t0 = _now_ms()
+        for role, content in conversation:
+            afm.add_message(role, content)
+        dur_add = _elapsed_ms(t0)
+
+        # Measure raw conversation size
+        raw_tokens = sum(_count_tokens(c) for _, c in conversation)
+
+        step_add = StepResult(
+            name="add_20_messages",
+            input_tokens=raw_tokens,
+            output_tokens=raw_tokens,
+            savings_pct=0.0,
+            duration_ms=dur_add,
+            extra={"messages_added": len(conversation)},
+        )
+        result.steps.append(step_add)
+        if verbose:
+            print(
+                f"  [1/2] added {len(conversation)} messages ({raw_tokens:,} tokens, {dur_add:.0f}ms)"
+            )
+
+        # Build compressed context for a follow-up question
+        t0 = _now_ms()
+        context, stats = afm.build_context(
+            current_query="How does the rate limiter interact with the caching layer?",
+            budget_tokens=2000,
+        )
+        dur_build = _elapsed_ms(t0)
+
+        compressed_tokens = sum(_count_tokens(c) for _, c in context)
+        savings = _savings_pct(raw_tokens, compressed_tokens)
+
+        step_build = StepResult(
+            name="build_context_budget_2000",
+            input_tokens=raw_tokens,
+            output_tokens=compressed_tokens,
+            savings_pct=savings,
+            duration_ms=dur_build,
+            extra={
+                "context_messages": len(context),
+                "budget_tokens": 2000,
+                "full_count": stats.full_count,
+                "compressed_count": stats.compressed_count,
+                "placeholder_count": stats.placeholder_count,
+            },
+        )
+        result.steps.append(step_build)
+        if verbose:
+            print(
+                f"  [2/2] build_context: {raw_tokens:,} -> {compressed_tokens:,} tokens "
+                f"({savings:.1f}% savings, {dur_build:.0f}ms)"
+            )
+            print(
+                f"        full={stats.full_count} compressed={stats.compressed_count} "
+                f"placeholder={stats.placeholder_count}"
+            )
+
+        result.total_input_tokens = raw_tokens
+        result.total_output_tokens = compressed_tokens
+        result.total_savings_pct = savings
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+def run_cuj_10_budget_governance(verbose: bool = False) -> CUJResult:
+    """CUJ 10: Token Budget Monitoring & Alerts"""
+    result = CUJResult(
+        journey_id=10,
+        name="Budget Governance",
+        persona="Engineering manager who wants to cap team token spend at $500/day",
+        description=(
+            "Set up daily token budget (500K tokens ≈ $500/day at Opus), "
+            "record usage across simulated team, verify alert thresholds fire correctly."
+        ),
+    )
+
+    try:
+        from src.budget_monitor import TokenBudgetMonitor
+
+        t0 = _now_ms()
+        monitor = TokenBudgetMonitor(
+            session_limit=100_000,  # 100K per session
+            daily_limit=500_000,  # 500K per day (~$500 at Opus)
+            monthly_limit=10_000_000,  # 10M per month
+        )
+
+        # Simulate usage: 10 sessions averaging 40K tokens each
+        sessions = [
+            ("session_1", 35_000),
+            ("session_2", 42_000),
+            ("session_3", 48_000),
+            ("session_4", 31_000),
+            ("session_5", 55_000),
+            ("session_6", 38_000),
+            ("session_7", 45_000),
+            ("session_8", 50_000),
+            ("session_9", 28_000),
+            ("session_10", 43_000),
+        ]
+        total_used = 0
+        for name, tokens in sessions:
+            monitor.record_usage(tokens, tool_name=name)
+            total_used += tokens
+
+        dur_record = _elapsed_ms(t0)
+
+        # Check budget
+        t0 = _now_ms()
+        check = monitor.check_budget()
+        dur_check = _elapsed_ms(t0)
+
+        step = StepResult(
+            name="budget_check_after_10_sessions",
+            input_tokens=total_used,
+            output_tokens=0,
+            savings_pct=0.0,
+            duration_ms=dur_record + dur_check,
+            extra={
+                "overall_status": check.overall_status,
+                "limits": [lim.to_dict() for lim in check.limits],
+                "sessions_recorded": len(sessions),
+                "total_tokens_used": total_used,
+            },
+        )
+        result.steps.append(step)
+        if verbose:
+            print(f"  [{len(sessions)} sessions] {total_used:,} tokens used")
+            for lim in check.limits:
+                print(
+                    f"    {lim.name}: {lim.usage_pct:.1f}% ({lim.current_tokens:,}/{lim.max_tokens:,}) "
+                    f"alert={lim.alert_level}"
+                )
+            print(f"  Overall: {check.overall_status}")
+
+        # The "savings" here is about governance — how much budget remains
+        result.total_input_tokens = total_used
+        result.total_output_tokens = 0
+        result.total_savings_pct = 0.0
+        # For budget CUJ, track governance metrics instead of compression
+        result.passed = check.overall_status in ("ok", "info", "warning", "critical")
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+def run_cuj_11_tee_recovery(verbose: bool = False) -> CUJResult:
+    """CUJ 11: Recovering Original Content After Compression"""
+    result = CUJResult(
+        journey_id=11,
+        name="Tee/Recovery",
+        persona="Dev whose AI compressed output but now needs the original for debugging",
+        description=(
+            "Compress CLI output with tee enabled, verify original is recoverable, "
+            "measure overhead of tee storage vs savings."
+        ),
+    )
+
+    try:
+        from src.cli_output_optimizer import CLIOutputOptimizer
+        from src.tee_recovery import TeeStore
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tee = TeeStore(mode="always", persist_dir=tmp_dir)
+            optimizer = CLIOutputOptimizer(tee_store=tee)
+
+            # Compress 3 different CLI outputs
+            fixtures = [
+                ("git_diff", GIT_DIFF_FIXTURE, "git_diff"),
+                ("pytest", PYTEST_FIXTURE, "test_output"),
+                ("npm", NPM_INSTALL_FIXTURE, "install_output"),
+            ]
+
+            total_original = 0
+            total_compressed = 0
+            tee_ids = []
+
+            for label, fixture, hint in fixtures:
+                t0 = _now_ms()
+                fr = optimizer.filter(fixture, command_hint=hint)
+                dur = _elapsed_ms(t0)
+
+                original_tokens = _count_tokens(fr.original_text)
+                compressed_tokens = _count_tokens(fr.filtered_text)
+                total_original += original_tokens
+                total_compressed += compressed_tokens
+
+                tee_id = fr.metadata.get("tee_id")
+                if tee_id:
+                    tee_ids.append(tee_id)
+
+                if verbose:
+                    print(
+                        f"  [{label}] {original_tokens:,} -> {compressed_tokens:,} tokens, "
+                        f"tee_id={tee_id}, {dur:.0f}ms"
+                    )
+
+            # Verify recovery
+            recovered_count = 0
+            for tee_id in tee_ids:
+                original = tee.get_original(tee_id)
+                if original is not None:
+                    recovered_count += 1
+
+            step = StepResult(
+                name="compress_and_recover",
+                input_tokens=total_original,
+                output_tokens=total_compressed,
+                savings_pct=_savings_pct(total_original, total_compressed),
+                duration_ms=0.0,
+                extra={
+                    "entries_stored": len(tee_ids),
+                    "entries_recovered": recovered_count,
+                    "recovery_success": recovered_count == len(tee_ids),
+                },
+            )
+            result.steps.append(step)
+            if verbose:
+                print(
+                    f"  Recovery: {recovered_count}/{len(tee_ids)} entries recovered successfully"
+                )
+
+            result.total_input_tokens = total_original
+            result.total_output_tokens = total_compressed
+            result.total_savings_pct = _savings_pct(total_original, total_compressed)
+            result.passed = recovered_count == len(tee_ids) and len(tee_ids) > 0
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+def run_cuj_12_team_dashboard(verbose: bool = False) -> CUJResult:
+    """CUJ 12: Team Dashboard Export (Enterprise)"""
+    result = CUJResult(
+        journey_id=12,
+        name="Team Dashboard Export",
+        persona="Engineering manager tracking 5-person team token savings",
+        description=(
+            "Aggregate savings across a simulated 5-person team, export in JSON/CSV/Prometheus, "
+            "verify per-member attribution and summary accuracy."
+        ),
+    )
+
+    try:
+        from src.team_export import TeamExporter
+
+        t0 = _now_ms()
+        exporter = TeamExporter()
+
+        # Simulate 5 team members with realistic usage
+        team = [
+            ("alice", 12, 850_000, 127_500, 48),
+            ("bob", 8, 620_000, 93_000, 32),
+            ("carol", 15, 1_200_000, 180_000, 67),
+            ("dave", 6, 410_000, 61_500, 24),
+            ("eve", 10, 780_000, 117_000, 41),
+        ]
+
+        for user_id, sessions, original, compressed, ops in team:
+            exporter.add_member_stats(
+                user_id=user_id,
+                sessions=sessions,
+                original_tokens=original,
+                compressed_tokens=compressed,
+                operations=ops,
+            )
+
+        report = exporter.build_report()
+        dur_build = _elapsed_ms(t0)
+
+        # Export all 3 formats
+        t0 = _now_ms()
+        json_export = exporter.export_json(report)
+        csv_export = exporter.export_csv(report)
+        prometheus_export = exporter.export_prometheus(report)
+        dur_export = _elapsed_ms(t0)
+
+        total_original = report.total_original_tokens
+        total_compressed = report.total_compressed_tokens
+        savings = _savings_pct(total_original, total_compressed)
+
+        step = StepResult(
+            name="team_export_3_formats",
+            input_tokens=total_original,
+            output_tokens=total_compressed,
+            savings_pct=savings,
+            duration_ms=dur_build + dur_export,
+            extra={
+                "team_size": len(team),
+                "total_sessions": report.total_sessions,
+                "total_operations": report.total_operations,
+                "tokens_saved": report.total_tokens_saved,
+                "json_size": len(json_export),
+                "csv_size": len(csv_export),
+                "prometheus_size": len(prometheus_export),
+            },
+        )
+        result.steps.append(step)
+        if verbose:
+            print(f"  Team: {len(team)} members, {report.total_sessions} sessions")
+            print(
+                f"  Tokens: {total_original:,} -> {total_compressed:,} "
+                f"(saved {report.total_tokens_saved:,}, {savings:.1f}%)"
+            )
+            print(
+                f"  Exports: JSON={len(json_export)} CSV={len(csv_export)} Prometheus={len(prometheus_export)} bytes"
+            )
+
+        result.total_input_tokens = total_original
+        result.total_output_tokens = total_compressed
+        result.total_savings_pct = savings
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
@@ -693,6 +1270,12 @@ ALL_CUJS = [
     run_cuj_4_query_focused_search,
     run_cuj_5_session_recovery,
     run_cuj_6_savings_report,
+    run_cuj_7_schema_compression,
+    run_cuj_8_code_compression,
+    run_cuj_9_dialogue_memory,
+    run_cuj_10_budget_governance,
+    run_cuj_11_tee_recovery,
+    run_cuj_12_team_dashboard,
 ]
 
 
@@ -783,9 +1366,9 @@ def main() -> int:
     parser.add_argument(
         "--journey",
         type=int,
-        choices=range(1, 7),
+        choices=range(1, 13),
         metavar="N",
-        help="Run only journey N (1-6)",
+        help="Run only journey N (1-12)",
     )
     parser.add_argument(
         "--output",

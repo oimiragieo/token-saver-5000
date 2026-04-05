@@ -60,6 +60,9 @@ All notable changes to Token Saver 5000.
 - **Total MCP tools**: 121 (was 112).
 - **Full test suite**: 3,409+ tests across 90+ test files.
 - **Benchmark results**: medium corpus 4.97x, large corpus 7.80x, avg 83.5% savings.
+- **CUJ benchmark suite**: expanded from 6 to **12 journeys** covering schema compression,
+  code-aware compression, AFM dialogue memory, budget governance, tee/recovery, and
+  team dashboard export. All 12 pass. Aggregate: 4.49M input → 591K output (86.8% savings).
 
 ### Fixed
 - **ROI calculator** (`token_optimization_handlers.py`): safe dict access for model pricing

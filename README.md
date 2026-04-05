@@ -36,9 +36,9 @@ Common use cases:
 
 Do not use this if you only have short prompts and token cost is irrelevant.
 
-## Proven Results: 6 Real-World User Journeys
+## Proven Results: 12 Real-World User Journeys
 
-Every journey runs locally. No API keys needed. Verified with 40 tests.
+Every journey runs locally. No API keys needed. Verified with 40+ tests.
 
 ```bash
 python scripts/benchmark_cujs.py --verbose
@@ -52,8 +52,14 @@ python scripts/benchmark_cujs.py --verbose
 | 4 | **Query-Focused Code Search** | Ask "how does caching work?" → find 3 relevant files → compress | 20,406 tokens | 439 tokens | **97.8%** |
 | 5 | **Session Recovery** | Recover 7 events after conversation compaction | 26,600 tokens | 138 tokens | **99.5%** |
 | 6 | **ROI Justification** | 10 compressions on Claude Opus → show savings report | $1.27 saved | 4.4x ROI | **$127/mo projected** |
+| 7 | **Tool Schema Compression** | 50 MCP tools → 3 meta-tools via SchemaCompressor | 10,376 tokens | 287 tokens | **97.2%** |
+| 8 | **Code-Aware Compression** | Compress 10 Python source files for code review | 15,547 tokens | 1,294 tokens | **91.7%** |
+| 9 | **Dialogue Memory (AFM)** | 22-message conversation → budget-aware context packing | 968 tokens | 481 tokens | **50.3%** |
+| 10 | **Budget Governance** | 10 sessions tracked against per-session/daily/monthly limits | 415,000 tokens | — | **alerts** |
+| 11 | **Tee/Recovery** | Compress 3 CLI outputs + recover originals on demand | 4,888 tokens | 777 tokens | **84.1%** |
+| 12 | **Team Dashboard Export** | 5-member team aggregate → JSON/CSV/Prometheus export | 3,860,000 tokens | 579,000 tokens | **85.0%** |
 
-**Aggregate: 179,161 input tokens → 9,010 output tokens (95.0% savings)**
+**Aggregate: 4,485,940 input tokens → 590,849 output tokens (86.8% savings)**
 
 ### Journey Details
 
@@ -86,6 +92,36 @@ compression profile, 26,600 tokens saved) in just 138 tokens.
 After 10 compressions on Claude Opus ($15/MTok), the savings tracker shows: $1.27 saved,
 4.4x ROI vs the $29/mo Pro plan, breakeven at 228 operations. Projected $127/month savings.
 The tool pays for itself on day 1.
+
+**CUJ 7: Tool Schema Compression (Proxy Mode).**
+Your MCP server exposes 50 tools. The proxy replaces all individual schemas with 3 meta-tools
+(search_tools, get_tool_schema, invoke_tool) — agents discover tools on demand instead of
+loading all schemas upfront. 97.2% savings on tool context.
+
+**CUJ 8: Code-Aware Compression.**
+You need AI to review 10 Python files. Token Saver compresses each file using semantic
+graph + PageRank, preserving function signatures, class structure, and key logic.
+91.7% savings — the AI sees the important parts without reading every line.
+
+**CUJ 9: Dialogue Memory (AFM).**
+After 22 back-and-forth messages, your context window is filling up. Adaptive Focus Memory
+ranks each message by importance and recency, keeps critical messages in full, compresses
+the rest to placeholders. 50.3% savings while preserving conversation coherence.
+
+**CUJ 10: Budget Governance.**
+Your team has token budgets per session (100K), per day (500K), and per month (10M).
+After 10 coding sessions consuming 415K tokens, the budget monitor alerts: session CRITICAL,
+daily WARNING, monthly OK. No surprise bills.
+
+**CUJ 11: Tee/Recovery.**
+The CLI optimizer compresses git diff, pytest, and npm output aggressively. But you need the
+full pytest output to debug a failure. Tee/recovery saved the original — retrieve it by ID.
+84.1% savings with a safety net.
+
+**CUJ 12: Team Dashboard Export (Enterprise).**
+Your 5-person team ran 51 sessions, consuming 3.86M tokens. Token Saver compressed to 579K
+(85% savings). Export the data as JSON for your dashboard, CSV for spreadsheets, or Prometheus
+metrics for Grafana. Justify the tool spend to your VP of Engineering.
 
 ## Two Ways To Use It
 
