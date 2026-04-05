@@ -20,7 +20,7 @@ Complete guide for deploying and configuring the Semantic Modulator MCP Server f
 
 ### System Requirements
 
-- **Python**: 3.10, 3.11, or 3.12 (3.13+ not recommended due to ChromaDB compatibility)
+- **Python**: 3.10, 3.11, 3.12, 3.13, or 3.14 (chromadb only works on 3.10-3.12)
 - **Disk Space**: ~100MB for embedding models (first-time setup)
 - **Memory**: 2GB RAM minimum, 4GB recommended
 - **Claude Desktop** or **Claude Code CLI**: Latest version
@@ -62,7 +62,7 @@ python scripts/quickstart.py
 This script:
 1. ✅ Installs all dependencies
 2. ✅ Downloads embedding models (~100MB)
-3. ✅ Runs test suite (427 tests)
+3. ✅ Runs test suite (3,409+ tests)
 4. ✅ Runs demo proof (7.9× compression verified)
 5. ✅ Provides configuration instructions
 
@@ -394,7 +394,7 @@ rm -rf ~/.cache/huggingface
 
 1. **Check Python Version**:
    ```bash
-   python --version  # Should be 3.10, 3.11, or 3.12
+   python --version  # Should be 3.10-3.14
    ```
 
 2. **Verify Installation**:

@@ -1698,6 +1698,11 @@ Token Saver 5000 achieves 85-90% token reduction (proven: 87.4% on real document
 5. **Multi-modal understanding** - Unified compression for text, code, and images
 6. **Agentic context evolution** - ACE framework for self-improving domain knowledge
 7. **Research-backed methods** - Five peer-reviewed papers validate the approach
+8. **CLI output filtering** - 11 command-specific strategies reduce tool output by 60-95%
+9. **Custom filter DSL** - User-defined TOML rules for project-specific output filtering
+10. **Token economy** - Savings dashboard, ROI calculator, budget monitoring, team export
+11. **Multi-agent support** - One-command setup for 8 AI coding agents
+12. **Tee/recovery** - Lossless original preservation with LRU eviction
 
 The result: Work with massive documents using a fraction of the context window, enabling AI assistants to reason about information that would otherwise exceed their limits.
 

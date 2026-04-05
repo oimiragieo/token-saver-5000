@@ -565,7 +565,7 @@ ace.execute_cycle(context_id, task, outcome)   # Generate → Reflect → Curate
 │                                                               │
 │  Handlers:                                                    │
 │  ┌───────────────────────────────────────────┐              │
-│  │ @list_tools() → Return 17 tool schemas    │              │
+│  │ @list_tools() → Return 121 tool schemas    │              │
 │  │ @call_tool() → Execute tool logic         │              │
 │  └───────────────────────────────────────────┘              │
 │                                                               │
@@ -591,7 +591,7 @@ ace.execute_cycle(context_id, task, outcome)   # Generate → Reflect → Curate
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Complete MCP Tool List (44 tools - v0.10.0)
+### Complete MCP Tool List (121 tools - v0.12.0)
 
 #### Document Compression Tools (9)
 1. `ingest_context` - Ingest and compress documents

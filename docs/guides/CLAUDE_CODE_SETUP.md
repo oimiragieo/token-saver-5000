@@ -8,7 +8,7 @@ This guide shows you how to set up Token Saver 5000 as an MCP server for Claude 
 3. [Slash Commands](#slash-commands)
 4. [Hooks for Automation](#hooks-for-automation)
 5. [Prompt Examples](#prompt-examples)
-6. [Available Tools](#available-tools-39-total)
+6. [Available Tools](#available-tools-121-total)
 7. [Troubleshooting](#troubleshooting)
 
 ---
@@ -456,7 +456,7 @@ All suggestions verified against your stored preferences.
 
 ---
 
-## Available Tools (39 total)
+## Available Tools (121 total)
 
 ### Document Compression (9 tools)
 | Tool | Description |

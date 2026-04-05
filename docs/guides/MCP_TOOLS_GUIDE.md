@@ -24,7 +24,7 @@
 
 ## Overview
 
-Token Saver 5000 exposes **44 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
+Token Saver 5000 exposes **121 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
 
 1. **Compress documents** with 80-95% token reduction
 2. **Manage dialogue memory** with ~66% token savings and safety preservation
@@ -2346,7 +2346,7 @@ if stats["storage_used_mb"] > 900:  # Approaching 1GB limit
 
 ## Conclusion
 
-The 44 MCP tools provide comprehensive capabilities for:
+The 121 MCP tools provide comprehensive capabilities for:
 
 - **Document compression** (80-95% reduction)
 - **Dialogue memory** (~66% reduction with safety preservation)

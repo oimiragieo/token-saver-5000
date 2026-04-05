@@ -13,20 +13,20 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 ### Audit Status: HEALTHY ✅
 **No unused, orphaned, or legacy files detected. Codebase is clean and well-maintained.**
 
-### Key Metrics (v0.11.0)
+### Key Metrics (v0.12.0)
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Source Modules** | 75 Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
+| **Source Modules** | 80+ Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
 | **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 112 tools defined | ✅ All routed |
-| **Test Files** | 84 test modules | ✅ 1,327+ tests |
-| **Test Coverage** | 92%+ overall | ✅ Exceeds 70% threshold |
-| **Documentation** | 51 markdown files | ⚠️ Minor updates needed |
+| **MCP Tools** | 121 tools defined | ✅ All routed |
+| **Test Files** | 90+ test modules | ✅ 3,409+ tests |
+| **Test Coverage** | 70%+ overall | ✅ Meets threshold |
+| **Documentation** | 51+ markdown files | ✅ Updated for launch |
 
 ### Version Alignment
-- **pyproject.toml**: v0.11.0 ✅ (updated from 0.10.0)
-- **README.md**: 103 MCP tools ✅ (updated from 99)
-- **CHANGELOG.md**: Latest unreleased v0.11.0 ✅
+- **pyproject.toml**: v0.11.0 ✅ (requires-python <3.15)
+- **README.md**: 121 MCP tools ✅
+- **CHANGELOG.md**: Latest unreleased v0.12.0 ✅
 
 ### Architecture Summary
 ```
@@ -40,9 +40,12 @@ src/                              # 75 modules, ~26,000 lines
 ├── Reliability (3 modules)       # timeout, circuit breaker, retry
 ├── Security (2 modules)          # path_validator, graceful_degradation
 ├── Token Optimization (4 modules) # token_estimation, response_formatter, client_config, compression_profiles
+├── Token Economy (4 modules)     # savings_tracker, savings_dashboard, budget_monitor, team_export
+├── CLI Filtering (3 modules)     # cli_output_optimizer, filter_rules, tee_recovery
+├── Discovery (1 module)          # savings_discover
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
 ├── semantic_modulator/           # subpackage (additional modules)
-└── handlers/ (11 modules)        # 103 MCP tool implementations
+└── handlers/ (11 modules)        # 121 MCP tool implementations
 ```
 
 ### Experimental Features Status

@@ -29,7 +29,7 @@ src/
 ├── multimodal_compressor.py    # Text + Code + Images
 ├── blind_spot_detector.py      # Hallucination detection
 ├── scar_compressor.py          # Learnable compression
-├── server.py                   # MCP server (44 tools)
+├── server.py                   # MCP server (121 tools)
 ├── persistence.py              # ChromaDB/JSON storage
 ├── resource_manager.py         # Resource limits
 ├── adaptive_rate_allocator.py  # Dynamic compression
@@ -620,7 +620,7 @@ if result.blind_spot_detected:
 
 **File:** `src/server.py`
 
-MCP server exposing 44 tools via stdio transport.
+MCP server exposing 121 tools via stdio transport.
 
 ### Server Setup
 
@@ -633,7 +633,7 @@ server = SemanticModulatorServer()
 
 ### Available Tools
 
-See [**MCP_TOOLS_GUIDE.md**](MCP_TOOLS_GUIDE.md) for complete documentation of all 44 tools.
+See [**MCP_TOOLS_GUIDE.md**](MCP_TOOLS_GUIDE.md) for complete documentation of all 121 tools.
 
 **Quick reference:**
 - `ingest_context` - Ingest document

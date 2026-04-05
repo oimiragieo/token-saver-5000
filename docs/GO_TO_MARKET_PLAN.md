@@ -3,7 +3,7 @@
 **Product**: gotcontext.ai — The context optimization platform for AI coding agents
 **Tagline**: "Every token your AI reads costs money. We make sure it only reads what matters."
 **Founder**: CEO (business), Claude Code (engineering)
-**Status**: Product built, 109 MCP tools, proven benchmarks, ready for launch
+**Status**: Product built, 121 MCP tools, proven benchmarks, ready for launch
 
 ---
 
@@ -44,7 +44,7 @@ gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
 | Feature | gotcontext.ai | RTK (28K★) | Headroom | Atlassian mcp-compressor | Context-Mode |
 |---------|--------------|-----------|----------|------------------------|-------------|
 | Document compression | **13x** | No | "up to 80%" | No | No |
-| CLI output filtering | **10 strategies** | 100+ commands | No | No | No |
+| CLI output filtering | **11 strategies** | 100+ commands | No | No | No |
 | Tool schema compression | **96% reduction** | No | No | 70-97% | No |
 | MCP proxy (any server) | **Yes** | No | Yes | Yes | No |
 | Session continuity | **Yes** | No | No | No | Yes |
@@ -204,7 +204,7 @@ Real API measurements, not marketing claims.
 
 [FEATURES BENTO GRID]
 - 13x Document Compression
-- CLI Output Optimizer (10 strategies)
+- CLI Output Optimizer (11 strategies)
 - Tool Schema Compression (96% reduction)
 - Session Continuity (survives compaction)
 - Research-Backed (3 arXiv papers)

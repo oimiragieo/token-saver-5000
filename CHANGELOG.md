@@ -4,6 +4,63 @@ All notable changes to Token Saver 5000.
 
 ## [Unreleased]
 
+### Added (v0.12.0 - Enterprise Launch & gotcontext.ai)
+
+#### Phase 1: Launch Blockers
+- **Multi-agent MCP setup** (`src/mcp_install.py`): one-command install for 8 AI agents
+  (Claude Desktop, Claude Code, Cursor, Windsurf, Cline, VS Code Copilot, Codex, Gemini CLI).
+  `token-saver-install-mcp --agent cursor` or `--doctor-all` for status. 25 tests.
+- **Savings dashboard CLI** (`src/savings_dashboard.py`): cross-session savings analysis.
+  Entry point: `token-saver-stats` / `gotcontext-stats`. Modes: `--daily`, `--weekly`,
+  `--by-tool`, `--cost`, `--json`, `--csv`. 18 tests.
+- **Proxy savings tracking** (`src/proxy/proxy_server.py`): per-call metrics recording,
+  savings percentage, token estimates, `--verbose` per-call logging, enhanced exit summary.
+  8 tests.
+
+#### Phase 2: Competitive Parity (RTK-Inspired)
+- **CLI output optimizer enhancements** (`src/cli_output_optimizer.py`): expanded from 10
+  to **11 command-specific strategies** (added `docker_compact`). Enhanced git_diff (per-file
+  previews), test_failure_focus (structured pytest parser), lint_group (JSON grouping),
+  json_structure (recursive schema). 51 tests total.
+- **Tee/recovery system** (`src/tee_recovery.py`): preserves original content before
+  compression for later retrieval. LRU-evicting store with 3 modes (failures/always/never),
+  JSON persistence. 3 new MCP tools: `get_original_output`, `list_tee_entries`,
+  `tee_store_stats`. 42 tests.
+- **Missed savings discovery** (`src/savings_discover.py`): scans directories/files to
+  find compression opportunities. Per-extension compression ratio estimates, ranked
+  opportunity report. New MCP tool: `discover_savings`. 27 tests.
+- **Session continuity validation**: 8 tests proving skeleton survival across JSON
+  round-trips, truncation, and re-ingestion.
+
+#### Phase 3: Differentiation
+- **Custom filter rules DSL** (`src/filter_rules.py`): user-defined output filtering via
+  `.gotcontext.toml` TOML config. 8-stage pipeline (strip_ansi → strip_lines → keep_lines
+  → truncate → head → tail → max → on_empty). Project + user-global precedence, inline
+  test verification. 26 tests.
+- **ROI calculator** MCP tool (`calculate_roi`): monthly cost comparison with/without
+  compression, Pro plan ROI, net savings, payback analysis. 20+ model pricing database.
+  6 tests.
+- **Token budget monitoring** (`src/budget_monitor.py`): configurable per-session, daily,
+  and monthly token budget limits. Alert thresholds (ok/info/warning/critical), usage
+  projections. MCP tool: `check_budget`. Env vars: `TOKEN_BUDGET_SESSION`,
+  `TOKEN_BUDGET_DAILY`, `TOKEN_BUDGET_MONTHLY`. 14 tests.
+- **Team dashboard export** (`src/team_export.py`): aggregated team savings in JSON, CSV,
+  and Prometheus exposition formats. MCP tool: `export_team_data`. 12 tests.
+
+#### Phase 4: Polish
+- **GTM benchmark reproduction suite** (`tests/test_gtm_benchmarks.py`): 26 tests
+  validating all go-to-market claims (compression ratios, CLI strategies, schema
+  compression, ROI calculations, tool count, feature existence).
+- **Documentation overhaul**: README.md, CLAUDE.md, copilot-instructions.md updated
+  with all new features, tool counts, and entry points.
+- **gotcontext entry points**: `gotcontext-mcp`, `gotcontext-setup`, `gotcontext-stats`,
+  `gotcontext-proxy` alongside legacy `token-saver-*` aliases.
+- **Python 3.14 support**: fixed `requires-python` upper bound from `<3.14` to `<3.15`.
+
+- **Total MCP tools**: 121 (was 112).
+- **Full test suite**: 3,409+ tests across 90+ test files.
+- **Benchmark results**: medium corpus 4.97x, large corpus 7.80x, avg 83.5% savings.
+
 ### Added (v0.11.0 - Cross-Platform Token Optimization)
 - **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken
   (accurate), `len//4` fast, `len//2` JSON-density, Gemini-compatible (0.25/ASCII, 1.3/non-ASCII),
