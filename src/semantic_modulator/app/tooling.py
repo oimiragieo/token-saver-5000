@@ -13,6 +13,10 @@ from mcp.types import GetPromptResult, Prompt, Resource, ResourceTemplate, Tool
 from src.semantic_modulator.api.mcp import registry as mcp_registry
 from src.semantic_modulator.api.mcp import router as mcp_router
 from src.semantic_modulator.app import mcp_context_surfaces
+from src.semantic_modulator.app.contract_validation import (
+    contract_key_mismatch_message as _contract_key_mismatch_message,
+    validate_contract_keys as _validate_contract_keys,
+)
 
 
 class ProfileState(TypedDict):
@@ -39,7 +43,9 @@ class MCPToolingGateway:
         missing: list[str],
         extra: list[str],
     ) -> str:
-        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+        return _contract_key_mismatch_message(
+            contract_name=contract_name, missing=missing, extra=extra
+        )
 
     @classmethod
     def validate_contract_keys(
@@ -49,17 +55,9 @@ class MCPToolingGateway:
         payload: dict[str, Any],
         expected_keys: frozenset[str],
     ) -> None:
-        actual_keys = set(payload.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                cls.contract_key_mismatch_message(
-                    contract_name=contract_name,
-                    missing=missing,
-                    extra=extra,
-                )
-            )
+        _validate_contract_keys(
+            contract_name=contract_name, payload=payload, expected_keys=expected_keys
+        )
 
     @classmethod
     def validate_profile_state_map(cls, state: dict[str, Any]) -> ProfileState:

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any, TypedDict
+
+from src.semantic_modulator.app.contract_validation import validate_contract_keys
 
 
 class BindRequest(TypedDict):
@@ -18,34 +21,6 @@ class BindRequest(TypedDict):
 
 
 BIND_REQUEST_KEYS: frozenset[str] = frozenset(BindRequest.__annotations__.keys())
-
-
-def contract_key_mismatch_message(
-    *,
-    contract_name: str,
-    missing: list[str],
-    extra: list[str],
-) -> str:
-    return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
-
-
-def validate_contract_keys(
-    *,
-    contract_name: str,
-    payload: dict[str, Any],
-    expected_keys: frozenset[str],
-) -> None:
-    actual_keys = set(payload.keys())
-    missing = sorted(expected_keys - actual_keys)
-    extra = sorted(actual_keys - expected_keys)
-    if missing or extra:
-        raise ValueError(
-            contract_key_mismatch_message(
-                contract_name=contract_name,
-                missing=missing,
-                extra=extra,
-            )
-        )
 
 
 def validate_bind_request_map(request: dict[str, Any]) -> BindRequest:
@@ -120,4 +95,5 @@ def bind_mcp_handlers(
         except Exception as e:
             if logger is not None:
                 logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)
-            return [text_content_cls(type="text", text=f"Error: {str(e)}")]
+            error_body = json.dumps({"error": type(e).__name__, "message": str(e), "tool": name})
+            return [text_content_cls(type="text", text=error_body)]

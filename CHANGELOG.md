@@ -76,6 +76,24 @@ All notable changes to Token Saver 5000.
 - **Filter rules dead code** (`cli_output_optimizer.py`): `FilterRuleEngine` is now wired
   as a post-filter stage in `CLIOutputOptimizer` — user-defined `.gotcontext.toml` rules
   are applied after the built-in strategy.
+- **Version mismatch** (`src/__init__.py`): `__version__` now derived from package metadata
+  via `importlib.metadata.version()` — pyproject.toml is the single source of truth.
+  README version/Python range updated to match (0.11.0, 3.10-3.14).
+- **Logging side effect** (`afm.py`): removed `logging.basicConfig()` call at import time
+  that could override the application's structured logging configuration.
+- **Pytest local ergonomics** (`pyproject.toml`): removed `--cov*` flags from default
+  `addopts` — focused test runs no longer fail due to global coverage threshold. Use
+  `--cov=src --cov-fail-under=70` explicitly for CI coverage.
+- **Training utils** (`training_utils.py`): fixed bare `from scar_compressor import` to
+  package-relative `from src.scar_compressor import`, and added `weights_only=True` to
+  `torch.load()` for safer checkpoint loading.
+- **Tool error envelope** (`router_binding.py`): tool failures now return structured JSON
+  `{"error": "...", "message": "...", "tool": "..."}` instead of plain `"Error: ..."` text.
+- **Contract validation DRY** (app layer): extracted shared `contract_key_mismatch_message`
+  and `validate_contract_keys` into `contract_validation.py`, replacing 8 identical copies
+  across the app-layer services.
+- **Portable MCP config** (`mcp_install.py`): added doc comment explaining why portable
+  mode uses generic `"python"` command and when to prefer desktop install instead.
 
 ### Added (v0.11.0 - Cross-Platform Token Optimization)
 - **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken

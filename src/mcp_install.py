@@ -129,6 +129,10 @@ def build_status_report(status: dict[str, Any], recommended_target: str | None =
 
 def build_server_config(root: Path | None = None, portable: bool = False) -> dict[str, Any]:
     if portable:
+        # Portable mode uses generic "python" command because it cannot know the
+        # target machine's interpreter path. This requires Python to be on PATH.
+        # For deterministic resolution, use the non-portable (desktop) install instead,
+        # which discovers the installed token-saver-mcp launcher.
         return {
             "command": "python",
             "args": ["-m", "src.server"],

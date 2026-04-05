@@ -43,8 +43,7 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Module logger — application configures logging; do not call basicConfig here
 logger = logging.getLogger("afm")
 
 

@@ -97,7 +97,7 @@ def test_trainer_compressor_train_eval_checkpoint(tmp_path: Path, monkeypatch):
     real_torch_load = torch.load
     monkeypatch.setattr(
         "src.training_utils.torch.load",
-        lambda *args, **kwargs: real_torch_load(*args, weights_only=False, **kwargs),
+        lambda *args, **kwargs: real_torch_load(*args, **{**kwargs, "weights_only": False}),
     )
     trainer.load_checkpoint(str(ckpt))
     assert trainer.global_step > 0

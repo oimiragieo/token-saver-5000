@@ -414,7 +414,7 @@ class SCARTrainer:
 
     def load_checkpoint(self, filepath: str):
         """Load model checkpoint"""
-        checkpoint = torch.load(filepath, map_location=self.device)
+        checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
@@ -467,7 +467,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     # Import SCAR modules
-    from scar_compressor import LearnableSemanticCompressor
+    from src.scar_compressor import LearnableSemanticCompressor
 
     # Training config
     config = TrainingConfig(

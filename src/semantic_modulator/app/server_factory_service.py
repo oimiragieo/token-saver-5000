@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any, TypedDict, cast
 
+from .contract_validation import (
+    contract_key_mismatch_message as _contract_key_mismatch_message,
+    validate_contract_keys as _validate_contract_keys,
+)
 from .server_aliases import ALLOWED_FACTORY_OVERRIDE_KEYS, validate_override_keys
 
 ALLOWED_OVERRIDE_KEYS: frozenset[str] = ALLOWED_FACTORY_OVERRIDE_KEYS
@@ -151,7 +155,9 @@ class ServerFactoryService:
         extra: list[str],
     ) -> str:
         """Build a canonical contract-drift message for key mismatches."""
-        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+        return _contract_key_mismatch_message(
+            contract_name=contract_name, missing=missing, extra=extra
+        )
 
     @classmethod
     def validate_contract_keys(
@@ -162,17 +168,9 @@ class ServerFactoryService:
         expected_keys: frozenset[str],
     ) -> None:
         """Fail fast when a payload keyset drifts from the expected contract."""
-        actual_keys = set(payload.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                cls.contract_key_mismatch_message(
-                    contract_name=contract_name,
-                    missing=missing,
-                    extra=extra,
-                )
-            )
+        _validate_contract_keys(
+            contract_name=contract_name, payload=payload, expected_keys=expected_keys
+        )
 
     @staticmethod
     def default_class_map() -> FactoryClassMap:

@@ -748,14 +748,11 @@ python -m black src tests scripts skills
 
 ## Version and Requirements
 
-1. Version: `0.10.0`
-2. Python: `3.10-3.13`
+1. Version: `0.11.0`
+2. Python: `3.10-3.14` (chromadb requires 3.10-3.12)
 3. Suggested RAM: `~4GB` for embedding workloads
 
-Version source-of-truth:
-
-1. `pyproject.toml`
-2. `src/__init__.py`
+Version source-of-truth: `pyproject.toml` (all other files derive from it).
 
 ## Documentation
 

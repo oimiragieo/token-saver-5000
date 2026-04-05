@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Callable, TypedDict
 
+from src.semantic_modulator.app.contract_validation import (
+    contract_key_mismatch_message as _contract_key_mismatch_message,
+    validate_contract_keys as _validate_contract_keys,
+)
+
 
 class StartupRequest(TypedDict):
     """Startup request envelope for lifecycle orchestration."""
@@ -33,7 +38,9 @@ class ServerLifecycleService:
         missing: list[str],
         extra: list[str],
     ) -> str:
-        return f"{contract_name} keys mismatch: missing={missing} extra={extra}"
+        return _contract_key_mismatch_message(
+            contract_name=contract_name, missing=missing, extra=extra
+        )
 
     @classmethod
     def validate_contract_keys(
@@ -43,17 +50,9 @@ class ServerLifecycleService:
         payload: dict[str, Any],
         expected_keys: frozenset[str],
     ) -> None:
-        actual_keys = set(payload.keys())
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-        if missing or extra:
-            raise ValueError(
-                cls.contract_key_mismatch_message(
-                    contract_name=contract_name,
-                    missing=missing,
-                    extra=extra,
-                )
-            )
+        _validate_contract_keys(
+            contract_name=contract_name, payload=payload, expected_keys=expected_keys
+        )
 
     @classmethod
     def validate_startup_request_map(cls, request: dict[str, Any]) -> StartupRequest:
