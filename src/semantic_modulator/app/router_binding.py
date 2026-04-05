@@ -6,7 +6,57 @@ import json
 from collections.abc import Callable
 from typing import Any, TypedDict
 
+from src.response_formatter import ResponseFormatter
 from src.semantic_modulator.app.contract_validation import validate_contract_keys
+
+# Module-level formatter instance (lazy singleton).
+_formatter: ResponseFormatter | None = None
+
+
+def _get_formatter() -> ResponseFormatter:
+    """Return the shared ResponseFormatter, creating it on first access."""
+    global _formatter
+    if _formatter is None:
+        _formatter = ResponseFormatter()
+    return _formatter
+
+
+def _format_result(result: Any, tool_name: str) -> str:
+    """Normalize a handler result through ResponseFormatter.
+
+    Handles three shapes:
+    - dict/list → format directly
+    - JSON string that parses to dict/list → format the parsed payload
+    - anything else → return as plain text (no formatting)
+    """
+    formatter = _get_formatter()
+
+    # Already a dict — format it.
+    if isinstance(result, dict):
+        formatted = formatter.format_response(result, tool_name=tool_name)
+        return json.dumps(formatted)
+
+    # Already a list — wrap for formatting then serialize.
+    if isinstance(result, list):
+        formatted = formatter.format_response({"items": result}, tool_name=tool_name)
+        return json.dumps(formatted)
+
+    # String — try to parse as JSON dict/list.
+    if isinstance(result, str):
+        try:
+            parsed = json.loads(result)
+        except (json.JSONDecodeError, TypeError):
+            return result  # plain text passthrough
+        if isinstance(parsed, dict):
+            formatted = formatter.format_response(parsed, tool_name=tool_name)
+            return json.dumps(formatted)
+        if isinstance(parsed, list):
+            formatted = formatter.format_response({"items": parsed}, tool_name=tool_name)
+            return json.dumps(formatted)
+        return result  # scalar JSON — leave as-is
+
+    # Fallback: stringify.
+    return str(result)
 
 
 class BindRequest(TypedDict):
@@ -91,7 +141,8 @@ def bind_mcp_handlers(
             result = await tooling.route_tool_call(
                 name, arguments, context, tool_profile=tool_profile
             )
-            return [text_content_cls(type="text", text=str(result))]
+            text = _format_result(result, tool_name=name)
+            return [text_content_cls(type="text", text=text)]
         except Exception as e:
             if logger is not None:
                 logger.error("tool_handler_error", tool_name=name, error=str(e), exc_info=True)

@@ -156,12 +156,18 @@ async def test_router_binding_call_handler_wraps_result_and_errors():
         text_content_cls=lambda **kwargs: kwargs,
     )
 
+    import json as _json
+
     ok = await fake_server.call_tool_handler("ingest_context", {})
     err = await fake_server.call_tool_handler("boom", {})
     prompt = await fake_server.get_prompt_handler("document_compression_workflow", {"goal": "x"})
     resource = await fake_server.read_resource_handler("token-saver://catalog/tools")
 
-    assert ok[0]["text"].startswith("{'ok': True")
+    # Successful result should be valid JSON with ResponseFormatter metadata
+    ok_data = _json.loads(ok[0]["text"])
+    assert ok_data["ok"] is True
+    assert ok_data["name"] == "ingest_context"
+    assert "_truncated" in ok_data  # ResponseFormatter adds metadata
     assert '"error"' in err[0]["text"]
     assert "kaboom" in err[0]["text"]
     assert prompt["name"] == "document_compression_workflow"

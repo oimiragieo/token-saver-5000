@@ -58,7 +58,7 @@ All notable changes to Token Saver 5000.
 - **Python 3.14 support**: fixed `requires-python` upper bound from `<3.14` to `<3.15`.
 
 - **Total MCP tools**: 121 (was 112).
-- **Full test suite**: 3,409+ tests across 90+ test files.
+- **Full test suite**: 3,396+ tests across 90+ test files.
 - **Benchmark results**: medium corpus 4.97x, large corpus 7.80x, avg 83.5% savings.
 - **CUJ benchmark suite**: expanded from 6 to **12 journeys** covering schema compression,
   code-aware compression, AFM dialogue memory, budget governance, tee/recovery, and
@@ -94,6 +94,13 @@ All notable changes to Token Saver 5000.
   across the app-layer services.
 - **Portable MCP config** (`mcp_install.py`): added doc comment explaining why portable
   mode uses generic `"python"` command and when to prefer desktop install instead.
+- **ResponseFormatter wired into router** (`router_binding.py`): tool responses now pass
+  through `ResponseFormatter` for size-bounded, cache-stable output. Normalizes handler
+  results (dict, JSON string, or plain text) at the MCP response boundary.
+- **HTTP server wired into startup** (`bootstrap.py`): `start_http_server()` now launches
+  as a background task when `HTTP_ENABLED=true`, matching documented Docker/K8s behavior.
+- **Dead code removed**: deleted `memory_hooks.py` (orphaned hook manager) and
+  `toon_gate.py` (orphaned production gate) — zero runtime references in src/.
 
 ### Added (v0.11.0 - Cross-Platform Token Optimization)
 - **Token estimation module** (`src/token_estimation.py`): dual-mode estimation with tiktoken

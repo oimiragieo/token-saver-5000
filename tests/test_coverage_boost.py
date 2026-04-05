@@ -2,8 +2,7 @@
 Coverage boost tests for uncovered code paths.
 
 Covers: visualization_handlers, graceful_degradation, experimental_handlers,
-graph_visualizer, experience_synthesis, compression_presets, validation_hooks,
-memory_hooks.
+graph_visualizer, experience_synthesis, compression_presets, validation_hooks.
 
 All tests use mocks to avoid heavy dependencies (ChromaDB, ONNX, PyTorch, etc.).
 """
@@ -934,43 +933,3 @@ class TestValidationHooks:
 
         errors = validate_tool_input("unknown_tool_xyz", {})
         assert errors == []
-
-
-# =============================================================================
-# 7. Memory Hooks - clear()
-# =============================================================================
-
-
-class TestMemoryHooksClear:
-    """Tests for MemoryHookManager.clear()."""
-
-    def test_clear_removes_hooks_and_entries(self):
-        from src.memory_hooks import MemoryHookManager
-
-        mgr = MemoryHookManager()
-        mgr.register_hook("post_compress", lambda d: None)
-        mgr.add_memory_entry("f1", "insight", "cat")
-        assert len(mgr.get_memory_index()) == 1
-
-        mgr.clear()
-        assert len(mgr.get_memory_index()) == 0
-        # hooks dict should also be empty
-        assert mgr._hooks == {}
-
-    def test_clear_idempotent(self):
-        from src.memory_hooks import MemoryHookManager
-
-        mgr = MemoryHookManager()
-        mgr.clear()
-        mgr.clear()
-        assert len(mgr.get_memory_index()) == 0
-
-    def test_trigger_after_clear_does_nothing(self):
-        from src.memory_hooks import MemoryHookManager
-
-        mgr = MemoryHookManager()
-        called = []
-        mgr.register_hook("evt", lambda d: called.append(1))
-        mgr.clear()
-        mgr.trigger("evt", {})
-        assert len(called) == 0
