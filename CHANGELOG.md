@@ -4,6 +4,14 @@ All notable changes to Token Saver 5000.
 
 ## [Unreleased]
 
+### Added
+- **5-product platform strategy** in GTM plan: CaaS, AI Benchmarks, AI News Center, Knowledge Hub (NotebookLM competitor), Agent Context Hub (ref.tools/Context7 competitor)
+- **OSS baseline research** (§11 in GTM plan): evaluated 12 open-source projects across Knowledge Hub and Agent Context Hub categories with fork/build recommendations
+- **Competitive comparison tables** for Knowledge Hub (vs NotebookLM, open-notebook, SurfSense) and Agent Context Hub (vs Context7, ref.tools, docs-mcp-server, Nia)
+- **Phase 4-5 launch timelines** for Agent Context Hub (months 10-18) and Knowledge Hub (months 14-24)
+- **Updated revenue projections** to $682.5K MRR at month 24 across all 5 product lines ($8.2M Year 2 ARR)
+- **Reddit sentiment analysis** documenting community demand for self-hosted NotebookLM alternatives and compressed doc retrieval
+
 ### Added (v0.12.0 - Enterprise Launch & gotcontext.ai)
 
 #### Phase 1: Launch Blockers

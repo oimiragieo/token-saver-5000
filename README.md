@@ -772,10 +772,14 @@ This repo is the open-source local MCP tool. [gotcontext.ai](https://gotcontext.
 
 **Planned for gotcontext.ai:**
 
-- **Global AI Benchmark Repository** — crowd-sourced database of model inference performance across hardware, quantization formats, and providers. Like [UserBenchmark](https://www.userbenchmark.com/) but for AI. Upload runs, compare tok/s by GPU, find the best quant for your model, get cost-per-quality recommendations. See `docs/GO_TO_MARKET_PLAN.md` §10 for the full vision.
-- **Multi-tenant SaaS** — externalized state, scoped persistence, team dashboards
-- **API gateway** — REST/GraphQL endpoints for non-MCP consumers
+- **Context as a Service (CaaS)** — cloud API for semantic compression with team dashboards, session history, and usage metering
+- **Knowledge Hub** — model-agnostic RAG notebooks with compressed retrieval. Upload docs, chat with compressed context. Like NotebookLM but open, self-hostable, and 85% more token-efficient. Built on [open-notebook](https://github.com/lfnovo/open-notebook) (21.8K★).
+- **Agent Context Hub** — always-current framework docs for AI coding agents with compressed retrieval. Like Context7/ref.tools but local-first, open source, and 85% fewer tokens per response. Built on [docs-mcp-server](https://github.com/arabold/docs-mcp-server) (1.2K★).
+- **Global AI Benchmark Repository** — crowd-sourced database of model inference performance across hardware, quantization formats, and providers. Like [UserBenchmark](https://www.userbenchmark.com/) but for AI.
+- **AI News Center** — curated AI infrastructure intelligence hub with data-driven reports from benchmark data
 - **Model-aware routing** — combine context compression with benchmark data to recommend optimal model + quant for each request
+
+See `docs/GO_TO_MARKET_PLAN.md` for the full 5-product platform strategy.
 
 ## Documentation
 

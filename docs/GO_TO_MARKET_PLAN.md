@@ -5,10 +5,12 @@
 **Founder**: CEO (business), Claude Code (engineering)
 **Status**: Product built, 121 MCP tools, proven benchmarks, ready for launch
 
-**Three product lines:**
+**Five product lines:**
 1. **Context as a Service (CaaS)** — semantic compression SaaS (freemium + paid)
 2. **AI Benchmark Repository** — crowd-sourced global AI inference database (UserBenchmark for AI)
 3. **AI News Center** — curated AI industry intelligence hub
+4. **Knowledge Hub** — model-agnostic RAG with compressed retrieval (NotebookLM competitor)
+5. **Agent Context Hub** — framework doc indexing with semantic compression (ref.tools/Context7 competitor)
 
 ---
 
@@ -33,7 +35,9 @@
 | **CaaS (Context as a Service)** | **$50-100B** | 5-10% of $480B+ inference spend is wasted context |
 | **AI Benchmark Repository** | **$1.2-4.5B** | AI benchmarking platform market (FactMR 2026-2033) |
 | **AI News Center** | **$500M-1B** | AI-focused dev media (ad + sponsorship + premium content) |
-| **Combined platform** | **$52-106B** | — |
+| **Knowledge Hub** | **$2-5B** | Enterprise knowledge management + RAG SaaS (Grand View Research 2026) |
+| **Agent Context Hub** | **$1-3B** | Developer documentation tooling + AI agent infrastructure |
+| **Combined platform** | **$55-114B** | — |
 
 ### The Macro Thesis
 
@@ -82,6 +86,33 @@ gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
 | Pricing | **Freemium + usage** | Free (OSS) | Free (OSS) | Free (OSS) | Elastic License |
 | AI benchmark repo | **Yes (planned)** | No | No | No | No |
 
+### Context/RAG Comparison (Knowledge Hub competitors)
+
+| Feature | gotcontext Knowledge Hub | Google NotebookLM | open-notebook (21.8K★) | SurfSense (13.6K★) |
+|---------|------------------------|-------------------|----------------------|-------------------|
+| Model-agnostic | **Yes (16+ providers)** | Google only | Yes (16+) | Yes |
+| Self-hosted | **Yes** | No (cloud only) | Yes (Docker) | Yes (Docker) |
+| Semantic compression | **Yes (5-20x)** | No | No | No |
+| Multi-format ingest | PDF, code, video, audio, web | PDF, video, web | PDF, video, audio, web | Search, Slack, Linear, Notion, GitHub, YouTube |
+| API access | **REST + MCP** | No API | REST API | REST API |
+| Multi-tenant | **Yes (scoped)** | Per-user (Google) | Single-user | Team support |
+| Compressed retrieval | **Yes (unique)** | No | No | No |
+| Podcast generation | Planned | Yes (2 speakers) | Yes (1-4 speakers) | No |
+| Pricing | Freemium | Free (Google lock-in) | Free (OSS) | Free + SaaS |
+
+### Doc Context Comparison (Agent Context Hub competitors)
+
+| Feature | gotcontext Agent Context Hub | Context7 (51K installs) | ref.tools | docs-mcp-server (1.2K★) | Nia ($6.2M funded) |
+|---------|----------------------------|------------------------|-----------|------------------------|--------------------|
+| Compressed retrieval | **Yes (unique)** | No (raw chunks) | ~5K token cap | No | No |
+| Offline/local | **Yes** | No (cloud) | No (cloud) | Yes | No |
+| Open source | **Yes** | No | Partial | Yes (MIT) | No |
+| Version-specific docs | Yes | Yes | Yes | Yes | Yes |
+| Self-hosted | **Yes** | No | No | Yes | No |
+| Multi-format | 90+ formats | Web docs only | Web docs only | 90+ formats | Codebase + docs |
+| Token efficiency | **85-96% compression** | Uncompressed | ~5K cap | Uncompressed | Uncompressed |
+| Pricing | Freemium | $10/mo (1K free) | $9/mo | Free (OSS) | $14.99/mo |
+
 ### Our Moat
 
 1. **Only tool with proven cross-platform benchmarks** (real API numbers, reproducible)
@@ -90,10 +121,11 @@ gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
 4. **Research-backed** (3 arXiv papers implemented, TurboQuant-inspired embeddings)
 5. **Full stack**: search (tensor-grep) + compress (token-saver) + filter (CLI optimizer) + proxy
 6. **Data network effect** (benchmark repo): crowd-sourced inference data that can't be forked or replicated — grows more valuable with every submission
+7. **Compressed retrieval** (unique in market): no doc context tool or RAG platform compresses output before serving — gotcontext is the only platform where retrieval and compression are unified
 
 ---
 
-## 3. Pricing Strategy — Three Product Lines
+## 3. Pricing Strategy — Five Product Lines
 
 ### Product Line 1: Context as a Service (CaaS)
 
@@ -129,23 +161,51 @@ Hybrid model (free tier + usage-based). 67% of B2B SaaS uses hybrid pricing in 2
 
 **Flywheel**: News drives traffic → traffic drives benchmark submissions → benchmarks drive CaaS signups → CaaS usage generates news-worthy data (compression trends, cost savings reports).
 
+### Product Line 4: Knowledge Hub (NotebookLM Competitor)
+
+| Tier | Price | Includes | Target |
+|------|-------|----------|--------|
+| **Free** | $0 | 3 notebooks, 10 sources each, local processing, TF-IDF retrieval | Individuals, students |
+| **Pro** (bundled with CaaS Pro) | $29/month | Unlimited notebooks/sources, SBERT compressed retrieval, podcast generation, API access, 50M tokens/month | Researchers, power users |
+| **Team** | $19/user/month (min 5) | Shared notebooks, role-based access, team knowledge base, Slack/Notion/GitHub connectors | Dev teams, research teams |
+| **Enterprise** | Custom | Self-hosted, SSO, audit logs, custom connectors, unlimited storage | Enterprises |
+
+**Differentiator vs NotebookLM**: Model-agnostic (not Google-locked), self-hostable, compressed retrieval (5-20x fewer tokens consumed per query), API access, multi-tenant.
+
+**Differentiator vs open-notebook/SurfSense**: Compressed retrieval is unique — same RAG quality, 85% fewer tokens. Plus enterprise features (multi-tenant, SSO, connectors) that OSS tools lack.
+
+### Product Line 5: Agent Context Hub (ref.tools/Context7 Competitor)
+
+| Tier | Price | Includes | Target |
+|------|-------|----------|--------|
+| **Free** | $0 | 5 indexed libraries, local search, basic compression, 1K queries/month | Solo devs |
+| **Pro** (bundled with CaaS Pro) | $29/month | Unlimited libraries, SBERT compressed search, version-specific docs, 90+ formats, 50K queries/month | Individual developers |
+| **Team** | $19/user/month (min 5) | Shared library indexes, team doc standards, private repo indexing, 500K queries/month | Dev teams |
+| **Enterprise** | Custom | Self-hosted, private library indexes, SSO, custom scraping pipelines, unlimited | Large orgs |
+
+**Differentiator vs Context7**: Offline/local option, no rate limits, compressed retrieval (85% fewer tokens in responses vs Context7's raw dumps), open source core, self-hostable.
+
+**Differentiator vs ref.tools**: Compressed output (ref.tools caps at 5K tokens; gotcontext delivers same info in 750 tokens), open source, self-hosted option, version-specific.
+
+**Differentiator vs docs-mcp-server**: Same local-first approach, but adds semantic compression on top — docs-mcp-server returns full indexed chunks, gotcontext returns compressed skeletons.
+
 ### Combined Revenue Projections
 
-| Month | CaaS MRR | Benchmarks MRR | News MRR | Total MRR |
-|-------|---------|---------------|---------|-----------|
-| 1 (launch CaaS) | $145 | — | — | **$145** |
-| 6 (launch benchmarks) | $4,800 | $500 | — | **$5,300** |
-| 12 (launch news) | $24,100 | $5,000 | $2,000 | **$31,100** |
-| 18 | $142,000 | $25,000 | $8,000 | **$175,000** |
-| 24 | $467,500 | $80,000 | $20,000 | **$567,500** |
+| Month | CaaS MRR | Benchmarks MRR | News MRR | Knowledge Hub MRR | Agent Context MRR | Total MRR |
+|-------|---------|---------------|---------|-------------------|-------------------|-----------|
+| 1 (launch CaaS) | $145 | — | — | — | — | **$145** |
+| 6 (launch benchmarks) | $4,800 | $500 | — | — | — | **$5,300** |
+| 12 (launch news + context hub) | $24,100 | $5,000 | $2,000 | — | $1,500 | **$32,600** |
+| 18 (launch knowledge hub) | $142,000 | $25,000 | $8,000 | $5,000 | $15,000 | **$195,000** |
+| 24 | $467,500 | $80,000 | $20,000 | $40,000 | $75,000 | **$682,500** |
 
 **Year 1 ARR** (CaaS only): ~$290K
-**Year 2 ARR** (all 3 products): ~$6.8M
-**Year 3 ARR** (projected with network effects): ~$25-40M
+**Year 2 ARR** (all 5 products): ~$8.2M
+**Year 3 ARR** (projected with network effects): ~$30-50M
 
 ### Valuation at Series A (Month 18-24)
 
-At $2-5M ARR with 80%+ growth + data moat:
+At $3-8M ARR with 80%+ growth + data moat + 5 product lines:
 - Standard SaaS: 15-20x ARR = **$30-100M**
 - AI premium (1.5x): **$45-150M**
 - Data network effect premium (benchmark repo): additional 2-3x multiplier on that segment
@@ -213,16 +273,28 @@ At $2-5M ARR with 80%+ growth + data moat:
 
 ### Phase 4: Platform Expansion (Months 12-24)
 
-**Goal**: $1M+ ARR, Series A readiness, all 3 products live
+**Goal**: $1M+ ARR, Series A readiness, all 5 products live
 
 1. **AI News Center live** at gotcontext.ai/news — curated weekly digest, newsletter
-2. **Benchmark recommendation engine**: "Best model for your GPU and budget"
-3. **Marketplace**: third-party compression plugins
-4. **REST/GraphQL API**: gotcontext.ai as a service (not just MCP)
-5. **Analytics**: "Token Intelligence" — show where tokens are being wasted
-6. **Integrations**: Datadog, Grafana, PagerDuty for token budget alerting
-7. **Data-driven reports**: publish industry insights from benchmark + compression data
-8. **Sponsored content partnerships** with GPU makers, cloud providers
+2. **Agent Context Hub beta** at gotcontext.ai/docs — compressed doc retrieval for coding agents
+3. **Benchmark recommendation engine**: "Best model for your GPU and budget"
+4. **Marketplace**: third-party compression plugins
+5. **REST/GraphQL API**: gotcontext.ai as a service (not just MCP)
+6. **Analytics**: "Token Intelligence" — show where tokens are being wasted
+7. **Integrations**: Datadog, Grafana, PagerDuty for token budget alerting
+8. **Data-driven reports**: publish industry insights from benchmark + compression data
+9. **Sponsored content partnerships** with GPU makers, cloud providers
+
+### Phase 5: Knowledge Platform (Months 18-30)
+
+**Goal**: Full platform flywheel, $5M+ ARR
+
+1. **Knowledge Hub launch** at gotcontext.ai/notebooks — compressed RAG notebooks
+2. **Agent Context Hub GA** — version-specific doc indexing for 500+ frameworks
+3. **Cross-product integration**: Knowledge Hub uses CaaS compression, Agent Context Hub feeds benchmark data
+4. **Podcast generation** in Knowledge Hub (multi-speaker, multi-model)
+5. **Enterprise connectors**: Slack, Notion, Confluence, GitHub, Jira for Knowledge Hub
+6. **Self-hosted enterprise bundles**: all 5 products in a single deployment
 
 ---
 
@@ -245,10 +317,12 @@ Real API measurements, not marketing claims.
 | Codex    | 37K    | 23K   | 38.2%   |
 | Gemini   | 69K    | 31K   | 55.7%   |
 
-[PLATFORM OVERVIEW - 3 pillars]
+[PLATFORM OVERVIEW - 5 pillars]
 1. Context Compression — 85-96% token savings via semantic compression
 2. AI Benchmark Repository — find the best model for your hardware and budget
 3. AI News & Intelligence — stay ahead of AI infrastructure trends
+4. Knowledge Hub — upload docs, chat with compressed context (NotebookLM, but open)
+5. Agent Context Hub — always-current framework docs for your AI agent (Context7, but compressed)
 
 [HOW IT WORKS - 3 steps]
 1. Install: pip install gotcontext
@@ -262,6 +336,8 @@ Real API measurements, not marketing claims.
 - Session Continuity (survives compaction)
 - Research-Backed (3 arXiv papers)
 - Cross-Platform (Claude, Codex, Gemini)
+- Knowledge Hub (upload → chat → compressed RAG)
+- Agent Context Hub (docs → compressed MCP retrieval)
 - Global Benchmark Database (coming soon)
 
 [PRICING]
@@ -282,12 +358,20 @@ GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 - `/benchmarks/leaderboard` — rankings by GPU, model, quant format, cost-per-quality
 - `/benchmarks/submit` — upload inference runs (web UI or API)
 - `/benchmarks/compare` — side-by-side model/hardware/quant comparisons
+- `/notebooks` — **Knowledge Hub** (upload docs, chat with compressed context)
+- `/notebooks/new` — create notebook, add sources (PDF, web, video, audio, code)
+- `/notebooks/:id/chat` — RAG chat with compressed retrieval
+- `/docs` — **Agent Context Hub** (framework doc search for AI agents)
+- `/docs/index` — browse/manage indexed libraries (version-specific)
+- `/docs/search` — semantic search across indexed docs (compressed results)
 - `/news` — **AI News Center** (curated industry intelligence)
 - `/news/weekly` — weekly digest of AI infrastructure and tooling
-- `/docs` — getting started, MCP config, API reference
+- `/getting-started` — setup guide, MCP config, API reference
 - `/blog` — technical content, case studies, token savings reports
 - `/compare/rtk` — head-to-head comparison with ROI calculator
 - `/compare/headroom` — feature comparison
+- `/compare/notebooklm` — Knowledge Hub vs NotebookLM comparison
+- `/compare/context7` — Agent Context Hub vs Context7 comparison
 - `/enterprise` — self-hosted, SOC 2, SLA details
 
 ---
@@ -309,6 +393,9 @@ GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 | **Email** | Resend | Transactional + marketing |
 | **CDN** | Cloudflare | Edge, WAF, bot protection |
 | **Search** | Meilisearch or Typesense | Instant benchmark search/filtering |
+| **Vector store** | Qdrant or Weaviate | Knowledge Hub + Agent Context Hub embeddings at scale |
+| **Object storage** | S3 / R2 (Cloudflare) | Knowledge Hub document storage (PDF, audio, video) |
+| **Job queue** | BullMQ (Redis) or Celery | Async doc ingestion, indexing, podcast generation |
 
 ---
 
@@ -351,6 +438,29 @@ GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 | 36 | Data-driven reports (from benchmark repo data) | Thought leadership |
 | 40 | Premium analysis tier ($9/month) | Subscription revenue |
 
+### Phase 4: Agent Context Hub (Months 10-18)
+
+| Week | Action | Goal |
+|------|--------|------|
+| 40 | Fork docs-mcp-server (MIT), integrate gotcontext compression pipeline | Baseline framework |
+| 44 | Beta at gotcontext.ai/docs — 50 frameworks indexed (React, Next.js, LangChain, etc.) | Developer testing |
+| 48 | MCP tool for AI agents: `gotcontext_search_docs` + `gotcontext_read_doc` | Agent integration |
+| 52 | Version-specific indexing — pin docs to project dependency versions | Key differentiator |
+| 56 | Self-hosted option (Docker) for enterprise | Enterprise pipeline |
+| 60 | 500+ libraries indexed, comparison pages vs Context7/ref.tools | Growth marketing |
+
+### Phase 5: Knowledge Hub (Months 14-24)
+
+| Week | Action | Goal |
+|------|--------|------|
+| 56 | Fork open-notebook (MIT), replace LangChain RAG with gotcontext compression | Baseline framework |
+| 60 | Beta at gotcontext.ai/notebooks — PDF/web/video/audio ingestion | User testing |
+| 64 | Compressed RAG chat — same quality, 85% fewer tokens per query | Core differentiator |
+| 68 | Team notebooks with role-based access | Team adoption |
+| 72 | Enterprise connectors (Slack, Notion, Confluence, GitHub) | Enterprise pipeline |
+| 80 | Podcast generation (multi-speaker, multi-model) | Feature parity with NotebookLM |
+| 96 | Self-hosted enterprise bundle (all 5 products) | Enterprise upsell |
+
 ---
 
 ## 8. Key Metrics to Track
@@ -359,13 +469,17 @@ GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 |--------|-----------------|-------------------|-------------------|
 | Free signups (CaaS) | 2,000 | 10,000 | 50,000 |
 | Free → Pro conversion | 5% | 7% | 10% |
-| Combined MRR | $5,300 | $31,100 | $567,500 |
+| Combined MRR | $5,300 | $32,600 | $682,500 |
 | Churn (monthly) | <5% | <3% | <2% |
 | NRR | >110% | >120% | >130% |
 | Tokens compressed/month | 500M | 5B | 50B |
 | Benchmark submissions | — | 50,000 | 500,000 |
 | Benchmark MAU | — | 5,000 | 50,000 |
 | News center monthly traffic | — | 10,000 | 100,000 |
+| Agent Context Hub libraries indexed | — | 50 | 500+ |
+| Agent Context Hub queries/month | — | 10,000 | 500,000 |
+| Knowledge Hub notebooks created | — | — | 25,000 |
+| Knowledge Hub MAU | — | — | 10,000 |
 | DAU (active compression) | 200 | 1,000 | 5,000 |
 
 ---
@@ -382,6 +496,9 @@ GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 | Open source competitors copy CaaS features | Medium | Low | Benchmark data moat + SaaS convenience is the moat. Data network effects can't be forked. |
 | Content treadmill burns out solo founder | Medium | Medium | Automate news curation using own compression tools. Focus on data-driven reports from benchmark data. |
 | Fake/manipulated benchmark submissions | Medium | Medium | Hardware fingerprinting, statistical outlier detection, verified-device badges |
+| Context7/Nia outpace Agent Context Hub | Medium | Medium | Compressed retrieval is a fundamental differentiator they can't replicate without rebuilding their architecture. Offline/self-hosted is a moat for enterprise. |
+| NotebookLM adds model-agnostic support | Low | High | Google is unlikely to abandon their own models. Self-hosted + compression are structural advantages. open-notebook community provides innovation velocity. |
+| OSS baselines diverge from our forks | Medium | Low | Contribute upstream, maintain thin integration layers. Core value is compression, not the fork. |
 
 ---
 
@@ -432,7 +549,65 @@ See §3 Product Line 2 for pricing tiers. Key insight: the free tier drives data
 
 ---
 
-## 11. Immediate Next Steps (This Week)
+## 11. OSS Baseline Research — Build vs Fork Analysis
+
+### Knowledge Hub Baselines (NotebookLM Competitors)
+
+| Project | Stars | Stack | License | Recommendation |
+|---------|-------|-------|---------|---------------|
+| **[open-notebook](https://github.com/lfnovo/open-notebook)** | **21.8K** ⭐ | Python (FastAPI) + Next.js + SurrealDB + LangChain | MIT | **🏆 Fork as baseline.** Python backend aligns with gotcontext core. 16+ model providers, Docker deploy, REST API, multi-format ingestion (PDF, video, audio, web), podcast generation (1-4 speakers). Active community, trending on GitHub. |
+| **[SurfSense](https://github.com/modsetter/surfsense)** | **13.6K** ⭐ | Next.js + FastAPI | MIT | **Strong reference.** Teams-focused, already has SaaS (surfsense.com). External source connectors (Slack, Linear, Notion, GitHub, YouTube) are a roadmap template. Don't fork — learn from their connector architecture. |
+| [KnowNote](https://github.com/MrSibe/KnowNote) | 966 ⭐ | Electron + TypeScript | MIT | Skip. Desktop-only, not web-native. |
+| [InsightsLM](https://github.com/theaiautomators/insights-lm-public) | 512 ⭐ | React + Supabase + N8N | MIT | Reference only. Lightweight template with audio summaries. |
+| [Local-NotebookLM](https://github.com/nicholasgriffintn/Local-NotebookLM) | 867 ⭐ | Python | MIT | Reference only. Fully local, minimal features. |
+
+**Recommended approach**: Fork **open-notebook**, replace its LangChain RAG pipeline with gotcontext's `SemanticCompressor` + `EmbeddingManager`. Keep its multi-format ingestion, multi-model support, and podcast generation. Add multi-tenant scoping from `identity_scope.py`. Result: same RAG quality, 5-20x fewer tokens per retrieval.
+
+### Agent Context Hub Baselines (ref.tools/Context7 Competitors)
+
+| Project | Stars | Stack | License | Recommendation |
+|---------|-------|-------|---------|---------------|
+| **[docs-mcp-server](https://github.com/arabold/docs-mcp-server)** (Grounded Docs) | **1,176** ⭐ | TypeScript + SQLite | MIT | **🏆 Fork as baseline.** Explicitly bills itself as "open-source Context7/Nia/Ref.Tools alternative". Web UI, CLI, 90+ file formats, version-specific indexing, optional embeddings (OpenAI, Ollama, Gemini). Web scraping + local files + GitHub + npm + PyPI sources. |
+| **[Context (Neuledge)](https://github.com/neuledge/context)** | **141** ⭐ | TypeScript + SQLite FTS5 | Apache 2.0 | **Strong reference.** Fully offline, BM25 scoring, token-aware (~2K cap). Lightweight architecture worth studying for the local-first experience. |
+| [ref-tools-mcp](https://github.com/ref-tools/ref-tools-mcp) | 1K ⭐ | TypeScript | Proprietary | Reference only. ref.tools' own server. Session-aware filtering, ~5K token cap. |
+| [Docfork](https://github.com/docfork/docfork) | — | TypeScript | MIT | Reference. 9,000+ libraries, "Cabinets" for context isolation — interesting feature. |
+| [GitMCP](https://gitmcp.io/) | — | TypeScript | OSS | Skip. Too simple — just reads README/llms.txt from GitHub repos. |
+| [Deepcon](https://deepcon.ai/) | — | Cloud service | Proprietary | Reference. Claims 90% accuracy vs Context7's 65%. Semantic search approach worth studying. |
+| [Nia](https://trynia.ai/) | — | Cloud service ($6.2M YC) | Proprietary | Competitor. Indexes codebase + docs, cross-session context, 15+ tools. Richest feature set but cloud-only. |
+
+**Recommended approach**: Fork **docs-mcp-server**, add a gotcontext compression layer in the retrieval pipeline. When a user/agent queries `gotcontext_search_docs("React useEffect cleanup")`, the server fetches indexed chunks then compresses them through `SemanticCompressor` before returning. Same relevance, 85% fewer tokens. Keep the web UI, version-specific indexing, and 90+ format support.
+
+### Reddit Sentiment & Community Demand
+
+**NotebookLM alternatives** (r/selfhosted, r/ollama, r/notebooklm, r/LocalLLaMA):
+- Massive demand for self-hosted NotebookLM. Multiple threads with hundreds of upvotes.
+- SurfSense is the most-recommended alternative — consistently top answer.
+- Key themes: **privacy** ("I don't want Google reading my research"), **no data limits** (NotebookLM caps sources), **model choice** ("why am I locked to Gemini?").
+- open-notebook gaining rapid traction (21.8K stars, trending on GitHub).
+
+**Doc context tools** (r/cursor, r/ClaudeAI, r/mcp, r/LocalLLaMA):
+- Context7 was hyped but backlash is growing: rate limits dropped from 6K to 1K free requests (Jan 2026), $10/mo paid tier.
+- Top complaint: **token bloat** — "responses are too large, eating my context window." This is literally gotcontext's value prop.
+- Active thread: r/cursor "What's the best Docs MCP? (Context7, Ref, etc)" — no clear winner, developers switching between tools frequently.
+- r/ClaudeAI: "Am I missing something with the Context7 MCP hype?" — skepticism about whether any of these tools deliver real value. Opportunity to differentiate with benchmarks.
+- r/LocalLLaMA: "What is the best Opensource Context7 Alternative" — demand for local-first, self-hosted solutions.
+
+### The gotcontext Advantage: Compressed Retrieval
+
+**No existing tool compresses its retrieval output.** This is the unique differentiator:
+
+| What exists today | What gotcontext adds |
+|---|---|
+| docs-mcp-server fetches 10K tokens of React docs | gotcontext returns a 1.5K compressed skeleton with citations |
+| open-notebook returns full RAG chunks | gotcontext returns compressed, ranked chunks with importance scores |
+| Context7 serves large uncompressed responses | gotcontext serves the **skeleton** — same info, 85% fewer tokens |
+| ref.tools hard-caps at 5K tokens (lossy truncation) | gotcontext compresses semantically — nothing lost, just denser |
+
+This is a fundamental architectural advantage. Competitors would need to rebuild their retrieval pipelines to match it. gotcontext already has the compression engine — it just needs a retrieval frontend.
+
+---
+
+## 12. Immediate Next Steps (This Week)
 
 **CaaS launch (priority):**
 1. **Register gotcontext.ai domain**
@@ -452,6 +627,16 @@ See §3 Product Line 2 for pricing tiers. Key insight: the free tier drives data
 **News center groundwork (low-effort now):**
 12. **Register social accounts** (Twitter/X, LinkedIn, YouTube for gotcontext brand)
 13. **Draft first 3 newsletter issues** from existing benchmark data and market research
+
+**Agent Context Hub groundwork (parallel research):**
+14. **Clone and evaluate docs-mcp-server** (arabold) — assess architecture, identify compression insertion points
+15. **Prototype compressed retrieval**: index a framework (React), serve compressed vs raw, measure token savings
+16. **Design MCP tool schema**: `gotcontext_search_docs` and `gotcontext_read_doc` with compression parameters
+
+**Knowledge Hub groundwork (future phase):**
+17. **Clone and evaluate open-notebook** — assess SurrealDB dependency, identify LangChain RAG replacement points
+18. **Map integration points**: where `SemanticCompressor` replaces LangChain's retrieval chain
+19. **Design multi-tenant notebook schema** using existing `identity_scope.py` patterns
 
 ---
 
@@ -480,3 +665,19 @@ See §3 Product Line 2 for pricing tiers. Key insight: the free tier drives data
 ### Comparable Models
 - [UserBenchmark](https://www.userbenchmark.com/) — hardware benchmark aggregation model (crowd-sourced, ad-supported, ~50M visits/month)
 - [Open LLM Leaderboard (Hugging Face)](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard) — model quality rankings (no hardware/cost data)
+
+### OSS Baselines & Competitors (Knowledge Hub)
+- [open-notebook](https://github.com/lfnovo/open-notebook) — 21.8K★, MIT, Python + Next.js + SurrealDB, multi-model, multi-format, podcast generation
+- [SurfSense](https://github.com/modsetter/surfsense) — 13.6K★, MIT, NotebookLM for teams, external source connectors (Slack, Linear, Notion, GitHub)
+- [Google NotebookLM](https://notebooklm.google.com/) — Google-only models, free tier, no API, no self-hosting
+- [KnowNote](https://github.com/MrSibe/KnowNote) — 966★, Electron desktop app, local-first
+
+### OSS Baselines & Competitors (Agent Context Hub)
+- [docs-mcp-server / Grounded Docs](https://github.com/arabold/docs-mcp-server) — 1,176★, MIT, TypeScript, 90+ formats, "open-source Context7/Nia/Ref.Tools alternative"
+- [Context7 (Upstash)](https://context7.com/) — 51.5K MCP installs, cloud-hosted, $10/mo, rate-limited free tier (1K requests)
+- [Context (Neuledge)](https://github.com/neuledge/context) — 141★, Apache 2.0, fully local, SQLite FTS5, BM25 scoring
+- [ref.tools](https://ref.tools/) — session-aware filtering, ~5K token cap, $9/mo, MCP-native
+- [Nia](https://trynia.ai/) — YC-backed ($6.2M), codebase + docs indexing, 15+ tools, $14.99/mo
+- [Deepcon](https://deepcon.ai/) — semantic search, claims 90% accuracy, $8-$20/mo
+- [Docfork](https://github.com/docfork/docfork) — MIT, 9,000+ libraries, "Cabinets" for context isolation
+- [Top 7 MCP Alternatives for Context7 (DEV.to)](https://dev.to/moshe_io/top-7-mcp-alternatives-for-context7-in-2026-2555) — landscape overview with comparison table
