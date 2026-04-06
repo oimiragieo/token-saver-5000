@@ -766,6 +766,17 @@ python -m black src tests scripts skills
 
 Version source-of-truth: `pyproject.toml` (all other files derive from it).
 
+## Roadmap
+
+This repo is the open-source local MCP tool. [gotcontext.ai](https://gotcontext.ai) will be the SaaS platform built on top of it.
+
+**Planned for gotcontext.ai:**
+
+- **Global AI Benchmark Repository** — crowd-sourced database of model inference performance across hardware, quantization formats, and providers. Like [UserBenchmark](https://www.userbenchmark.com/) but for AI. Upload runs, compare tok/s by GPU, find the best quant for your model, get cost-per-quality recommendations. See `docs/GO_TO_MARKET_PLAN.md` §10 for the full vision.
+- **Multi-tenant SaaS** — externalized state, scoped persistence, team dashboards
+- **API gateway** — REST/GraphQL endpoints for non-MCP consumers
+- **Model-aware routing** — combine context compression with benchmark data to recommend optimal model + quant for each request
+
 ## Documentation
 
 Start here:
