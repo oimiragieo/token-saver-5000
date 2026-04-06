@@ -1,31 +1,52 @@
 # gotcontext.ai — Go-To-Market Plan
 
-**Product**: gotcontext.ai — The context optimization platform for AI coding agents
+**Product**: gotcontext.ai — The context optimization and AI intelligence platform
 **Tagline**: "Every token your AI reads costs money. We make sure it only reads what matters."
 **Founder**: CEO (business), Claude Code (engineering)
 **Status**: Product built, 121 MCP tools, proven benchmarks, ready for launch
+
+**Three product lines:**
+1. **Context as a Service (CaaS)** — semantic compression SaaS (freemium + paid)
+2. **AI Benchmark Repository** — crowd-sourced global AI inference database (UserBenchmark for AI)
+3. **AI News Center** — curated AI industry intelligence hub
 
 ---
 
 ## 1. Market Opportunity
 
-### Total Addressable Market (TAM)
+### Total Addressable Market (TAM) — Combined Platform
 
-| Metric | Value | Source |
-|--------|-------|--------|
-| Worldwide AI spending 2026 | **$2.02 trillion** | Gartner |
-| Inference as % of AI budget | **85%** | Industry consensus |
-| AI token optimization addressable | **$50-100B** (est.) | 5% of inference spend |
-| Enterprise AI budget allocation | **8-12% of IT budgets** | Deloitte |
-| YoY AI spending growth | **37%** | IDC |
+| Market Segment | 2026 Size | 2030 Projected | CAGR | Source |
+|----------------|-----------|----------------|------|--------|
+| **Global AI market** | **$1.02T** | **$1.8T (2027)** | 89% | AI Business Insider |
+| **AI inference spend** (55%+ of AI cloud) | **$480B+** | >$1T | ~40% | Oplexa / Deloitte |
+| **AI developer tools** | **$3.5B** (DevOps alone) | $10B+ | 21.5% | WifiTalents |
+| **AI benchmarking platforms** | **$1.2B** | $4.5B (2033) | 17.8% | FactMR / MarketIntelo |
+| **Enterprise AI budget (avg)** | **$7M/yr** | $15M+ | 483% since 2024 | AnalyticsWeek |
+| **AI VC funding pace** | **$120B+** | — | — | AI Business Insider |
+| **MCP protocol installs** | **97M** | — | — | David & Goliath |
 
-### Why Now
+#### gotcontext.ai TAM by Product Line
 
-- Token prices dropping 80%/year BUT volume growing faster — enterprises spending MORE
-- 1M-2M token context windows mean the problem shifts from "can I fit?" to "should I include all this?"
-- MCP protocol becoming standard (Anthropic, OpenAI Codex, Gemini all support it)
-- AI coding agents (Cursor, Claude Code, Codex, Gemini CLI) are mainstream
-- No dominant player in token optimization — market is fragmented
+| Product Line | Addressable Market | Basis |
+|--------------|-------------------|-------|
+| **CaaS (Context as a Service)** | **$50-100B** | 5-10% of $480B+ inference spend is wasted context |
+| **AI Benchmark Repository** | **$1.2-4.5B** | AI benchmarking platform market (FactMR 2026-2033) |
+| **AI News Center** | **$500M-1B** | AI-focused dev media (ad + sponsorship + premium content) |
+| **Combined platform** | **$52-106B** | — |
+
+### The Macro Thesis
+
+The AI inference cost crisis is real and accelerating:
+
+- Per-token costs fell **280x** in two years ($30/MTok → $0.10/MTok), but enterprise AI bills rose **320%** (Oplexa 2026)
+- Average enterprise AI budget grew from **$1.2M/yr (2024) → $7M/yr (2026)** — 483% increase
+- **73% of enterprises** report AI costs exceeding original budget projections (FinOps Foundation 2026)
+- Inference now consumes **55% of AI cloud spend** ($37.5B), projected to reach **70-80% by end of 2026** (ByteIota)
+- Agentic workflows use **10-20x more tokens** than simple queries — and agents run 24/7
+- **92% of US developers** use AI coding tools daily (WifiTalents 2026)
+
+**The paradox**: tokens are cheaper, but total bills are higher. Volume is growing faster than prices are falling. This is the exact environment where optimization tools thrive — not because tokens are expensive per unit, but because there are so many of them.
 
 ### The Pain Point
 
@@ -34,6 +55,12 @@ tool schemas + CLI output noise. At Opus pricing ($15/MTok input), that's **$1.5
 in waste. A team of 10 developers making 50 requests/day = **$750/day wasted** = **$195K/year**.
 
 gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
+
+### Why Now — Three Convergent Tailwinds
+
+1. **Inference cost crisis** — enterprises are spending more despite falling unit prices. Optimization is urgent.
+2. **MCP is the standard** — 97M installs. Every major AI agent supports it. gotcontext plugs in natively.
+3. **No one owns the benchmark data** — model perf data is scattered across Reddit, Twitter, Discord. There's no central, structured, queryable source. First mover wins the data network effect.
 
 ---
 
@@ -64,48 +91,63 @@ gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
 
 ---
 
-## 3. Pricing Strategy
+## 3. Pricing Strategy — Three Product Lines
 
-### Recommended: Hybrid (Free Tier + Usage-Based)
+### Product Line 1: Context as a Service (CaaS)
 
-Based on 2026 SaaS pricing trends: 67% of B2B SaaS now uses hybrid models.
+Hybrid model (free tier + usage-based). 67% of B2B SaaS uses hybrid pricing in 2026.
 
-| Tier | Price | Includes | Target |
-|------|-------|----------|--------|
-| **Free** | $0/month | 100K tokens compressed/month, 5 MCP tools, community support | Solo developers, trial |
-| **Pro** | $29/month | 5M tokens compressed/month, all 109 tools, proxy mode, CLI optimizer | Individual developers |
-| **Team** | $19/user/month (min 5) | 50M tokens/month shared, team dashboard, session history, priority support | Dev teams |
+| Tier | Price | CaaS Includes | Target |
+|------|-------|---------------|--------|
+| **Free (open-source)** | $0 | Local MCP tool, TF-IDF embeddings, basic compression (50-70% savings), community support | Solo devs, OSS users |
+| **Pro** | $29/month | Cloud API, SBERT embeddings, full compression (85-96% savings), all 121 tools, proxy mode, CLI optimizer, 5M tokens/month | Individual developers |
+| **Team** | $19/user/month (min 5) | Everything in Pro + team dashboard, session history, shared config, 50M tokens/month shared | Dev teams |
 | **Enterprise** | Custom | Unlimited, self-hosted option, SSO, audit logs, SLA, dedicated support | Large orgs |
-| **Overage** | $2/MTok compressed | Pay-as-you-go beyond tier limits | All tiers |
+| **Overage** | $2/MTok compressed | Pay-as-you-go beyond tier limits | All paid tiers |
 
-### Pricing Rationale
+**Freemium strategy**: The open-source tool (this repo) is genuinely useful — not crippled. It uses TF-IDF embeddings (98% less memory, decent quality). The paid SaaS tier unlocks SBERT/ONNX embeddings for measurably better compression ratios, plus cloud API access, team features, and higher throughput. Users upgrade because paid is better, not because free is broken.
 
-- **$29/month Pro** is cheaper than the tokens it saves: a Pro user compressing 5M tokens saves
-  ~$75/month at Opus pricing (55% average savings). **2.6x ROI on day 1.**
-- **$19/user Team** with volume discount drives adoption at org level
-- **Free tier** captures the funnel — most users start free, convert when they hit limits
-- **Usage-based overage** captures high-volume users without pricing them out
+### Product Line 2: AI Benchmark Repository
 
-### Revenue Projections (Conservative)
+| Tier | Price | Benchmark Access | Target |
+|------|-------|-----------------|--------|
+| **Free** | $0 | Browse leaderboards, submit benchmarks, basic search | Everyone |
+| **Pro** (bundled with CaaS Pro) | $29/month | API access, custom comparisons, export CSV/JSON, recommendation engine | Power users |
+| **Enterprise** | Custom | Private fleet benchmarks, procurement recommendations, team analytics | Hardware buyers, ML teams |
 
-| Month | Free Users | Pro | Team (users) | Enterprise | MRR |
-|-------|-----------|-----|-------------|-----------|-----|
-| 1 (launch) | 100 | 5 | 0 | 0 | $145 |
-| 3 | 500 | 25 | 20 | 0 | $1,105 |
-| 6 | 2,000 | 100 | 100 | 1 ($500) | $4,800 |
-| 12 | 10,000 | 400 | 500 | 5 ($2,500) | $24,100 |
-| 18 | 25,000 | 1,000 | 2,000 | 15 ($5,000) | $142,000 |
-| 24 | 50,000 | 2,500 | 5,000 | 30 ($10,000) | $467,500 |
+**Data network effect**: Every upload makes the database more valuable. Free tier drives volume. API access drives revenue. Enterprise private benchmarks are high-value.
 
-**Year 1 ARR**: ~$290K (conservative)
-**Year 2 ARR**: ~$5.6M (with enterprise growth)
+### Product Line 3: AI News Center
+
+| Revenue Stream | Model | Target |
+|----------------|-------|--------|
+| **Organic traffic** | SEO → funnel to CaaS/Benchmarks | All developers |
+| **Sponsored content** | $5-15K/post from AI tool vendors | GPU makers, cloud providers, AI startups |
+| **Newsletter premium** | $9/month for deep-dive analysis | AI decision makers |
+
+**Flywheel**: News drives traffic → traffic drives benchmark submissions → benchmarks drive CaaS signups → CaaS usage generates news-worthy data (compression trends, cost savings reports).
+
+### Combined Revenue Projections
+
+| Month | CaaS MRR | Benchmarks MRR | News MRR | Total MRR |
+|-------|---------|---------------|---------|-----------|
+| 1 (launch CaaS) | $145 | — | — | **$145** |
+| 6 (launch benchmarks) | $4,800 | $500 | — | **$5,300** |
+| 12 (launch news) | $24,100 | $5,000 | $2,000 | **$31,100** |
+| 18 | $142,000 | $25,000 | $8,000 | **$175,000** |
+| 24 | $467,500 | $80,000 | $20,000 | **$567,500** |
+
+**Year 1 ARR** (CaaS only): ~$290K
+**Year 2 ARR** (all 3 products): ~$6.8M
+**Year 3 ARR** (projected with network effects): ~$25-40M
 
 ### Valuation at Series A (Month 18-24)
 
-At $1-2M ARR with 80%+ growth:
-- Standard SaaS: 15-20x ARR = **$15-40M**
-- AI premium (1.5x): **$22.5-60M**
-- With proven benchmarks + research backing: premium end
+At $2-5M ARR with 80%+ growth + data moat:
+- Standard SaaS: 15-20x ARR = **$30-100M**
+- AI premium (1.5x): **$45-150M**
+- Data network effect premium (benchmark repo): additional 2-3x multiplier on that segment
+- With proven benchmarks + research backing: **premium end**
 
 ---
 
@@ -222,8 +264,14 @@ GitHub | Docs | Blog | Discord | Twitter
 
 ### Key Pages
 
+- `/` — landing page with live demo, pricing, agent savings comparison
 - `/pricing` — comparison table with ROI calculator
-- `/benchmarks` — interactive benchmark results with methodology
+- `/benchmarks` — **AI Benchmark Repository** (crowd-sourced inference database)
+- `/benchmarks/leaderboard` — rankings by GPU, model, quant format, cost-per-quality
+- `/benchmarks/submit` — upload inference runs (web UI or API)
+- `/benchmarks/compare` — side-by-side model/hardware/quant comparisons
+- `/news` — **AI News Center** (curated industry intelligence)
+- `/news/weekly` — weekly digest of AI infrastructure and tooling
 - `/docs` — getting started, MCP config, API reference
 - `/blog` — technical content, case studies, token savings reports
 - `/compare/rtk` — head-to-head comparison with ROI calculator
@@ -241,16 +289,20 @@ GitHub | Docs | Blog | Discord | Twitter
 | **Payments** | Stripe | Usage-based billing, metering API |
 | **Backend API** | FastAPI (Python) | Same language as Token Saver core |
 | **Database** | Supabase (Postgres) | Real-time, auth, storage in one |
+| **Benchmark DB** | Supabase (Postgres) + TimescaleDB | Time-series inference metrics at scale |
 | **Metering** | Stripe Meters or Orb | Token usage tracking |
 | **Analytics** | PostHog | Product analytics, self-hostable |
 | **Monitoring** | Better Stack | Uptime, logs, status page |
 | **Docs** | Mintlify or Nextra | Beautiful dev docs |
 | **Email** | Resend | Transactional + marketing |
 | **CDN** | Cloudflare | Edge, WAF, bot protection |
+| **Search** | Meilisearch or Typesense | Instant benchmark search/filtering |
 
 ---
 
-## 7. Launch Timeline
+## 7. Launch Timeline — Phased
+
+### Phase 1: CaaS (Months 1-3) — Ship first, revenue first
 
 | Week | Action | Goal |
 |------|--------|------|
@@ -265,19 +317,44 @@ GitHub | Docs | Blog | Discord | Twitter
 | 8 | Team tier live | Multi-user accounts |
 | 12 | Enterprise pilot (first 3 orgs) | Pipeline for enterprise sales |
 
+### Phase 2: AI Benchmark Repository (Months 4-8)
+
+| Week | Action | Goal |
+|------|--------|------|
+| 16 | Seed database with automated runs (50+ models × 10+ GPUs × 5 quant formats) | Content before launch |
+| 18 | Public beta at gotcontext.ai/benchmarks | Community submissions |
+| 20 | CLI upload tool (`gotcontext benchmark submit`) | Frictionless contribution |
+| 22 | MCP tool for AI agents to auto-submit benchmarks | Agent-driven data growth |
+| 24 | Leaderboards + recommendation engine live | "Best model for your GPU" |
+| 28 | API access for Pro/Enterprise tiers | Revenue from benchmark data |
+| 32 | Hardware vendor partnerships (NVIDIA, AMD) | Sponsored benchmarks, credibility |
+
+### Phase 3: AI News Center (Months 6-12)
+
+| Week | Action | Goal |
+|------|--------|------|
+| 24 | Launch gotcontext.ai/news with curated weekly digest | SEO traffic |
+| 28 | Newsletter (free + premium) | Email list growth |
+| 32 | Sponsored content partnerships | Ad revenue from AI vendors |
+| 36 | Data-driven reports (from benchmark repo data) | Thought leadership |
+| 40 | Premium analysis tier ($9/month) | Subscription revenue |
+
 ---
 
 ## 8. Key Metrics to Track
 
-| Metric | Target (Month 6) | Target (Month 12) |
-|--------|-----------------|-------------------|
-| Free signups | 2,000 | 10,000 |
-| Free → Pro conversion | 5% | 7% |
-| MRR | $4,800 | $24,100 |
-| Churn (monthly) | <5% | <3% |
-| NRR | >110% | >120% |
-| Tokens compressed/month | 500M | 5B |
-| DAU (active compression) | 200 | 1,000 |
+| Metric | Target (Month 6) | Target (Month 12) | Target (Month 24) |
+|--------|-----------------|-------------------|-------------------|
+| Free signups (CaaS) | 2,000 | 10,000 | 50,000 |
+| Free → Pro conversion | 5% | 7% | 10% |
+| Combined MRR | $5,300 | $31,100 | $567,500 |
+| Churn (monthly) | <5% | <3% | <2% |
+| NRR | >110% | >120% | >130% |
+| Tokens compressed/month | 500M | 5B | 50B |
+| Benchmark submissions | — | 50,000 | 500,000 |
+| Benchmark MAU | — | 5,000 | 50,000 |
+| News center monthly traffic | — | 10,000 | 100,000 |
+| DAU (active compression) | 200 | 1,000 | 5,000 |
 
 ---
 
@@ -285,11 +362,14 @@ GitHub | Docs | Blog | Discord | Twitter
 
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|-----------|
-| Token prices drop so fast optimization becomes irrelevant | Medium | High | Pivot to quality (better context = better answers, not just cheaper) |
-| RTK (28K stars) adds document compression | Low | High | We have 2-year head start on semantic compression + research backing |
-| Anthropic/OpenAI build native optimization | Medium | High | Move up-stack to analytics + intelligence, not just compression |
+| Token prices drop so fast optimization becomes irrelevant | Medium | High | Pivot to quality (better context = better answers, not just cheaper). Benchmark repo + news center are price-independent. |
+| RTK (28K stars) adds document compression | Low | High | 2-year head start on semantic compression + research backing. Benchmark repo is a separate moat. |
+| Anthropic/OpenAI build native optimization | Medium | High | Move up-stack to analytics + intelligence. Benchmark repo is vendor-neutral — benefits from more providers. |
+| Benchmark repo can't reach critical mass | Medium | High | Seed with automated runs before launch (50+ models × 10+ GPUs). Add MCP tool so AI agents auto-submit. |
 | Slow enterprise adoption | High | Medium | Focus on PLG first, enterprise comes with proof |
-| Open source competitors copy features | Medium | Low | Speed + execution + SaaS convenience is the moat |
+| Open source competitors copy CaaS features | Medium | Low | Benchmark data moat + SaaS convenience is the moat. Data network effects can't be forked. |
+| Content treadmill burns out solo founder | Medium | Medium | Automate news curation using own compression tools. Focus on data-driven reports from benchmark data. |
+| Fake/manipulated benchmark submissions | Medium | Medium | Hardware fingerprinting, statistical outlier detection, verified-device badges |
 
 ---
 
@@ -359,13 +439,26 @@ This is a natural extension of the token optimization mission:
 
 ## Research Sources
 
+### Market Sizing & AI Economics
+- [AI Inference Cost Crisis 2026 (Oplexa)](https://oplexa.com/ai-inference-cost-crisis-2026/) — 280x price drop, 320% spend increase, $7M avg enterprise budget
+- [AI Inference 55% of Cloud Spending (ByteIota)](https://byteiota.com/ai-inference-costs-55-of-cloud-spending-in-2026/) — $37.5B cloud infra, $50B+ inference chip market
+- [2026 AI Market Report: $1T (AI Business Insider)](https://aibusinessinsider.org/2026-ai-market-report-1-trillion-and-growing-9/) — $1.02T market, $120B+ VC funding pace
+- [AI Inference Hardware Benchmarking Market (FactMR)](https://www.factmr.com/report/ai-inference-hardware-benchmarking-test-market) — $1.2B → $4.5B (2026-2033)
+- [AI Benchmarking Platform Market (MarketIntelo)](https://marketintelo.com/report/ai-benchmarking-platform-market) — market sizing through 2033
+- [AI Developer Tools Industry (WifiTalents)](https://wifitalents.com/ai-developer-tools-industry-statistics/) — 92% dev adoption, 21.5% CAGR, $3.5B DevOps
+- [MCP Reaches 97M Installs (David & Goliath)](https://davidandgoliath.ai/daily-ai-briefing/mcp-97-million-installs-ai-standard) — protocol adoption data
+- [AI Token Spend Dynamics (Deloitte)](https://www.deloitte.com/us/en/insights/topics/emerging-technologies/ai-tokens-how-to-navigate-spend-dynamics.html)
+- [Gartner: 90% LLM Cost Drop by 2030](https://www.gartner.com/en/newsroom/press-releases/2026-03-25-gartner-predicts-that-by-2030-performing-inference-on-an-llm-with-1-trillion-parameters-will-cost-genai-providers-over-90-percent-less-than-in-2025)
+
+### SaaS Strategy
 - [SaaS GTM Playbook 2026](https://thesmarketers.com/toolkits-guides/saas-gtm-playbook-2026/)
 - [SaaS Pricing Strategy Guide 2026](https://www.nxcode.io/resources/news/saas-pricing-strategy-guide-2026)
 - [AI Startup Valuation Multiples](https://qubit.capital/blog/ai-startup-valuation-multiples)
 - [SaaS Benchmarks Report 2026](https://www.averi.ai/how-to/the-saas-benchmarks-report-2026-how-your-startup-stacks-up-(from-pre-seed-to-series-a))
-- [AI Token Spend Dynamics (Deloitte)](https://www.deloitte.com/us/en/insights/topics/emerging-technologies/ai-tokens-how-to-navigate-spend-dynamics.html)
-- [Gartner: 90% LLM Cost Drop by 2030](https://www.gartner.com/en/newsroom/press-releases/2026-03-25-gartner-predicts-that-by-2030-performing-inference-on-an-llm-with-1-trillion-parameters-will-cost-genai-providers-over-90-percent-less-than-in-2025)
 - [Solo Founder SaaS Guide 2026](https://www.twocents.software/blog/solo-founders-guide-to-launching-saas/)
 - [SaaS Landing Page Trends 2026](https://www.saasframe.io/blog/10-saas-landing-page-trends-for-2026-with-real-examples)
 - [AI SaaS Solo Founder Success Stories](https://crazyburst.com/ai-saas-solo-founder-success-stories-2026/)
-- [SaaS Website Design 2026](https://www.stan.vision/journal/saas-website-design)
+
+### Comparable Models
+- [UserBenchmark](https://www.userbenchmark.com/) — hardware benchmark aggregation model (crowd-sourced, ad-supported, ~50M visits/month)
+- [Open LLM Leaderboard (Hugging Face)](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard) — model quality rankings (no hardware/cost data)
