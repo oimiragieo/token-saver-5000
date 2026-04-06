@@ -79,15 +79,17 @@ gotcontext.ai cuts this by 55-96%, saving **$107-187K/year** per team.
 | Proven benchmarks | **Claude/Codex/Gemini** | Claimed 89% | No published | No published | No published |
 | Quality predictor | **Yes** (PoC paper) | No | No | No | No |
 | Research-backed | **3 papers** | No | No | No | No |
-| Pricing | **Usage-based** | Free (OSS) | Free (OSS) | Free (OSS) | Elastic License |
+| Pricing | **Freemium + usage** | Free (OSS) | Free (OSS) | Free (OSS) | Elastic License |
+| AI benchmark repo | **Yes (planned)** | No | No | No | No |
 
 ### Our Moat
 
 1. **Only tool with proven cross-platform benchmarks** (real API numbers, reproducible)
 2. **Deepest compression stack** (semantic graph + token refiner + meta-tokens + CLI filters)
-3. **Broadest feature surface** (109 tools vs competitors' 1-5)
+3. **Broadest feature surface** (121 tools vs competitors' 1-5)
 4. **Research-backed** (3 arXiv papers implemented, TurboQuant-inspired embeddings)
 5. **Full stack**: search (tensor-grep) + compress (token-saver) + filter (CLI optimizer) + proxy
+6. **Data network effect** (benchmark repo): crowd-sourced inference data that can't be forked or replicated — grows more valuable with every submission
 
 ---
 
@@ -209,14 +211,18 @@ At $2-5M ARR with 80%+ growth + data moat:
 4. **Sales-assisted motion** for $500+/month accounts
 5. **Case studies** from Phase 1-2 customers with real ROI numbers
 
-### Phase 4: Platform (Months 12-24)
+### Phase 4: Platform Expansion (Months 12-24)
 
-**Goal**: $1M+ ARR, Series A readiness
+**Goal**: $1M+ ARR, Series A readiness, all 3 products live
 
-1. **Marketplace**: third-party compression plugins
-2. **API**: gotcontext.ai as a service (not just MCP)
-3. **Analytics**: "Token Intelligence" — show where tokens are being wasted
-4. **Integrations**: Datadog, Grafana, PagerDuty for token budget alerting
+1. **AI News Center live** at gotcontext.ai/news — curated weekly digest, newsletter
+2. **Benchmark recommendation engine**: "Best model for your GPU and budget"
+3. **Marketplace**: third-party compression plugins
+4. **REST/GraphQL API**: gotcontext.ai as a service (not just MCP)
+5. **Analytics**: "Token Intelligence" — show where tokens are being wasted
+6. **Integrations**: Datadog, Grafana, PagerDuty for token budget alerting
+7. **Data-driven reports**: publish industry insights from benchmark + compression data
+8. **Sponsored content partnerships** with GPU makers, cloud providers
 
 ---
 
@@ -239,6 +245,11 @@ Real API measurements, not marketing claims.
 | Codex    | 37K    | 23K   | 38.2%   |
 | Gemini   | 69K    | 31K   | 55.7%   |
 
+[PLATFORM OVERVIEW - 3 pillars]
+1. Context Compression — 85-96% token savings via semantic compression
+2. AI Benchmark Repository — find the best model for your hardware and budget
+3. AI News & Intelligence — stay ahead of AI infrastructure trends
+
 [HOW IT WORKS - 3 steps]
 1. Install: pip install gotcontext
 2. Configure: one line in your MCP config
@@ -251,6 +262,7 @@ Real API measurements, not marketing claims.
 - Session Continuity (survives compaction)
 - Research-Backed (3 arXiv papers)
 - Cross-Platform (Claude, Codex, Gemini)
+- Global Benchmark Database (coming soon)
 
 [PRICING]
 Free / Pro $29 / Team $19/user / Enterprise
@@ -259,7 +271,7 @@ Free / Pro $29 / Team $19/user / Enterprise
 gotcontext.ai vs RTK vs Headroom vs mcp-compressor
 
 [FOOTER]
-GitHub | Docs | Blog | Discord | Twitter
+GitHub | Docs | Blog | Benchmarks | News | Discord | Twitter
 ```
 
 ### Key Pages
@@ -416,16 +428,13 @@ This is a natural extension of the token optimization mission:
 
 ### Revenue Model
 
-| Tier | Access |
-|------|--------|
-| **Free** | Browse rankings, submit benchmarks, basic queries |
-| **Pro** ($29/mo, bundled with gotcontext Pro) | API access, custom comparisons, export, recommendation engine |
-| **Enterprise** | Private benchmarks (internal hardware fleet), team analytics, procurement recommendations |
+See §3 Product Line 2 for pricing tiers. Key insight: the free tier drives data volume (network effect), while Pro/Enterprise API access drives revenue. Bundling with CaaS Pro means benchmark users become compression customers and vice versa.
 
 ---
 
 ## 11. Immediate Next Steps (This Week)
 
+**CaaS launch (priority):**
 1. **Register gotcontext.ai domain**
 2. **Create GitHub org** (gotcontext or gotcontext-ai)
 3. **Deploy landing page** (Next.js on Vercel, dark mode, dev-focused)
@@ -434,6 +443,15 @@ This is a natural extension of the token optimization mission:
 6. **Write launch blog post** with benchmark data
 7. **Prepare Product Hunt listing** (scheduled for Tuesday 12:01 AM PT)
 8. **Create Discord server** for community
+
+**Benchmark repo groundwork (parallel):**
+9. **Design benchmark submission schema** (model, hardware, quant, throughput, cost)
+10. **Prototype database schema** (Postgres + TimescaleDB for time-series metrics)
+11. **Plan automated seed runs** — identify 50+ models × 10+ GPUs for initial data
+
+**News center groundwork (low-effort now):**
+12. **Register social accounts** (Twitter/X, LinkedIn, YouTube for gotcontext brand)
+13. **Draft first 3 newsletter issues** from existing benchmark data and market research
 
 ---
 
