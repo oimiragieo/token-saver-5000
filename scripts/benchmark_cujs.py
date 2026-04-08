@@ -1259,6 +1259,168 @@ def run_cuj_12_team_dashboard(verbose: bool = False) -> CUJResult:
     return result
 
 
+def run_cuj_13_knowledge_compilation(verbose: bool = False) -> CUJResult:
+    """CUJ 13: Knowledge Compilation & Retrieval"""
+    result = CUJResult(
+        journey_id=13,
+        name="Knowledge Compilation & Retrieval",
+        persona="Tech lead managing team knowledge across sessions",
+        description=(
+            "Ingest session transcripts, compile memories into cross-linked articles, "
+            "lint the knowledge base, and search via compiled index."
+        ),
+    )
+
+    try:
+        from src.memory_api import MemoryAPI
+        from src.transcript_extractor import ingest_transcript
+        from src.knowledge_compiler import KnowledgeCompiler
+        from src.knowledge_lint import KnowledgeLinter
+
+        MemoryAPI.reset_singleton()
+        api = MemoryAPI()
+
+        # -- Step 1: Ingest transcripts ----------------------------------------
+        transcripts = [
+            (
+                "We decided to use PostgreSQL over MongoDB for ACID compliance. "
+                "Watch out for N+1 query problems when using the ORM. "
+                "Going forward we should always use select_related in Django queries."
+            ),
+            (
+                "The lesson learned from the outage was to never deploy on Fridays. "
+                "We chose Redis for caching because of its pub/sub support. "
+                "Bug in the auth flow caused session leaks under load."
+            ),
+            (
+                "Best practice: always run black and ruff before commits. "
+                "We decided to use dependency injection for all service classes. "
+                "Watch out for race conditions in the async cache invalidation code."
+            ),
+        ]
+
+        t0 = _now_ms()
+        total_input = 0
+        total_stored = 0
+        for transcript in transcripts:
+            total_input += _count_tokens(transcript)
+            extraction = ingest_transcript(transcript, memory_api=api)
+            total_stored += extraction.stored_count
+
+        dur_ingest = _elapsed_ms(t0)
+
+        step1 = StepResult(
+            name="ingest_transcripts",
+            input_tokens=total_input,
+            output_tokens=total_stored * 15,  # ~15 tokens per stored insight
+            savings_pct=_savings_pct(total_input, total_stored * 15),
+            duration_ms=dur_ingest,
+            extra={
+                "transcripts_ingested": len(transcripts),
+                "insights_stored": total_stored,
+            },
+        )
+        result.steps.append(step1)
+
+        # -- Step 2: Compile knowledge -----------------------------------------
+        t0 = _now_ms()
+        compiler = KnowledgeCompiler()
+        compilation = compiler.compile_from_api(memory_api=api)
+        dur_compile = _elapsed_ms(t0)
+
+        index_tokens = _count_tokens(compilation.index_markdown)
+        memory_tokens = sum(
+            _count_tokens(m.get("text", "")) for a in compilation.articles for m in a.memories
+        )
+
+        step2 = StepResult(
+            name="compile_knowledge",
+            input_tokens=memory_tokens,
+            output_tokens=index_tokens,
+            savings_pct=_savings_pct(memory_tokens, index_tokens),
+            duration_ms=dur_compile,
+            extra={
+                "articles_count": len(compilation.articles),
+                "deduplicated": compilation.deduplicated,
+                "total_memories": compilation.total_memories,
+            },
+        )
+        result.steps.append(step2)
+
+        # -- Step 3: Lint knowledge --------------------------------------------
+        t0 = _now_ms()
+        linter = KnowledgeLinter(stale_days=30)
+        lint_report = linter.lint_from_api(memory_api=api)
+        dur_lint = _elapsed_ms(t0)
+
+        step3 = StepResult(
+            name="lint_knowledge",
+            input_tokens=compilation.total_memories,
+            output_tokens=len(lint_report.findings),
+            savings_pct=0.0,
+            duration_ms=dur_lint,
+            extra={
+                "findings": len(lint_report.findings),
+                "errors": lint_report.error_count,
+                "warnings": lint_report.warning_count,
+                "checks_run": lint_report.checks_run,
+            },
+        )
+        result.steps.append(step3)
+
+        # -- Step 4: Index-first search ----------------------------------------
+        t0 = _now_ms()
+        search_result = compiler.compile_from_api(memory_api=api)
+        query = "decided"
+        matched = [
+            a
+            for a in search_result.articles
+            if query in " ".join(m.get("text", "") for m in a.memories).lower()
+        ]
+        dur_search = _elapsed_ms(t0)
+
+        step4 = StepResult(
+            name="search_compiled_index",
+            input_tokens=memory_tokens,
+            output_tokens=index_tokens,
+            savings_pct=_savings_pct(memory_tokens, index_tokens),
+            duration_ms=dur_search,
+            extra={
+                "query": query,
+                "matched_articles": len(matched),
+                "total_articles": len(search_result.articles),
+            },
+        )
+        result.steps.append(step4)
+
+        # -- Totals ------------------------------------------------------------
+        result.total_input_tokens = total_input
+        result.total_output_tokens = index_tokens
+        result.total_savings_pct = _savings_pct(total_input, index_tokens)
+
+        if verbose:
+            print(f"  Transcripts: {len(transcripts)}, insights stored: {total_stored}")
+            print(
+                f"  Compiled: {len(compilation.articles)} articles, "
+                f"deduped {compilation.deduplicated}"
+            )
+            print(
+                f"  Lint: {len(lint_report.findings)} findings "
+                f"({lint_report.error_count} errors, {lint_report.warning_count} warnings)"
+            )
+            print(f"  Search '{query}': {len(matched)} articles matched")
+
+        MemoryAPI.reset_singleton()
+
+    except Exception as exc:
+        result.passed = False
+        result.error = str(exc)
+        if verbose:
+            print(f"  ERROR: {exc}")
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -1276,6 +1438,7 @@ ALL_CUJS = [
     run_cuj_10_budget_governance,
     run_cuj_11_tee_recovery,
     run_cuj_12_team_dashboard,
+    run_cuj_13_knowledge_compilation,
 ]
 
 

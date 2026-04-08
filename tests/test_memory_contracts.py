@@ -17,6 +17,14 @@ MEMORY_TOOL_NAMES = {
     "get_user_profile",
 }
 
+KNOWLEDGE_TOOL_NAMES = {
+    "ingest_transcript",
+    "compile_knowledge",
+    "get_knowledge_index",
+    "lint_knowledge",
+    "search_memory_index",
+}
+
 
 def setup_function():
     MemoryAPI.reset_singleton()
@@ -27,6 +35,14 @@ def test_memory_tools_are_registered_in_mcp_core():
 
     assert MEMORY_TOOL_NAMES.issubset(tools)
     assert {"text", "user_id", "workspace_id"} <= set(tools["add_memory"].inputSchema["properties"])
+
+
+def test_knowledge_tools_are_registered_in_mcp_core():
+    tools = {tool.name: tool for tool in setup_mcp_tools()}
+
+    assert KNOWLEDGE_TOOL_NAMES.issubset(tools)
+    assert "text" in tools["ingest_transcript"].inputSchema["properties"]
+    assert "query" in tools["search_memory_index"].inputSchema["properties"]
 
 
 @pytest.mark.asyncio
@@ -58,3 +74,33 @@ async def test_router_dispatches_memory_tools():
 
     assert created["status"] == "success"
     assert listed["total_memories"] == 1
+
+
+@pytest.mark.asyncio
+async def test_router_dispatches_knowledge_tools():
+    context = {"memory_api": MemoryAPI()}
+
+    # ingest_transcript
+    ingested = json.loads(
+        await route_tool_call(
+            "ingest_transcript",
+            {"text": "We decided to use PostgreSQL for ACID compliance."},
+            context,
+        )
+    )
+    assert ingested["status"] == "success"
+
+    # compile_knowledge
+    compiled = json.loads(await route_tool_call("compile_knowledge", {}, context))
+    assert compiled["status"] == "success"
+
+    # lint_knowledge
+    linted = json.loads(await route_tool_call("lint_knowledge", {}, context))
+    assert linted["status"] == "success"
+    assert "checks_run" in linted
+
+    # search_memory_index
+    searched = json.loads(
+        await route_tool_call("search_memory_index", {"query": "PostgreSQL"}, context)
+    )
+    assert searched["status"] == "success"

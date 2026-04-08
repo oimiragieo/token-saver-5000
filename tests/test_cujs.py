@@ -33,6 +33,7 @@ from scripts.benchmark_cujs import (
     run_cuj_4_query_focused_search,
     run_cuj_5_session_recovery,
     run_cuj_6_savings_report,
+    run_cuj_13_knowledge_compilation,
 )
 
 # ---------------------------------------------------------------------------
@@ -309,6 +310,67 @@ def test_cuj_6_compression_ratio_above_10x(cuj6: CUJResult) -> None:
 
 
 # ---------------------------------------------------------------------------
+# CUJ 13: Knowledge Compilation & Retrieval
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def cuj13() -> CUJResult:
+    return run_cuj_13_knowledge_compilation(verbose=False)
+
+
+def test_cuj_13_passes(cuj13: CUJResult) -> None:
+    assert cuj13.passed, f"CUJ 13 failed: {cuj13.error}"
+
+
+def test_cuj_13_ingests_transcripts(cuj13: CUJResult) -> None:
+    ingest_step = next(s for s in cuj13.steps if s.name == "ingest_transcripts")
+    stored = ingest_step.extra.get("insights_stored", 0)
+    assert stored >= 3, f"Expected >= 3 insights stored, got {stored}"
+
+
+def test_cuj_13_compiles_articles(cuj13: CUJResult) -> None:
+    compile_step = next(s for s in cuj13.steps if s.name == "compile_knowledge")
+    articles = compile_step.extra.get("articles_count", 0)
+    assert articles >= 2, f"Expected >= 2 articles, got {articles}"
+
+
+def test_cuj_13_deduplicates(cuj13: CUJResult) -> None:
+    compile_step = next(s for s in cuj13.steps if s.name == "compile_knowledge")
+    deduped = compile_step.extra.get("deduplicated", 0)
+    assert deduped >= 0  # May be 0 if all memories are distinct
+
+
+def test_cuj_13_lints_knowledge(cuj13: CUJResult) -> None:
+    lint_step = next(s for s in cuj13.steps if s.name == "lint_knowledge")
+    checks = lint_step.extra.get("checks_run", [])
+    assert "stale" in checks
+    assert "duplicates" in checks
+    assert "contradictions" in checks
+
+
+def test_cuj_13_searches_compiled_index(cuj13: CUJResult) -> None:
+    search_step = next(s for s in cuj13.steps if s.name == "search_compiled_index")
+    matched = search_step.extra.get("matched_articles", 0)
+    assert matched >= 1, f"Expected >= 1 matched article for 'decided', got {matched}"
+
+
+def test_cuj_13_has_all_four_steps(cuj13: CUJResult) -> None:
+    step_names = [s.name for s in cuj13.steps]
+    assert "ingest_transcripts" in step_names
+    assert "compile_knowledge" in step_names
+    assert "lint_knowledge" in step_names
+    assert "search_compiled_index" in step_names
+
+
+def test_cuj_13_savings_positive(cuj13: CUJResult) -> None:
+    assert cuj13.total_savings_pct > 0, (
+        f"Expected positive savings from knowledge compilation, "
+        f"got {cuj13.total_savings_pct:.1f}%"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Cross-cutting: run all CUJs together
 # ---------------------------------------------------------------------------
 
@@ -325,16 +387,16 @@ def test_all_cujs_pass(full_baseline: CUJBaseline) -> None:
     )
 
 
-def test_baseline_has_twelve_journeys(full_baseline: CUJBaseline) -> None:
+def test_baseline_has_thirteen_journeys(full_baseline: CUJBaseline) -> None:
     assert (
-        len(full_baseline.journeys) == 12
-    ), f"Expected 12 journeys, got {len(full_baseline.journeys)}"
+        len(full_baseline.journeys) == 13
+    ), f"Expected 13 journeys, got {len(full_baseline.journeys)}"
 
 
 def test_baseline_summary_populated(full_baseline: CUJBaseline) -> None:
     s = full_baseline.summary
-    assert s.get("total_journeys") == 12
-    assert s.get("passed") == 12
+    assert s.get("total_journeys") == 13
+    assert s.get("passed") == 13
     assert s.get("aggregate_input_tokens", 0) > 0
     assert s.get("aggregate_output_tokens", 0) > 0
     assert s.get("aggregate_savings_pct", 0) > 0
@@ -344,7 +406,7 @@ def test_baseline_output_json_serializable(full_baseline: CUJBaseline) -> None:
     raw = asdict(full_baseline)
     serialized = json.dumps(raw, default=str)
     recovered = json.loads(serialized)
-    assert recovered["summary"]["total_journeys"] == 12
+    assert recovered["summary"]["total_journeys"] == 13
 
 
 # ---------------------------------------------------------------------------

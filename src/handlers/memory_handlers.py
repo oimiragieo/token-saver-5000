@@ -1,11 +1,15 @@
-"""Handlers for explicit memory and personalization APIs."""
+"""Handlers for explicit memory, personalization, and knowledge management APIs."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from ..memory_api import MemoryAPI
+from ..knowledge_compiler import KnowledgeCompiler
+from ..knowledge_lint import KnowledgeLinter
+from ..transcript_extractor import ingest_transcript
 from ..observability import get_observability
 
 
@@ -180,3 +184,178 @@ async def handle_get_user_profile(context: dict[str, Any], args: dict[str, Any])
             session_id=args.get("session_id"),
         )
     return json.dumps({"status": "success", "profile": profile}, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Transcript ingestion (Phase 1)
+# ---------------------------------------------------------------------------
+
+
+async def handle_ingest_transcript(context: dict[str, Any], args: dict[str, Any]) -> str:
+    """Extract insights from a conversation transcript and store as memories."""
+    observe = get_observability()
+    text = _required_string(args, "text", "ingest_transcript")
+    mode = args.get("mode", "all")
+    if mode not in ("all", "decisions", "patterns"):
+        raise ValueError("'mode' must be one of: all, decisions, patterns")
+    source = args.get("source", "transcript")
+
+    with observe.trace("transcript.ingest", mode=mode, **_scope_args(args)):
+        result = ingest_transcript(
+            text,
+            mode=mode,
+            source=source if isinstance(source, str) else "transcript",
+            memory_api=_memory_api(context),
+            **_scope_args(args),
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "total_sentences": result.total_sentences,
+            "extracted_count": result.extracted_count,
+            "stored_count": result.stored_count,
+            "insights": result.insights,
+        },
+        indent=2,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Knowledge compilation (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+async def handle_compile_knowledge(context: dict[str, Any], args: dict[str, Any]) -> str:
+    """Compile flat memories into cross-linked concept articles + index."""
+    observe = get_observability()
+    write_files = bool(args.get("write_files", False))
+    output_dir = _optional_string(args, "output_dir")
+
+    with observe.trace("knowledge.compile", write_files=write_files, **_scope_args(args)):
+        compiler = KnowledgeCompiler(
+            output_dir=Path(output_dir) if output_dir else None,
+        )
+        result = compiler.compile_from_api(
+            memory_api=_memory_api(context),
+            **_scope_args(args),
+            write_files=write_files,
+        )
+
+    articles_summary = [
+        {"title": a.title, "category": a.category, "entry_count": len(a.memories)}
+        for a in result.articles
+    ]
+
+    return json.dumps(
+        {
+            "status": "success",
+            "total_memories": result.total_memories,
+            "deduplicated": result.deduplicated,
+            "articles_count": len(result.articles),
+            "articles": articles_summary,
+            "index_markdown": result.index_markdown,
+            "output_dir": result.output_dir if write_files else None,
+        },
+        indent=2,
+    )
+
+
+async def handle_get_knowledge_index(context: dict[str, Any], args: dict[str, Any]) -> str:
+    """Return the compiled knowledge index for index-first retrieval."""
+    observe = get_observability()
+
+    with observe.trace("knowledge.get_index", **_scope_args(args)):
+        compiler = KnowledgeCompiler()
+        result = compiler.compile_from_api(
+            memory_api=_memory_api(context),
+            **_scope_args(args),
+            write_files=False,
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "index_markdown": result.index_markdown,
+            "articles_count": len(result.articles),
+            "total_memories": result.total_memories,
+        },
+        indent=2,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Knowledge lint (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+async def handle_lint_knowledge(context: dict[str, Any], args: dict[str, Any]) -> str:
+    """Run quality checks on stored memories and return a lint report."""
+    observe = get_observability()
+    stale_days = args.get("stale_days", 30)
+    if not isinstance(stale_days, int) or stale_days <= 0:
+        raise ValueError("'stale_days' must be a positive integer")
+
+    with observe.trace("knowledge.lint", stale_days=stale_days, **_scope_args(args)):
+        linter = KnowledgeLinter(stale_days=stale_days)
+        report = linter.lint_from_api(
+            memory_api=_memory_api(context),
+            **_scope_args(args),
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            **report.to_dict(),
+        },
+        indent=2,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Index-first retrieval (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+async def handle_search_memory_index(context: dict[str, Any], args: dict[str, Any]) -> str:
+    """Search memories via the compiled knowledge index.
+
+    Returns the full index markdown plus any articles matching the query,
+    enabling index-guided retrieval for small knowledge bases (<500 entries).
+    """
+    observe = get_observability()
+    query = _required_string(args, "query", "search_memory_index")
+
+    with observe.trace("memory.search_index", query=query, **_scope_args(args)):
+        compiler = KnowledgeCompiler()
+        result = compiler.compile_from_api(
+            memory_api=_memory_api(context),
+            **_scope_args(args),
+            write_files=False,
+        )
+
+        # Filter articles whose content matches the query
+        query_lower = query.lower()
+        matched = []
+        for article in result.articles:
+            article_text = " ".join(m.get("text", "") for m in article.memories).lower()
+            if query_lower in article_text or any(w in article_text for w in query_lower.split()):
+                matched.append(
+                    {
+                        "title": article.title,
+                        "category": article.category,
+                        "entries": article.memories,
+                        "markdown": article.to_markdown(),
+                    }
+                )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "query": query,
+            "index_markdown": result.index_markdown,
+            "matched_articles": len(matched),
+            "articles": matched,
+        },
+        indent=2,
+    )

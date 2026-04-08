@@ -18,14 +18,14 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 |--------|-------|--------|
 | **Source Modules** | 80+ Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
 | **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 121 tools defined | ✅ All routed |
-| **Test Files** | 90+ test modules | ✅ 3,409+ tests |
+| **MCP Tools** | 126 tools defined | ✅ All routed |
+| **Test Files** | 90+ test modules | ✅ 3,500+ tests |
 | **Test Coverage** | 70%+ overall | ✅ Meets threshold |
 | **Documentation** | 51+ markdown files | ✅ Updated for launch |
 
 ### Version Alignment
 - **pyproject.toml**: v0.11.0 ✅ (requires-python <3.15)
-- **README.md**: 121 MCP tools ✅
+- **README.md**: 126 MCP tools ✅
 - **CHANGELOG.md**: Latest unreleased v0.12.0 ✅
 
 ### Architecture Summary
@@ -43,9 +43,10 @@ src/                              # 75 modules, ~26,000 lines
 ├── Token Economy (4 modules)     # savings_tracker, savings_dashboard, budget_monitor, team_export
 ├── CLI Filtering (3 modules)     # cli_output_optimizer, filter_rules, tee_recovery
 ├── Discovery (1 module)          # savings_discover
+├── Knowledge Management (3 modules) # transcript_extractor, knowledge_compiler, knowledge_lint
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
 ├── semantic_modulator/           # subpackage (additional modules)
-└── handlers/ (11 modules)        # 121 MCP tool implementations
+└── handlers/ (11 modules)        # 126 MCP tool implementations
 ```
 
 ### Experimental Features Status

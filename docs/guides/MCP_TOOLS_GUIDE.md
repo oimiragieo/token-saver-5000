@@ -24,7 +24,7 @@
 
 ## Overview
 
-Token Saver 5000 exposes **121 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
+Token Saver 5000 exposes **126 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
 
 1. **Compress documents** with 80-95% token reduction
 2. **Manage dialogue memory** with ~66% token savings and safety preservation
@@ -33,6 +33,7 @@ Token Saver 5000 exposes **121 MCP tools** via the stdio transport protocol. The
 5. **Adapt compression dynamically** based on available context
 6. **Sync file changes** with real-time staleness detection (v0.4.0)
 7. **Evolve contexts** through ACE Framework self-improving playbooks (v0.4.0)
+8. **Mine session knowledge** — extract, compile, lint, and search accumulated insights
 
 All tools operate **locally** (no external API calls required) and use **persistent storage** (documents survive server restarts).
 
@@ -2346,7 +2347,77 @@ if stats["storage_used_mb"] > 900:  # Approaching 1GB limit
 
 ## Conclusion
 
-The 121 MCP tools provide comprehensive capabilities for:
+## Knowledge Management Tools (5)
+
+Inspired by [claude-memory-compiler](https://github.com/coleam00/claude-memory-compiler),
+these tools implement a two-stage knowledge pipeline: fast capture at session boundaries,
+slow consolidation on a schedule.
+
+### `ingest_transcript`
+
+Extract decisions, lessons, patterns, and gotchas from conversation transcripts.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `text` | string | Yes | Raw conversation transcript |
+| `mode` | string | No | `"all"` (default), `"decisions"`, or `"patterns"` |
+| `source` | string | No | Source tag (default: `"transcript"`) |
+| `workspace_id` | string | No | Scope |
+| `user_id` | string | No | Scope |
+
+**Benchmark**: 10 transcripts (1,545 chars) → 29 insights extracted in 3ms.
+
+### `compile_knowledge`
+
+Compile flat memories into cross-linked markdown concept articles with index.
+Groups by category, deduplicates by pairwise similarity, cross-links by token overlap.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `write_files` | boolean | No | Persist to disk (default: false) |
+| `output_dir` | string | No | Output path for markdown files |
+| `workspace_id` | string | No | Scope |
+
+**Benchmark**: 29 memories → 5 articles + index in 40ms. 5.1x compression (raw → index).
+
+### `get_knowledge_index`
+
+Return the compiled knowledge index markdown for index-first retrieval.
+Best for small knowledge bases (<500 entries) where a readable index beats embedding search.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspace_id` | string | No | Scope |
+
+### `lint_knowledge`
+
+Run quality checks: staleness, near-duplicates, contradictions, orphan detection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `stale_days` | integer | No | Days threshold (default: 30) |
+| `workspace_id` | string | No | Scope |
+
+**Checks**: stale (age > N days), duplicate (similarity > 0.75), contradiction
+(always/never, use/avoid, should/should-not within same category), ACE bullet decay
+(success_rate < 0.3 with 5+ usages), orphan (no compiled article for category).
+
+**Benchmark**: 29 memories linted in 44ms, 5 contradictions detected.
+
+### `search_memory_index`
+
+Index-first search: compiles index, returns matching articles by query keyword match.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | Yes | Search query |
+| `workspace_id` | string | No | Scope |
+
+---
+
+## Conclusion
+
+The 126 MCP tools provide comprehensive capabilities for:
 
 - **Document compression** (80-95% reduction)
 - **Dialogue memory** (~66% reduction with safety preservation)
@@ -2355,6 +2426,7 @@ The 121 MCP tools provide comprehensive capabilities for:
 - **Adaptive compression** (JSCCM-inspired dynamic allocation)
 - **Resource management** (persistent storage, limits, cleanup)
 - **Pre-flight assessment** (file type detection, token estimation - v0.9.2)
+- **Knowledge management** (transcript mining, compilation, lint, index search)
 - **Experimental features** (TOON, SCAR, Multimodal - v0.10.0)
 
 **Key Principles:**

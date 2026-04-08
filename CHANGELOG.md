@@ -5,6 +5,38 @@ All notable changes to Token Saver 5000.
 ## [Unreleased]
 
 ### Added
+
+#### Knowledge Management Pipeline (claude-memory-compiler inspired)
+- **Transcript extraction** (`src/transcript_extractor.py`): splits conversation transcripts
+  into candidate insights using signal-phrase detection (decisions, lessons, patterns,
+  gotchas, issues, preferences, actions). Classifies via `memory_classifier`, stores through
+  `MemoryAPI`. Deduplicates and strips role prefixes. New MCP tool: `ingest_transcript`.
+- **Knowledge compiler** (`src/knowledge_compiler.py`): periodic consolidation of flat
+  memories into cross-linked markdown concept articles with navigable index. Groups by
+  category, deduplicates by pairwise similarity (configurable threshold), cross-links
+  articles by token overlap. Idempotent — rerunning produces same output. New MCP tools:
+  `compile_knowledge`, `get_knowledge_index`.
+- **Knowledge lint** (`src/knowledge_lint.py`): quality checks on stored memories —
+  staleness detection (configurable threshold), near-duplicate detection, contradiction
+  detection (always/never, use/avoid, should/should-not pairs within same category),
+  ACE bullet decay (success_rate < 0.3 with 5+ usages), orphan memory detection against
+  compiled articles. New MCP tool: `lint_knowledge`.
+- **Index-first retrieval** (`search_memory_index` MCP tool): compiles index from stored
+  memories, returns matching articles — designed for small knowledge bases (<500 entries)
+  where an LLM-readable index beats embedding search.
+- **Hook recipes** (`docs/guides/HOOK_RECIPES.md`): 5 recipes for wiring Claude Code
+  lifecycle hooks to the knowledge pipeline — session-end capture, prompt journaling,
+  nightly compilation, pre-compile lint gate, index-first Q&A.
+- **CUJ 13: Knowledge Compilation & Retrieval**: 4-step journey (ingest 3 transcripts →
+  compile → lint → index search). 9 insights extracted, 5 articles compiled, 5.1x
+  compression (transcript → index), 44.5% savings, <90ms total pipeline.
+- **Benchmark results** (10-transcript realistic corpus): 29 insights extracted, 5 articles
+  across 5 categories, 5 contradictions detected, 80.3% savings (raw → index), 87ms total.
+- **126 MCP tools** (was 121): +5 knowledge management tools.
+- **13 CUJ journeys** (was 12): aggregate 4.49M input → 591K output (86.8% savings).
+- **83 new tests** across 4 test files (transcript extractor, knowledge compiler, knowledge
+  lint, knowledge handlers), plus 10 new tests in contracts/CUJ/GTM/parity files.
+
 - **5-product platform strategy** in GTM plan: CaaS, AI Benchmarks, AI News Center, Knowledge Hub (NotebookLM competitor), Agent Context Hub (ref.tools/Context7 competitor)
 - **OSS baseline research** (§11 in GTM plan): evaluated 12 open-source projects across Knowledge Hub and Agent Context Hub categories with fork/build recommendations
 - **Competitive comparison tables** for Knowledge Hub (vs NotebookLM, open-notebook, SurfSense) and Agent Context Hub (vs Context7, ref.tools, docs-mcp-server, Nia)
@@ -65,12 +97,11 @@ All notable changes to Token Saver 5000.
   `gotcontext-proxy` alongside legacy `token-saver-*` aliases.
 - **Python 3.14 support**: fixed `requires-python` upper bound from `<3.14` to `<3.15`.
 
-- **Total MCP tools**: 121 (was 112).
-- **Full test suite**: 3,396+ tests across 90+ test files.
+- **Total MCP tools**: 126 (was 121): +5 knowledge management tools.
+- **Full test suite**: 3,500+ tests across 90+ test files.
 - **Benchmark results**: medium corpus 4.97x, large corpus 7.80x, avg 83.5% savings.
-- **CUJ benchmark suite**: expanded from 6 to **12 journeys** covering schema compression,
-  code-aware compression, AFM dialogue memory, budget governance, tee/recovery, and
-  team dashboard export. All 12 pass. Aggregate: 4.49M input → 591K output (86.8% savings).
+- **CUJ benchmark suite**: expanded from 12 to **13 journeys** — new CUJ 13: Knowledge
+  Compilation & Retrieval. All 13 pass. Aggregate: 4.49M input → 591K output (86.8% savings).
 
 ### Fixed
 - **ROI calculator** (`token_optimization_handlers.py`): safe dict access for model pricing

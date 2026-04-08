@@ -327,6 +327,9 @@ _GTM_IMPORTS = [
     ("src.handlers.token_optimization_handlers", "handle_calculate_roi"),
     ("src.proxy.schema_compressor", "SchemaCompressor"),
     ("src.code_compressor", "CodeSemanticCompressor"),
+    ("src.transcript_extractor", "ingest_transcript"),
+    ("src.knowledge_compiler", "KnowledgeCompiler"),
+    ("src.knowledge_lint", "KnowledgeLinter"),
 ]
 
 

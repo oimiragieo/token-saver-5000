@@ -61,7 +61,13 @@ async def test_platform_workflow_spans_memory_prompt_experiment_connector_and_mo
         handle_sync_connector_feed,
     )
     from src.handlers.experiment_handlers import handle_create_dataset, handle_run_experiment
-    from src.handlers.memory_handlers import handle_add_memory, handle_get_user_profile
+    from src.handlers.memory_handlers import (
+        handle_add_memory,
+        handle_compile_knowledge,
+        handle_get_user_profile,
+        handle_ingest_transcript,
+        handle_lint_knowledge,
+    )
     from src.handlers.model_handlers import handle_optimize_for_model
     from src.handlers.prompt_handlers import (
         handle_create_prompt_template,
@@ -82,6 +88,29 @@ async def test_platform_workflow_spans_memory_prompt_experiment_connector_and_mo
         await handle_get_user_profile(
             platform_context, {"workspace_id": "acme", "user_id": "alice"}
         )
+    )
+
+    # Knowledge management: ingest transcript, compile, and lint
+    transcript_result = json.loads(
+        await handle_ingest_transcript(
+            platform_context,
+            {
+                "text": (
+                    "We decided to use prompt-cache stability for all templates. "
+                    "Watch out for volatile content in the stable prefix."
+                ),
+                "workspace_id": "acme",
+                "user_id": "alice",
+            },
+        )
+    )
+    compile_result = json.loads(
+        await handle_compile_knowledge(
+            platform_context, {"workspace_id": "acme", "user_id": "alice"}
+        )
+    )
+    lint_result = json.loads(
+        await handle_lint_knowledge(platform_context, {"workspace_id": "acme", "user_id": "alice"})
     )
 
     with patch("src.handlers.prompt_handlers.get_metrics") as mock_metrics:
@@ -168,6 +197,10 @@ async def test_platform_workflow_spans_memory_prompt_experiment_connector_and_mo
 
     assert memory_result["status"] == "success"
     assert profile_result["profile"]["user_id"] == "alice"
+    assert transcript_result["status"] == "success"
+    assert compile_result["status"] == "success"
+    assert lint_result["status"] == "success"
+    assert "checks_run" in lint_result
     assert prompt_created["status"] == "success"
     assert prompt_fetched["resolved_version"]["version"] == 1
     assert dataset_created["status"] == "success"

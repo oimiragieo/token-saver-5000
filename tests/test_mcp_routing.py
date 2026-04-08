@@ -62,7 +62,9 @@ class TestSetupMCPTools:
         # - Savings Tracker: 2 (v0.14.0) - get_savings_report, get_savings_inline
         # - Cache Strategy Advisor: 1 - advise_cache_strategy
         # - Structural Summary + Dead Code Detector: 2 (v0.15.0)
-        assert len(tools) == 114, f"Expected 114 tools, got {len(tools)}"
+        # - Knowledge Management: 5 (ingest_transcript, compile_knowledge,
+        #   get_knowledge_index, lint_knowledge, search_memory_index)
+        assert len(tools) == 126, f"Expected 126 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""

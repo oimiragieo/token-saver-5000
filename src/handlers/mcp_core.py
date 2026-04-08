@@ -2262,6 +2262,100 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "required": ["user_id"],
             },
         ),
+        # -- Knowledge Management (Phase 1-4) ------------------------------------
+        Tool(
+            name="ingest_transcript",
+            description=(
+                "Extract decisions, lessons, patterns, and gotchas from a conversation "
+                "transcript and store them as scoped memories automatically."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Raw conversation transcript text",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["all", "decisions", "patterns"],
+                        "description": "Extraction mode (default: all)",
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Source tag for stored memories (default: transcript)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["text"],
+            },
+        ),
+        Tool(
+            name="compile_knowledge",
+            description=(
+                "Compile flat memories into cross-linked markdown concept articles "
+                "with a navigable index. Deduplicates and groups by category."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "write_files": {
+                        "type": "boolean",
+                        "description": "Persist articles as markdown files (default: false)",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output directory for compiled files",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="get_knowledge_index",
+            description=(
+                "Return the compiled knowledge index markdown for index-first retrieval. "
+                "Useful for small knowledge bases (<500 entries) where a readable index "
+                "beats embedding search."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {**SCOPE_PROPERTIES},
+            },
+        ),
+        Tool(
+            name="lint_knowledge",
+            description=(
+                "Run quality checks on stored memories: staleness, near-duplicates, "
+                "contradictions, and orphan detection. Returns a structured lint report."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stale_days": {
+                        "type": "integer",
+                        "description": "Days after which a memory is considered stale (default: 30)",
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+            },
+        ),
+        Tool(
+            name="search_memory_index",
+            description=(
+                "Index-first memory search: compiles an index from stored memories, "
+                "then returns matching articles. Best for small corpora (<500 entries) "
+                "where an LLM-readable index beats embedding search."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["query"],
+            },
+        ),
         Tool(
             name="create_dataset",
             description=(
@@ -3358,6 +3452,12 @@ async def route_tool_call(
         "delete_memory": mh.handle_delete_memory,
         "summarize_user_memory": mh.handle_summarize_user_memory,
         "get_user_profile": mh.handle_get_user_profile,
+        # Knowledge Management (Phase 1-4)
+        "ingest_transcript": mh.handle_ingest_transcript,
+        "compile_knowledge": mh.handle_compile_knowledge,
+        "get_knowledge_index": mh.handle_get_knowledge_index,
+        "lint_knowledge": mh.handle_lint_knowledge,
+        "search_memory_index": mh.handle_search_memory_index,
         "create_dataset": eh.handle_create_dataset,
         "list_datasets": eh.handle_list_datasets,
         "run_experiment": eh.handle_run_experiment,
