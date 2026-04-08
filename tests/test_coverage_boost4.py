@@ -17,6 +17,16 @@ from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 import numpy as np
 import pytest
 
+
+def _has_pillow() -> bool:
+    try:
+        import PIL  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -478,11 +488,14 @@ class TestExperimentalHandlers:
             await handle_scar_get_stats(ctx, {})
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _has_pillow(), reason="Pillow not installed")
     async def test_multimodal_ingest_with_images(self):
         """Cover lines 456-457 - image paths added."""
         from src.handlers.experimental_handlers import handle_multimodal_ingest
 
         ctx = _make_mock_context()
+        # Make path_validator.validate return the path string (not a MagicMock)
+        ctx["path_validator"].validate = MagicMock(side_effect=lambda p: p)
         mock_compressor = MagicMock()
         mock_compressor.ingest_mixed_content.return_value = {"node_count": 3}
         with patch(

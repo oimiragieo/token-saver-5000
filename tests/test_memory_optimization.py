@@ -25,8 +25,9 @@ import os
 try:
     from src.embeddings_onnx import ONNXEmbeddingManager
 
-    # Check if onnxruntime is actually available
+    # Check if onnxruntime AND optimum are actually available
     import onnxruntime  # noqa: F401
+    import optimum.onnxruntime  # noqa: F401
 
     ONNX_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):

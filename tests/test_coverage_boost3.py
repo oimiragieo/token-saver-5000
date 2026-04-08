@@ -17,6 +17,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
+
+def _has_pillow() -> bool:
+    try:
+        import PIL  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1613,6 +1623,7 @@ class TestMultimodalCompressor:
         result = mc._encode_image(b"fake_image_data")
         assert result is None
 
+    @pytest.mark.skipif(not _has_pillow(), reason="Pillow not installed")
     def test_encode_image_exception(self):
         from src.multimodal_compressor import MultiModalCompressor
 
