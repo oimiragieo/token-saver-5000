@@ -639,6 +639,31 @@ Keyword anchoring for compression.
 |------|------|
 | `def` | `apply_keyword_anchoring` |
 
+#### `knowledge_compiler.py`
+
+Knowledge compiler — periodic consolidation of flat memories into
+
+| Kind | Name |
+|------|------|
+| `def` | `_tokenize` |
+| `def` | `_similarity` |
+| `def` | `_utc_now_iso` |
+| `class` | `ConceptArticle` |
+| `class` | `CompilationResult` |
+| `class` | `KnowledgeCompiler` |
+
+#### `knowledge_lint.py`
+
+Knowledge lint — quality checks on stored memories and compiled articles.
+
+| Kind | Name |
+|------|------|
+| `def` | `_similarity` |
+| `def` | `_parse_iso` |
+| `class` | `LintFinding` |
+| `class` | `LintReport` |
+| `class` | `KnowledgeLinter` |
+
 #### `mcp_install.py`
 
 Install or render Token Saver 5000 MCP configuration.
@@ -1219,6 +1244,19 @@ Training Utilities for SCAR Modules
 | `class` | `AlignmentDataset` |
 | `class` | `SCARTrainer` |
 | `def` | `create_synthetic_training_data` |
+
+#### `transcript_extractor.py`
+
+Transcript-to-memory extraction pipeline.
+
+| Kind | Name |
+|------|------|
+| `class` | `ExtractionResult` |
+| `def` | `_split_sentences` |
+| `def` | `_has_signal` |
+| `def` | `_strip_role_prefix` |
+| `def` | `extract_insights` |
+| `def` | `ingest_transcript` |
 
 #### `types.py`
 

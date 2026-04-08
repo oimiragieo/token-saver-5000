@@ -224,7 +224,7 @@ MCP Core Routing Module
 
 #### `memory_handlers.py`
 
-Handlers for explicit memory and personalization APIs.
+Handlers for explicit memory, personalization, and knowledge management APIs.
 
 | Kind | Name |
 |------|------|
@@ -240,6 +240,11 @@ Handlers for explicit memory and personalization APIs.
 | `async def` | `handle_delete_memory` |
 | `async def` | `handle_summarize_user_memory` |
 | `async def` | `handle_get_user_profile` |
+| `async def` | `handle_ingest_transcript` |
+| `async def` | `handle_compile_knowledge` |
+| `async def` | `handle_get_knowledge_index` |
+| `async def` | `handle_lint_knowledge` |
+| `async def` | `handle_search_memory_index` |
 
 #### `model_handlers.py`
 

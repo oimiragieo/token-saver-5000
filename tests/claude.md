@@ -879,9 +879,18 @@ Tests for Critical User Journey (CUJ) baselines.
 | `def` | `test_cuj_6_breakeven_reasonable` |
 | `def` | `test_cuj_6_monthly_savings_exceeds_pro_plan` |
 | `def` | `test_cuj_6_compression_ratio_above_10x` |
+| `def` | `cuj13` |
+| `def` | `test_cuj_13_passes` |
+| `def` | `test_cuj_13_ingests_transcripts` |
+| `def` | `test_cuj_13_compiles_articles` |
+| `def` | `test_cuj_13_deduplicates` |
+| `def` | `test_cuj_13_lints_knowledge` |
+| `def` | `test_cuj_13_searches_compiled_index` |
+| `def` | `test_cuj_13_has_all_four_steps` |
+| `def` | `test_cuj_13_savings_positive` |
 | `def` | `full_baseline` |
 | `def` | `test_all_cujs_pass` |
-| `def` | `test_baseline_has_twelve_journeys` |
+| `def` | `test_baseline_has_thirteen_journeys` |
 | `def` | `test_baseline_summary_populated` |
 | `def` | `test_baseline_output_json_serializable` |
 | `def` | `test_git_diff_fixture_has_sufficient_lines` |
@@ -1319,6 +1328,58 @@ Integration Workflow Tests for Token Saver 5000 v0.7.0
 | `class` | `TestBatchProcessingIntegration` |
 | `class` | `TestCrossFeatureIntegration` |
 
+#### `test_knowledge_compiler.py`
+
+Tests for knowledge compiler (src/knowledge_compiler.py).
+
+| Kind | Name |
+|------|------|
+| `def` | `reset_memory` |
+| `def` | `_populate_memories` |
+| `class` | `TestConceptArticle` |
+| `class` | `TestKnowledgeCompiler` |
+
+#### `test_knowledge_handlers.py`
+
+Tests for knowledge management MCP handlers (ingest_transcript, compile, lint, index search).
+
+| Kind | Name |
+|------|------|
+| `def` | `memory_context` |
+| `async def` | `test_ingest_transcript_handler` |
+| `async def` | `test_ingest_transcript_mode_decisions` |
+| `async def` | `test_ingest_transcript_empty_text_rejected` |
+| `async def` | `test_ingest_transcript_invalid_mode_rejected` |
+| `async def` | `test_ingest_transcript_with_scoping` |
+| `async def` | `test_compile_knowledge_handler` |
+| `async def` | `test_compile_knowledge_empty` |
+| `async def` | `test_compile_knowledge_write_files` |
+| `async def` | `test_get_knowledge_index_handler` |
+| `async def` | `test_lint_knowledge_handler` |
+| `async def` | `test_lint_knowledge_invalid_stale_days` |
+| `async def` | `test_search_memory_index_handler` |
+| `async def` | `test_search_memory_index_no_match` |
+| `async def` | `test_search_memory_index_requires_query` |
+| `async def` | `test_knowledge_tools_registered_in_router` |
+
+#### `test_knowledge_lint.py`
+
+Tests for knowledge lint (src/knowledge_lint.py).
+
+| Kind | Name |
+|------|------|
+| `def` | `reset_memory` |
+| `def` | `_utc_iso` |
+| `def` | `_make_memory` |
+| `class` | `TestLintFinding` |
+| `class` | `TestLintReport` |
+| `class` | `TestStaleCheck` |
+| `class` | `TestDuplicateCheck` |
+| `class` | `TestContradictionCheck` |
+| `class` | `TestACEDecayCheck` |
+| `class` | `TestOrphanCheck` |
+| `class` | `TestLintFromAPI` |
+
 #### `test_launch_readiness.py`
 
 Launch-readiness documentation tests for Phase 10.
@@ -1448,8 +1509,10 @@ Contract tests for explicit memory MCP tools.
 |------|------|
 | `def` | `setup_function` |
 | `def` | `test_memory_tools_are_registered_in_mcp_core` |
+| `def` | `test_knowledge_tools_are_registered_in_mcp_core` |
 | `async def` | `test_memory_tools_have_help_entries` |
 | `async def` | `test_router_dispatches_memory_tools` |
+| `async def` | `test_router_dispatches_knowledge_tools` |
 
 #### `test_memory_golden_profiles.py`
 
@@ -2768,6 +2831,19 @@ Contract tests for MCP tool profile behavior.
 | `def` | `test_dataset_contracts_and_synthetic_data_shapes` |
 | `def` | `test_trainer_compressor_train_eval_checkpoint` |
 | `def` | `test_trainer_alignment_train_eval` |
+
+#### `test_transcript_extractor.py`
+
+Tests for transcript extraction pipeline (src/transcript_extractor.py).
+
+| Kind | Name |
+|------|------|
+| `def` | `reset_memory` |
+| `class` | `TestSplitSentences` |
+| `class` | `TestHasSignal` |
+| `class` | `TestStripRolePrefix` |
+| `class` | `TestExtractInsights` |
+| `class` | `TestIngestTranscript` |
 
 #### `test_ux_improvements.py`
 

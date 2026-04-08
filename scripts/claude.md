@@ -46,6 +46,7 @@ Critical User Journey Baselines for gotcontext.ai
 | `def` | `run_cuj_10_budget_governance` |
 | `def` | `run_cuj_11_tee_recovery` |
 | `def` | `run_cuj_12_team_dashboard` |
+| `def` | `run_cuj_13_knowledge_compilation` |
 | `def` | `run_all_cujs` |
 | `def` | `_print_table` |
 | `def` | `main` |
