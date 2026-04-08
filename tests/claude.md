@@ -768,6 +768,7 @@ Coverage boost tests - Round 3.
 
 | Kind | Name |
 |------|------|
+| `def` | `_has_pillow` |
 | `def` | `_make_mock_context` |
 | `class` | `TestListDocumentsMetadata` |
 | `class` | `TestDeleteDocumentErrors` |
@@ -808,6 +809,7 @@ Coverage boost tests - Round 4.
 
 | Kind | Name |
 |------|------|
+| `def` | `_has_pillow` |
 | `def` | `_make_mock_context` |
 | `def` | `_make_semantic_node` |
 | `def` | `_make_code_chunk` |
