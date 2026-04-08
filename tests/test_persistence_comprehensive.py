@@ -663,11 +663,14 @@ class TestErrorHandlingAndRecovery:
         try:
             success = persistence_manager.delete_document("test_doc")
 
-            # Should handle gracefully
-            assert success is False
+            if doc_file.exists():
+                # Permission was enforced — delete should have failed
+                assert success is False
+            # else: OS allowed deletion despite read-only (e.g. root on Linux CI)
         finally:
-            # Restore permissions
-            os.chmod(doc_file, 0o644)
+            # Restore permissions only if file still exists
+            if doc_file.exists():
+                os.chmod(doc_file, 0o644)
 
     def test_save_afm_history_with_permission_error(self, persistence_manager):
         """Test save_afm_history with permission error (v0.8.0: JSON format)."""
@@ -1160,11 +1163,14 @@ class TestStorageStatsAndUtilities:
         try:
             success = persistence_manager.clear_all()
 
-            # Should handle gracefully
-            assert success is False
+            if doc_file.exists():
+                # Permission was enforced — clear should have failed
+                assert success is False
+            # else: OS allowed deletion despite read-only (e.g. root on Linux CI)
         finally:
-            # Restore permissions
-            os.chmod(doc_file, 0o644)
+            # Restore permissions only if file still exists
+            if doc_file.exists():
+                os.chmod(doc_file, 0o644)
 
     def test_backend_selection_json_fallback(self, temp_storage_dir):
         """Test that backend is correctly set to JSON/Pickle when ChromaDB unavailable."""
