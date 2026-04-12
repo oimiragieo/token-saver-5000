@@ -259,6 +259,7 @@ class CodeCompressionAdapter:
         file_id: str,
         metadata: Optional[Dict] = None,
         file_path: Optional[str] = None,
+        chunking_strategy: str = "auto",
     ):
         """
         Ingest content with automatic routing based on file type.
@@ -316,7 +317,9 @@ class CodeCompressionAdapter:
             file_path=file_path,
             model="MiniLM",
         )
-        return await self._text_compressor.ingest_file_async(text, file_id, metadata)
+        return await self._text_compressor.ingest_file_async(
+            text, file_id, metadata, chunking_strategy=chunking_strategy
+        )
 
     def _convert_code_stats_to_skeleton(self, stats: Dict, file_id: str):
         """
