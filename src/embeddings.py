@@ -31,7 +31,11 @@ from enum import Enum
 from typing import Dict, List, Optional, Union
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None  # ONNX-only mode — no torch/sentence-transformers
 
 from .constants import (
     DEFAULT_TEXT_MODEL,
