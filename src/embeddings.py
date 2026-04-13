@@ -297,23 +297,27 @@ class EmbeddingManager:
         # If we get here, all tiers failed
         raise RuntimeError("All embedding tiers failed. Cannot encode texts.")
 
-    def get_text_embedder(self, model_name: str = DEFAULT_TEXT_MODEL) -> SentenceTransformer:
+    def get_text_embedder(self, model_name: str = DEFAULT_TEXT_MODEL):
         """
         Get or create text embedding model.
+
+        In ONNX-only mode (no sentence-transformers), returns a lightweight
+        adapter that delegates to encode() with automatic ONNX/TF-IDF fallback.
 
         Args:
             model_name: Name of the SentenceTransformer model
                        (default: "all-MiniLM-L6-v2")
 
         Returns:
-            Cached or newly loaded SentenceTransformer model
-
-        Example:
-            >>> manager = EmbeddingManager()
-            >>> model = manager.get_text_embedder()
-            >>> embeddings = model.encode(["Hello world"])
+            SentenceTransformer model, or _EmbeddingManagerAdapter in ONNX-only mode
         """
-        return self._get_or_create_model(model_name, "text")
+        try:
+            return self._get_or_create_model(model_name, "text")
+        except (ImportError, TypeError):
+            from .semantic_compressor import _EmbeddingManagerAdapter
+
+            logger.info("SentenceTransformer unavailable — using ONNX/TF-IDF adapter")
+            return _EmbeddingManagerAdapter(self)
 
     def get_code_embedder(self, model_name: str = DEFAULT_CODE_MODEL) -> SentenceTransformer:
         """
