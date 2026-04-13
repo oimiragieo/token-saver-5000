@@ -151,10 +151,10 @@ class CodeCompressionAdapter:
             self._load_code_compressor()
 
         logger.info(
-            "code_compression_adapter_initialized",
-            text_model=text_model,
-            code_model=code_model,
-            preload=preload_code_model or env_preload,
+            "code_compression_adapter_initialized: text=%s code=%s preload=%s",
+            text_model,
+            code_model,
+            preload_code_model or env_preload,
         )
 
     # =========================================================================
@@ -281,12 +281,7 @@ class CodeCompressionAdapter:
             code_compressor = self._load_code_compressor()
 
             if code_compressor:
-                logger.info(
-                    "ingesting_code_file",
-                    file_id=file_id,
-                    file_path=file_path,
-                    model="CodeBERT",
-                )
+                logger.info("ingesting_code_file: %s (path=%s, model=CodeBERT)", file_id, file_path)
 
                 # Run code ingestion in thread pool (it's synchronous)
                 loop = asyncio.get_running_loop()
@@ -311,12 +306,7 @@ class CodeCompressionAdapter:
                 )
 
         # Use text compressor (default path)
-        logger.info(
-            "ingesting_text_file",
-            file_id=file_id,
-            file_path=file_path,
-            model="MiniLM",
-        )
+        logger.info("ingesting_text_file: %s (path=%s, model=MiniLM)", file_id, file_path)
         return await self._text_compressor.ingest_file_async(
             text, file_id, metadata, chunking_strategy=chunking_strategy
         )
