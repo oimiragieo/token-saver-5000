@@ -23,7 +23,7 @@ import networkx as nx
 from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
-from .embeddings import EmbeddingManager
+from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -120,25 +120,6 @@ def compute_adaptive_ratio(total_tokens: int) -> float:
         return 0.2
     else:
         return 0.1
-
-
-class _EmbeddingManagerAdapter:
-    """Thin adapter so EmbeddingManager can be used where SentenceTransformer is expected.
-
-    SentenceTransformer.encode(texts, normalize_embeddings=..., show_progress_bar=...)
-    EmbeddingManager.encode(texts, tier=..., normalize=...)
-
-    This adapter accepts either set of kwargs and delegates to EmbeddingManager.
-    """
-
-    def __init__(self, manager):
-        self._manager = manager
-
-    def encode(self, texts, **kwargs):
-        # Map SentenceTransformer kwargs to EmbeddingManager kwargs
-        normalize = kwargs.get("normalize_embeddings", kwargs.get("normalize", True))
-        # Silently ignore show_progress_bar and other ST-specific kwargs
-        return self._manager.encode(texts, normalize=normalize)
 
 
 class SemanticCompressor:

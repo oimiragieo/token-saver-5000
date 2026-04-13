@@ -78,6 +78,23 @@ except ImportError:
 logger = logging.getLogger("embeddings")
 
 
+class _EmbeddingManagerAdapter:
+    """Adapter so EmbeddingManager can substitute for SentenceTransformer.
+
+    In ONNX-only deployments (no torch/sentence-transformers), callers that
+    expect a SentenceTransformer-like .encode() interface get this adapter
+    instead.  It delegates to EmbeddingManager.encode() which has built-in
+    STANDARD → ONNX → TF-IDF fallback.
+    """
+
+    def __init__(self, manager: "EmbeddingManager"):
+        self._manager = manager
+
+    def encode(self, texts, **kwargs):
+        normalize = kwargs.get("normalize_embeddings", kwargs.get("normalize", True))
+        return self._manager.encode(texts, normalize=normalize)
+
+
 class EmbeddingTier(Enum):
     """
     Embedding tiers with automatic fallback hierarchy (v0.6.0).
@@ -314,8 +331,6 @@ class EmbeddingManager:
         try:
             return self._get_or_create_model(model_name, "text")
         except (ImportError, TypeError):
-            from .semantic_compressor import _EmbeddingManagerAdapter
-
             logger.info("SentenceTransformer unavailable — using ONNX/TF-IDF adapter")
             return _EmbeddingManagerAdapter(self)
 

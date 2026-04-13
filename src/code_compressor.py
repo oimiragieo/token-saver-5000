@@ -83,7 +83,7 @@ class CodeSemanticCompressor:
         # Use EmbeddingManager for shared model caching (handles fallback internally).
         # In ONNX-only mode, get_code_embedder() raises ImportError —
         # fall back to the manager's encode() with tier fallback.
-        from .semantic_compressor import _EmbeddingManagerAdapter
+        from .embeddings import _EmbeddingManagerAdapter
 
         embedding_manager = EmbeddingManager()
         try:
