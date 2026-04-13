@@ -122,6 +122,25 @@ def compute_adaptive_ratio(total_tokens: int) -> float:
         return 0.1
 
 
+class _EmbeddingManagerAdapter:
+    """Thin adapter so EmbeddingManager can be used where SentenceTransformer is expected.
+
+    SentenceTransformer.encode(texts, normalize_embeddings=..., show_progress_bar=...)
+    EmbeddingManager.encode(texts, tier=..., normalize=...)
+
+    This adapter accepts either set of kwargs and delegates to EmbeddingManager.
+    """
+
+    def __init__(self, manager):
+        self._manager = manager
+
+    def encode(self, texts, **kwargs):
+        # Map SentenceTransformer kwargs to EmbeddingManager kwargs
+        normalize = kwargs.get("normalize_embeddings", kwargs.get("normalize", True))
+        # Silently ignore show_progress_bar and other ST-specific kwargs
+        return self._manager.encode(texts, normalize=normalize)
+
+
 class SemanticCompressor:
     """
     Core compressor implementing adaptive semantic fidelity.
@@ -147,9 +166,18 @@ class SemanticCompressor:
             skeleton_ratio: Fraction of nodes to include in skeleton (top N%),
                 or "auto" to adapt based on corpus size
         """
-        # Use EmbeddingManager for shared model caching
-        embedding_manager = EmbeddingManager()
-        self.model = embedding_manager.get_text_embedder(model_name)
+        # Use EmbeddingManager for shared model caching.
+        # In ONNX-only deployments (no torch/sentence-transformers),
+        # get_text_embedder() raises ImportError.  Fall back to using
+        # the manager's encode() directly — it has STANDARD→ONNX→TFIDF
+        # fallback built in.
+        self._embedding_manager = EmbeddingManager()
+        try:
+            self.model = self._embedding_manager.get_text_embedder(model_name)
+        except (ImportError, TypeError):
+            # ONNX-only mode: use a thin wrapper that adapts
+            # EmbeddingManager.encode() to accept SentenceTransformer kwargs
+            self.model = _EmbeddingManagerAdapter(self._embedding_manager)
         self.similarity_threshold = similarity_threshold
         self.skeleton_ratio = skeleton_ratio
 

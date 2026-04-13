@@ -80,9 +80,16 @@ class CodeSemanticCompressor:
                        - "all-MiniLM-L6-v2" (general, faster)
             similarity_threshold: Minimum similarity for edges
         """
-        # Use EmbeddingManager for shared model caching (handles fallback internally)
+        # Use EmbeddingManager for shared model caching (handles fallback internally).
+        # In ONNX-only mode, get_code_embedder() raises ImportError —
+        # fall back to the manager's encode() with tier fallback.
+        from .semantic_compressor import _EmbeddingManagerAdapter
+
         embedding_manager = EmbeddingManager()
-        self.model = embedding_manager.get_code_embedder(model_name)
+        try:
+            self.model = embedding_manager.get_code_embedder(model_name)
+        except (ImportError, TypeError):
+            self.model = _EmbeddingManagerAdapter(embedding_manager)
         self.similarity_threshold = similarity_threshold
 
         # Storage

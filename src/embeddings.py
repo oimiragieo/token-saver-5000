@@ -378,7 +378,15 @@ class EmbeddingManager:
                 logger.debug(f"Using cached {model_type} embedder: {model_name}")
                 return self._model_cache[model_name]
 
-            # Load model (this is the expensive operation)
+            # Load model (this is the expensive operation).
+            # Guard: SentenceTransformer may be None in ONNX-only mode
+            # (e.g. Docker images that skip torch + sentence-transformers).
+            if SentenceTransformer is None:
+                raise ImportError(
+                    "sentence-transformers not installed — cannot load "
+                    f"STANDARD tier model '{model_name}'. "
+                    "Use EmbeddingTier.ONNX or EmbeddingTier.TFIDF instead."
+                )
             logger.info(
                 f"Loading {model_type} embedding model: {model_name} "
                 f"(~80MB download if not cached)"
