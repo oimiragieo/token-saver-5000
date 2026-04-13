@@ -92,7 +92,11 @@ class _EmbeddingManagerAdapter:
 
     def encode(self, texts, **kwargs):
         normalize = kwargs.get("normalize_embeddings", kwargs.get("normalize", True))
-        return self._manager.encode(texts, normalize=normalize)
+        # MUST skip STANDARD tier to avoid recursion:
+        # adapter.encode → manager.encode(STANDARD) → _encode_standard
+        # → get_text_embedder → adapter → loop!
+        # Force ONNX (or TF-IDF fallback) directly.
+        return self._manager.encode(texts, tier=EmbeddingTier.ONNX, normalize=normalize)
 
 
 class EmbeddingTier(Enum):
