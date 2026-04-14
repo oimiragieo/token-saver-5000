@@ -188,13 +188,18 @@ class CodeCompressionAdapter:
     async def diff_reingest_async(self, *args, **kwargs):
         return await self._text_compressor.diff_reingest_async(*args, **kwargs)
 
-    @property
-    def _temporal_graph(self):
-        return getattr(self._text_compressor, "_temporal_graph", None)
+    def __getattr__(self, name):
+        """Proxy any missing attribute to the underlying text compressor.
 
-    @property
-    def _access_tracker(self):
-        return getattr(self._text_compressor, "_access_tracker", None)
+        This catches ALL attribute access that isn't explicitly defined
+        on CodeCompressionAdapter and delegates to SemanticCompressor.
+        Handles _temporal_graph, _access_tracker, _compression_replay,
+        and any future internal attributes handlers may access.
+        """
+        # Avoid recursion during init (before _text_compressor is set)
+        if name == "_text_compressor":
+            raise AttributeError(name)
+        return getattr(self._text_compressor, name)
 
         # Check for prewarm environment variable
         env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
