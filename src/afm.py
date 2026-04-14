@@ -703,16 +703,37 @@ class FocusManager:
         sim = cosine_similarity([msg_embedding], [query_embedding])[0][0]
         return float(sim)
 
+    def _compute_centroid(self) -> np.ndarray:
+        """Compute the conversation centroid (mean of all message embeddings).
+
+        STAE (Semantic-Temporal Aware Eviction, ICLR 2026) uses the centroid
+        to detect redundant messages: those closest to the centroid carry the
+        least unique information.
+        """
+        embeddings = []
+        for msg in self.messages:
+            emb = self._embed_message(msg)
+            if emb is not None:
+                embeddings.append(emb)
+        if not embeddings:
+            return np.zeros(384)  # Fallback: zero vector
+        return np.mean(embeddings, axis=0)
+
     def _calculate_relevance_score(
         self, message: Message, query_embedding: np.ndarray, current_turn: int
     ) -> float:
         """
-        Calculate relevance score for message
+        STAE-enhanced relevance scoring (arXiv, ICLR 2026 under review).
 
-        Implements the piecewise scoring function from Section 3.2:
-        - CRITICAL: score = 1.0 (force-elevated)
-        - RELEVANT: score = max(0, sim) * (0.5 + 0.5 * w_recency)
-        - TRIVIAL: score = max(0, sim) * (0.25 * w_recency)
+        Replaces the original piecewise AFM scoring with a centroid-temporal
+        hybrid that jointly optimizes for semantic uniqueness and recency:
+
+            score = λ * semantic_uniqueness + (1-λ) * recency
+
+        where semantic_uniqueness = cosine_distance(msg, centroid) and
+        recency = 1 - (age / max_age).  Messages far from the centroid
+        are more unique (higher score).  Recent messages get a boost.
+        CRITICAL messages are still force-elevated to 1.0.
 
         Args:
             message: Message to score
@@ -722,25 +743,34 @@ class FocusManager:
         Returns:
             Relevance score in [0, 1]
         """
-        # Get embeddings
-        msg_embedding = self._embed_message(message)
-
-        # Calculate similarity
-        sim = self._calculate_similarity(msg_embedding, query_embedding)
-        sim = max(0.0, sim)  # Clamp negative similarities to 0
-
-        # Calculate recency weight
-        w_recency = self._calculate_recency_weight(message, current_turn)
-
-        # Piecewise scoring based on importance
+        # CRITICAL messages bypass scoring
         if message.importance == ImportanceLevel.CRITICAL:
-            score = 1.0  # Force-elevated
-        elif message.importance == ImportanceLevel.RELEVANT:
-            score = sim * (0.5 + 0.5 * w_recency)
-        else:  # TRIVIAL
-            score = sim * (0.25 * w_recency)
+            return 1.0
 
-        return score
+        # STAE centroid-temporal scoring
+        msg_embedding = self._embed_message(message)
+        centroid = self._compute_centroid()
+
+        # Semantic uniqueness: distance from centroid (farther = more unique)
+        centroid_sim = self._calculate_similarity(msg_embedding, centroid)
+        semantic_uniqueness = 1.0 - max(0.0, centroid_sim)
+
+        # Query relevance boost: messages similar to the query get extra score
+        query_sim = self._calculate_similarity(msg_embedding, query_embedding)
+        query_sim = max(0.0, query_sim)
+
+        # Recency: linear decay (0 = oldest, 1 = newest)
+        max_age = max(1, current_turn)
+        age = current_turn - message.turn_index
+        recency = 1.0 - (age / max_age)
+
+        # STAE hybrid: λ=0.4 semantic uniqueness, 0.3 query relevance, 0.3 recency
+        lam_unique = 0.4
+        lam_query = 0.3
+        lam_recency = 0.3
+        score = lam_unique * semantic_uniqueness + lam_query * query_sim + lam_recency * recency
+
+        return min(1.0, max(0.0, score))
 
     def _assign_intended_fidelity(self, message: Message) -> FidelityLevel:
         """
