@@ -173,10 +173,8 @@ class CodeCompressionAdapter:
     def model(self):
         return self._text_compressor.model
 
-    def _generate_skeleton(self, file_id, query=None, ratio_override=None):
-        return self._text_compressor._generate_skeleton(
-            file_id, query=query, ratio_override=ratio_override
-        )
+    def _generate_skeleton(self, file_id, **kwargs):
+        return self._text_compressor._generate_skeleton(file_id, **kwargs)
 
     def read_skeleton(self, file_id, **kwargs):
         return self._text_compressor.read_skeleton(file_id, **kwargs)
