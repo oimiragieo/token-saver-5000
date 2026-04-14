@@ -149,25 +149,53 @@ class CodeCompressionAdapter:
         self.skeleton_ratio = skeleton_ratio
         self.similarity_threshold = similarity_threshold
 
+    # ------------------------------------------------------------------
+    # Proxy properties and methods — CodeCompressionAdapter wraps
+    # SemanticCompressor but many modules (graph_visualizer, context
+    # window adapter, compression handlers) access compressor attributes
+    # directly.  These proxies delegate to the underlying text compressor
+    # so the adapter is a drop-in replacement everywhere.
+    # ------------------------------------------------------------------
+
     @property
     def graphs(self):
-        """Proxy to text compressor's graph storage."""
         return self._text_compressor.graphs
 
     @property
     def chunks(self):
-        """Proxy to text compressor's chunk storage."""
         return self._text_compressor.chunks
 
     @property
     def file_metadata(self):
-        """Proxy to text compressor's file metadata."""
         return self._text_compressor.file_metadata
 
     @property
     def model(self):
-        """Proxy to text compressor's embedding model."""
         return self._text_compressor.model
+
+    def _generate_skeleton(self, file_id, query=None, ratio_override=None):
+        return self._text_compressor._generate_skeleton(
+            file_id, query=query, ratio_override=ratio_override
+        )
+
+    def read_skeleton(self, file_id, **kwargs):
+        return self._text_compressor.read_skeleton(file_id, **kwargs)
+
+    def compress(self, text, **kwargs):
+        return self._text_compressor.compress(text, **kwargs)
+
+    def ingest_mixed_content(self, *args, **kwargs):
+        return self._text_compressor.ingest_mixed_content(*args, **kwargs)
+
+    def find_duplicates(self, *args, **kwargs):
+        return self._text_compressor.find_duplicates(*args, **kwargs)
+
+    async def diff_reingest_async(self, *args, **kwargs):
+        return await self._text_compressor.diff_reingest_async(*args, **kwargs)
+
+    @property
+    def _temporal_graph(self):
+        return getattr(self._text_compressor, "_temporal_graph", None)
 
         # Check for prewarm environment variable
         env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
