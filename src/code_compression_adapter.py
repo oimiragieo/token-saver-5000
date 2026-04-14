@@ -144,6 +144,31 @@ class CodeCompressionAdapter:
         # Track which file_ids use code compression
         self._code_file_ids: set = set()
 
+        # Expose text compressor attributes that other modules access directly
+        # (graph_visualizer, context_window_adapter, etc.)
+        self.skeleton_ratio = skeleton_ratio
+        self.similarity_threshold = similarity_threshold
+
+    @property
+    def graphs(self):
+        """Proxy to text compressor's graph storage."""
+        return self._text_compressor.graphs
+
+    @property
+    def chunks(self):
+        """Proxy to text compressor's chunk storage."""
+        return self._text_compressor.chunks
+
+    @property
+    def file_metadata(self):
+        """Proxy to text compressor's file metadata."""
+        return self._text_compressor.file_metadata
+
+    @property
+    def model(self):
+        """Proxy to text compressor's embedding model."""
+        return self._text_compressor.model
+
         # Check for prewarm environment variable
         env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
         if preload_code_model or env_preload:
