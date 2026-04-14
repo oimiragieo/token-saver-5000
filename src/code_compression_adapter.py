@@ -192,6 +192,10 @@ class CodeCompressionAdapter:
     def _temporal_graph(self):
         return getattr(self._text_compressor, "_temporal_graph", None)
 
+    @property
+    def _access_tracker(self):
+        return getattr(self._text_compressor, "_access_tracker", None)
+
         # Check for prewarm environment variable
         env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
         if preload_code_model or env_preload:
