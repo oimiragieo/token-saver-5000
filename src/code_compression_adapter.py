@@ -173,9 +173,6 @@ class CodeCompressionAdapter:
     def model(self):
         return self._text_compressor.model
 
-    def _generate_skeleton(self, file_id, **kwargs):
-        return self._text_compressor._generate_skeleton(file_id, **kwargs)
-
     def read_skeleton(self, file_id, **kwargs):
         return self._text_compressor.read_skeleton(file_id, **kwargs)
 
@@ -445,11 +442,11 @@ class CodeCompressionAdapter:
             node_map=node_map,
         )
 
-    def _generate_skeleton(self, file_id: str):
+    def _generate_skeleton(self, file_id: str, **kwargs):
         """Generate skeleton for a document (routes to appropriate compressor)."""
         if file_id in self._code_file_ids and self._code_compressor:
             return self._generate_code_skeleton(file_id)
-        return self._text_compressor._generate_skeleton(file_id)
+        return self._text_compressor._generate_skeleton(file_id, **kwargs)
 
     def _generate_code_skeleton(self, file_id: str):
         """Generate skeleton from code compressor."""
