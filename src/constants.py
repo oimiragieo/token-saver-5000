@@ -276,36 +276,6 @@ if MAX_ACE_CONTEXTS < 1:
     raise ValueError("MAX_ACE_CONTEXTS must be >= 1")
 
 # ============================================================================
-# Progress Indicators
-# ============================================================================
-
-PROGRESS_BAR_WIDTH = 40
-"""
-Character width for progress bars in CLI output.
-- Fixed width for consistent terminal display
-WHY: Fits comfortably in 80-column terminals.
-"""
-
-# ============================================================================
-# Query Defaults
-# ============================================================================
-
-DEFAULT_QUERY_PRIORITY = 0.5
-"""
-Default query priority for adapt_to_context_window.
-- Range: 0.0 (low) to 1.0 (high)
-- 0.5 = medium priority (balanced approach)
-WHY: Neutral default; user can override based on query importance.
-"""
-
-DEFAULT_SEARCH_TOP_K = 5
-"""
-Default number of results for semantic search.
-- Returns top 5 most similar nodes by default
-WHY: Small enough to be manageable, large enough to be useful.
-"""
-
-# ============================================================================
 # Logging
 # ============================================================================
 
