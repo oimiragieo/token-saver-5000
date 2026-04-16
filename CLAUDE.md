@@ -10,6 +10,18 @@ Token Saver 5000 is an MCP server that performs semantic compression of text and
 **Python:** 3.10-3.13 (chromadb only works on 3.10-3.12)
 **Transport:** stdio (default), optional HTTP for Kubernetes
 
+## Monorepo context (gotcontext.ai)
+
+When this directory lives inside **gotcontext-main** (sibling of `api/` and `apps/web/`), the canonical **platform** documentation is the repository root [`../CLAUDE.md`](../CLAUDE.md). That file explains:
+
+- How the FastAPI app mounts **MCP Streamable HTTP** at `https://api.gotcontext.ai/mcp` using this package’s `src.handlers` toolchain.
+- How **plan gating** and **`GOTCONTEXT_SAAS_MODE`** strip dangerous tools in SaaS.
+- How the **Docker image** sets `PYTHONPATH` to this folder instead of pip-installing the full torch/sentence-transformers stack.
+
+Use **this** `CLAUDE.md` for day-to-day **library and MCP server** work, folder-guide indexes, and Python test commands. Use the **root** `CLAUDE.md` when changing deploy wiring, API gateway auth, or the Next.js dashboard.
+
+**Hosted API embedding policy:** On gotcontext.ai, the API does not necessarily use the same default embedding tier as a local stdio server. Plan → tier mapping lives in **`api/app/services/plan_gating.py`** (`get_embedding_tier_for_plan`: e.g. `free` → TF-IDF, `pro` → ONNX, `enterprise` → standard/SBERT). The vendor layer respects **`EMBEDDING_TIER`** env and integration with `api/app/vendor/embeddings.py`.
+
 ## Codebase map (folder guides)
 
 This file is the **master index** for humans and AI tools. Each first-class code directory also has a lowercase **`claude.md`** that lists **every file in that folder**, the **first line of the module docstring** (when present), and **top-level** `class` / `def` / `async def` names (nested helpers are omitted).

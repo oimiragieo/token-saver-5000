@@ -1,5 +1,13 @@
 # LLM Rules Production Pack
 
+## Repository placement (read first)
+
+This path is **`token-saver-5000/.claude/`** inside the **gotcontext.ai monorepo**. For Fly.io deploys, FastAPI routers, MCP `/mcp` gateway auth, Next.js dashboard, or repo-wide conventions, start from the **repository root** [`CLAUDE.md`](../CLAUDE.md).
+
+- **Root `CLAUDE.md`:** `api/`, `apps/web/`, `infra/`, deployment, MCP URL and headers.
+- **`token-saver-5000/CLAUDE.md`:** Python package layout, tests, and auto-generated `**/claude.md` folder indexes.
+- **This file:** optional Claude Code workspace rules, hooks, and cross-platform agent guidance that historically lived alongside the token-saver package.
+
 ## Overview
 - **Type**: Multi-platform agent configuration bundle
 - **Stack**: Claude Code, Cursor 2.0, Factory Droid with shared rule base
@@ -8,25 +16,23 @@
 
 This CLAUDE.md is authoritative. Subdirectories extend these rules within the Claude Projects hierarchy.
 
-## Codebase Audit Summary (2026-01-01)
+## Codebase Audit Summary (2026-04-13)
 
 ### Audit Status: HEALTHY ✅
 **No unused, orphaned, or legacy files detected. Codebase is clean and well-maintained.**
 
-### Key Metrics (v0.12.0)
+### Key Metrics (semantic-modulator v0.11.0)
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Source Modules** | 80+ Python files in src/ | ✅ All active (incl. semantic_modulator subpkg) |
-| **Handler Modules** | 11 modules in src/handlers/ | ✅ All integrated |
-| **MCP Tools** | 126 tools defined | ✅ All routed |
-| **Test Files** | 90+ test modules | ✅ 3,500+ tests |
-| **Test Coverage** | 70%+ overall | ✅ Meets threshold |
-| **Documentation** | 51+ markdown files | ✅ Updated for launch |
+| **Source tree** | `src/` package (core + `semantic_modulator/` + `handlers/`) | ✅ Active |
+| **Handler modules** | 19 handler modules + `mcp_core.py` under `src/handlers/` | ✅ Routed via `mcp_core` |
+| **MCP tools** | Large surface (100+); exact count changes release-to-release | ✅ See `mcp_core.py` / tests |
+| **Tests** | 3,000+ tests in `tests/` | ✅ `pytest` is authoritative |
+| **Coverage** | Enforced ≥70% in `pyproject` | ✅ |
 
 ### Version Alignment
-- **pyproject.toml**: v0.11.0 ✅ (requires-python <3.15)
-- **README.md**: 126 MCP tools ✅
-- **CHANGELOG.md**: Latest unreleased v0.12.0 ✅
+- **`pyproject.toml`**: v0.11.0 ✅ (`requires-python = ">=3.10,<3.15"`)
+- **Root `CLAUDE.md` / `api/`** (when integrated): hosted MCP gateway and plan allowlists live outside this package in `api/app/mcp_gateway.py` and `api/app/services/plan_gating.py`
 
 ### Architecture Summary
 ```
@@ -46,7 +52,7 @@ src/                              # 75 modules, ~26,000 lines
 ├── Knowledge Management (3 modules) # transcript_extractor, knowledge_compiler, knowledge_lint
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
 ├── semantic_modulator/           # subpackage (additional modules)
-└── handlers/ (11 modules)        # 126 MCP tool implementations
+└── handlers/ (~19 modules + mcp_core)  # large MCP tool surface
 ```
 
 ### Experimental Features Status
@@ -778,7 +784,7 @@ docs/                       # 49 documentation files
 examples/                   # 10 usage examples
 scripts/                    # 8 utility scripts
 skills/                     # Python compression skill (12 scripts)
-src/                        # 71 source modules + handlers
+src/                        # core modules + handlers (see src/claude.md)
 tests/                      # 78 test files (1,171 tests)
 ```
 
@@ -863,22 +869,11 @@ tests/                      # 78 test files (1,171 tests)
   - Dangerous Git operations without approval
 
 ### MCP Server Access
-Token Saver 5000 provides 49 MCP tools via stdio transport. Configure in your Claude Desktop settings:
+Token Saver 5000 exposes a **large MCP tool surface** (100+ tools; exact set evolves by release) over **stdio** in local mode. In the **gotcontext** monorepo, the hosted API may expose a **subset** per billing plan—see `api/app/services/plan_gating.py` and `api/app/mcp_gateway.py`.
 
-**Tool Categories:**
-- **Document Compression** (9 tools): ingest, read, search, modulate, batch operations
-- **Dialogue Memory (AFM)** (6 tools): add_message, build_context, export/import
-- **Context Engineering (ACE)** (7 tools): generate, reflect, curate, grow, refine
-- **File Sync & Versioning** (4 tools): check_sync, refresh, diff, version_history
-- **Visualization** (4 tools): export_json, visualize_html, export_graphml, explain
-- **Detection** (2 tools): check_blind_spots, detect_hallucination
-- **Health & Assessment** (3 tools): check_health, check_environment, should_compress
-- **Experimental** (5 tools): TOON encode/decode, SCAR compress/stats, multimodal_ingest
-- **Discovery** (3 tools): list_documents, delete_document, tool_help
-- **Fidelity** (1 tool): recommend_fidelity
-- **Token Optimization** (4 tools, v0.11.0): estimate_tokens, configure_for_client, set/get_compression_profile
+**Representative categories** (not an exhaustive count): document compression, AFM dialogue memory, ACE context engineering, file sync/versioning, visualization, detection, health/assessment, experimental (TOON/SCAR/multimodal), token optimization, memory/session tools, prompts/cache tooling, connectors, experiments, and more.
 
-See `docs/guides/MCP_TOOLS_GUIDE.md` for complete tool documentation.
+See `docs/guides/MCP_TOOLS_GUIDE.md` and `src/handlers/mcp_core.py` for the authoritative list.
 
 ## Code Style Guidelines
 

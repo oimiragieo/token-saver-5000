@@ -414,6 +414,7 @@ Centralized Embedding Management for Semantic Modulator (v0.6.0)
 
 | Kind | Name |
 |------|------|
+| `class` | `_EmbeddingManagerAdapter` |
 | `class` | `EmbeddingTier` |
 | `class` | `EmbeddingManager` |
 | `def` | `get_embedding_manager` |
