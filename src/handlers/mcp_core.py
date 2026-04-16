@@ -523,7 +523,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "to pack dialogue history under strict token budget. Achieves ~66% token reduction "
                 "while preserving safety-critical information (e.g., allergies, constraints). "
                 "Each message gets adaptive fidelity: FULL (verbatim), COMPRESSED (summary), or "
-                "PLACEHOLDER (stub). Messages packed chronologically to preserve conversation flow."
+                "PLACEHOLDER. Messages packed chronologically to preserve conversation flow."
             ),
             inputSchema={
                 "type": "object",
