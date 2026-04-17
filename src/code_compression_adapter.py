@@ -149,29 +149,28 @@ class CodeCompressionAdapter:
         self.skeleton_ratio = skeleton_ratio
         self.similarity_threshold = similarity_threshold
 
+        # Optional eager-load of CodeBERT (~400MB) — otherwise lazy via first ingest.
+        env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
+        if preload_code_model or env_preload:
+            logger.info("Pre-warming CodeBERT model (~400MB, one-time)...")
+            self._load_code_compressor()
+
+        logger.info(
+            "code_compression_adapter_initialized: text=%s code=%s preload=%s",
+            text_model,
+            code_model,
+            preload_code_model or env_preload,
+        )
+
     # ------------------------------------------------------------------
     # Proxy properties and methods — CodeCompressionAdapter wraps
     # SemanticCompressor but many modules (graph_visualizer, context
     # window adapter, compression handlers) access compressor attributes
     # directly.  These proxies delegate to the underlying text compressor
-    # so the adapter is a drop-in replacement everywhere.
+    # so the adapter is a drop-in replacement everywhere.  The richer
+    # unified versions of `graphs`, `chunks`, and `file_metadata` below
+    # merge results from both the text and code compressors.
     # ------------------------------------------------------------------
-
-    @property
-    def graphs(self):
-        return self._text_compressor.graphs
-
-    @property
-    def chunks(self):
-        return self._text_compressor.chunks
-
-    @property
-    def file_metadata(self):
-        return self._text_compressor.file_metadata
-
-    @property
-    def model(self):
-        return self._text_compressor.model
 
     def read_skeleton(self, file_id, **kwargs):
         return self._text_compressor.read_skeleton(file_id, **kwargs)
@@ -200,19 +199,6 @@ class CodeCompressionAdapter:
         if name == "_text_compressor":
             raise AttributeError(name)
         return getattr(self._text_compressor, name)
-
-        # Check for prewarm environment variable
-        env_preload = os.environ.get("PRELOAD_CODE_MODEL", "").lower() == "true"
-        if preload_code_model or env_preload:
-            logger.info("Pre-warming CodeBERT model (~400MB, one-time)...")
-            self._load_code_compressor()
-
-        logger.info(
-            "code_compression_adapter_initialized: text=%s code=%s preload=%s",
-            text_model,
-            code_model,
-            preload_code_model or env_preload,
-        )
 
     # =========================================================================
     # Property Proxies - Required for handler compatibility
