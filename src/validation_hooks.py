@@ -57,8 +57,14 @@ def _validate_ingest(args: Dict[str, Any]) -> List[str]:
     if not text or len(text.strip()) == 0:
         errors.append("text cannot be empty or whitespace-only")
     file_id = args.get("file_id", "")
-    if file_id and not re.match(r"^[a-zA-Z0-9_]+$", file_id):
-        errors.append("file_id must contain only alphanumeric characters and underscores")
+    if file_id:
+        if ".." in file_id:
+            errors.append("file_id must not contain '..' (parent-directory reference)")
+        elif not re.match(r"^[a-zA-Z0-9_\-./]+$", file_id):
+            errors.append(
+                "file_id must contain only alphanumeric characters, underscores, "
+                "hyphens, dots, or forward slashes"
+            )
     return errors
 
 
