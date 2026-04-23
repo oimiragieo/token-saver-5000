@@ -53,6 +53,15 @@ onnx = [
 vis = [
     "pyvis>=0.3.2",
 ]
+# AST-aware code search: enables gc_blast_radius, compress_codebase, and the
+# repo-map + ast-search backends in src/tensor_grep_integration.py. Without it,
+# those tools return available=False and fall back to degraded behavior (no AST
+# search, no repo symbol map). The hosted api.gotcontext.ai server always
+# ships tensor-grep in api/requirements.txt; self-hosted users should install
+# this extra to unlock full code-understanding features.
+code = [
+    "tensor-grep>=1.4.3",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
@@ -71,6 +80,7 @@ all = [
     "onnxruntime>=1.16.0",
     "optimum[exporters]>=1.15.0",
     "pyvis>=0.3.2",
+    "tensor-grep>=1.4.3",
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
