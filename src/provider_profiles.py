@@ -28,6 +28,22 @@ class ProviderProfile:
 
 
 _PROFILES = {
+    "claude-opus-4.7": ProviderProfile(
+        model="claude-opus-4.7",
+        provider="anthropic",
+        input_cost_per_million=15.0,
+        output_cost_per_million=75.0,
+        cached_input_cost_per_million=1.5,
+        context_window=1_000_000,
+        cache_read_field="cache_read_input_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=256,
+        supports_prompt_cache_key=False,
+        cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
+        prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
+        recommended_output_format="toon",
+        notes="Flagship Anthropic model. Same per-1M pricing as Opus 4.6 but with 1M-token context window — compression still pays off because output tokens dominate the bill.",
+    ),
     "claude-opus-4.6": ProviderProfile(
         model="claude-opus-4.6",
         provider="anthropic",
@@ -192,8 +208,13 @@ _PROFILES = {
 }
 
 _ALIASES = {
-    "claude-opus-4": "claude-opus-4.6",
+    # Latest flagship — unversioned name + hyphen form alias to 4.7
+    "claude-opus": "claude-opus-4.7",
+    "claude-opus-4": "claude-opus-4.7",
+    "claude-opus-4-7": "claude-opus-4.7",
+    # Pinned earlier version kept as its own profile
     "claude-opus-4.5": "claude-opus-4.6",
+    "claude-opus-4-6": "claude-opus-4.6",
     "claude-sonnet-4": "claude-sonnet-4.6",
     "claude-sonnet-4.5": "claude-sonnet-4.6",
     "claude-haiku-3.5": "claude-haiku-4",

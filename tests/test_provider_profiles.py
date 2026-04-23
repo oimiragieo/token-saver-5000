@@ -100,3 +100,32 @@ def test_gpt41_mini_cheaper_than_full():
 def test_mini_aliases_resolve():
     assert get_provider_profile("gpt-5-mini").model == "gpt-5.4-mini"
     assert get_provider_profile("gpt-4o-mini").model == "gpt-4.1-mini"
+
+
+# ---------------------------------------------------------------------------
+# Claude Opus 4.7 — flagship model, 1M-token context.
+# ---------------------------------------------------------------------------
+
+
+def test_opus_4_7_is_registered():
+    profile = get_provider_profile("claude-opus-4.7")
+    assert profile.provider == "anthropic"
+    assert profile.model == "claude-opus-4.7"
+    assert profile.input_cost_per_million == 15.0
+    assert profile.output_cost_per_million == 75.0
+    assert profile.context_window == 1_000_000
+
+
+def test_opus_4_7_aliases_resolve():
+    # Unversioned
+    assert get_provider_profile("claude-opus").model == "claude-opus-4.7"
+    # Hyphenated (MCP _meta.model convention in some clients)
+    assert get_provider_profile("claude-opus-4-7").model == "claude-opus-4.7"
+    # Unversioned major
+    assert get_provider_profile("claude-opus-4").model == "claude-opus-4.7"
+
+
+def test_opus_4_6_still_resolves_with_hyphen_alias():
+    """Pinned 4.6 users keep working."""
+    assert get_provider_profile("claude-opus-4-6").model == "claude-opus-4.6"
+    assert get_provider_profile("claude-opus-4.6").model == "claude-opus-4.6"
