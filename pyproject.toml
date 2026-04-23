@@ -1,9 +1,22 @@
 [project]
-name = "semantic-modulator"
+name = "gotcontext-server"
 version = "0.11.0"
-description = "Adaptive Semantic Fidelity MCP Server - Combining Semantic Communication with Fidelity-Preserving Encoding"
-authors = [{name = "Token Saver Team"}]
+description = "Self-hosted MCP server for gotcontext.ai — semantic compression, AST-aware code understanding, and context engineering for LLM agents."
+authors = [{name = "gotcontext.ai"}]
+license = "MIT"
 readme = "README.md"
+keywords = ["gotcontext", "mcp", "compression", "llm", "tokens", "semantic"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 # Python 3.13+ breaks chromadb (pydantic-settings conflict) and has numpy>=2.0 incompatibility.
 # Upper bound enforces the supported range stated in CLAUDE.md.
 requires-python = ">=3.10,<3.15"
@@ -25,13 +38,20 @@ dependencies = [
     "msgpack>=1.0.0",  # Required for embedding_cache.py disk persistence
 ]
 
+[project.urls]
+Homepage = "https://gotcontext.ai"
+Documentation = "https://gotcontext.ai/docs"
+Repository = "https://github.com/oimiragieo/token-saver-5000"
+Issues = "https://github.com/oimiragieo/token-saver-5000/issues"
+Changelog = "https://github.com/oimiragieo/token-saver-5000/blob/main/CHANGELOG.md"
+
 [project.scripts]
-# Primary gotcontext entry points (for gotcontext.ai branding)
+# Primary gotcontext entry points
 gotcontext-mcp = "src.server:main"
 gotcontext-setup = "src.setup_cli:main"
 gotcontext-stats = "src.savings_dashboard:main"
 gotcontext-proxy = "src.proxy_cli:main"
-# Legacy token-saver entry points (backward compatible)
+# Legacy token-saver entry points (kept for backward compatibility)
 token-saver-mcp = "src.server:main"
 token-saver-install-mcp = "src.mcp_install:main"
 token-saver-setup = "src.setup_cli:main"
@@ -56,9 +76,10 @@ vis = [
 # AST-aware code search: enables gc_blast_radius, compress_codebase, and the
 # repo-map + ast-search backends in src/tensor_grep_integration.py. Without it,
 # those tools return available=False and fall back to degraded behavior (no AST
-# search, no repo symbol map). The hosted api.gotcontext.ai server always
-# ships tensor-grep in api/requirements.txt; self-hosted users should install
-# this extra to unlock full code-understanding features.
+# search, no repo symbol map). The hosted api.gotcontext.ai server always ships
+# tensor-grep; self-hosted users unlock it with:
+#   pip install "gotcontext-server[code]"      (once published on PyPI)
+#   pip install -e ".[code]"                    (from a git checkout)
 code = [
     "tensor-grep>=1.4.3",
 ]

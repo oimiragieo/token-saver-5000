@@ -1,0 +1,59 @@
+name: Publish gotcontext-server to PyPI
+
+# Publish the self-hosted MCP server to PyPI as `gotcontext-server`.
+# Triggers on tags of the form `vX.Y.Z` (e.g. `v0.11.0`).
+#
+# Prerequisite: PyPI trusted publisher must be configured once at:
+#   https://pypi.org/manage/account/publishing/
+# with these values:
+#   - PyPI project:     gotcontext-server
+#   - Owner:            oimiragieo
+#   - Repository:       token-saver-5000
+#   - Workflow:         publish.yml
+#   - Environment:      pypi
+# No password or API token needed once that's set.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish (e.g. v0.11.0)'
+        required: true
+
+jobs:
+  build-and-publish:
+    name: Build and publish gotcontext-server
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/gotcontext-server
+    permissions:
+      contents: read
+      id-token: write  # required for PyPI OIDC trusted publishing
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify metadata
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # OIDC trusted publishing — no password needed once configured at PyPI.
