@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from os import cpu_count
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Literal, Optional, Set, Tuple
 from enum import Enum
 
 import numpy as np
@@ -830,6 +830,7 @@ class SemanticCompressor:
         query: Optional[str] = None,
         anchor_node_ids: Optional[Set[str]] = None,
         exclude_node_ids: Optional[Set[str]] = None,
+        selection_strategy: Literal["mig", "pagerank", "auto"] = "auto",
     ) -> SkeletonResponse:
         """
         Step 2: Rate Allocation (JSCCM)
@@ -838,6 +839,21 @@ class SemanticCompressor:
         1. Ranking nodes by importance (PageRank)
         2. Keeping top N% as "anchor concepts"
         3. Hiding others as references
+
+        Args:
+            file_id: Document identifier previously ingested.
+            query: Optional retrieval query for guided selection.
+            anchor_node_ids: Force-include specific node IDs in skeleton.
+            exclude_node_ids: Force-exclude specific node IDs from skeleton.
+            selection_strategy: Node-selection algorithm.
+                - ``"auto"`` (default): current behaviour — COMI coarse filter
+                  (when query provided) followed by PageRank-guided selection.
+                - ``"mig"``: force MIG (Marginal Information Gain) path via
+                  ``MIGScorer`` for node importance re-ranking instead of the
+                  PageRank-only ranking step.  COMI coarse filter is still
+                  applied when a query is present.
+                - ``"pagerank"``: skip the COMI coarse filter entirely, relying
+                  only on PageRank importance scores for selection.
         """
         graph = self.graphs.get(file_id)
         if not graph:
@@ -882,12 +898,13 @@ class SemanticCompressor:
         num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
 
         # COMI coarse-to-fine pass (arXiv 2602.01719, ICLR 2026):
-        # When a query is provided, first do a COARSE pass that eliminates
-        # clearly irrelevant nodes (bottom 50% by query relevance) before
-        # the fine-grained PageRank selection.  This reduces noise and
-        # focuses the skeleton on query-relevant content.  The paper showed
-        # a 25-point EM improvement at high compression ratios.
-        if query and len(file_nodes) > 3:
+        # When a query is provided AND strategy is not "pagerank", first do a
+        # COARSE pass that eliminates clearly irrelevant nodes (bottom 50% by
+        # query relevance) before the fine-grained PageRank selection.  This
+        # reduces noise and focuses the skeleton on query-relevant content.
+        # The paper showed a 25-point EM improvement at high compression ratios.
+        # ``selection_strategy="pagerank"`` skips this filter entirely.
+        if query and len(file_nodes) > 3 and selection_strategy != "pagerank":
             try:
                 query_emb = self.model.encode([query])[0]
                 # Score each node by relevance to query
@@ -918,6 +935,33 @@ class SemanticCompressor:
                 )
             except Exception as exc:
                 logger.warning(f"COMI coarse pass failed for '{file_id}': {exc}")
+
+        # MIG (Marginal Information Gain) node re-ranking:
+        # When ``selection_strategy="mig"`` and a query is present, re-rank
+        # nodes using token-level MIG scores aggregated per node.  This
+        # replaces the PageRank importance attribute used in the downstream
+        # ``_select_skeleton_nodes`` call so that the greedy MMR selection
+        # operates on MIG-weighted scores rather than graph centrality.
+        if selection_strategy == "mig" and query and query.strip():
+            try:
+                from .token_refiner import MIGConfig, MIGScorer
+
+                mig_scorer = MIGScorer(config=MIGConfig())
+                for nid, node in file_nodes:
+                    tokens = node.text.split()
+                    if tokens:
+                        scored = mig_scorer.score_tokens_mig(tokens, query)
+                        # Aggregate: mean MIG score across tokens → new importance
+                        node.importance = float(sum(s for _, s in scored) / len(scored))
+                    # nodes with no tokens keep their PageRank importance
+
+                # Re-sort by updated importance for stable downstream order
+                file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
+                logger.info(
+                    f"  MIG re-ranking applied for '{file_id}' " f"({len(file_nodes)} nodes scored)"
+                )
+            except Exception as exc:
+                logger.warning(f"MIG re-ranking failed for '{file_id}': {exc}")
 
         # Phase 5: Query-adaptive per-section ratios (KVzip/LazyLLM)
         adaptive_priority_scores = None
@@ -1012,14 +1056,28 @@ class SemanticCompressor:
             node_map=node_map,
         )
 
-    def read_skeleton(self, file_id: str, query: Optional[str] = None) -> str:
+    def read_skeleton(
+        self,
+        file_id: str,
+        query: Optional[str] = None,
+        selection_strategy: Literal["mig", "pagerank", "auto"] = "auto",
+    ) -> str:
         """
         MCP Tool: read_skeleton
 
         Returns the compressed skeleton view of a document.
         ~80-95% token savings vs raw text.
+
+        Args:
+            file_id: Document identifier previously ingested.
+            query: Optional retrieval query for query-guided skeleton.
+            selection_strategy: Node-selection algorithm (``"auto"``,
+                ``"mig"``, or ``"pagerank"``).  Defaults to ``"auto"``
+                which preserves pre-v1.11.0 behaviour.
         """
-        skeleton = self._generate_skeleton(file_id, query=query)
+        skeleton = self._generate_skeleton(
+            file_id, query=query, selection_strategy=selection_strategy
+        )
         return skeleton.skeleton_text
 
     def retrieve_evidence(
