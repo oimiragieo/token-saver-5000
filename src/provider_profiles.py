@@ -205,6 +205,25 @@ _PROFILES = {
         recommended_output_format="toon",
         notes="GPT-4.1 mini — low cost, smaller context; good for bulk preprocessing and light classification.",
     ),
+    # Launched 2026-04-23. Same input rate as Opus 4.7 ($5/MTok) but output is
+    # significantly more expensive at $30/MTok (vs $25/MTok for Opus). 1M-token
+    # context window. Prompt cache read at 10% of input (same as GPT-5.4 tier).
+    "gpt-5.5": ProviderProfile(
+        model="gpt-5.5",
+        provider="openai",
+        input_cost_per_million=5.0,
+        output_cost_per_million=30.0,
+        cached_input_cost_per_million=0.50,
+        context_window=1_000_000,
+        cache_read_field="cached_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=128,
+        supports_prompt_cache_key=True,
+        cache_routing_strategy="Use stable prompt_cache_key per workflow; 1M-context window makes stable-prefix discipline especially valuable at large document sizes.",
+        prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
+        recommended_output_format="toon",
+        notes="OpenAI GPT-5.5 flagship (2026-04-23). 1M-token context, $5/$30 per MTok input/output. Compression ROI is high given the expensive output rate.",
+    ),
 }
 
 _ALIASES = {
@@ -212,6 +231,10 @@ _ALIASES = {
     "claude-opus": "claude-opus-4.7",
     "claude-opus-4": "claude-opus-4.7",
     "claude-opus-4-7": "claude-opus-4.7",
+    # Short-form aliases (without the "claude-" prefix) used by model_pricing.py
+    # and /v1/usage alert helpers.
+    "opus-4-7": "claude-opus-4.7",
+    "opus-4.7": "claude-opus-4.7",
     # Pinned earlier version kept as its own profile
     "claude-opus-4.5": "claude-opus-4.6",
     "claude-opus-4-6": "claude-opus-4.6",
@@ -240,6 +263,8 @@ _ALIASES = {
     "gpt-5.3-mini": "gpt-5.4-mini",
     "gpt-4o-mini": "gpt-4.1-mini",
     "gpt-4-mini": "gpt-4.1-mini",
+    # GPT-5.5 hyphen alias (e.g. used as "gpt-5-5" in some clients)
+    "gpt-5-5": "gpt-5.5",
 }
 
 
