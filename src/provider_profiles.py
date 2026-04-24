@@ -95,9 +95,14 @@ _PROFILES = {
     "gpt-5.4": ProviderProfile(
         model="gpt-5.4",
         provider="openai",
-        input_cost_per_million=10.0,
-        output_cost_per_million=30.0,
-        cached_input_cost_per_million=1.0,
+        # Standard tier. Per OpenAI's 2026-04 release notes and Artificial
+        # Analysis pricing index, GPT-5.4 standard input was $2.50/MTok,
+        # output $15/MTok — earlier $10/$30 entry was a stale copy from a
+        # GPT-5.2 profile.  GPT-5.5 (separate entry) is the one that
+        # doubled standard to $5/$30 on 2026-04-23.
+        input_cost_per_million=2.5,
+        output_cost_per_million=15.0,
+        cached_input_cost_per_million=0.25,
         context_window=400_000,
         cache_read_field="cached_tokens",
         minimum_cacheable_tokens=1024,
