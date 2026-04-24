@@ -116,7 +116,8 @@ MCP Client → stdio → Server (src/server.py)
 **Handler modules** (`src/handlers/`):
 - Each module handles a category: compression, AFM (dialogue memory), ACE (context engineering), file sync, visualization, detection, experimental, etc.
 - All handlers are async, receive `HandlerContext` dict, return JSON-serializable dicts
-- 19 handler files, ~126 MCP tools total
+- 20 handler files, ~127 MCP tools total
+- **v1.8.0 addition:** `src/handlers/compress_manifest.py` — `handle_compress_manifest(params)` compresses an MCP `tools/list` response (shortens `description` fields, preserves `inputSchema` byte-for-byte). Consumed by gotcontext.ai's `gc_compress_manifest` platform tool in `api/app/mcp_gateway.py`. Plan-gated to Pro+ in `api/app/services/plan_gating.py::_PRO_TOOLS`.
 
 **Core compression** (`src/semantic_compressor.py`, `src/code_compressor.py`):
 - `SemanticCompressor`: text chunking → embedding → graph construction → PageRank → skeleton
