@@ -487,3 +487,164 @@ class TestDeletionDoesNotOverreach:
             # src/module.py should still be in tracked code files
             assert "src/module.py" in adapter._code_file_ids
             assert "src/mod.py" not in adapter._code_file_ids
+
+
+class TestDeleteDocumentFromMemoryPropertyCopy:
+    """Regression lock for the CodeCompressionAdapter.chunks/@property copy bug.
+
+    Root cause (caught by Bucket B E2E sweep, 2026-05-17):
+    CodeCompressionAdapter.chunks, .graphs, and .file_metadata are @property
+    descriptors that return dict(self._text_compressor.chunks) -- a NEW COPY
+    each access.  The original delete_document handler did:
+
+        chunks_to_delete = [k for k in compressor.chunks.keys() ...]
+        for chunk_id in chunks_to_delete:
+            del compressor.chunks[chunk_id]   # <-- deletes from the COPY
+
+    The del operated on the throw-away copy, leaving the real underlying
+    dict untouched.  Calling list_documents immediately after would still
+    show the file because self._text_compressor.chunks still held all keys.
+
+    Fix: added delete_document_from_memory() to CodeCompressionAdapter that
+    directly accesses self._text_compressor.chunks (the real dict).
+    """
+
+    def test_property_chunks_returns_copy_not_reference(self):
+        """Verify that compressor.chunks IS a copy -- del on it is a no-op.
+
+        This test exists to DOCUMENT the footgun, not to fix it.  It must
+        continue to pass (the property is intentionally a copy for safety).
+        """
+        with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
+            mock_text = Mock()
+            real_chunks = {"doc1_n0": Mock(), "doc1_n1": Mock()}
+            mock_text.chunks = real_chunks
+            mock_text.graphs = {}
+            mock_text.file_metadata = {}
+            mock_text_cls.return_value = mock_text
+
+            from src.code_compression_adapter import CodeCompressionAdapter
+
+            adapter = CodeCompressionAdapter()
+
+            copy_a = adapter.chunks
+            del copy_a["doc1_n0"]
+
+            # The real underlying dict is UNCHANGED -- del was a no-op
+            assert "doc1_n0" in mock_text.chunks, (
+                "Property returned a reference, not a copy -- the contract changed!"
+            )
+
+    def test_delete_document_from_memory_mutates_real_underlying_dict(self):
+        """Regression lock: delete_document_from_memory must remove from real dict."""
+        with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
+            mock_text = Mock()
+            real_chunks = {
+                "my_doc_n0": Mock(),
+                "my_doc_n1": Mock(),
+                "other_doc_n0": Mock(),
+            }
+            real_graphs = {"my_doc": Mock(), "other_doc": Mock()}
+            real_metadata = {"my_doc": {"size": 100}, "other_doc": {"size": 200}}
+            mock_text.chunks = real_chunks
+            mock_text.graphs = real_graphs
+            mock_text.file_metadata = real_metadata
+            mock_text_cls.return_value = mock_text
+
+            from src.code_compression_adapter import CodeCompressionAdapter
+
+            adapter = CodeCompressionAdapter()
+
+            assert hasattr(adapter, "delete_document_from_memory"), (
+                "delete_document_from_memory() not found on CodeCompressionAdapter"
+            )
+
+            removed = adapter.delete_document_from_memory("my_doc")
+
+            assert removed == 2, f"Expected 2 removed, got {removed}"
+
+            assert "my_doc_n0" not in mock_text.chunks, (
+                "my_doc_n0 still in underlying chunks after delete_document_from_memory"
+            )
+            assert "my_doc_n1" not in mock_text.chunks, (
+                "my_doc_n1 still in underlying chunks after delete_document_from_memory"
+            )
+            assert "my_doc" not in mock_text.graphs
+            assert "my_doc" not in mock_text.file_metadata
+            assert "other_doc_n0" in mock_text.chunks
+            assert "other_doc" in mock_text.graphs
+            assert "other_doc" in mock_text.file_metadata
+
+    def test_delete_document_from_memory_with_code_compressor(self):
+        """Regression lock: delete also removes keys from code compressor internals."""
+        with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
+            mock_text = Mock()
+            mock_text.chunks = {"code_file.py_n0": Mock()}
+            mock_text.graphs = {}
+            mock_text.file_metadata = {}
+            mock_text_cls.return_value = mock_text
+
+            from src.code_compression_adapter import CodeCompressionAdapter
+
+            adapter = CodeCompressionAdapter()
+
+            mock_code = Mock()
+            real_code_chunks = {
+                "code_file.py::main": Mock(),
+                "code_file.py::helper": Mock(),
+                "other_file.py::run": Mock(),
+            }
+            real_code_graphs = {"code_file.py": Mock()}
+            real_code_metadata = {"code_file.py": {}}
+            mock_code.chunks = real_code_chunks
+            mock_code.graphs = real_code_graphs
+            mock_code.file_metadata = real_code_metadata
+            adapter._code_compressor = mock_code
+            adapter._code_file_ids = {"code_file.py"}
+
+            removed = adapter.delete_document_from_memory("code_file.py")
+
+            assert removed == 3, f"Expected 3 removed, got {removed}"
+
+            assert "code_file.py::main" not in real_code_chunks
+            assert "code_file.py::helper" not in real_code_chunks
+            assert "other_file.py::run" in real_code_chunks
+            assert "code_file.py" not in adapter._code_file_ids
+
+    def test_list_documents_excludes_deleted_after_delete_from_memory(self):
+        """Integration regression lock: list_documents must not show deleted doc."""
+        with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
+            mock_text = Mock()
+            real_chunks = {
+                "keep_me_n0": Mock(),
+                "keep_me_n1": Mock(),
+                "delete_me_n0": Mock(),
+                "delete_me_n1": Mock(),
+            }
+            real_graphs = {"keep_me": Mock(), "delete_me": Mock()}
+            real_metadata = {
+                "keep_me": {"created": "2026-01-01"},
+                "delete_me": {"created": "2026-01-02"},
+            }
+            mock_text.chunks = real_chunks
+            mock_text.graphs = real_graphs
+            mock_text.file_metadata = real_metadata
+            mock_text_cls.return_value = mock_text
+
+            from src.code_compression_adapter import CodeCompressionAdapter
+
+            adapter = CodeCompressionAdapter()
+
+            file_ids_before = set(adapter.file_metadata.keys())
+            assert "delete_me" in file_ids_before
+            assert "keep_me" in file_ids_before
+
+            adapter.delete_document_from_memory("delete_me")
+
+            file_ids_after = set(adapter.file_metadata.keys())
+
+            assert "delete_me" not in file_ids_after, (
+                "delete_me still in file_metadata after delete_document_from_memory -- "
+                "the property-copy bug is NOT fixed!"
+            )
+            assert "keep_me" in file_ids_after, "keep_me was incorrectly deleted"
