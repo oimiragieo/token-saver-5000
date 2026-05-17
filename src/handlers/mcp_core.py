@@ -3188,15 +3188,20 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     },
                     "items": {
                         "type": "array",
-                        "description": "List of text items to analyze",
+                        "description": "List of text items to analyze. Each item may be a plain string or an object with a 'text' field.",
                         "items": {
-                            "type": "object",
-                            "properties": {
-                                "text": {"type": "string"},
-                                "label": {"type": "string"},
-                                "file_ext": {"type": "string"},
-                            },
-                            "required": ["text"],
+                            "oneOf": [
+                                {"type": "string"},
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                        "label": {"type": "string"},
+                                        "file_ext": {"type": "string"},
+                                    },
+                                    "required": ["text"],
+                                },
+                            ]
                         },
                     },
                     "max_files": {
