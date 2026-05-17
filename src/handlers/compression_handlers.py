@@ -1263,23 +1263,31 @@ Tip: Use list_documents() to see all available documents first
     node_count = stats["total_nodes"]
 
     # Delete from memory
+    # IMPORTANT: compressor.chunks, compressor.graphs, and
+    # compressor.file_metadata are properties on CodeCompressionAdapter
+    # that return *copies* of the underlying dicts.  Direct del on those
+    # copies is a no-op against the real storage.  Use
+    # delete_document_from_memory when available; fall back to direct
+    # mutation only when the compressor exposes real dicts (plain
+    # SemanticCompressor).
     try:
-        # Remove chunks
-        chunks_to_delete = [
-            k for k in context["compressor"].chunks.keys() if k.startswith(scoped_file_id)
-        ]
-        for chunk_id in chunks_to_delete:
-            del context["compressor"].chunks[chunk_id]
+        compressor = context["compressor"]
+        if hasattr(compressor, "delete_document_from_memory"):
+            # CodeCompressionAdapter path — mutates real underlying dicts
+            compressor.delete_document_from_memory(scoped_file_id)
+        else:
+            # SemanticCompressor path — chunks/graphs/file_metadata are real dicts
+            chunks_to_delete = [
+                k for k in compressor.chunks.keys() if k.startswith(scoped_file_id)
+            ]
+            for chunk_id in chunks_to_delete:
+                del compressor.chunks[chunk_id]
+            if scoped_file_id in compressor.graphs:
+                del compressor.graphs[scoped_file_id]
+            if scoped_file_id in compressor.file_metadata:
+                del compressor.file_metadata[scoped_file_id]
 
-        # Remove graph
-        if scoped_file_id in context["compressor"].graphs:
-            del context["compressor"].graphs[scoped_file_id]
-
-        # Remove metadata
-        if scoped_file_id in context["compressor"].file_metadata:
-            del context["compressor"].file_metadata[scoped_file_id]
-
-        # Remove retrieval history
+        # Remove retrieval history (plain dict on context — safe to mutate directly)
         if scoped_file_id in context["retrieval_history"]:
             del context["retrieval_history"][scoped_file_id]
 

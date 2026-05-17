@@ -228,6 +228,49 @@ class CodeCompressionAdapter:
             result.update(self._code_compressor.file_metadata)
         return result
 
+    def delete_document_from_memory(self, file_id: str) -> int:
+        """Delete a document from in-memory storage of both underlying compressors.
+
+        The chunks, graphs, and file_metadata properties return
+        *copies* of the underlying dicts, so callers cannot mutate them
+        directly via del compressor.chunks[key].  This method deletes
+        directly from the source dicts to make in-memory deletion permanent.
+
+        Args:
+            file_id: The scoped file identifier to delete.
+
+        Returns:
+            Number of chunk keys removed.
+        """
+        removed = 0
+
+        # Text compressor
+        tc = self._text_compressor
+        chunk_keys = [k for k in tc.chunks if k.startswith(file_id)]
+        for k in chunk_keys:
+            del tc.chunks[k]
+            removed += 1
+        tc.graphs.pop(file_id, None)
+        tc.file_metadata.pop(file_id, None)
+
+        # Code compressor (if loaded)
+        if self._code_compressor is not None:
+            cc = self._code_compressor
+            code_chunk_keys = [k for k in cc.chunks if k.startswith(file_id)]
+            for k in code_chunk_keys:
+                del cc.chunks[k]
+                removed += 1
+            # CodeSemanticCompressor may store graphs/metadata differently
+            if hasattr(cc, "graphs"):
+                cc.graphs.pop(file_id, None)
+            if hasattr(cc, "file_metadata"):
+                cc.file_metadata.pop(file_id, None)
+
+        # Clean up the code-file tracking set
+        self._code_file_ids.discard(file_id)
+
+        return removed
+
     @property
     def model(self):
         """Access to embedding model (delegates to text compressor)."""

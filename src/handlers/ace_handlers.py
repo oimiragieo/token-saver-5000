@@ -199,6 +199,10 @@ def _filter_and_serialize_bullets(
             continue
 
         bullet_dict = bullet.to_display_dict()
+        # Include bullet_id so callers can use it with ace_refine_context.
+        # to_display_dict() intentionally strips it for cache-friendliness, but the
+        # MCP-facing playbook MUST expose IDs to make refinement usable end-to-end.
+        bullet_dict["bullet_id"] = bullet_id
 
         # Add embedding only when explicitly requested
         if include_embeddings and hasattr(bullet, "embedding"):
