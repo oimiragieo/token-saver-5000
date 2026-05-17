@@ -1127,12 +1127,12 @@ Metadata: {json.dumps(stats['metadata'], indent=2)}
             if _has_scope_args(args)
             else None
         )
-        files_output = "\n".join(scope_lines) if scope_lines else ", ".join(stats["files"])
+        files_output = chr(10).join(scope_lines) if scope_lines else ", ".join(stats.get("files", []))
         result = f"""
 [STATS] Global Statistics
 
-Total files ingested: {stats['total_files']}
-Total nodes: {stats['total_nodes']}
+Total files ingested: {stats.get('total_files', stats.get('total_documents', 0))}
+Total nodes: {stats.get('total_nodes', 0)}
 
 Files: {files_output}
 """

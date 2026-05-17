@@ -584,7 +584,9 @@ async def handle_discover_savings(context: Dict[str, Any], args: Dict[str, Any])
         max_files = args.get("max_files", 500)
         report = analyzer.scan_directory(directory, max_files=max_files)
     elif items:
-        report = analyzer.analyze_items(items)
+        # BUG-E-01 fix: auto-wrap plain strings as {"text": s} dicts
+        wrapped = [i if isinstance(i, dict) else {"text": str(i)} for i in items]
+        report = analyzer.analyze_items(wrapped)
     else:
         return json.dumps(
             {
