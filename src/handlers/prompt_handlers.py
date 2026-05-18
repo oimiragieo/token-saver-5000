@@ -433,9 +433,12 @@ async def handle_render_prompt_template(context: Dict[str, Any], args: Dict[str,
                 "Prompt stability guard rejected the rendered prompt. "
                 f"Violations: {', '.join(item['code'] for item in rendered['stability_guard']['violations'])}"
             )
-        rendered["prompt_id"] = PromptCacheMiddleware.record_expectation(name, rendered)
+        prompt_id = PromptCacheMiddleware.record_expectation(name, rendered)
+        rendered["prompt_id"] = prompt_id
         _record_metrics(start_time, "success")
-        return json.dumps({"status": "success", "rendered": rendered}, indent=2)
+        return json.dumps(
+            {"status": "success", "prompt_id": prompt_id, "rendered": rendered}, indent=2
+        )
     except Exception as exc:
         _record_metrics(start_time, "failure", type(exc).__name__)
         raise
