@@ -3251,10 +3251,14 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             description=(
                 "Check token budget usage against configured limits. "
                 "Supports per-session, daily, and monthly budgets. "
-                "Returns usage status, alert level, and projected usage."
+                "Returns usage status, alert level, and projected usage. "
+                "Schema rejects unknown fields (e.g. legacy 'period' arg) so "
+                "MCP agents get explicit validation errors instead of silent "
+                "argument-drops."
             ),
             inputSchema={
                 "type": "object",
+                "additionalProperties": False,
                 "properties": {
                     "session_limit": {
                         "type": "integer",
