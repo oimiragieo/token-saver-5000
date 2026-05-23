@@ -774,10 +774,18 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
     logger.info(f"Reading skeleton: {scoped_file_id}")
 
     # NEW: Check file sync status before reading
+    # v1.34.20 (dogfood F2): suppress the warning when the source file is
+    # absent on this server. That branch fires for every hosted-MCP ingest
+    # that passes file_path — the customer's client-side path naturally
+    # doesn't exist on the Fly container. The staleness warning is meant
+    # for "your file changed locally, refresh" not "we never saw your file
+    # in the first place." Only emit when has_source_file=True (legitimate
+    # local-disk drift, the only case where refresh_document/diff_cached_file
+    # is the right next step).
     staleness_warning = None
     if scoped_file_id in context["sync_manager"].file_metadata:
         status = context["sync_manager"].check_file_sync(scoped_file_id)
-        if not status["in_sync"]:
+        if not status["in_sync"] and status.get("has_source_file", False):
             staleness_warning = {
                 "is_stale": True,
                 "reason": status["reason"],
@@ -1127,7 +1135,9 @@ Metadata: {json.dumps(stats['metadata'], indent=2)}
             if _has_scope_args(args)
             else None
         )
-        files_output = chr(10).join(scope_lines) if scope_lines else ", ".join(stats.get("files", []))
+        files_output = (
+            chr(10).join(scope_lines) if scope_lines else ", ".join(stats.get("files", []))
+        )
         result = f"""
 [STATS] Global Statistics
 
@@ -1277,9 +1287,7 @@ Tip: Use list_documents() to see all available documents first
             compressor.delete_document_from_memory(scoped_file_id)
         else:
             # SemanticCompressor path — chunks/graphs/file_metadata are real dicts
-            chunks_to_delete = [
-                k for k in compressor.chunks.keys() if k.startswith(scoped_file_id)
-            ]
+            chunks_to_delete = [k for k in compressor.chunks.keys() if k.startswith(scoped_file_id)]
             for chunk_id in chunks_to_delete:
                 del compressor.chunks[chunk_id]
             if scoped_file_id in compressor.graphs:
