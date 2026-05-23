@@ -412,6 +412,22 @@ class SemanticCompressor:
                 return rendered_semantic_chunks
             except Exception as exc:
                 logger.warning(f"Semantic chunking failed; falling back to fixed chunking: {exc}")
+        # F4-followup: for structured markdown, split strictly on H2/H3 boundaries
+        # so that each major section becomes its own node, regardless of the
+        # min-token floor.  This prevents 3-4 sections being bundled into one
+        # node (e.g. a 1592-token doc with 15 H2 sections yielding only 4 nodes).
+        _H2H3_RE = re.compile(r"(?=^#{2,3} )", re.MULTILINE)
+        _HEADING_DETECT_RE = re.compile(r"^#{1,3} ", re.MULTILINE)
+        _LIST_DETECT_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
+        _is_structured = (
+            len(_HEADING_DETECT_RE.findall(text)) >= 3 and len(_LIST_DETECT_RE.findall(text)) >= 3
+        )
+        if _is_structured:
+            # Split at H2/H3 heading boundaries, discarding empty pieces
+            heading_chunks = [c.strip() for c in _H2H3_RE.split(text) if c.strip()]
+            if len(heading_chunks) > 1:
+                return heading_chunks
+
         # Split by double newlines first (paragraphs)
         paragraphs = text.split("\n\n")
         chunks = []
@@ -710,6 +726,49 @@ class SemanticCompressor:
                 for node_id, score in pagerank.items():
                     if node_id in self.chunks:
                         self.chunks[node_id].importance = score
+
+                # F3: Content-based importance boosts (applied after PageRank, then re-normalised)
+                # Rationale: PageRank measures graph connectivity, not semantic signal strength.
+                # Structured audit docs have verdict/CRITICAL nodes that are peripheral in the
+                # graph (few neighbours) but maximally important to the reader.
+                _boosted: Dict[str, float] = {}
+                for node_id, node in self.chunks.items():
+                    if not node_id.startswith(file_id):
+                        continue
+                    t = node.text
+                    boost = 0.0
+                    # Heading-level boosts
+                    if re.search(r"^# ", t, re.MULTILINE):
+                        boost += 0.5  # H1 — document title / top-level heading
+                    if re.search(r"^## ", t, re.MULTILINE):
+                        boost += 0.3  # H2 — major section
+                    # Severity / priority markers
+                    if re.search(r"\b(CRITICAL|HIGH|P0|BLOCKER)\b", t, re.IGNORECASE):
+                        boost += 0.4
+                    # Verdict / conclusion patterns
+                    if re.search(
+                        r"\b(verdict|conclusion|summary|finding|result|status)s?\b",
+                        t,
+                        re.IGNORECASE,
+                    ):
+                        boost += 0.3
+                    # Ordered list items (numbered findings)
+                    if re.search(r"^\d+\.", t, re.MULTILINE):
+                        boost += 0.2
+                    if boost > 0:
+                        _boosted[node_id] = node.importance + boost
+
+                if _boosted:
+                    # Re-normalise only the boosted nodes' scores across all file nodes
+                    all_scores = {
+                        nid: (_boosted.get(nid, n.importance))
+                        for nid, n in self.chunks.items()
+                        if nid.startswith(file_id)
+                    }
+                    normalised = self._normalize_scores(all_scores)
+                    for node_id, score in normalised.items():
+                        if node_id in self.chunks:
+                            self.chunks[node_id].importance = score
 
             # Store graph
             self.graphs[file_id] = graph

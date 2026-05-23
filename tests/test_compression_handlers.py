@@ -205,6 +205,81 @@ class TestHandleIngest:
         assert payload["status"] == "success"
         self.mock_persistence.save_file_sync_metadata.assert_awaited_once()
 
+    # ------------------------------------------------------------------
+    # F1: file_url parameter tests
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_file_url_happy_path_stamps_source_url(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """When file_url is supplied, the fetched text is ingested and source_url is stamped."""
+        fetched_text = "This is a remote document with enough content to be meaningful."
+        with (
+            patch(
+                "src.handlers.compression_handlers.fetch_url",
+                new_callable=lambda: lambda *a, **kw: _make_async_return(fetched_text),
+            ),
+            patch("src.handlers.compression_handlers.CompressionAdvisor") as MockAdvisor,
+        ):
+            mock_advisor = Mock()
+            mock_estimate = Mock()
+            mock_estimate.compression_ratio = 9.0
+            mock_estimate.original_tokens = 500
+            mock_estimate.estimated_compressed = 55
+            mock_advisor.estimate_compression.return_value = mock_estimate
+            MockAdvisor.return_value = mock_advisor
+
+            result = await ch.handle_ingest(
+                self.context,
+                {"file_url": "https://example.com/doc.txt", "file_id": "remote_doc"},
+            )
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data.get("source_url") == "https://example.com/doc.txt"
+
+    @pytest.mark.asyncio
+    async def test_text_and_file_url_both_raises_error(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """Providing both text and file_url must raise a ValueError."""
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            await ch.handle_ingest(
+                self.context,
+                {
+                    "text": "inline content here that is long enough",
+                    "file_url": "https://example.com/doc.txt",
+                    "file_id": "conflict_doc",
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_file_url_fetch_failure_propagates_error_code(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """A URLFetchError from fetch_url must surface as a ValueError with the code."""
+        from src.url_fetcher import URLFetchError
+
+        async def _raise(*a, **kw):
+            raise URLFetchError("private IP blocked", code="private_ip")
+
+        with patch("src.handlers.compression_handlers.fetch_url", side_effect=_raise):
+            with pytest.raises(ValueError, match="private_ip"):
+                await ch.handle_ingest(
+                    self.context,
+                    {"file_url": "https://192.168.0.1/secret.txt", "file_id": "fail_doc"},
+                )
+
+
+def _make_async_return(value):
+    """Return an async function that returns *value* when awaited."""
+
+    async def _inner(*args, **kwargs):
+        return value
+
+    return _inner()
+
 
 @patch("src.handlers.compression_handlers.validate_file_id")
 @patch("src.handlers.compression_handlers.validate_node_ids")

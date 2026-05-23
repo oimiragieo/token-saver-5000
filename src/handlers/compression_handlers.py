@@ -31,6 +31,7 @@ from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
 from ..metrics import compute_cost_savings, get_metrics
 from ..constants import MAX_TEXT_LENGTH_BYTES
+from ..url_fetcher import URLFetchError, fetch_url
 from ..identity_scope import (
     compose_scoped_file_id,
     display_file_id,
@@ -508,7 +509,36 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             "Tip: The server allows ~10 ingestions/second to prevent resource exhaustion."
         )
 
-    text = args["text"]
+    # --- Resolve text from inline 'text' or remote 'file_url' ---
+    text_arg: str | None = args.get("text")
+    file_url: str | None = args.get("file_url")
+    source_url: str | None = None  # stamped on response when file_url is used
+
+    if text_arg is not None and file_url is not None:
+        raise ValueError(
+            "'text' and 'file_url' are mutually exclusive — provide only one.\n"
+            "Tip: Use 'text' for inline content or 'file_url' to fetch from a remote HTTPS URL."
+        )
+
+    if file_url is not None:
+        try:
+            text_arg = await fetch_url(file_url)
+            source_url = file_url
+            logger.info(f"Fetched {len(text_arg):,} chars from {file_url}")
+        except URLFetchError as exc:
+            raise ValueError(
+                f"Failed to fetch file_url '{file_url}': {exc}\n" f"Error code: {exc.code}"
+            ) from exc
+
+    if text_arg is None:
+        raise ValueError(
+            "Either 'text' or 'file_url' is required.\n"
+            "Tip: Provide inline document content via 'text', "
+            "or a remote HTTPS URL via 'file_url'."
+        )
+
+    text: str = text_arg
+
     file_id = args["file_id"]
     file_path = args.get("file_path")  # Optional file path for sync tracking
     metadata = args.get("metadata")
@@ -703,7 +733,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
             fidelity = 0.0
             try:
-                original_text = args.get("text", "")
+                original_text = text  # use resolved text (may have come from file_url)
                 if original_text and skeleton.skeleton_text:
                     emb_mgr = compressor.model
                     fidelity = compute_fidelity_score(
@@ -765,6 +795,9 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         response["file_path"] = file_path
         response["version"] = 1
 
+    if source_url is not None:
+        response["source_url"] = source_url
+
     # F6: optional ingest+query in one call
     inline_query = args.get("query")
     if inline_query and skeleton.total_nodes >= 3:
@@ -800,19 +833,21 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
     """
     file_id = args["file_id"]
     scoped_file_id = _scoped_file_id(file_id, args)
-    selection_mode = args.get("selection_mode", "baseline")
+    selection_mode = args.get("selection_mode", "auto")
     query = args.get("query")
     top_k = args.get("top_k", 5)
     min_similarity = args.get("min_similarity", 0.35)
     excluded_node_ids = _temporal_excluded_node_ids(context, args, scoped_file_id)
 
-    valid_modes = {"baseline", "query_guided", "evidence_aware"}
+    valid_modes = {"baseline", "query_guided", "evidence_aware", "auto"}
     if selection_mode not in valid_modes:
         raise ValueError(
             f"Invalid selection_mode: '{selection_mode}'\n"
             f"[TIP] Valid modes: {sorted(valid_modes)}"
         )
-    if selection_mode != "baseline" and not query:
+    # query_guided and evidence_aware require an explicit query;
+    # auto resolves the query internally from doc structure when not supplied.
+    if selection_mode in {"query_guided", "evidence_aware"} and not query:
         raise ValueError(
             f"query is required when selection_mode='{selection_mode}'\n"
             "[TIP] Provide a natural-language query to guide anchor selection."
@@ -855,6 +890,20 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
                 if node_id.startswith(scoped_file_id)
                 and any(kw in node.text.lower() for kw in keywords_lower)
             }
+
+        # F3: Reconstruct raw_text for auto-mode heuristic from stored chunks.
+        # Chunks are sorted by node_id (which encodes insertion order) so the
+        # concatenated text preserves document structure well enough for heading
+        # and finding-count heuristics.
+        raw_text_for_auto: str | None = None
+        if selection_mode == "auto":
+            file_chunks = sorted(
+                (nid, node)
+                for nid, node in compressor.chunks.items()
+                if nid.startswith(scoped_file_id)
+            )
+            raw_text_for_auto = "\n\n".join(node.text for _, node in file_chunks)
+
         pipeline = run_read_skeleton_pipeline(
             compressor=compressor,
             file_id=scoped_file_id,
@@ -864,6 +913,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             min_similarity=min_similarity,
             anchor_node_ids=anchored_node_ids,
             excluded_node_ids=excluded_node_ids,
+            raw_text=raw_text_for_auto,
         )
         skeleton_response = pipeline["final_skeleton"]
 
@@ -905,7 +955,10 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             "skeleton_text": skeleton_response.skeleton_text,
             "cache_stable_prefix": cache_stable_prefix,
             "node_map": skeleton_response.node_map,
-            "selection_mode": selection_mode,
+            "selection_mode": args.get("selection_mode", "auto"),
+            "selection_mode_resolved": pipeline.get(
+                "selection_mode_resolved", pipeline["final_stage"]
+            ),
             "temporal_filters": {
                 "as_of": (
                     format_timestamp(coerce_timestamp(args["as_of"])) if args.get("as_of") else None

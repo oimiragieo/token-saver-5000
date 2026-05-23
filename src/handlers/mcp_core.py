@@ -128,6 +128,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "This creates a fidelity-preserving encoding that reduces token usage by 80-95%. "
                 "The document is analyzed for structure, relationships, and importance. "
                 "Returns a compressed skeleton view. "
+                "Provide document content via 'text' (inline) or 'file_url' (fetched via HTTPS). "
                 "Optionally provide file_path to enable file sync tracking and version history."
             ),
             inputSchema={
@@ -135,7 +136,15 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "The raw document text to ingest",
+                        "description": "The raw document text to ingest (mutually exclusive with file_url)",
+                    },
+                    "file_url": {
+                        "type": "string",
+                        "description": (
+                            "HTTPS URL to fetch document content from (mutually exclusive with text). "
+                            "Must use https:// scheme. Redirects are not followed. "
+                            "Maximum 10 MB. Only text/* and application/json/xml/yaml content types accepted."
+                        ),
                     },
                     "file_id": {
                         "type": "string",
@@ -175,7 +184,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     },
                     **SCOPE_PROPERTIES,
                 },
-                "required": ["text", "file_id"],
+                "required": ["file_id"],
             },
         ),
         Tool(
@@ -185,7 +194,9 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                 "Shows high-importance 'anchor' concepts with summaries, and lists "
                 "other sections as expandable nodes. Achieves 80-95% token reduction. "
                 "Use this FIRST before requesting specific details. "
-                "Opt-in selection modes: baseline, query_guided, and evidence_aware."
+                "Selection modes: auto (default, smart detection), baseline, "
+                "query_guided, evidence_aware. The response includes "
+                "'selection_mode_resolved' indicating which mode was actually used."
             ),
             inputSchema={
                 "type": "object",
@@ -196,9 +207,16 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     },
                     "selection_mode": {
                         "type": "string",
-                        "enum": ["baseline", "query_guided", "evidence_aware"],
-                        "description": "Anchor selection strategy (default: baseline)",
-                        "default": "baseline",
+                        "enum": ["auto", "baseline", "query_guided", "evidence_aware"],
+                        "description": (
+                            "Anchor selection strategy (default: auto). "
+                            "'auto' inspects the document structure and chooses "
+                            "'evidence_aware' for structured audit/report docs "
+                            "(3+ H2 headings + 3+ numbered findings + verdict keyword) "
+                            "or 'baseline' for plain prose. "
+                            "The resolved mode is reported in 'selection_mode_resolved'."
+                        ),
+                        "default": "auto",
                     },
                     "query": {
                         "type": "string",

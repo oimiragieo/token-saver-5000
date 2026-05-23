@@ -3,7 +3,51 @@
 from __future__ import annotations
 
 import inspect
+import re
 from typing import Any
+
+# F3: Heuristics for auto-detecting structured audit/report documents.
+# The auto selection_mode resolves to evidence_aware (using the H1 text as a
+# synthetic query) for structured docs, and falls back to baseline otherwise.
+_AUTO_H2_RE = re.compile(r"^## ", re.MULTILINE)
+_AUTO_FINDING_RE = re.compile(r"^\d+\.", re.MULTILINE)
+_AUTO_VERDICT_RE = re.compile(
+    r"\b(verdict|conclusion|summary|finding|result|status|critical|high|p0|blocker)\b",
+    re.IGNORECASE,
+)
+_AUTO_H1_RE = re.compile(r"^# (.+)", re.MULTILINE)
+
+
+def _resolve_auto_mode(text: str) -> tuple[str, str]:
+    """Return (resolved_mode, selection_mode_resolved_label) for selection_mode='auto'.
+
+    Structured detection criteria (all three must pass):
+    - 3+ H2 headings  (## …)
+    - 3+ numbered findings  (1. …)
+    - At least one verdict-like keyword
+
+    When detected, resolves to evidence_aware and extracts the H1 heading as
+    the synthetic query.  Falls back to baseline when text is None/empty or the
+    criteria are not met.
+    """
+    if not text:
+        return "baseline", "auto-detected: baseline"
+
+    h2_count = len(_AUTO_H2_RE.findall(text))
+    finding_count = len(_AUTO_FINDING_RE.findall(text))
+    has_verdict = bool(_AUTO_VERDICT_RE.search(text))
+
+    if h2_count >= 3 and finding_count >= 3 and has_verdict:
+        return "evidence_aware", "auto-detected: evidence_aware"
+    return "baseline", "auto-detected: baseline"
+
+
+def _extract_h1_query(text: str | None) -> str | None:
+    """Return the first H1 heading text, or None if not found."""
+    if not text:
+        return None
+    m = _AUTO_H1_RE.search(text)
+    return m.group(1).strip() if m else None
 
 
 def _generate_skeleton(
@@ -57,8 +101,27 @@ def run_read_skeleton_pipeline(
     min_similarity: float,
     anchor_node_ids: set[str] | None = None,
     excluded_node_ids: set[str] | None = None,
+    raw_text: str | None = None,
 ) -> dict[str, Any]:
-    """Run baseline/query/evidence stages and return the final skeleton plus trace."""
+    """Run baseline/query/evidence stages and return the final skeleton plus trace.
+
+    When selection_mode='auto', the pipeline inspects ``raw_text`` (the
+    original ingested document) to decide whether to use evidence_aware
+    (structured audit/report docs) or baseline (plain prose).  The resolved
+    mode is reported in the ``selection_mode_resolved`` key of the return dict.
+    """
+    # F3: Resolve auto selection mode before any skeleton generation.
+    selection_mode_resolved: str = selection_mode
+    if selection_mode == "auto":
+        resolved, selection_mode_resolved = _resolve_auto_mode(raw_text or "")
+        selection_mode = resolved
+        # For evidence_aware, synthesise a query from the H1 heading when the
+        # caller didn't supply one explicitly.
+        if selection_mode == "evidence_aware" and not query:
+            query = _extract_h1_query(raw_text) or "key findings and verdict"
+    else:
+        selection_mode_resolved = selection_mode
+
     stages: list[dict[str, Any]] = []
     working_anchors = set(anchor_node_ids or set())
     evidence_info: dict[str, Any] | None = None
@@ -84,6 +147,7 @@ def run_read_skeleton_pipeline(
             "stage_count": len(stages),
             "stages": stages,
             "evidence": None,
+            "selection_mode_resolved": selection_mode_resolved,
         }
 
     query_guided = _generate_skeleton(
@@ -109,6 +173,7 @@ def run_read_skeleton_pipeline(
             "stage_count": len(stages),
             "stages": stages,
             "evidence": None,
+            "selection_mode_resolved": selection_mode_resolved,
         }
 
     evidence = compressor.retrieve_evidence(
@@ -148,4 +213,5 @@ def run_read_skeleton_pipeline(
         "stage_count": len(stages),
         "stages": stages,
         "evidence": evidence_info,
+        "selection_mode_resolved": selection_mode_resolved,
     }
