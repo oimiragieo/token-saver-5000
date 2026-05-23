@@ -20,6 +20,7 @@ import logging
 from typing import Any, Dict, List
 import hashlib
 import inspect
+import re
 
 from ..types import HandlerContext  # TypedDict for handler context
 from ..semantic_compressor import FidelityLevel
@@ -41,6 +42,34 @@ from ..temporal_graph import coerce_timestamp, format_timestamp
 from ..compression_pipeline import run_read_skeleton_pipeline
 
 logger = logging.getLogger("semantic-modulator")
+
+_HEADING_RE = re.compile(r"^#{1,3} ", re.MULTILINE)
+_LIST_ITEM_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
+
+
+def _is_structured_markdown(text: str) -> bool:
+    """Return True when text looks like structured markdown with headings + lists.
+
+    Heuristic: >= 3 ATX headings (H1-H3) AND >= 3 ordered/unordered list items.
+    Designed to avoid misfiring on plain prose that has only one or two headings.
+    """
+    headings = len(_HEADING_RE.findall(text))
+    list_items = len(_LIST_ITEM_RE.findall(text))
+    return headings >= 3 and list_items >= 3
+
+
+def _resolve_chunking_strategy(args: Dict[str, Any], text: str) -> tuple[str, str]:
+    """Return (effective_chunking_strategy, chunking_strategy_used_label).
+
+    When the caller passes ``chunking_strategy="auto"`` (default), we inspect the
+    text and switch to ``"fixed"`` for structured markdown so that heading and
+    list boundaries are respected.  Any explicit strategy is passed through
+    unchanged with a label that records the caller-supplied value.
+    """
+    raw = args.get("chunking_strategy", "auto")
+    if raw == "auto" and _is_structured_markdown(text):
+        return "fixed", "auto-detected: fixed"
+    return raw, raw
 
 
 def _scope_kwargs(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -328,6 +357,8 @@ INGEST_CONTEXT_RESPONSE_TEMPLATE: Dict[str, Any] = {
         "estimated_ratio": 0.0,
         "accuracy": "",
     },
+    "chunking_strategy_used": "",
+    "query_skeleton": None,
     "message": "",
     "file_sync_enabled": False,
     "file_path": "",
@@ -540,7 +571,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     )
 
     try:
-        chunking_strategy = args.get("chunking_strategy", "fixed")
+        chunking_strategy, chunking_strategy_used = _resolve_chunking_strategy(args, text)
         skeleton = await context["compressor"].ingest_file_async(
             text, scoped_file_id, metadata, chunking_strategy=chunking_strategy
         )
@@ -636,6 +667,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             else 0.0
         ),
         "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
+        "chunking_strategy_used": chunking_strategy_used,
         "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
     }
 
@@ -732,6 +764,23 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         response["file_sync_enabled"] = True
         response["file_path"] = file_path
         response["version"] = 1
+
+    # F6: optional ingest+query in one call
+    inline_query = args.get("query")
+    if inline_query and skeleton.total_nodes >= 3:
+        try:
+            query_skeleton_payload = run_read_skeleton_pipeline(
+                compressor=context["compressor"],
+                file_id=scoped_file_id,
+                selection_mode="query_guided",
+                query=inline_query,
+                top_k=args.get("top_k", 5),
+                min_similarity=args.get("min_similarity", 0.35),
+            )
+            response["query_skeleton"] = query_skeleton_payload
+        except Exception as exc:
+            logger.warning(f"Inline query failed for '{file_id}': {exc}")
+            response["query_skeleton"] = None
 
     return json.dumps(response, indent=2)
 

@@ -207,6 +207,276 @@ class TestHandleIngest:
 
 
 @patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers.validate_node_ids")
+@patch("src.handlers.compression_handlers.validate_token_count")
+class TestHandleIngestF4ChunkingStrategy:
+    """Tests for F4 — auto-detect structured markdown and default to chunking_strategy=fixed."""
+
+    def setup_method(self):
+        self.mock_compressor = Mock()
+        self.mock_persistence = Mock()
+        self.mock_resource_manager = Mock()
+        self.mock_sync_manager = Mock()
+        self.mock_version_manager = Mock()
+
+        self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.register_document_async = AsyncMock()
+        self.mock_version_manager.add_version_async = AsyncMock()
+        self.mock_version_manager.delete_versions_async = AsyncMock()
+
+        self.mock_skeleton = Mock()
+        self.mock_skeleton.total_nodes = 10
+        self.mock_skeleton.total_tokens = 2000
+        self.mock_skeleton.skeleton_tokens = 200
+        self.mock_skeleton.compression_ratio = 10.0
+        self.mock_skeleton.skeleton_text = "Skeleton text..."
+        self.mock_compressor.ingest_file_async = AsyncMock(return_value=self.mock_skeleton)
+        self.mock_compressor.graphs = {"structured_doc": Mock()}
+        self.mock_compressor.file_metadata = {}
+        self.mock_compressor.chunks = {}
+
+        self.mock_persistence.save_document.return_value = True
+        self.mock_persistence.save_file_sync_metadata.return_value = True
+        self.mock_sync_manager.export_metadata.return_value = []
+
+        self.context = {
+            "compressor": self.mock_compressor,
+            "persistence": self.mock_persistence,
+            "resource_manager": self.mock_resource_manager,
+            "sync_manager": self.mock_sync_manager,
+            "version_manager": self.mock_version_manager,
+            "retrieval_history": {},
+        }
+
+    def _make_advisor_patch(self):
+        from unittest.mock import patch as _patch, Mock as _Mock
+
+        mock_estimate = _Mock()
+        mock_estimate.compression_ratio = 8.0
+        mock_estimate.original_tokens = 2000
+        mock_estimate.estimated_compressed = 250
+        mock_advisor = _Mock()
+        mock_advisor.estimate_compression.return_value = mock_estimate
+        return _patch(
+            "src.handlers.compression_handlers.CompressionAdvisor",
+            return_value=mock_advisor,
+        )
+
+    @pytest.mark.asyncio
+    async def test_structured_markdown_uses_fixed_strategy(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F4: structured markdown (3+ headings + 3+ list items) → chunking_strategy='fixed'."""
+        structured_text = (
+            "## Introduction\n\n"
+            "This document explains important concepts.\n\n"
+            "## Chapter 1\n\n"
+            "1. First point about the topic\n"
+            "2. Second point about the topic\n"
+            "3. Third point about the topic\n\n"
+            "## Chapter 2\n\n"
+            "- Alpha item\n"
+            "- Beta item\n"
+            "- Gamma item\n\n"
+            "## Conclusion\n\n"
+            "Summary of the document content.\n"
+        )
+        args = {"text": structured_text, "file_id": "structured_doc"}
+
+        with self._make_advisor_patch():
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["chunking_strategy_used"] == "auto-detected: fixed"
+        # Compressor must be called with chunking_strategy="fixed"
+        call_kwargs = self.mock_compressor.ingest_file_async.call_args
+        assert call_kwargs.kwargs.get("chunking_strategy") == "fixed" or (
+            len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "fixed"
+        )
+
+    @pytest.mark.asyncio
+    async def test_plain_prose_uses_auto_strategy(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F4: plain prose (no headings, no list items) stays 'auto'."""
+        prose_text = (
+            "The quick brown fox jumps over the lazy dog. "
+            "This is a plain prose paragraph without any structure. "
+            "There are no headings and no list items in this text. "
+            "It is just flowing narrative with sentences and paragraphs. "
+            "The compression engine should treat this as ordinary text. "
+            "Auto mode is the correct choice for unstructured prose documents. "
+            "No special handling is required for this kind of input. "
+        )
+        args = {"text": prose_text, "file_id": "prose_doc"}
+
+        with self._make_advisor_patch():
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["chunking_strategy_used"] == "auto"
+
+    @pytest.mark.asyncio
+    async def test_explicit_semantic_strategy_not_overridden(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F4: explicit chunking_strategy='semantic' is never overridden by auto-detect."""
+        structured_text = (
+            "## Section 1\n\n"
+            "1. Item one\n"
+            "2. Item two\n"
+            "3. Item three\n\n"
+            "## Section 2\n\n"
+            "- Alpha\n- Beta\n- Gamma\n\n"
+            "## Section 3\n\nMore content here.\n"
+        )
+        args = {
+            "text": structured_text,
+            "file_id": "explicit_doc",
+            "chunking_strategy": "semantic",
+        }
+
+        with self._make_advisor_patch():
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["chunking_strategy_used"] == "semantic"
+        call_kwargs = self.mock_compressor.ingest_file_async.call_args
+        assert call_kwargs.kwargs.get("chunking_strategy") == "semantic" or (
+            len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "semantic"
+        )
+
+
+@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers.validate_node_ids")
+@patch("src.handlers.compression_handlers.validate_token_count")
+class TestHandleIngestF6InlineQuery:
+    """Tests for F6 — optional query param for ingest+query in one call."""
+
+    def setup_method(self):
+        self.mock_compressor = Mock()
+        self.mock_persistence = Mock()
+        self.mock_resource_manager = Mock()
+        self.mock_sync_manager = Mock()
+        self.mock_version_manager = Mock()
+
+        self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.register_document_async = AsyncMock()
+        self.mock_version_manager.add_version_async = AsyncMock()
+        self.mock_version_manager.delete_versions_async = AsyncMock()
+
+        self.mock_skeleton = Mock()
+        self.mock_skeleton.total_nodes = 10
+        self.mock_skeleton.total_tokens = 2000
+        self.mock_skeleton.skeleton_tokens = 200
+        self.mock_skeleton.compression_ratio = 10.0
+        self.mock_skeleton.skeleton_text = "Mock skeleton text..."
+        self.mock_compressor.ingest_file_async = AsyncMock(return_value=self.mock_skeleton)
+        self.mock_compressor.graphs = {"query_doc": Mock()}
+        self.mock_compressor.file_metadata = {}
+        self.mock_compressor.chunks = {}
+
+        self.mock_persistence.save_document.return_value = True
+        self.mock_persistence.save_file_sync_metadata.return_value = True
+        self.mock_sync_manager.export_metadata.return_value = []
+
+        self.context = {
+            "compressor": self.mock_compressor,
+            "persistence": self.mock_persistence,
+            "resource_manager": self.mock_resource_manager,
+            "sync_manager": self.mock_sync_manager,
+            "version_manager": self.mock_version_manager,
+            "retrieval_history": {},
+        }
+
+    def _make_advisor_patch(self):
+        from unittest.mock import patch as _patch, Mock as _Mock
+
+        mock_estimate = _Mock()
+        mock_estimate.compression_ratio = 8.0
+        mock_estimate.original_tokens = 2000
+        mock_estimate.estimated_compressed = 250
+        mock_advisor = _Mock()
+        mock_advisor.estimate_compression.return_value = mock_estimate
+        return _patch(
+            "src.handlers.compression_handlers.CompressionAdvisor",
+            return_value=mock_advisor,
+        )
+
+    @pytest.mark.asyncio
+    async def test_without_query_no_query_skeleton_field(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F6: when no query is provided, response has no query_skeleton key."""
+        args = {
+            "text": "This is a plain document with enough content to be indexed.",
+            "file_id": "no_query_doc",
+        }
+
+        with self._make_advisor_patch():
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert "query_skeleton" not in data
+
+    @pytest.mark.asyncio
+    async def test_with_query_returns_both_stats_and_query_skeleton(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F6: when query is provided and doc is large enough, response has query_skeleton."""
+        # Mock the run_read_skeleton_pipeline so we don't need real embeddings
+        mock_pipeline_result = {
+            "final_skeleton": "=== SEMANTIC SKELETON ===\n[0] query_doc::section_1 (0.95)\n",
+            "final_stage": "query_guided",
+            "stage_count": 2,
+            "stages": [],
+            "evidence": None,
+        }
+
+        args = {
+            "text": "This is a document with enough content to be indexed for the query.",
+            "file_id": "query_doc",
+            "query": "what is the main topic?",
+        }
+
+        with self._make_advisor_patch():
+            with patch(
+                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+                return_value=mock_pipeline_result,
+            ):
+                result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert "compression_ratio" in data  # normal ingest stats present
+        assert "query_skeleton" in data
+        assert data["query_skeleton"]["final_stage"] == "query_guided"
+
+    @pytest.mark.asyncio
+    async def test_with_query_skipped_for_small_doc(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F6: query_skeleton is skipped (not in response) when doc is too small (< 3 nodes)."""
+        self.mock_skeleton.total_nodes = 2  # too small
+        args = {
+            "text": "This is a document with enough content to be indexed for the query.",
+            "file_id": "small_query_doc",
+            "query": "what is the main topic?",
+        }
+
+        with self._make_advisor_patch():
+            result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert "query_skeleton" not in data
+
+
+@patch("src.handlers.compression_handlers.validate_file_id")
 class TestHandleReadSkeleton:
     """Test handle_read_skeleton handler (6 tests)"""
 
@@ -327,6 +597,7 @@ class TestHandleReadSkeleton:
             "reason": "File has been modified on disk",
             "current_mtime": 1234567890,
             "cached_mtime": 1234567000,
+            "has_source_file": True,
         }
 
         args = {"file_id": "doc1"}

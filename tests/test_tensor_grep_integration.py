@@ -55,9 +55,7 @@ def _make_popen(lines: list[str], returncode: int = 0) -> MagicMock:
 
 class TestIsAvailable:
     def test_is_available_with_tg_installed(self) -> None:
-        with patch(
-            "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-        ):
+        with patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"):
             assert is_available() is True
 
     def test_is_available_without_tg(self) -> None:
@@ -92,9 +90,7 @@ class TestGetRepoMap:
         cp = _make_completed_process(sample)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = get_repo_map("/repo")
@@ -107,9 +103,7 @@ class TestGetRepoMap:
     def test_repo_map_timeout_returns_graceful_result(self) -> None:
         """TimeoutExpired should yield a non-crashing result with available=True."""
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch(
                 "src.tensor_grep_integration.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd="tg", timeout=30),
@@ -138,17 +132,11 @@ class TestCodeSearch:
 
     def test_code_search_uses_ndjson_flag(self) -> None:
         """B2 fix: code_search must use --ndjson (not --json)."""
-        proc = _make_popen(
-            [json.dumps({"file": "src/main.py", "line": 10, "text": "def main():"})]
-        )
+        proc = _make_popen([json.dumps({"file": "src/main.py", "line": 10, "text": "def main():"})])
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.Popen", return_value=proc
-            ) as mock_popen,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc) as mock_popen,
         ):
             code_search("def main", "/repo")
 
@@ -162,9 +150,7 @@ class TestCodeSearch:
         proc = _make_popen([json.dumps(match_obj)])
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
         ):
             result = code_search("def main", "/repo")
@@ -183,9 +169,7 @@ class TestCodeSearch:
         proc = _make_popen(lines)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
         ):
             result = code_search("pattern", "/repo")
@@ -198,12 +182,8 @@ class TestCodeSearch:
         proc = _make_popen([])
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.Popen", return_value=proc
-            ) as mock_popen,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc) as mock_popen,
         ):
             code_search("foo", "/repo", use_index=True)
 
@@ -215,12 +195,8 @@ class TestCodeSearch:
         proc = _make_popen([])
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.Popen", return_value=proc
-            ) as mock_popen,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc) as mock_popen,
         ):
             code_search("foo", "/repo", use_index=False)
 
@@ -244,9 +220,7 @@ class TestCodeSearch:
         proc = _make_popen(lines)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
         ):
             result = code_search("pattern", "/repo")
@@ -266,9 +240,7 @@ class TestCodeSearch:
         proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="tg", timeout=30), 0]
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
         ):
             result = code_search("pattern", "/repo")
@@ -305,9 +277,7 @@ class TestASTSearch:
         cp = _make_completed_process(sample)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = ast_search("class Foo", "/repo")
@@ -321,12 +291,8 @@ class TestASTSearch:
         cp = _make_completed_process(json.dumps({"matches": [], "total_matches": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             ast_search("class Foo", "/repo", lang="python")
 
@@ -339,12 +305,8 @@ class TestASTSearch:
         cp = _make_completed_process(json.dumps({"matches": [], "total_matches": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             ast_search("class Foo", "/repo")
 
@@ -378,9 +340,7 @@ class TestGetContextRender:
         cp = _make_completed_process(json.dumps(payload))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = get_context_render("/repo", "how does auth work")
@@ -395,12 +355,8 @@ class TestGetContextRender:
         cp = _make_completed_process(json.dumps({}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             get_context_render("/repo", "find the auth logic")
 
@@ -414,12 +370,8 @@ class TestGetContextRender:
         cp = _make_completed_process(json.dumps({}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             get_context_render("/repo", "query", render_profile="compact")
 
@@ -432,12 +384,8 @@ class TestGetContextRender:
         cp = _make_completed_process(json.dumps({}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             get_context_render("/repo", "query", max_files=5)
 
@@ -450,12 +398,8 @@ class TestGetContextRender:
         cp = _make_completed_process(json.dumps({}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             get_context_render("/repo", "query", optimize_context=False)
 
@@ -465,9 +409,7 @@ class TestGetContextRender:
     def test_context_render_timeout_returns_graceful_result(self) -> None:
         """TimeoutExpired yields available=True with empty result."""
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch(
                 "src.tensor_grep_integration.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd="tg", timeout=60),
@@ -484,9 +426,7 @@ class TestGetContextRender:
         cp = _make_completed_process("this is not json")
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = get_context_render("/repo", "query")
@@ -516,9 +456,7 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps(payload), returncode=0)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = scan_ruleset("/repo", "secrets")
@@ -542,9 +480,7 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps(payload), returncode=1)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = scan_ruleset("/repo", "secrets")
@@ -565,9 +501,7 @@ class TestScanRuleset:
         cp = _make_completed_process("tg: ruleset not found", returncode=2)
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
         ):
             result = scan_ruleset("/repo", "nonexistent-ruleset")
@@ -581,12 +515,8 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps({"findings": [], "total_findings": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             scan_ruleset("/repo", "owasp-top-10")
 
@@ -600,12 +530,8 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps({"findings": [], "total_findings": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             scan_ruleset("/repo", "secrets", language="python")
 
@@ -618,12 +544,8 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps({"findings": [], "total_findings": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             scan_ruleset("/repo", "secrets")
 
@@ -635,12 +557,8 @@ class TestScanRuleset:
         cp = _make_completed_process(json.dumps({"findings": [], "total_findings": 0}))
 
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
-            patch(
-                "src.tensor_grep_integration.subprocess.run", return_value=cp
-            ) as mock_run,
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp) as mock_run,
         ):
             scan_ruleset("/repo", "secrets", include_evidence=True)
 
@@ -650,9 +568,7 @@ class TestScanRuleset:
     def test_scan_timeout_returns_graceful_result(self) -> None:
         """TimeoutExpired yields available=True with empty findings."""
         with (
-            patch(
-                "src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"
-            ),
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
             patch(
                 "src.tensor_grep_integration.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd="tg", timeout=60),

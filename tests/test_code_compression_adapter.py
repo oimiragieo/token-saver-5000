@@ -531,9 +531,9 @@ class TestDeleteDocumentFromMemoryPropertyCopy:
             del copy_a["doc1_n0"]
 
             # The real underlying dict is UNCHANGED -- del was a no-op
-            assert "doc1_n0" in mock_text.chunks, (
-                "Property returned a reference, not a copy -- the contract changed!"
-            )
+            assert (
+                "doc1_n0" in mock_text.chunks
+            ), "Property returned a reference, not a copy -- the contract changed!"
 
     def test_delete_document_from_memory_mutates_real_underlying_dict(self):
         """Regression lock: delete_document_from_memory must remove from real dict."""
@@ -555,20 +555,20 @@ class TestDeleteDocumentFromMemoryPropertyCopy:
 
             adapter = CodeCompressionAdapter()
 
-            assert hasattr(adapter, "delete_document_from_memory"), (
-                "delete_document_from_memory() not found on CodeCompressionAdapter"
-            )
+            assert hasattr(
+                adapter, "delete_document_from_memory"
+            ), "delete_document_from_memory() not found on CodeCompressionAdapter"
 
             removed = adapter.delete_document_from_memory("my_doc")
 
             assert removed == 2, f"Expected 2 removed, got {removed}"
 
-            assert "my_doc_n0" not in mock_text.chunks, (
-                "my_doc_n0 still in underlying chunks after delete_document_from_memory"
-            )
-            assert "my_doc_n1" not in mock_text.chunks, (
-                "my_doc_n1 still in underlying chunks after delete_document_from_memory"
-            )
+            assert (
+                "my_doc_n0" not in mock_text.chunks
+            ), "my_doc_n0 still in underlying chunks after delete_document_from_memory"
+            assert (
+                "my_doc_n1" not in mock_text.chunks
+            ), "my_doc_n1 still in underlying chunks after delete_document_from_memory"
             assert "my_doc" not in mock_text.graphs
             assert "my_doc" not in mock_text.file_metadata
             assert "other_doc_n0" in mock_text.chunks

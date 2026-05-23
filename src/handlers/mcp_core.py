@@ -166,8 +166,12 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     "chunking_strategy": {
                         "type": "string",
                         "enum": ["auto", "fixed", "semantic"],
-                        "description": "Chunking strategy: 'auto' (semantic for larger structured docs), 'fixed' (paragraph/sentence boundaries), or 'semantic' (embedding-based boundaries). Default: auto",
+                        "description": "Chunking strategy: 'auto' (auto-detects structured markdown and uses fixed; otherwise semantic), 'fixed' (paragraph/sentence boundaries), or 'semantic' (embedding-based boundaries). Default: auto",
                         "default": "auto",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional query string. When provided, runs ingest + query_guided read_skeleton in one call and returns a query_skeleton field alongside the normal ingest stats. Skipped for very small documents (< 3 nodes).",
                     },
                     **SCOPE_PROPERTIES,
                 },

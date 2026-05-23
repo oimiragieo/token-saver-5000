@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -90,9 +89,7 @@ class TestCompressManifestHandlerRoundTrip:
         ]
         result = _call({"tools": tools})
         for i, out_tool in enumerate(result["manifest"]["tools"]):
-            assert out_tool["inputSchema"] == schemas[i], (
-                f"inputSchema for tool_{i} was mutated"
-            )
+            assert out_tool["inputSchema"] == schemas[i], f"inputSchema for tool_{i} was mutated"
 
 
 class TestCompressManifestHandlerSavings:
@@ -147,9 +144,9 @@ class TestCompressManifestHandlerSavings:
         assert stats["input_tokens"] > 0, "input_tokens must be > 0 for a verbose manifest"
         assert stats["savings_pct"] >= 0.0, "savings_pct must be non-negative"
         # For a sufficiently verbose manifest the output should be shorter
-        assert stats["output_tokens"] <= stats["input_tokens"], (
-            "Output must not be longer than input for a verbose manifest"
-        )
+        assert (
+            stats["output_tokens"] <= stats["input_tokens"]
+        ), "Output must not be longer than input for a verbose manifest"
 
     def test_savings_pct_is_float_in_valid_range(self):
         manifest = {
