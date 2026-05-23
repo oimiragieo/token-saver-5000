@@ -39,7 +39,13 @@ async def test_core_compression_flow_characterization(
     )
 
     assert skeleton_payload["file_id"] == document["file_id"]
-    assert skeleton_payload["selection_mode"] == "baseline"
+    # F3: default is now "auto" (was "baseline"); for plain-prose docs auto resolves to baseline
+    assert skeleton_payload["selection_mode"] == "auto"
+    assert skeleton_payload["selection_mode_resolved"] in (
+        "auto-detected: baseline",
+        "auto-detected: evidence_aware",
+        "baseline",
+    )
     assert skeleton_payload["cache_stable_prefix"] == skeleton_payload["skeleton_text"]
     assert isinstance(skeleton_payload["node_map"], dict)
 
