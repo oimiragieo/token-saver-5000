@@ -93,7 +93,17 @@ class PersistenceManager:
 
     @staticmethod
     def _atomic_write_json(filepath: Path, data: dict) -> None:
-        """Write JSON atomically via temp file + rename to prevent corruption."""
+        """Write JSON atomically via temp file + rename to prevent corruption.
+
+        F8 (2026-05-23 dogfood Sentry GOTCONTEXT-API-G): ensure parent dir
+        exists before mkstemp. Without this, callers passing a file_id with
+        forward slashes (e.g. ``docs/audits/foo/bar.md`` — the canonical
+        relative-path pattern customers are told to use) hit ENOENT because
+        the segment subdirs under .semantic_modulator_data/documents/ don't
+        exist on first write. parents=True + exist_ok=True is idempotent +
+        safe under concurrent writes.
+        """
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=filepath.parent, suffix=".tmp", prefix=filepath.stem
         )
@@ -108,7 +118,11 @@ class PersistenceManager:
 
     @staticmethod
     def _atomic_write_npz(filepath: Path, **arrays) -> None:
-        """Write numpy arrays atomically via temp file + rename."""
+        """Write numpy arrays atomically via temp file + rename.
+
+        F8 (same root cause as _atomic_write_json): pre-create parent dir.
+        """
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=filepath.parent, suffix=".tmp", prefix=filepath.stem
         )

@@ -810,7 +810,31 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
                 top_k=args.get("top_k", 5),
                 min_similarity=args.get("min_similarity", 0.35),
             )
-            response["query_skeleton"] = query_skeleton_payload
+            # F7 (2026-05-23 dogfood Sentry GOTCONTEXT-API-H): the pipeline
+            # dict contains a raw SkeletonResponse dataclass under
+            # "final_skeleton" — embedding it directly here causes json.dumps
+            # below to raise "TypeError: Object of type SkeletonResponse is
+            # not JSON serializable". Project to scalar fields (matching the
+            # handle_read_skeleton response shape) so the inline-query result
+            # is JSON-safe end-to-end.
+            inline_skeleton = query_skeleton_payload["final_skeleton"]
+            response["query_skeleton"] = {
+                "total_nodes": inline_skeleton.total_nodes,
+                "total_tokens": inline_skeleton.total_tokens,
+                "skeleton_tokens": inline_skeleton.skeleton_tokens,
+                "compression_ratio": inline_skeleton.compression_ratio,
+                "skeleton_text": inline_skeleton.skeleton_text,
+                "node_map": inline_skeleton.node_map,
+                "selection_mode_resolved": query_skeleton_payload.get(
+                    "selection_mode_resolved", query_skeleton_payload["final_stage"]
+                ),
+                "evidence": query_skeleton_payload.get("evidence"),
+                "pipeline": {
+                    "final_stage": query_skeleton_payload["final_stage"],
+                    "stage_count": query_skeleton_payload["stage_count"],
+                    "stages": query_skeleton_payload["stages"],
+                },
+            }
         except Exception as exc:
             logger.warning(f"Inline query failed for '{file_id}': {exc}")
             response["query_skeleton"] = None
