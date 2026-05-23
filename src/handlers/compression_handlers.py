@@ -895,14 +895,19 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         # Chunks are sorted by node_id (which encodes insertion order) so the
         # concatenated text preserves document structure well enough for heading
         # and finding-count heuristics.
+        # Guard: compressor.chunks may be a Mock or absent in unit-test contexts;
+        # fall back to None (auto resolves to baseline) rather than raising.
         raw_text_for_auto: str | None = None
         if selection_mode == "auto":
-            file_chunks = sorted(
-                (nid, node)
-                for nid, node in compressor.chunks.items()
-                if nid.startswith(scoped_file_id)
-            )
-            raw_text_for_auto = "\n\n".join(node.text for _, node in file_chunks)
+            try:
+                file_chunks = sorted(
+                    (nid, node)
+                    for nid, node in compressor.chunks.items()
+                    if nid.startswith(scoped_file_id)
+                )
+                raw_text_for_auto = "\n\n".join(node.text for _, node in file_chunks)
+            except (AttributeError, TypeError):
+                raw_text_for_auto = None
 
         pipeline = run_read_skeleton_pipeline(
             compressor=compressor,

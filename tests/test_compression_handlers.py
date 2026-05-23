@@ -590,7 +590,8 @@ class TestHandleReadSkeleton:
         assert data["file_id"] == "doc1"
         assert data["skeleton_text"] == "Mock skeleton text"
         assert data["compression_ratio"] == 10.0
-        assert data["selection_mode"] == "baseline"
+        # F3: default is now "auto"; with no chunks available (Mock), auto resolves to baseline
+        assert data["selection_mode"] == "auto"
         assert data["pipeline"]["final_stage"] == "baseline"
         assert data["pipeline"]["stages"][0]["name"] == "baseline"
 

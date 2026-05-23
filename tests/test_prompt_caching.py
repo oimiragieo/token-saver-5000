@@ -175,7 +175,8 @@ class TestACEHandlersCacheOptimized:
         return ctx
 
     def test_filter_serialize_excludes_volatile(self, ace_context_with_data):
-        """_filter_and_serialize_bullets should use display dict by default."""
+        """_filter_and_serialize_bullets exposes bullet_id (for MCP refinement usability)
+        but strips high-churn timestamp fields for cache-friendliness."""
         from src.handlers.ace_handlers import _filter_and_serialize_bullets
 
         bullets = _filter_and_serialize_bullets(
@@ -185,7 +186,10 @@ class TestACEHandlersCacheOptimized:
             bullet_type_filter=None,
         )
         for bullet_dict in bullets:
-            assert "bullet_id" not in bullet_dict
+            # bullet_id IS intentionally included — callers need it for ace_refine_context.
+            # See ace_handlers.py line ~205: "Include bullet_id so callers can use it."
+            assert "bullet_id" in bullet_dict
+            # Timestamps are still stripped (pure cache-churn, not needed by callers)
             assert "created_at" not in bullet_dict
             assert "updated_at" not in bullet_dict
 

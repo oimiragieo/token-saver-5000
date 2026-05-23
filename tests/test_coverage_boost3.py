@@ -124,9 +124,9 @@ class TestDeleteDocumentErrors:
         from src.handlers.compression_handlers import handle_delete_document
 
         ctx = self._make_delete_ctx()
-        # Make chunks.keys() raise on iteration during deletion
-        ctx["compressor"].chunks = MagicMock()
-        ctx["compressor"].chunks.keys.side_effect = RuntimeError("boom")
+        # Make delete_document_from_memory raise — this is the code path taken when the
+        # compressor is a MagicMock (hasattr returns True for all attributes on MagicMock).
+        ctx["compressor"].delete_document_from_memory.side_effect = RuntimeError("boom")
         ctx["compressor"].get_stats.return_value = {"total_nodes": 2}
 
         with pytest.raises(RuntimeError, match="Failed to delete from memory"):
@@ -817,20 +817,34 @@ class TestEmbeddingManager:
 
     def test_encode_unknown_tier_raises(self):
         self._reset_singleton()
+        import src.embeddings as emb_mod
         from src.embeddings import EmbeddingManager, EmbeddingTier
 
-        with patch("src.embeddings.SentenceTransformer"):
-            mgr = EmbeddingManager.__new__(EmbeddingManager)
-            mgr._model_cache = {}
-            mgr._cache_lock = threading.Lock()
-            mgr._lru_cache = None
-            mgr._onnx_manager = None
-            mgr._tfidf_manager = None
-            mgr._tier = EmbeddingTier.STANDARD
-            mgr._enable_cache = False
+        # Build a manager with no model available.
+        mgr = EmbeddingManager.__new__(EmbeddingManager)
+        mgr._model_cache = {}
+        mgr._cache_lock = threading.Lock()
+        mgr._lru_cache = None
+        mgr._onnx_manager = None
+        mgr._tfidf_manager = None
+        mgr._tier = EmbeddingTier.STANDARD
+        mgr._enable_cache = False
 
-            with pytest.raises((ValueError, RuntimeError)):
-                # Use a fake tier value
+        # _encode_with_fallback for STANDARD tier skips STANDARD re-try and goes
+        # directly to ONNX then TF-IDF.  To force exhaustion we patch all three
+        # encode helpers plus mark both optional tiers as available so the branches
+        # are entered (otherwise they short-circuit before the patch is hit).
+        err = RuntimeError("no model")
+        with (
+            patch.object(mgr, "_encode_standard", side_effect=err),
+            patch.object(mgr, "_encode_onnx", side_effect=err),
+            patch.object(mgr, "_encode_tfidf", side_effect=err),
+            patch.object(emb_mod, "ONNX_AVAILABLE", True),
+            patch.object(emb_mod, "TFIDF_AVAILABLE", True),
+        ):
+            # _encode_tfidf raises directly (no wrapper), so the exception
+            # propagates as-is rather than the "All embedding tiers failed" sentinel.
+            with pytest.raises(RuntimeError):
                 mgr._encode_with_fallback(["test"], EmbeddingTier.STANDARD, True)
 
     def test_code_embedder_fallback(self):
