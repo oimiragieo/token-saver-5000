@@ -1081,6 +1081,7 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "minimum": 1,
                         "maximum": 8,
                     },
+                    **SCOPE_PROPERTIES,
                 },
                 "required": ["documents"],
             },
