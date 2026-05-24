@@ -355,6 +355,55 @@ class SemanticCompressor:
 
         return pagerank
 
+    # F11: compiled once at class level to avoid re-compiling per call
+    _HEADING_FIRST_LINE_RE = re.compile(r"^(#{1,6}) (.+?)[ \t]*$", re.MULTILINE)
+
+    def _split_oversized_section(self, section: str, max_chunk_size: int) -> List[str]:
+        """
+        Sub-split a heading section that exceeds max_chunk_size × 1.5.
+
+        Prepends the heading text to each child chunk so the heading's semantic
+        signal is preserved in every child embedding (F11 fix).
+        """
+        heading_match = self._HEADING_FIRST_LINE_RE.match(section.strip())
+        heading_prefix = (heading_match.group(0).rstrip() + "\n\n") if heading_match else ""
+        body = section[len(heading_prefix) :].strip() if heading_prefix else section
+        paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+
+        chunks: List[str] = []
+        current = heading_prefix
+        for para in paragraphs:
+            sep = "\n\n" if current.strip() else ""
+            candidate = current + sep + para
+            if self._count_tokens(candidate) <= max_chunk_size:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                # Start fresh sub-chunk with heading prefix
+                current = heading_prefix + para
+
+        if current:
+            chunks.append(current)
+        return chunks if chunks else [section]
+
+    def _extract_heading_metadata(self, text: str) -> dict:
+        """
+        Return heading metadata for a chunk that begins with a markdown heading.
+
+        Used to enrich SemanticNode.metadata so heading signal is queryable
+        without re-parsing during selection (F11).
+        """
+        stripped = text.strip()
+        match = self._HEADING_FIRST_LINE_RE.match(stripped)
+        if not match:
+            return {}
+        return {
+            "heading_level": len(match.group(1)),
+            "heading_text": match.group(2).strip(),
+            "chunking_strategy_resolved": "markdown_section_v1",
+        }
+
     def _chunk_text(
         self, text: str, max_chunk_size: int = 512, strategy: str = "auto"
     ) -> List[str]:
@@ -412,21 +461,38 @@ class SemanticCompressor:
                 return rendered_semantic_chunks
             except Exception as exc:
                 logger.warning(f"Semantic chunking failed; falling back to fixed chunking: {exc}")
-        # F4-followup: for structured markdown, split strictly on H2/H3 boundaries
+        # F4-followup / F11-fix: for structured markdown, split strictly on H2/H3 boundaries
         # so that each major section becomes its own node, regardless of the
         # min-token floor.  This prevents 3-4 sections being bundled into one
         # node (e.g. a 1592-token doc with 15 H2 sections yielding only 4 nodes).
+        #
+        # F11 root cause: the old gate required BOTH ≥3 headings AND ≥3 list items.
+        # Structured handoff docs have many H2s but zero bullet lists, so they fell
+        # through to paragraph-based chunking.  Multiple sections merged across heading
+        # boundaries, diluting heading embeddings and causing query-guided selection to
+        # miss exact heading matches (cosine similarity < 0.4 instead of ≥ 0.6).
+        #
+        # Fix: use heading-density alone as the gate (≥2 H2/H3 headings, OR ≥3 headings
+        # of any level).  Also sub-split oversized sections with the heading prefix
+        # prepended to each child chunk so the heading signal survives in the embedding.
         _H2H3_RE = re.compile(r"(?=^#{2,3} )", re.MULTILINE)
         _HEADING_DETECT_RE = re.compile(r"^#{1,3} ", re.MULTILINE)
-        _LIST_DETECT_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
+        _H2H3_ONLY_RE = re.compile(r"^#{2,3} ", re.MULTILINE)
         _is_structured = (
-            len(_HEADING_DETECT_RE.findall(text)) >= 3 and len(_LIST_DETECT_RE.findall(text)) >= 3
+            len(_H2H3_ONLY_RE.findall(text)) >= 2 or len(_HEADING_DETECT_RE.findall(text)) >= 3
         )
+        _MAX_SECTION_FACTOR = 1.5
         if _is_structured:
             # Split at H2/H3 heading boundaries, discarding empty pieces
             heading_chunks = [c.strip() for c in _H2H3_RE.split(text) if c.strip()]
             if len(heading_chunks) > 1:
-                return heading_chunks
+                result: list = []
+                for chunk in heading_chunks:
+                    if self._count_tokens(chunk) > max_chunk_size * _MAX_SECTION_FACTOR:
+                        result.extend(self._split_oversized_section(chunk, max_chunk_size))
+                    else:
+                        result.append(chunk)
+                return result
 
         # Split by double newlines first (paragraphs)
         paragraphs = text.split("\n\n")
@@ -645,7 +711,19 @@ class SemanticCompressor:
             # to neighbors, and merges windows whose similarity > 0.92.
             # This reduces input size by 10-30% on repetitive documents,
             # producing a cleaner graph with fewer redundant nodes.
-            if total_tokens > 200:  # Skip for very short texts
+            #
+            # F11 fix: Skip SemToken for structured markdown docs.
+            # SemToken merges similar adjacent windows — on structured docs this
+            # collapses H2/H3 sections into a single block before _chunk_text()
+            # can split on heading boundaries, defeating the heading-aware chunking.
+            # Detect structured docs by counting H2/H3 headings in the ORIGINAL text.
+            import re as _re_semtoken  # noqa: PLC0415
+
+            _H2H3_COUNT = len(_re_semtoken.findall(r"^#{2,3} ", text, _re_semtoken.MULTILINE))
+            _skip_semtoken = _H2H3_COUNT >= 2
+            if (
+                total_tokens > 200 and not _skip_semtoken
+            ):  # Skip for very short texts and structured docs
                 text = await self._semtoken_preprocess(text)
                 preprocessed_tokens = self._count_tokens(text)
                 if preprocessed_tokens < total_tokens:
@@ -694,16 +772,18 @@ class SemanticCompressor:
                 # Create unique node ID
                 node_id = f"{file_id}_n{i}"
 
-                # Create semantic node
+                # Create semantic node (F11: enrich with heading metadata when present)
+                _node_meta: dict = {
+                    "position": i,
+                    "tokens": self._count_tokens(chunk),
+                    "entities": self._extract_key_entities(chunk),
+                }
+                _node_meta.update(self._extract_heading_metadata(chunk))
                 node = SemanticNode(
                     node_id=node_id,
                     text=chunk,
                     embedding=embeddings[i],
-                    metadata={
-                        "position": i,
-                        "tokens": self._count_tokens(chunk),
-                        "entities": self._extract_key_entities(chunk),
-                    },
+                    metadata=_node_meta,
                 )
 
                 self.chunks[node_id] = node
