@@ -20,7 +20,13 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 DOCS_BASE_URL = "https://gotcontext.ai/docs"
+DOCS_LLMS_TXT_URL = "https://gotcontext.ai/llms.txt"
 MAX_DOC_TOKENS = 5000
+# v1.34.32 hotfix: defensive character cap on truncated markdown.
+# Even after _excerpt_around_anchor trims to MAX_DOC_TOKENS, the
+# orchestrator tool-result wrapper has its own size limit; cap at
+# ~20K chars so a 5K-token excerpt with very long words still fits.
+MAX_DOC_CHARS = 20_000
 
 
 @dataclass(frozen=True)
@@ -51,18 +57,54 @@ def _trim_words(value: str, limit: int = 240) -> str:
     return squashed[: limit - 3].rstrip() + "..."
 
 
-def _docs_root() -> Path:
+def _docs_root() -> Path | None:
+    """Return a local llms.txt path if one is configured/available, else None.
+
+    v1.34.32 hotfix: the original spec assumed `apps/web/public/llms.txt`
+    existed as a static file, but the production `/llms.txt` is served by a
+    Next.js route handler (`apps/web/src/app/llms.txt/route.ts`) — there is
+    no static file. Returning None tells `_read_llms_txt` to fall back to
+    fetching the live URL.
+    """
     env_path = os.environ.get("GOTCONTEXT_LLMS_TXT")
     if env_path:
         return Path(env_path)
-    return Path(__file__).resolve().parents[3] / "apps" / "web" / "public" / "llms.txt"
+    # Best-effort local-dev path (works when running pytest inside the
+    # monorepo with apps/web/public populated). Returns None if missing,
+    # which triggers the live-URL fallback in _read_llms_txt.
+    candidate = Path(__file__).resolve().parents[3] / "apps" / "web" / "public" / "llms.txt"
+    return candidate if candidate.exists() else None
 
 
 def _read_llms_txt() -> str:
+    """Load llms.txt content; prefer local file, fall back to live URL fetch.
+
+    v1.34.32 hotfix: synchronous urllib fetch at module init (no asyncio
+    available pre-event-loop). 5s timeout. Empty string on failure (handler
+    returns empty results gracefully — already the swallow-failure pattern).
+    """
+    local = _docs_root()
+    if local is not None:
+        try:
+            return local.read_text(encoding="utf-8")
+        except Exception as exc:
+            logger.warning("docs MCP: local llms.txt read failed (%s); trying live URL", exc)
+
+    # Live-URL fallback — production case where the Fly container has no
+    # apps/web/public/llms.txt baked in. Uses urllib (stdlib) so this works
+    # at module-import time before the asyncio loop exists.
+    import urllib.request
+    import urllib.error
+
+    url = os.environ.get("GOTCONTEXT_LLMS_TXT_URL", DOCS_LLMS_TXT_URL)
     try:
-        return _docs_root().read_text(encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Failed to read llms.txt for docs MCP index: %s", exc)
+        req = urllib.request.Request(url, headers={"User-Agent": "gotcontext-mcp-docs-handler/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            content = resp.read().decode("utf-8", errors="replace")
+            logger.info("docs MCP: loaded llms.txt from %s (%d bytes)", url, len(content))
+            return content
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        logger.warning("docs MCP: live llms.txt fetch from %s failed: %s", url, exc)
         return ""
 
 
@@ -292,6 +334,18 @@ async def handle_gc_read_doc(context: dict[str, Any], args: dict[str, Any]) -> s
         truncated = original_tokens > MAX_DOC_TOKENS
         if truncated:
             markdown = _excerpt_around_anchor(markdown, anchor_slug, MAX_DOC_TOKENS)
+
+        # v1.34.32 hotfix: defensive character cap. The token-based truncation
+        # above can still produce 80KB+ output when fetching HTML pages that
+        # have very long lines (the live /docs page is one big React-rendered
+        # blob). Hard-cap at MAX_DOC_CHARS to fit within orchestrator tool-result
+        # limits regardless of token semantics.
+        if len(markdown) > MAX_DOC_CHARS:
+            markdown = (
+                markdown[:MAX_DOC_CHARS]
+                + f"\n\n... (truncated at {MAX_DOC_CHARS} chars; call gc_search_docs for navigation)"
+            )
+            truncated = True
 
         return json.dumps(
             {

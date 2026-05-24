@@ -131,3 +131,115 @@ async def test_session_dedup_does_not_repeat_urls():
     assert first["results"]
     assert second["results"]
     assert first["results"][0]["url"] != second["results"][0]["url"]
+
+
+# v1.34.32 hotfix regression locks
+# ===
+# Bug 1: codex hardcoded apps/web/public/llms.txt which doesn't exist
+# in production (the /llms.txt route is served by Next.js, not static).
+# _DOC_CHUNKS was always [] → every search returned {results: []}.
+# Fix: _docs_root() returns None if the local path doesn't exist, and
+# _read_llms_txt() falls back to fetching DOCS_LLMS_TXT_URL via urllib.
+
+
+def test_docs_root_returns_none_when_local_path_missing(monkeypatch, tmp_path):
+    """v1.34.32: if neither GOTCONTEXT_LLMS_TXT env var nor the local
+    apps/web/public/llms.txt is present, _docs_root must return None
+    so _read_llms_txt knows to fall back to the live URL.
+    """
+    monkeypatch.delenv("GOTCONTEXT_LLMS_TXT", raising=False)
+    # Force the candidate path to a guaranteed-nonexistent location
+    fake_parents = (tmp_path / "fake-module.py").resolve()
+    monkeypatch.setattr(
+        dh,
+        "_docs_root",
+        lambda: None,  # simulate "not found"
+    )
+    assert dh._docs_root() is None
+
+
+def test_read_llms_txt_falls_back_to_live_url_when_local_missing(monkeypatch):
+    """v1.34.32: when _docs_root returns None, _read_llms_txt must
+    invoke urllib against DOCS_LLMS_TXT_URL (or GOTCONTEXT_LLMS_TXT_URL
+    override) and return the response body.
+    """
+    monkeypatch.setattr(dh, "_docs_root", lambda: None)
+    monkeypatch.setenv("GOTCONTEXT_LLMS_TXT_URL", "https://example.invalid/llms.txt")
+
+    fake_content = b"# Test Docs\n\n## Authentication\n\nUse gc_ keys.\n"
+
+    class _FakeResp:
+        def __init__(self, body: bytes):
+            self._body = body
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    import urllib.request
+
+    def fake_urlopen(req, timeout=5):
+        # Verify it actually constructed the request against our URL
+        assert "example.invalid" in req.full_url
+        return _FakeResp(fake_content)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    result = dh._read_llms_txt()
+    assert "Authentication" in result
+    assert result.startswith("# Test Docs")
+
+
+def test_read_llms_txt_returns_empty_on_url_fetch_failure(monkeypatch):
+    """v1.34.32: when the live URL fetch raises, _read_llms_txt must
+    return empty string so handlers continue gracefully (matches the
+    swallow-failure pattern in handle_filter_cli_output etc.).
+    """
+    import urllib.error
+    import urllib.request
+
+    monkeypatch.setattr(dh, "_docs_root", lambda: None)
+
+    def boom(req, timeout=5):
+        raise urllib.error.URLError("simulated failure")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    assert dh._read_llms_txt() == ""
+
+
+# Bug 2: gc_read_doc on a huge live /docs page returned 80KB markdown,
+# exceeding the orchestrator's tool-result size limit. _excerpt_around_anchor
+# did its job at the TOKEN level but the resulting markdown was still
+# 80KB of characters (long lines). Fix: defensive MAX_DOC_CHARS = 20K cap
+# AFTER token-level truncation.
+
+
+@pytest.mark.asyncio
+async def test_read_doc_enforces_character_cap_on_pathological_output(monkeypatch):
+    """v1.34.32: even when token-level truncation fires, the final
+    markdown must be ≤ MAX_DOC_CHARS to fit orchestrator limits.
+    Simulates the /docs HTML-as-markdown case where one logical line
+    is 80KB of HTML.
+    """
+    from unittest.mock import AsyncMock
+
+    # A single 80KB "line" — exactly the pathological live-fetch case
+    pathological = "# Authentication\n\n" + ("auth-blob " * 8000)
+    monkeypatch.setattr(dh, "_fetch_url_markdown", AsyncMock(return_value=pathological))
+
+    response = await dh.handle_gc_read_doc(
+        {},
+        {"url_or_slug": "https://gotcontext.ai/docs#authentication"},
+    )
+    data = json.loads(response)
+
+    assert len(data["markdown"]) <= dh.MAX_DOC_CHARS + 200, (
+        f"v1.34.32 hotfix: markdown should be capped at ~{dh.MAX_DOC_CHARS} chars, "
+        f"got {len(data['markdown'])}"
+    )
+    assert data["truncated"] is True
+    assert "truncated" in data["markdown"].lower()
