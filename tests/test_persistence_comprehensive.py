@@ -1181,3 +1181,98 @@ class TestStorageStatsAndUtilities:
 
             assert stats["backend"] == "JSON/Pickle"
             assert stats["chromadb_available"] is False
+
+
+# ===========================
+# F8 regression-lock (Sentry GOTCONTEXT-API-G — 2026-05-23 dogfood)
+# ===========================
+
+
+class TestF8AtomicWriteParentDirAutoCreate:
+    """Regression-lock for F8 (multi-segment file_id ENOENT on first write).
+
+    Pre-fix, ``_atomic_write_json`` and ``_atomic_write_npz`` called
+    ``tempfile.mkstemp(dir=filepath.parent)`` without ensuring
+    ``filepath.parent`` existed. Customers passing a ``file_id`` with
+    forward slashes (the CLAUDE.md-canonical relative-path pattern, e.g.
+    ``docs/audits/foo/bar.md``) hit ``[Errno 2] No such file or directory``
+    on first write because the segment subdirs under
+    ``.semantic_modulator_data/documents/`` weren't pre-created.
+
+    Fix: each atomic-write helper now calls
+    ``Path.parent.mkdir(parents=True, exist_ok=True)`` before mkstemp.
+    Idempotent + concurrent-safe.
+
+    Both tests intentionally pass a path whose parent dirs DO NOT exist.
+    Pre-fix this raised FileNotFoundError; post-fix it succeeds.
+    """
+
+    def test_atomic_write_json_creates_parent_dirs(self, temp_storage_dir):
+        """F8: _atomic_write_json with multi-segment path succeeds on first write."""
+        from pathlib import Path
+
+        nested_path = (
+            Path(temp_storage_dir)
+            / "documents"
+            / "docs"
+            / "audits"
+            / "2026-05-23-full-site-audit"
+            / "38-benchmarks-submit.md.json"
+        )
+        assert not nested_path.parent.exists(), (
+            "test precondition: parent dirs must NOT pre-exist (this is the bug shape)"
+        )
+
+        # Pre-fix raised FileNotFoundError here.
+        PersistenceManager._atomic_write_json(nested_path, {"verified": True, "f8": "fixed"})
+
+        assert nested_path.exists()
+        assert nested_path.parent.exists()
+        with nested_path.open(encoding="utf-8") as f:
+            assert json.load(f) == {"verified": True, "f8": "fixed"}
+
+    def test_atomic_write_npz_creates_parent_dirs(self, temp_storage_dir):
+        """F8 (companion): _atomic_write_npz with multi-segment path succeeds on first write."""
+        from pathlib import Path
+
+        nested_path = (
+            Path(temp_storage_dir)
+            / "embeddings"
+            / "docs"
+            / "audits"
+            / "2026-05-23-full-site-audit"
+            / "38-benchmarks-submit.md.npz"
+        )
+        assert not nested_path.parent.exists()
+
+        embeddings = np.random.rand(3, 8).astype(np.float32)
+        # Pre-fix raised FileNotFoundError here.
+        PersistenceManager._atomic_write_npz(nested_path, embeddings=embeddings)
+
+        # _atomic_write_npz uses np.savez which may append `.npz` if missing.
+        # Either the exact path or path+.npz should exist.
+        assert nested_path.exists() or Path(str(nested_path) + ".npz").exists()
+        assert nested_path.parent.exists()
+
+    def test_atomic_write_json_idempotent_on_existing_parent(self, temp_storage_dir):
+        """F8: pre-creating parent dirs is idempotent (exist_ok=True)."""
+        from pathlib import Path
+
+        nested_path = Path(temp_storage_dir) / "documents" / "a" / "b" / "c.json"
+        nested_path.parent.mkdir(parents=True, exist_ok=True)
+        assert nested_path.parent.exists()
+
+        # Second write hits the mkdir(exist_ok=True) path, must not raise.
+        PersistenceManager._atomic_write_json(nested_path, {"second": "write"})
+        assert nested_path.exists()
+
+    def test_atomic_write_json_overwrites_existing_file(self, temp_storage_dir):
+        """F8: confirm pre-fix atomic-rename semantics still apply (overwrites existing)."""
+        from pathlib import Path
+
+        nested_path = Path(temp_storage_dir) / "documents" / "x" / "y.json"
+        PersistenceManager._atomic_write_json(nested_path, {"v": 1})
+        PersistenceManager._atomic_write_json(nested_path, {"v": 2})
+
+        with nested_path.open(encoding="utf-8") as f:
+            assert json.load(f) == {"v": 2}

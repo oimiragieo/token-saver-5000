@@ -532,6 +532,120 @@ class TestHandleIngestF6InlineQuery:
         assert data["query_skeleton"]["final_stage"] == "query_guided"
 
     @pytest.mark.asyncio
+    async def test_with_query_pipeline_returns_skeleton_response_object_serializes_cleanly(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F7 REGRESSION LOCK (Sentry GOTCONTEXT-API-H, 2026-05-23 dogfood):
+
+        The real ``run_read_skeleton_pipeline()`` returns a dict where
+        ``["final_skeleton"]`` is a ``SkeletonResponse`` DATACLASS — not a
+        string. Pre-fix, ``handle_ingest`` embedded the raw pipeline dict
+        in ``response["query_skeleton"]`` and the subsequent
+        ``json.dumps(response, indent=2)`` raised
+        ``TypeError: Object of type SkeletonResponse is not JSON serializable``.
+
+        The prior F6 test (``test_with_query_returns_both_stats_and_query_skeleton``)
+        used a STRING for ``final_skeleton`` so the JSON-serialization path
+        was never exercised — that's why F7 shipped to prod.
+
+        This test uses a real ``SkeletonResponse`` (built via dataclass) so
+        ``json.dumps`` of the full response gets exercised at unit-test time.
+        Asserts:
+        - The handler returns a string (json.dumps succeeded — no TypeError)
+        - The returned JSON has ``query_skeleton`` as a flat dict of scalars
+        - The raw SkeletonResponse object did NOT leak into the response.
+        """
+        from src.semantic_compressor import SkeletonResponse
+
+        real_skeleton = SkeletonResponse(
+            file_id="query_doc",
+            total_nodes=10,
+            total_tokens=2000,
+            skeleton_tokens=250,
+            compression_ratio=8.0,
+            skeleton_text="=== SEMANTIC SKELETON ===\n[0] query_doc::section_1 (0.95)\n",
+            node_map={"query_doc::section_1": "ANCHOR: section 1 summary"},
+        )
+
+        mock_pipeline_result = {
+            "final_skeleton": real_skeleton,
+            "final_stage": "query_guided",
+            "stage_count": 2,
+            "stages": [
+                {
+                    "name": "baseline",
+                    "query": None,
+                    "anchor_node_count": 0,
+                    "evidence_used": False,
+                    "total_nodes": 10,
+                    "skeleton_tokens": 250,
+                    "compression_ratio": 8.0,
+                },
+                {
+                    "name": "query_guided",
+                    "query": "what is the main topic?",
+                    "anchor_node_count": 1,
+                    "evidence_used": False,
+                    "total_nodes": 10,
+                    "skeleton_tokens": 250,
+                    "compression_ratio": 8.0,
+                },
+            ],
+            "evidence": None,
+            "selection_mode_resolved": "query_guided",
+        }
+
+        args = {
+            "text": "This is a document with enough content to be indexed for the query.",
+            "file_id": "query_doc",
+            "query": "what is the main topic?",
+        }
+
+        with self._make_advisor_patch():
+            with patch(
+                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+                return_value=mock_pipeline_result,
+            ):
+                # Pre-fix this raised TypeError. Post-fix it returns a JSON string.
+                result = await ch.handle_ingest(self.context, args)
+
+        # Round-trip through json.loads so a non-serializable embedded object
+        # would surface here too.
+        data = json.loads(result)
+
+        assert data["status"] == "success"
+        assert "query_skeleton" in data
+
+        qs = data["query_skeleton"]
+        # Must be a flat dict of scalars — NOT a serialization of the raw
+        # pipeline dict that contains the SkeletonResponse object.
+        assert isinstance(qs, dict)
+        for required in (
+            "total_nodes",
+            "total_tokens",
+            "skeleton_tokens",
+            "compression_ratio",
+            "skeleton_text",
+            "node_map",
+            "selection_mode_resolved",
+            "pipeline",
+        ):
+            assert required in qs, f"query_skeleton missing scalar field {required!r}"
+
+        assert qs["total_nodes"] == 10
+        assert qs["skeleton_tokens"] == 250
+        assert qs["selection_mode_resolved"] == "query_guided"
+
+        # The full pipeline trace is projected to scalars under qs["pipeline"]:
+        assert qs["pipeline"]["final_stage"] == "query_guided"
+        assert qs["pipeline"]["stage_count"] == 2
+        assert len(qs["pipeline"]["stages"]) == 2
+
+        # Negative assertion: the raw key "final_skeleton" must NOT appear
+        # in query_skeleton — that's the pre-fix bug shape.
+        assert "final_skeleton" not in qs
+
+    @pytest.mark.asyncio
     async def test_with_query_skipped_for_small_doc(
         self, mock_validate_token, mock_validate_nodes, mock_validate_file
     ):
