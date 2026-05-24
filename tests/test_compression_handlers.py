@@ -428,6 +428,156 @@ class TestHandleIngestF4ChunkingStrategy:
 @patch("src.handlers.compression_handlers.validate_file_id")
 @patch("src.handlers.compression_handlers.validate_node_ids")
 @patch("src.handlers.compression_handlers.validate_token_count")
+class TestHandleIngestF12SavingsTrackerWired:
+    """F12 regression-lock (2026-05-23 evening dogfood discovery):
+
+    Pre-fix the SavingsTracker was DEAD INFRASTRUCTURE — _get_tracker existed
+    in token_optimization_handlers.py but was only ever called by
+    .get_report() paths, NEVER by .record(). Result: every customer's
+    `get_savings_report` MCP call returned $0 / 0 tokens saved even after
+    real compression activity. CEO question "are we actually saving money?"
+    surfaced the mismatch between /v1/global-savings (1.38M tokens across
+    all users) and per-session report ($0).
+
+    Fix: handle_ingest now calls _get_tracker(session_id, model).record(
+    tool_name="ingest_context", original_tokens, compressed_tokens, model)
+    after successful compression. Customers querying the savings report
+    immediately after ingest now see real activity.
+    """
+
+    def setup_method(self):
+        self.mock_compressor = Mock()
+        self.mock_persistence = Mock()
+        self.mock_resource_manager = Mock()
+        self.mock_sync_manager = Mock()
+        self.mock_version_manager = Mock()
+
+        self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.register_document_async = AsyncMock()
+        self.mock_version_manager.add_version_async = AsyncMock()
+        self.mock_version_manager.delete_versions_async = AsyncMock()
+
+        self.mock_skeleton = Mock()
+        self.mock_skeleton.total_nodes = 5
+        self.mock_skeleton.total_tokens = 2000
+        self.mock_skeleton.skeleton_tokens = 250
+        self.mock_skeleton.compression_ratio = 8.0
+        self.mock_skeleton.skeleton_text = "Mock skeleton text..."
+        self.mock_compressor.ingest_file_async = AsyncMock(return_value=self.mock_skeleton)
+        self.mock_compressor.graphs = {"f12_doc": Mock()}
+        self.mock_compressor.file_metadata = {}
+        self.mock_compressor.chunks = {}
+
+        self.mock_persistence.save_document.return_value = True
+        self.mock_persistence.save_file_sync_metadata.return_value = True
+        self.mock_sync_manager.export_metadata.return_value = []
+
+        self.context = {
+            "compressor": self.mock_compressor,
+            "persistence": self.mock_persistence,
+            "resource_manager": self.mock_resource_manager,
+            "sync_manager": self.mock_sync_manager,
+            "version_manager": self.mock_version_manager,
+            "retrieval_history": {},
+        }
+
+    def _make_advisor_patch(self):
+        from unittest.mock import Mock as _Mock, patch as _patch
+
+        mock_estimate = _Mock()
+        mock_estimate.compression_ratio = 8.0
+        mock_estimate.original_tokens = 2000
+        mock_estimate.estimated_compressed = 250
+        mock_advisor = _Mock()
+        mock_advisor.estimate_compression.return_value = mock_estimate
+        return _patch(
+            "src.handlers.compression_handlers.CompressionAdvisor",
+            return_value=mock_advisor,
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_records_to_savings_tracker(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F12: handle_ingest must call _get_tracker(...).record(...) after
+        successful compression so get_savings_report reflects real activity.
+
+        Pre-fix the tracker registry stayed empty forever; this test would
+        find zero events. Post-fix the recorded event has the ingest scalars.
+        """
+        from src.handlers import token_optimization_handlers as toh
+
+        # Snapshot the tracker registry BEFORE ingest. Use a unique session
+        # so we don't pollute or get polluted by other tests' "default" session.
+        unique_session = "f12-regression-2026-05-24"
+        # Drop any prior state for this session (test isolation):
+        toh._savings_trackers.pop(unique_session, None)
+
+        args = {
+            "text": "F12 verification: savings tracker must record this ingest event.",
+            "file_id": "f12_doc",
+            "session_id": unique_session,
+            "model": "claude-sonnet-4-6",
+        }
+
+        with self._make_advisor_patch():
+            await ch.handle_ingest(self.context, args)
+
+        # Post-fix: tracker for this session exists + has one event.
+        assert unique_session in toh._savings_trackers, (
+            "F12: handle_ingest must lazily create a SavingsTracker for the "
+            "passed session_id. Pre-fix the registry stayed empty."
+        )
+        tracker = toh._savings_trackers[unique_session]
+        events = tracker._events  # No public accessor; _events list is the source of truth.
+        assert len(events) == 1, (
+            f"F12: expected 1 recorded event after one ingest call, got {len(events)}. "
+            f"Pre-fix the tracker received zero events from handle_ingest."
+        )
+        event = events[0]
+        assert event.tool_name == "ingest_context"
+        assert event.original_tokens == 2000
+        assert event.compressed_tokens == 250
+        assert event.tokens_saved == 1750
+        assert event.model == "claude-sonnet-4-6"
+        assert event.dollars_saved > 0, (
+            "F12: dollars_saved must be > 0 for a real compression. "
+            f"Got {event.dollars_saved}."
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_failure_in_tracker_record_does_not_fail_the_ingest(
+        self, mock_validate_token, mock_validate_nodes, mock_validate_file
+    ):
+        """F12 defensive: if _get_tracker.record() throws (e.g. import-time
+        circular, disk-full on journal), handle_ingest still returns success.
+        Pre-fix this couldn't happen because record was never called; post-fix
+        we want to guarantee the wiring is non-load-bearing for ingest success.
+        """
+        args = {
+            "text": "F12 defensive: tracker failure must not break ingest.",
+            "file_id": "f12_defensive_doc",
+            "session_id": "f12-defensive",
+        }
+
+        with self._make_advisor_patch():
+            # Simulate tracker.record() raising — patch the lazy import target:
+            with patch(
+                "src.handlers.token_optimization_handlers._get_tracker",
+                side_effect=RuntimeError("simulated tracker failure"),
+            ):
+                result = await ch.handle_ingest(self.context, args)
+
+        data = json.loads(result)
+        assert data["status"] == "success", (
+            "F12: ingest must still succeed even when SavingsTracker.record() "
+            f"raises. Got status={data.get('status')}."
+        )
+
+
+@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers.validate_node_ids")
+@patch("src.handlers.compression_handlers.validate_token_count")
 class TestHandleIngestF6InlineQuery:
     """Tests for F6 — optional query param for ingest+query in one call."""
 
@@ -498,38 +648,17 @@ class TestHandleIngestF6InlineQuery:
         assert data["status"] == "success"
         assert "query_skeleton" not in data
 
-    @pytest.mark.asyncio
-    async def test_with_query_returns_both_stats_and_query_skeleton(
-        self, mock_validate_token, mock_validate_nodes, mock_validate_file
-    ):
-        """F6: when query is provided and doc is large enough, response has query_skeleton."""
-        # Mock the run_read_skeleton_pipeline so we don't need real embeddings
-        mock_pipeline_result = {
-            "final_skeleton": "=== SEMANTIC SKELETON ===\n[0] query_doc::section_1 (0.95)\n",
-            "final_stage": "query_guided",
-            "stage_count": 2,
-            "stages": [],
-            "evidence": None,
-        }
-
-        args = {
-            "text": "This is a document with enough content to be indexed for the query.",
-            "file_id": "query_doc",
-            "query": "what is the main topic?",
-        }
-
-        with self._make_advisor_patch():
-            with patch(
-                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
-                return_value=mock_pipeline_result,
-            ):
-                result = await ch.handle_ingest(self.context, args)
-
-        data = json.loads(result)
-        assert data["status"] == "success"
-        assert "compression_ratio" in data  # normal ingest stats present
-        assert "query_skeleton" in data
-        assert data["query_skeleton"]["final_stage"] == "query_guided"
+    # NOTE: prior `test_with_query_returns_both_stats_and_query_skeleton` test
+    # was deleted in v1.34.27 (2026-05-24). It mocked `final_skeleton` as a
+    # STRING, which was the very bug shape F7 (Sentry GOTCONTEXT-API-H) caught
+    # in prod — the test was passing only because the pre-F7 handler embedded
+    # the raw pipeline dict (string and all) into the response. Post-F7 fix
+    # (da74691) the handler projects scalar fields from the real
+    # SkeletonResponse dataclass, so the string-mock breaks at
+    # `.total_nodes` access. Replaced by
+    # `test_with_query_pipeline_returns_skeleton_response_object_serializes_cleanly`
+    # below, which uses a real SkeletonResponse + asserts the correct
+    # scalar-projection contract.
 
     @pytest.mark.asyncio
     async def test_with_query_pipeline_returns_skeleton_response_object_serializes_cleanly(

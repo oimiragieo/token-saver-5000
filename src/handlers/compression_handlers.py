@@ -710,6 +710,27 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         logger.warning(f"Cost savings calculation failed for '{file_id}': {exc}")
         response["cost_savings"] = None
 
+    # F12 (2026-05-23 dogfood Sentry-MCP discovery): wire the SavingsTracker
+    # from token_optimization_handlers so `get_savings_report` /
+    # `get_savings_inline` actually see ingest activity. Pre-fix the tracker
+    # was dead infrastructure — never recorded events, so every customer's
+    # session report returned $0 even after real compression. Lazy import to
+    # avoid module-load circularity (token_optimization_handlers imports
+    # from here transitively).
+    try:
+        from .token_optimization_handlers import _get_tracker
+
+        _sid = args.get("session_id") or "default"
+        _model_for_savings = args.get("model") or "claude-sonnet-4-6"
+        _get_tracker(_sid, _model_for_savings).record(
+            tool_name="ingest_context",
+            original_tokens=skeleton.total_tokens,
+            compressed_tokens=skeleton.skeleton_tokens,
+            model=_model_for_savings,
+        )
+    except Exception as exc:
+        logger.warning(f"SavingsTracker.record failed for '{file_id}': {exc}")
+
     # Record Prometheus metrics for observability
     try:
         metrics = get_metrics()
