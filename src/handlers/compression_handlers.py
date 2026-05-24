@@ -1036,6 +1036,24 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         if staleness_warning:
             response["staleness_warning"] = staleness_warning
 
+        # v1.34.28 (F12 class-completion): re-compression on every read_skeleton
+        # call produces real token savings (total → skeleton). Wire the tracker
+        # so agents querying get_savings_report mid-session see this activity.
+        # Same lazy-import + swallow-failure pattern as handle_ingest (v1.34.27).
+        try:
+            from .token_optimization_handlers import _get_tracker
+
+            _sid = args.get("session_id") or "default"
+            _model = args.get("model") or "claude-sonnet-4-6"
+            _get_tracker(_sid, _model).record(
+                tool_name="read_skeleton",
+                original_tokens=skeleton_response.total_tokens,
+                compressed_tokens=skeleton_response.skeleton_tokens,
+                model=_model,
+            )
+        except Exception as exc:
+            logger.warning(f"SavingsTracker.record failed for read_skeleton '{file_id}': {exc}")
+
         return json.dumps(response, indent=2)
     except Exception as e:
         raise RuntimeError(
@@ -1843,6 +1861,28 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
             f"[WARN] {failed} documents failed. Check error messages for each failed document."
         )
 
+    # v1.34.28 (F12 class-completion): batch_ingest bypasses handle_ingest by
+    # calling BatchCompressionManager.compress_batch() directly, so the F12
+    # tracker wiring on handle_ingest does NOT cover this path. Record one
+    # tracker event per successful result so per-session savings reflect bulk
+    # ingest activity. Same lazy-import + swallow pattern.
+    try:
+        from .token_optimization_handlers import _get_tracker
+
+        _sid = args.get("session_id") or "default"
+        _model = args.get("model") or "claude-sonnet-4-6"
+        _tracker = _get_tracker(_sid, _model)
+        for _r in results:
+            if _r.success and _r.result is not None:
+                _tracker.record(
+                    tool_name="batch_ingest_documents",
+                    original_tokens=getattr(_r.result, "total_tokens", 0),
+                    compressed_tokens=getattr(_r.result, "skeleton_tokens", 0),
+                    model=_model,
+                )
+    except Exception as exc:
+        logger.warning(f"SavingsTracker.record failed for batch_ingest: {exc}")
+
     logger.info(response["summary"])
 
     return json.dumps(response, indent=2)
@@ -2105,6 +2145,28 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
     if failed > 0:
         failed_ids = [r.file_id for r in results if not r.success]
         response["failed_file_ids"] = failed_ids
+
+    # v1.34.28 (F12 class-completion): ingest_directory bypasses handle_ingest
+    # (BatchCompressionManager.compress_batch() → compressor.ingest_file_async()
+    # directly), so the F12 tracker wiring on handle_ingest does NOT cover this
+    # path. Record one event per successful result so per-session savings reflect
+    # directory-scale ingest activity.
+    try:
+        from .token_optimization_handlers import _get_tracker
+
+        _sid = args.get("session_id") or "default"
+        _model = args.get("model") or "claude-sonnet-4-6"
+        _tracker = _get_tracker(_sid, _model)
+        for _r in results:
+            if _r.success and _r.result is not None:
+                _tracker.record(
+                    tool_name="ingest_directory",
+                    original_tokens=getattr(_r.result, "total_tokens", 0),
+                    compressed_tokens=getattr(_r.result, "skeleton_tokens", 0),
+                    model=_model,
+                )
+    except Exception as exc:
+        logger.warning(f"SavingsTracker.record failed for ingest_directory: {exc}")
 
     logger.info(response["summary"])
 

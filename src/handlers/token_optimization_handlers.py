@@ -13,6 +13,7 @@ not just Claude Code.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict
 
 from ..token_estimation import TokenEstimator
@@ -26,6 +27,8 @@ from ..compression_profiles import (
 from ..meta_tokens import MetaTokenCompressor
 from ..quality_predictor import QualityPredictor
 from ..savings_tracker import SavingsTracker
+
+logger = logging.getLogger(__name__)
 
 # Module-level singletons for session state
 _session_config_store = SessionConfigStore()
@@ -315,6 +318,28 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
     hint = args.get("command_hint") or None
     optimizer = CLIOutputOptimizer()
     result = optimizer.filter(text, command_hint=hint)
+
+    # v1.34.28 (F12 class-completion): filter_cli_output is a real
+    # savings-producing tool. Record via the SavingsTracker so agents querying
+    # get_savings_report mid-session see CLI filtering activity. Tokens are
+    # estimated via len()//4 (matches "fast" method in TokenEstimator —
+    # accuracy is fine for tracker aggregation, exact bills go through the
+    # /v1/usage/by-model REST surface). Same lazy-import + swallow pattern
+    # as handle_ingest / handle_read_skeleton.
+    try:
+        _orig_tokens = max(1, len(text) // 4)
+        _comp_tokens = max(1, len(result.filtered_text) // 4)
+        _sid = args.get("session_id") or "default"
+        _model = args.get("model") or "claude-sonnet-4-6"
+        _get_tracker(_sid, _model).record(
+            tool_name="filter_cli_output",
+            original_tokens=_orig_tokens,
+            compressed_tokens=_comp_tokens,
+            model=_model,
+        )
+    except Exception as exc:
+        logger.warning(f"SavingsTracker.record failed for filter_cli_output: {exc}")
+
     return json.dumps(
         {
             "status": "success",

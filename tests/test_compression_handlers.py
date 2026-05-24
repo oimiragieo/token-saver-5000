@@ -541,8 +541,7 @@ class TestHandleIngestF12SavingsTrackerWired:
         assert event.tokens_saved == 1750
         assert event.model == "claude-sonnet-4-6"
         assert event.dollars_saved > 0, (
-            "F12: dollars_saved must be > 0 for a real compression. "
-            f"Got {event.dollars_saved}."
+            "F12: dollars_saved must be > 0 for a real compression. " f"Got {event.dollars_saved}."
         )
 
     @pytest.mark.asyncio
@@ -792,6 +791,137 @@ class TestHandleIngestF6InlineQuery:
         data = json.loads(result)
         assert data["status"] == "success"
         assert "query_skeleton" not in data
+
+
+@patch("src.handlers.compression_handlers.validate_file_id")
+class TestHandleReadSkeletonF12ClassCompletion:
+    """v1.34.28 regression: read_skeleton must hit SavingsTracker.record().
+
+    Same root cause as F12 (v1.34.27): an aggregator helper (`get_savings_report`)
+    that exists but has no write-side caller produces silently-wrong zeros.
+    v1.34.27 fixed the ingest path; this test locks read_skeleton.
+    """
+
+    @pytest.mark.asyncio
+    async def test_read_skeleton_records_to_savings_tracker(self, mock_validate_file):
+        from src.handlers import token_optimization_handlers as toh
+
+        sid = "v1_34_28-read-skeleton-verify"
+        toh._savings_trackers.pop(sid, None)
+
+        compressor = Mock()
+        compressor.chunks = {}
+        compressor._access_tracker = None
+        compressor._baseline_skeleton_cache = {}
+        compressor.graphs = {"f12_doc": Mock()}
+
+        sync_manager = Mock()
+        sync_manager.file_metadata = {}
+
+        skel = SimpleNamespace(
+            total_nodes=4,
+            total_tokens=1000,
+            skeleton_tokens=120,
+            compression_ratio=8.33,
+            skeleton_text="mock skeleton text",
+            node_map={},
+        )
+
+        def fake_pipeline(*_a, **_kw):
+            return {
+                "final_skeleton": skel,
+                "final_stage": "baseline",
+                "stage_count": 1,
+                "stages": ["baseline"],
+                "evidence": None,
+                "selection_mode_resolved": "baseline",
+            }
+
+        with patch(
+            "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+            side_effect=fake_pipeline,
+        ):
+            await ch.handle_read_skeleton(
+                {
+                    "compressor": compressor,
+                    "sync_manager": sync_manager,
+                    "retrieval_history": {},
+                },
+                {
+                    "file_id": "f12_doc",
+                    "selection_mode": "baseline",
+                    "session_id": sid,
+                    "model": "claude-sonnet-4-6",
+                },
+            )
+
+        assert sid in toh._savings_trackers, (
+            "v1.34.28: read_skeleton must lazily create the SavingsTracker for "
+            "the passed session_id (same shape as F12 ingest fix)."
+        )
+        events = toh._savings_trackers[sid]._events
+        assert len(events) == 1
+        ev = events[0]
+        assert ev.tool_name == "read_skeleton"
+        assert ev.original_tokens == 1000
+        assert ev.compressed_tokens == 120
+        assert ev.tokens_saved == 880
+
+    @pytest.mark.asyncio
+    async def test_read_skeleton_succeeds_when_tracker_record_fails(self, mock_validate_file):
+        """Defensive: a tracker.record() exception must NOT fail read_skeleton."""
+        compressor = Mock()
+        compressor.chunks = {}
+        compressor._access_tracker = None
+        compressor._baseline_skeleton_cache = {}
+        compressor.graphs = {"f12_doc": Mock()}
+
+        sync_manager = Mock()
+        sync_manager.file_metadata = {}
+
+        skel = SimpleNamespace(
+            total_nodes=2,
+            total_tokens=200,
+            skeleton_tokens=40,
+            compression_ratio=5.0,
+            skeleton_text="x",
+            node_map={},
+        )
+
+        def fake_pipeline(*_a, **_kw):
+            return {
+                "final_skeleton": skel,
+                "final_stage": "baseline",
+                "stage_count": 1,
+                "stages": ["baseline"],
+                "evidence": None,
+                "selection_mode_resolved": "baseline",
+            }
+
+        with (
+            patch(
+                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+                side_effect=fake_pipeline,
+            ),
+            patch(
+                "src.handlers.token_optimization_handlers._get_tracker",
+                side_effect=RuntimeError("simulated tracker breakage"),
+            ),
+        ):
+            out = await ch.handle_read_skeleton(
+                {
+                    "compressor": compressor,
+                    "sync_manager": sync_manager,
+                    "retrieval_history": {},
+                },
+                {"file_id": "f12_doc", "selection_mode": "baseline"},
+            )
+
+        data = json.loads(out)
+        assert data["file_id"] == "f12_doc", (
+            "v1.34.28 defensive: read_skeleton must still return success when "
+            "SavingsTracker.record() raises."
+        )
 
 
 @patch("src.handlers.compression_handlers.validate_file_id")
