@@ -30,6 +30,7 @@ from . import ace_handlers as ace
 from . import visualization_handlers as vh
 from . import help_handlers as hh
 from . import connector_handlers as coh
+from . import docs_handlers as doch
 from . import model_handlers as moh
 from . import multimodal_handlers as mmh
 from . import temporal_handlers as th
@@ -120,6 +121,54 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         verify_compression, calculate_reward, get_evidence_stats, generate_synthetic_tests
     """
     all_tools = [
+        Tool(
+            name="gc_read_doc",
+            description=(
+                "Read a gotcontext product/API documentation page as markdown. "
+                "Use after gc_search_docs returns a URL; or pass a known slug like "
+                "'authentication'. Returns JSON with markdown, source_url, and "
+                "length_tokens."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url_or_slug": {
+                        "type": "string",
+                        "description": (
+                            "A full docs URL returned by gc_search_docs, or a known "
+                            "docs slug such as 'authentication' or 'mcp-server'."
+                        ),
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["url_or_slug"],
+            },
+        ),
+        Tool(
+            name="gc_search_docs",
+            description=(
+                "Search gotcontext product/API documentation and return ranked docs URLs. "
+                "When to use vs gc_lookup: gc_lookup is for company-name disambiguation; "
+                "gc_search_docs is for product/API documentation queries. Returns JSON "
+                "with results containing title, snippet, url, and score."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural-language product/API documentation query.",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Maximum number of ranked documentation results to return.",
+                        "default": 5,
+                    },
+                    **SCOPE_PROPERTIES,
+                },
+                "required": ["query"],
+            },
+        ),
         # === DOCUMENT COMPRESSION TOOLS (9) ===
         Tool(
             name="ingest_context",
@@ -3399,6 +3448,8 @@ async def route_tool_call(
     """
     # Define routing table mapping tool names to handler functions
     router = {
+        "gc_read_doc": doch.handle_gc_read_doc,
+        "gc_search_docs": doch.handle_gc_search_docs,
         # Document Compression (9 tools)
         "ingest_context": ch.handle_ingest,
         "read_skeleton": ch.handle_read_skeleton,
