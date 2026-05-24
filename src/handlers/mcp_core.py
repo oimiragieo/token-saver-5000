@@ -17,7 +17,7 @@ Architecture:
 
 from typing import Any, Dict, List, Set
 
-from mcp.types import Tool
+from mcp.types import Tool, ToolAnnotations
 
 # Import all handler modules
 from . import compression_handlers as ch
@@ -238,6 +238,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
         ),
         Tool(
             name="read_skeleton",
+            # F4 (plan v2 §14.4) — readOnlyHint=True signals to MCP clients
+            # (e.g. Claude Code's isConcurrencySafe()) that this tool has no
+            # side effects and may be dispatched in parallel with other
+            # read-only tools.
+            annotations=ToolAnnotations(readOnlyHint=True),
             description=(
                 "Read the compressed skeleton view of a previously ingested document. "
                 "Shows high-importance 'anchor' concepts with summaries, and lists "
@@ -346,6 +351,9 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
         ),
         Tool(
             name="search_semantic",
+            # F4 (plan v2 §14.4) — readOnlyHint=True; vector similarity
+            # lookup is pure read.
+            annotations=ToolAnnotations(readOnlyHint=True),
             description=(
                 "Semantic search across ingested documents. "
                 "Uses vector similarity to find relevant sections, "
