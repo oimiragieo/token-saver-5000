@@ -1,12 +1,20 @@
 """SSRF-hardened URL fetcher for ingest_context file_url parameter.
 
-Implements 6 mitigations against Server-Side Request Forgery (SSRF):
+Implements 8 mitigations against Server-Side Request Forgery (SSRF):
   1. HTTPS-ONLY — rejects any non-https scheme
-  2. PUBLIC IP ONLY — blocks RFC1918, loopback, link-local, IPv6-private after DNS resolution
-  3. NO REDIRECTS — follow_redirects=False
-  4. SIZE CAP — 10 MB hard limit checked via Content-Length header + streaming counter
-  5. TIMEOUT — connect=10s, read=30s
-  6. CONTENT-TYPE ALLOWLIST — text/*, application/json, application/xml, application/yaml, application/x-yaml
+  2. BLOCKED HOSTNAMES — denies metadata endpoints, *.internal TLD, bare 'metadata'
+  3. PUBLIC IP ONLY — blocks RFC1918, loopback, link-local, IPv6-private after DNS resolution
+     (includes IPv4-mapped IPv6 normalisation — ::ffff:127.0.0.1 collapses to 127.0.0.1)
+  4. DNS REBINDING — re-resolves after pre-connect check; rejects if IP set changes
+  5. NO REDIRECTS — follow_redirects=False
+  6. SIZE CAP — 10 MB hard limit checked via Content-Length header + streaming counter
+  7. TIMEOUT — connect=10s, read=30s
+  8. CONTENT-TYPE ALLOWLIST — text/*, application/json, application/xml, application/yaml, application/x-yaml
+
+Protection logic (items 2-4) is vendored from api/app/services/url_validator.py (2026-05-24,
+Phase 2 Chunk 6A).  token-saver-5000 tests run with PYTHONPATH=. from inside this directory,
+so importing from api/ at module-load time would fail.  Vendoring keeps this module
+standalone for tests and in production (where both paths are on PYTHONPATH anyway).
 """
 
 import ipaddress
@@ -31,6 +39,18 @@ _ALLOWED_CONTENT_TYPE_PREFIXES = (
 
 _TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
 
+# Vendored from api/app/services/url_validator.py — _METADATA_HOSTNAMES
+# Plus bare 'metadata' hostname used by some cloud environments.
+_BLOCKED_HOSTNAMES: frozenset[str] = frozenset(
+    {
+        "169.254.169.254",  # AWS/GCP/Azure IMDS endpoint
+        "169.254.169.254.nip.io",  # nip.io wildcard bypass
+        "metadata.google.internal",  # GCP metadata server
+        "metadata.aws.internal",  # AWS metadata server
+        "metadata",  # bare hostname (some private clouds)
+    }
+)
+
 
 # ---------------------------------------------------------------------------
 # Error class
@@ -50,14 +70,30 @@ class URLFetchError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
+# Private helpers (vendored from api/app/services/url_validator.py)
 # ---------------------------------------------------------------------------
 
 
+def _normalize_ip_address(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    """Return an ip_address object, collapsing IPv4-mapped IPv6 to pure IPv4.
+
+    ::ffff:127.0.0.1 maps to 127.0.0.1 so is_loopback() fires correctly.
+    Without this normalisation, ipaddress.ip_address('::ffff:127.0.0.1').is_loopback
+    returns False (Python stdlib bug-by-design).
+    """
+    ip = ipaddress.ip_address(ip_str)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    return ip
+
+
 def _is_private_ip(addr: str) -> bool:
-    """Return True if *addr* resolves to a private/reserved IP address."""
+    """Return True if *addr* resolves to a private/reserved IP address.
+
+    Handles IPv4-mapped IPv6 by normalising first.
+    """
     try:
-        ip = ipaddress.ip_address(addr)
+        ip = _normalize_ip_address(addr)
     except ValueError:
         # addr is a hostname — not expected here but treat as non-private
         return False
@@ -72,11 +108,26 @@ def _is_private_ip(addr: str) -> bool:
     )
 
 
-def _resolve_and_check_host(host: str) -> None:
-    """DNS-resolve *host* and raise URLFetchError if any address is private.
+def _is_blocked_hostname(host: str) -> bool:
+    """Return True if *host* is an explicitly blocked metadata/internal hostname.
+
+    Blocks:
+    - Any host in _BLOCKED_HOSTNAMES (exact match, case-insensitive)
+    - Any host with a .internal TLD (covers Fly.io internal networking and GCP)
+    """
+    lower = host.lower()
+    if lower in _BLOCKED_HOSTNAMES:
+        return True
+    # Block *.internal TLD — Fly.io, GCP, and most private-cloud internal DNS zones
+    if lower.endswith(".internal") or lower == "internal":
+        return True
+    return False
+
+
+def _resolve_host(host: str) -> set[str]:
+    """DNS-resolve *host* and return the set of IP address strings.
 
     Raises:
-        URLFetchError(code="private_ip") if the host resolves to a private address.
         URLFetchError(code="private_ip") if DNS resolution fails.
     """
     try:
@@ -86,15 +137,58 @@ def _resolve_and_check_host(host: str) -> None:
             f"DNS resolution failed for host '{host}': {exc}",
             code="private_ip",
         ) from exc
+    return {sockaddr[0] for _family, _type, _proto, _canonname, sockaddr in results}
 
-    for _family, _type, _proto, _canonname, sockaddr in results:
-        ip_addr = sockaddr[0]
+
+def _check_resolved_ips(host: str, ips: set[str]) -> None:
+    """Raise URLFetchError if any IP in *ips* is private/reserved.
+
+    Raises:
+        URLFetchError(code="private_ip") if any address is private.
+    """
+    for ip_addr in ips:
         if _is_private_ip(ip_addr):
             raise URLFetchError(
                 f"Host '{host}' resolves to a private/reserved IP address ({ip_addr}). "
                 "Fetching private network resources is not allowed.",
                 code="private_ip",
             )
+
+
+def _resolve_and_check_host(host: str) -> set[str]:
+    """DNS-resolve *host*, assert all IPs are public, return the IP set.
+
+    Returns the resolved IP set for use in the optional DNS-rebinding check.
+
+    Raises:
+        URLFetchError(code="private_ip") if any resolved IP is private/reserved or
+        DNS resolution fails.
+    """
+    ips = _resolve_host(host)
+    _check_resolved_ips(host, ips)
+    return ips
+
+
+def _check_dns_rebinding(host: str, first_ips: set[str]) -> None:
+    """Re-resolve *host* and raise if the IP set has changed (DNS rebinding).
+
+    Attackers can make a hostname resolve to a public IP during the check, then
+    switch the DNS record to 127.0.0.1 just before the actual connection is made.
+    A second resolution with comparison catches this race.
+
+    Raises:
+        URLFetchError(code="dns_rebinding") if IPs changed between resolutions.
+        URLFetchError(code="private_ip") if second resolution yields a private IP.
+    """
+    second_ips = _resolve_host(host)
+    _check_resolved_ips(host, second_ips)
+    if second_ips != first_ips:
+        raise URLFetchError(
+            f"DNS rebinding detected for host '{host}': IP set changed between "
+            f"pre-connect check ({sorted(first_ips)}) and connection "
+            f"({sorted(second_ips)}). Request blocked.",
+            code="dns_rebinding",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -134,20 +228,33 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
             code="private_ip",
         )
 
-    # --- Mitigation 2: PUBLIC IP ONLY (pre-connect DNS check) ---
+    # --- Mitigation 2: BLOCKED HOSTNAMES (pre-DNS, hostname-level check) ---
+    if _is_blocked_hostname(host):
+        raise URLFetchError(
+            f"Host '{host}' is a blocked metadata or internal-network hostname. "
+            "Fetching from this host is not allowed.",
+            code="blocked_hostname",
+        )
+
+    # --- Mitigations 3 + 4: PUBLIC IP ONLY + DNS REBINDING ---
     # Skip DNS check when a mock transport is injected (unit tests)
+    first_ips: Optional[set[str]] = None
     if _transport is None:
-        _resolve_and_check_host(host)
+        first_ips = _resolve_and_check_host(host)
 
     # --- Build client ---
     client_kwargs: dict = {
-        "follow_redirects": False,  # Mitigation 3: NO REDIRECTS
-        "timeout": _TIMEOUT,  # Mitigation 5: TIMEOUT
+        "follow_redirects": False,  # Mitigation 5: NO REDIRECTS
+        "timeout": _TIMEOUT,  # Mitigation 7: TIMEOUT
     }
     if _transport is not None:
         client_kwargs["transport"] = _transport
 
     async with httpx.AsyncClient(**client_kwargs) as client:
+        # --- Mitigation 4: DNS REBINDING — second resolution just before connect ---
+        if _transport is None and first_ips is not None:
+            _check_dns_rebinding(host, first_ips)
+
         try:
             response = await client.get(url)
         except httpx.TimeoutException as exc:
@@ -161,7 +268,7 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
                 code="private_ip",
             ) from exc
 
-        # --- Mitigation 3: NO REDIRECTS — reject 3xx ---
+        # --- Mitigation 5: NO REDIRECTS — reject 3xx ---
         if response.is_redirect or response.status_code in (301, 302, 303, 307, 308):
             raise URLFetchError(
                 f"Redirects are not followed. Got HTTP {response.status_code} from '{url}'.",
@@ -175,7 +282,7 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
                 code="private_ip",
             )
 
-        # --- Mitigation 6: CONTENT-TYPE ALLOWLIST ---
+        # --- Mitigation 8: CONTENT-TYPE ALLOWLIST ---
         content_type = response.headers.get("content-type", "")
         # Strip parameters (e.g. "text/html; charset=utf-8" → "text/html")
         ct_base = content_type.split(";")[0].strip().lower()
@@ -187,7 +294,7 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
                 code="content_type_not_allowed",
             )
 
-        # --- Mitigation 4: SIZE CAP — Content-Length header pre-check ---
+        # --- Mitigation 6: SIZE CAP — Content-Length header pre-check ---
         content_length_header = response.headers.get("content-length")
         if content_length_header is not None:
             try:
@@ -201,7 +308,7 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
             except ValueError:
                 pass  # Malformed header — proceed with streaming check
 
-        # --- Mitigation 4: SIZE CAP — streaming byte counter ---
+        # --- Mitigation 6: SIZE CAP — streaming byte counter ---
         # httpx has already buffered the body at this point for a non-streaming .get().
         # We read .content (bytes) and check length.
         body_bytes = response.content
