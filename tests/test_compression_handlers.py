@@ -1061,6 +1061,79 @@ class TestHandleReadSkeleton:
 
 
 @patch("src.handlers.compression_handlers.validate_node_ids")
+class TestHandleModulateRegionF10SingularNodeId:
+    """v1.34.30 (F10): handle_modulate_region must accept singular `node_id`.
+
+    Pre-fix: customers calling modulate_region(node_id="x") got
+    "Input validation error: 'node_ids' is a required property".
+    The plural-only API surface broke the singular intuitive call,
+    which agents naturally try first. Discovered in 2026-05-23 dogfood
+    cycle (F10 in docs/audits/2026-05-23-dogfood-findings.md).
+
+    Fix: handler accepts either `node_ids` (canonical, list) or
+    `node_id` (convenience, string → wrapped to [node_id]). Schema
+    `anyOf` enforces one is present.
+    """
+
+    def setup_method(self):
+        self.mock_compressor = Mock()
+        self.mock_compressor.modulate_region.return_value = "expanded content"
+        self.mock_sync_manager = Mock()
+        self.mock_sync_manager.file_metadata = {}
+        self.context = {
+            "compressor": self.mock_compressor,
+            "sync_manager": self.mock_sync_manager,
+            "retrieval_history": {},
+        }
+
+    @pytest.mark.asyncio
+    async def test_singular_node_id_wraps_to_list(self, mock_validate_nodes):
+        """node_id="x" must wrap to [x] and call modulate_region with the list."""
+        result = await ch.handle_modulate_region(
+            self.context,
+            {"node_id": "doc_a_n0", "fidelity_level": "RAW"},
+        )
+        # The mock returns "expanded content"; we just need the handler not to raise
+        # and to have called validate_node_ids with the wrapped list.
+        mock_validate_nodes.assert_called_once_with(["doc_a_n0"], self.context)
+        assert "expanded content" in result or "doc_a_n0" in result
+
+    @pytest.mark.asyncio
+    async def test_plural_node_ids_unchanged_canonical_path(self, mock_validate_nodes):
+        """node_ids=[...] (canonical) must continue to work — no regression."""
+        await ch.handle_modulate_region(
+            self.context,
+            {"node_ids": ["doc_a_n0", "doc_a_n1"], "fidelity_level": "RAW"},
+        )
+        mock_validate_nodes.assert_called_once_with(["doc_a_n0", "doc_a_n1"], self.context)
+
+    @pytest.mark.asyncio
+    async def test_both_singular_and_plural_prefers_plural_canonical(self, mock_validate_nodes):
+        """If both `node_ids` and `node_id` are passed, canonical `node_ids` wins.
+
+        Defensive: documented preference avoids agent-side ambiguity.
+        """
+        await ch.handle_modulate_region(
+            self.context,
+            {
+                "node_ids": ["canonical"],
+                "node_id": "ignored",
+                "fidelity_level": "RAW",
+            },
+        )
+        mock_validate_nodes.assert_called_once_with(["canonical"], self.context)
+
+    @pytest.mark.asyncio
+    async def test_neither_node_id_nor_node_ids_raises_clear_error(self, mock_validate_nodes):
+        """Calling with neither must raise a ValueError with actionable [TIP]."""
+        with pytest.raises(ValueError) as exc:
+            await ch.handle_modulate_region(self.context, {"fidelity_level": "RAW"})
+        msg = str(exc.value)
+        assert "node_ids" in msg and "node_id" in msg
+        assert "[TIP]" in msg
+
+
+@patch("src.handlers.compression_handlers.validate_node_ids")
 class TestHandleModulateRegion:
     """Test handle_modulate_region handler (12 tests)"""
 

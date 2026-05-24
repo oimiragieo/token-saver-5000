@@ -1076,7 +1076,20 @@ async def handle_modulate_region(context: HandlerContext, args: Dict[str, Any]) 
         ValueError: If validation fails
         RuntimeError: If modulation fails
     """
-    node_ids = args["node_ids"]
+    # v1.34.30 (F10): accept singular `node_id` as a convenience for the
+    # one-region case — wraps to [node_id]. Customers who try the
+    # singular intuitive call (modulate_region(node_id="x")) now succeed
+    # instead of getting "Input validation error: 'node_ids' is a
+    # required property". Canonical name remains `node_ids`.
+    if "node_ids" in args:
+        node_ids = args["node_ids"]
+    elif "node_id" in args:
+        node_ids = [args["node_id"]]
+    else:
+        raise ValueError(
+            "modulate_region requires `node_ids` (list) or `node_id` (single string)\n"
+            '[TIP] For one region: node_id="<id>". For many: node_ids=["<id1>", "<id2>"]'
+        )
     fidelity_str = args.get("fidelity_level", "RAW")
 
     # Validation

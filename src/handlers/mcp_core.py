@@ -270,7 +270,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     "node_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of node IDs to retrieve (from skeleton)",
+                        "description": "List of node IDs to retrieve (from skeleton). Use this for multiple regions.",
+                    },
+                    "node_id": {
+                        "type": "string",
+                        "description": "Single node ID convenience (wraps to [node_id]). Use when expanding one region — alternative to node_ids.",
                     },
                     "fidelity_level": {
                         "type": "string",
@@ -285,7 +289,10 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                         "default": "RAW",
                     },
                 },
-                "required": ["node_ids"],
+                "anyOf": [
+                    {"required": ["node_ids"]},
+                    {"required": ["node_id"]},
+                ],
             },
         ),
         Tool(
