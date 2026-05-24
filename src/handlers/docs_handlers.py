@@ -174,6 +174,34 @@ def _idf(term: str, tokenized_docs: list[list[str]]) -> float:
     return math.log(1 + (len(tokenized_docs) - docs_with_term + 0.5) / (docs_with_term + 0.5))
 
 
+# v1.34.33 hotfix: minimum prefix length for stemming match. Query terms
+# shorter than this require exact match (avoids false positives on short
+# common words). 6 chars is the sweet spot: "auth" (4) → exact only;
+# "authentication" (14) → matches "authenticate" via "authen" prefix.
+_PREFIX_MATCH_MIN_LEN = 6
+
+
+def _term_freq_with_stemming(term: str, doc: list[str]) -> int:
+    """Count occurrences of `term` in `doc`, with prefix-match stemming.
+
+    v1.34.33 hotfix: docs MCP must match morphological variants.
+    Pre-fix `gc_search_docs(query="authentication")` returned 0 results
+    because the corpus has "authenticate" / "auth" / "auth-gated" but
+    not the exact string "authentication" — common English suffixes
+    (-ation, -ing, -ed, etc.) made the exact-match BM25 brittle.
+
+    Rule: if query term ≥ 6 chars, match any doc token sharing the
+    first 6 chars as prefix (e.g., "authentication"[:6]="authen" matches
+    "authenticate", "authenticated", "authenticating"). Short query terms
+    (<6 chars) require exact match to avoid false positives.
+    """
+    exact = doc.count(term)
+    if len(term) < _PREFIX_MATCH_MIN_LEN:
+        return exact
+    prefix = term[:_PREFIX_MATCH_MIN_LEN]
+    return sum(1 for tok in doc if tok == term or tok.startswith(prefix))
+
+
 def _bm25_scores(query: str, chunks: list[DocChunk]) -> list[tuple[DocChunk, float]]:
     query_terms = _tokenize(query)
     if not query_terms or not chunks:
@@ -191,7 +219,7 @@ def _bm25_scores(query: str, chunks: list[DocChunk]) -> list[tuple[DocChunk, flo
         score = 0.0
         doc_len = len(doc)
         for term in query_terms:
-            freq = doc.count(term)
+            freq = _term_freq_with_stemming(term, doc)
             if freq == 0:
                 continue
             numerator = freq * (k1 + 1)
