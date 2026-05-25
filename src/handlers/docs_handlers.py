@@ -291,11 +291,23 @@ def _excerpt_around_anchor(markdown: str, anchor_slug: str | None, max_tokens: i
 
 async def _fetch_url_markdown(url: str) -> str:
     import aiohttp
+    import html2text as _html2text
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, timeout=15) as response:
             response.raise_for_status()
-            return await response.text()
+            raw_html = await response.text()
+
+    content_type = response.headers.get("Content-Type", "")
+    if "html" not in content_type.lower():
+        # Already plain text / markdown — return as-is
+        return raw_html
+
+    converter = _html2text.HTML2Text()
+    converter.ignore_links = False
+    converter.ignore_images = True
+    converter.body_width = 0  # disable line-wrapping
+    return converter.handle(raw_html)
 
 
 _LLMS_TXT = _read_llms_txt()

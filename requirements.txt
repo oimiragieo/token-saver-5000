@@ -35,6 +35,9 @@ aiohttp>=3.9.0  # Async HTTP server for health/metrics endpoints
 # URL fetching (url_fetcher.py — SSRF-hardened fetch for ingest_context file_url)
 httpx>=0.27.0
 
+# HTML → markdown conversion (docs_handlers._fetch_url_markdown; pure Python, no native deps)
+html2text>=2020.1.16
+
 # Utilities
 tqdm>=4.65.0
 psutil>=5.9.0

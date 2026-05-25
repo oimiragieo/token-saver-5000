@@ -125,9 +125,10 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             name="gc_read_doc",
             description=(
                 "Read a gotcontext product/API documentation page as markdown. "
-                "Use after gc_search_docs returns a URL; or pass a known slug like "
-                "'authentication'. Returns JSON with markdown, source_url, and "
-                "length_tokens."
+                "Pass a full URL (e.g. 'https://gotcontext.ai/docs#authentication') "
+                "returned by gc_search_docs, or a known slug such as 'authentication' "
+                "or 'mcp-server' (slug auto-resolves to the matching docs anchor). "
+                "Returns JSON with markdown, source_url, and length_tokens."
             ),
             inputSchema={
                 "type": "object",
