@@ -572,3 +572,23 @@ Weight for query-relevance component in quality prediction.
 - Environment variable: QUALITY_RELEVANCE_WEIGHT
 WHY: Relevance is query-dependent and optional; 0.3 keeps it symmetrical with coverage.
 """
+
+_RRF_K = int(os.getenv("_RRF_K", "60"))
+"""
+Reciprocal Rank Fusion k parameter (Cormack, Clarke, Buettcher — SIGIR 2009).
+k=60 is the SOTA empirical default; higher k flattens the RRF score distribution.
+- Environment variable: _RRF_K
+WHY: k=60 was empirically shown to be robust across diverse retrieval tasks in the
+     original paper. A smaller k (e.g. 10) gives more weight to top-ranked results;
+     a larger k (e.g. 100) makes the fusion softer. 60 is the safe starting point.
+"""
+
+F11_RANKER_PATH = os.getenv("F11_RANKER_PATH", "a").lower().strip()
+"""
+F11 ranker path selector.
+- "a" (default): dense cosine similarity only (backward-compatible Path A).
+- "c": BM25+RRF hybrid retrieval (v1.34.35 Path C council patches).
+- Environment variable: F11_RANKER_PATH
+WHY: Path A is the existing default; Path C adds BM25 re-ranking via Reciprocal
+     Rank Fusion without touching Path A's behavior when F11_RANKER_PATH != "c".
+"""

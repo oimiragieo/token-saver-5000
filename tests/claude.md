@@ -545,6 +545,7 @@ Tests for CodeCompressionAdapter v0.9.0 fixes.
 | `class` | `TestSkeletonTokensDocumentation` |
 | `class` | `TestFidelityLevelBalancedDoesNotExist` |
 | `class` | `TestDeletionDoesNotOverreach` |
+| `class` | `TestDeleteDocumentFromMemoryPropertyCopy` |
 
 #### `test_code_compressor.py`
 
@@ -576,6 +577,17 @@ Tests for Codex CLI token optimization enhancements (v0.11.0).
 | `class` | `TestCodexBuildCommand` |
 | `class` | `TestCodexDryRun` |
 
+#### `test_compress_manifest_handler.py`
+
+Tests for the gc_compress_manifest handler (v1.8.0 A2b).
+
+| Kind | Name |
+|------|------|
+| `def` | `_call` |
+| `class` | `TestCompressManifestHandlerRoundTrip` |
+| `class` | `TestCompressManifestHandlerSavings` |
+| `class` | `TestCompressManifestHandlerEdgeCases` |
+
 #### `test_compression_handlers.py`
 
 Comprehensive tests for compression_handlers.py (v0.4.3).
@@ -583,7 +595,13 @@ Comprehensive tests for compression_handlers.py (v0.4.3).
 | Kind | Name |
 |------|------|
 | `class` | `TestHandleIngest` |
+| `def` | `_make_async_return` |
+| `class` | `TestHandleIngestF4ChunkingStrategy` |
+| `class` | `TestHandleIngestF12SavingsTrackerWired` |
+| `class` | `TestHandleIngestF6InlineQuery` |
+| `class` | `TestHandleReadSkeletonF12ClassCompletion` |
 | `class` | `TestHandleReadSkeleton` |
+| `class` | `TestHandleModulateRegionF10SingularNodeId` |
 | `class` | `TestHandleModulateRegion` |
 | `class` | `TestHandleSearchSemantic` |
 | `class` | `TestSearchSemanticOutputFields` |
@@ -606,6 +624,19 @@ Tests for the composable read-skeleton compression pipeline.
 |------|------|
 | `def` | `_skeleton` |
 | `def` | `test_read_skeleton_pipeline_runs_baseline_then_evidence_stages` |
+| `def` | `_make_compressor_for_auto` |
+| `def` | `test_auto_mode_resolves_to_evidence_aware_for_structured_doc` |
+| `def` | `test_auto_mode_resolves_to_baseline_for_plain_prose` |
+| `def` | `test_auto_mode_resolves_to_baseline_when_raw_text_is_none` |
+| `def` | `test_auto_mode_synthesises_h1_as_query_when_no_query_supplied` |
+| `def` | `test_auto_mode_uses_explicit_query_when_supplied` |
+| `def` | `test_selection_mode_resolved_present_in_baseline_path` |
+| `def` | `test_selection_mode_resolved_present_in_query_guided_path` |
+| `def` | `test_resolve_auto_mode_detects_structured_doc` |
+| `def` | `test_resolve_auto_mode_falls_back_for_plain_prose` |
+| `def` | `test_resolve_auto_mode_returns_baseline_for_empty_text` |
+| `def` | `test_extract_h1_query_returns_heading_text` |
+| `def` | `test_extract_h1_query_returns_none_when_no_h1` |
 
 #### `test_compression_profiles.py`
 
@@ -957,6 +988,27 @@ Documentation and help-surface contract tests for launch readiness.
 | `async def` | `test_tool_help_list_reports_real_tool_count` |
 | `async def` | `test_formerly_missing_tools_return_help` |
 
+#### `test_docs_handlers.py`
+
+(no module docstring — see symbols below)
+
+| Kind | Name |
+|------|------|
+| `def` | `docs_fixture` |
+| `async def` | `test_search_returns_results_above_threshold` |
+| `async def` | `test_search_top_k_respected` |
+| `async def` | `test_read_doc_by_slug_returns_markdown` |
+| `async def` | `test_read_doc_truncates_long_responses` |
+| `async def` | `test_session_dedup_does_not_repeat_urls` |
+| `def` | `test_docs_root_returns_none_when_local_path_missing` |
+| `def` | `test_read_llms_txt_falls_back_to_live_url_when_local_missing` |
+| `def` | `test_read_llms_txt_returns_empty_on_url_fetch_failure` |
+| `async def` | `test_search_stemming_matches_morphological_variants` |
+| `async def` | `test_search_short_query_requires_exact_match` |
+| `def` | `test_term_freq_with_stemming_short_term_exact_only` |
+| `def` | `test_term_freq_with_stemming_long_term_prefix_match` |
+| `async def` | `test_read_doc_enforces_character_cap_on_pathological_output` |
+
 #### `test_e2e_scenarios.py`
 
 End-to-End Scenario Tests for Token Saver 5000 v0.7.0.
@@ -1114,6 +1166,35 @@ Tests for experimental handlers.
 | Kind | Name |
 |------|------|
 | `def` | `test_extractive_compressor_prioritizes_query_relevant_sentences` |
+
+#### `test_f11_header_aware_chunking.py`
+
+tests/test_f11_header_aware_chunking.py
+
+| Kind | Name |
+|------|------|
+| `def` | `compressor` |
+| `def` | `test_header_section_surfaces_at_top_with_matching_query` |
+| `def` | `test_structured_gate_triggers_on_headings_without_list_items` |
+| `def` | `test_oversized_section_retains_heading_prefix` |
+| `def` | `test_list_structured_doc_still_splits` |
+| `def` | `test_heading_metadata_stored_on_nodes` |
+
+#### `test_f11_path_c.py`
+
+F11 Path C — BM25 + Reciprocal Rank Fusion hybrid retrieval tests.
+
+| Kind | Name |
+|------|------|
+| `class` | `_FakeEmbedder` |
+| `def` | `fake_embedder` |
+| `def` | `_make_compressor_with_chunks` |
+| `class` | `TestBM25Utils` |
+| `class` | `TestBM25ScoresForNodes` |
+| `class` | `TestIdfPollutionRegression` |
+| `class` | `TestRRFFuse` |
+| `class` | `TestSearchSemanticWithScoresPathDispatch` |
+| `class` | `TestScoreTypeInHandlerResponse` |
 
 #### `test_file_sync.py`
 
@@ -1832,6 +1913,7 @@ Comprehensive Persistence Tests (v1.0.0 - Phase 1)
 | `class` | `TestErrorHandlingAndRecovery` |
 | `class` | `TestConcurrentAccess` |
 | `class` | `TestStorageStatsAndUtilities` |
+| `class` | `TestF8AtomicWriteParentDirAutoCreate` |
 
 #### `test_persistence_orchestration_service.py`
 
@@ -2059,6 +2141,15 @@ Golden-ish regression tests for prompt version comparison output.
 | `def` | `test_provider_profile_exposes_cache_threshold_guidance` |
 | `def` | `test_unknown_model_raises_value_error` |
 | `def` | `test_list_provider_profiles_includes_multiple_providers` |
+| `def` | `test_gemini_flash_is_cheaper_than_pro` |
+| `def` | `test_gemini_auto_priced_between_pro_and_flash` |
+| `def` | `test_gemini_flash_alias_resolves` |
+| `def` | `test_gpt5_mini_cheaper_than_full` |
+| `def` | `test_gpt41_mini_cheaper_than_full` |
+| `def` | `test_mini_aliases_resolve` |
+| `def` | `test_opus_4_7_is_registered` |
+| `def` | `test_opus_4_7_aliases_resolve` |
+| `def` | `test_opus_4_6_still_resolves_with_hyphen_alias` |
 
 #### `test_proxy_cli.py`
 
@@ -2341,6 +2432,15 @@ Tests for the search-then-compress pipeline.
 | Kind | Name |
 |------|------|
 | `def` | `test_segment_cache_reuses_cached_result_for_same_query_and_method` |
+
+#### `test_selection_strategy_toggle.py`
+
+TDD tests for H1 of v1.11.0: selection_strategy parameter on read_skeleton/_generate_skeleton.
+
+| Kind | Name |
+|------|------|
+| `def` | `_build_compressor_with_doc` |
+| `class` | `TestSelectionStrategyToggle` |
 
 #### `test_semantic_compressor_unit.py`
 
@@ -2719,10 +2819,13 @@ Tests for tensor_grep_integration.py
 | Kind | Name |
 |------|------|
 | `def` | `_make_completed_process` |
+| `def` | `_make_popen` |
 | `class` | `TestIsAvailable` |
 | `class` | `TestGetRepoMap` |
 | `class` | `TestCodeSearch` |
 | `class` | `TestASTSearch` |
+| `class` | `TestGetContextRender` |
+| `class` | `TestScanRuleset` |
 
 #### `test_token_estimation.py`
 
@@ -2847,6 +2950,48 @@ Tests for transcript extraction pipeline (src/transcript_extractor.py).
 | `class` | `TestExtractInsights` |
 | `class` | `TestIngestTranscript` |
 
+#### `test_url_fetcher.py`
+
+Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_transport` |
+| `async def` | `test_fetch_url_happy_path_returns_decoded_text` |
+| `async def` | `test_fetch_url_returns_json_content` |
+| `async def` | `test_mitigation_1_http_scheme_rejected` |
+| `async def` | `test_mitigation_1_ftp_scheme_rejected` |
+| `async def` | `test_mitigation_1_no_hostname_rejected` |
+| `async def` | `test_mitigation_3_301_redirect_rejected` |
+| `async def` | `test_mitigation_3_302_redirect_rejected` |
+| `async def` | `test_mitigation_3_307_redirect_rejected` |
+| `async def` | `test_mitigation_4_content_length_header_too_large` |
+| `async def` | `test_mitigation_4_body_too_large_no_content_length` |
+| `async def` | `test_mitigation_4_exactly_10_mb_is_allowed` |
+| `async def` | `test_mitigation_6_binary_content_type_rejected` |
+| `async def` | `test_mitigation_6_image_content_type_rejected` |
+| `async def` | `test_mitigation_6_text_html_allowed` |
+| `async def` | `test_mitigation_6_application_xml_allowed` |
+| `async def` | `test_mitigation_6_application_yaml_allowed` |
+| `async def` | `test_mitigation_6_application_x_yaml_allowed` |
+| `async def` | `test_non_2xx_status_raises_error` |
+| `async def` | `test_server_error_raises_error` |
+| `async def` | `test_urlfetcherror_has_code_attribute` |
+| `def` | `test_urlfetcherror_construction` |
+
+#### `test_url_fetcher_ssrf_hardening.py`
+
+Tests for the 4 new SSRF hardening mitigations added in Phase 2 Chunk 6A.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_transport` |
+| `def` | `_fake_getaddrinfo_for` |
+| `class` | `TestIPv4MappedIPv6Normalisation` |
+| `class` | `TestDNSRebindingDetection` |
+| `class` | `TestBlockedHostnamePreCheck` |
+| `class` | `TestInternalTLDBlock` |
+
 #### `test_ux_improvements.py`
 
 UX Improvements Test Suite (v0.4.1)
@@ -2857,6 +3002,14 @@ UX Improvements Test Suite (v0.4.1)
 | `class` | `TestSmartError` |
 | `class` | `TestCompressionAdvisor` |
 | `class` | `TestUXIntegration` |
+
+#### `test_validation_hooks_file_id.py`
+
+Tests for ``_validate_ingest`` — file_id character class.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestIngestFileIdCharacterClass` |
 
 #### `test_visualization.py`
 

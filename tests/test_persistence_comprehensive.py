@@ -1219,9 +1219,9 @@ class TestF8AtomicWriteParentDirAutoCreate:
             / "2026-05-23-full-site-audit"
             / "38-benchmarks-submit.md.json"
         )
-        assert not nested_path.parent.exists(), (
-            "test precondition: parent dirs must NOT pre-exist (this is the bug shape)"
-        )
+        assert (
+            not nested_path.parent.exists()
+        ), "test precondition: parent dirs must NOT pre-exist (this is the bug shape)"
 
         # Pre-fix raised FileNotFoundError here.
         PersistenceManager._atomic_write_json(nested_path, {"verified": True, "f8": "fixed"})

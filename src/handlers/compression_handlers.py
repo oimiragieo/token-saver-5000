@@ -30,7 +30,7 @@ from ..compression_advisor import CompressionAdvisor
 from ..rate_limiter import RATE_LIMITERS
 from ..error_types import RateLimitExceededError
 from ..metrics import compute_cost_savings, get_metrics
-from ..constants import MAX_TEXT_LENGTH_BYTES
+from ..constants import MAX_TEXT_LENGTH_BYTES, F11_RANKER_PATH
 from ..url_fetcher import URLFetchError, fetch_url
 from ..identity_scope import (
     compose_scoped_file_id,
@@ -1192,6 +1192,10 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
 
     search_results = _temporal_filter_search_results(context, search_results, args)[:top_k]
 
+    # Council patch P2: score_type field distinguishes Path C (RRF) from Path A (cosine).
+    # Callers must NOT treat RRF scores as cosine similarity values.
+    _score_type = "rrf" if F11_RANKER_PATH == "c" and not evidence_aware else "cosine"
+
     # Build structured results with both similarity and importance
     results = []
     for node_id, similarity_score in search_results:
@@ -1201,6 +1205,7 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
             {
                 "node_id": node_id,
                 "similarity": round(similarity_score, 3),  # Query match score
+                "score_type": _score_type,  # "cosine" (Path A) or "rrf" (Path C)
                 "importance": round(node.importance, 3),  # PageRank centrality
                 "summary": summary,
                 "tokens": node.metadata.get("tokens", 0),
@@ -1212,11 +1217,16 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
         "query": query,
         "file_id": file_id,
         "evidence_aware": evidence_aware,
+        "score_type": _score_type,  # Top-level: callers can detect Path A→C fallback
         "total_results": len(results),
         "results": results,
         "tip": "Use modulate_region() with node_ids to retrieve full content",
         "score_explanation": {
-            "similarity": "Semantic match to query (higher = better match)",
+            "similarity": (
+                "RRF score (rank-fusion, not cosine; higher = better match)"
+                if _score_type == "rrf"
+                else "Semantic match to query (higher = better match)"
+            ),
             "importance": "PageRank centrality in document graph (higher = more central)",
         },
         "temporal_filters": {
