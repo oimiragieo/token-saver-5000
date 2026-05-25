@@ -24,6 +24,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
+from .bm25_utils import bm25_scores as _bm25_score_texts
+from .constants import _RRF_K, F11_RANKER_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +357,55 @@ class SemanticCompressor:
 
         return pagerank
 
+    # F11: compiled once at class level to avoid re-compiling per call
+    _HEADING_FIRST_LINE_RE = re.compile(r"^(#{1,6}) (.+?)[ \t]*$", re.MULTILINE)
+
+    def _split_oversized_section(self, section: str, max_chunk_size: int) -> List[str]:
+        """
+        Sub-split a heading section that exceeds max_chunk_size × 1.5.
+
+        Prepends the heading text to each child chunk so the heading's semantic
+        signal is preserved in every child embedding (F11 fix).
+        """
+        heading_match = self._HEADING_FIRST_LINE_RE.match(section.strip())
+        heading_prefix = (heading_match.group(0).rstrip() + "\n\n") if heading_match else ""
+        body = section[len(heading_prefix) :].strip() if heading_prefix else section
+        paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+
+        chunks: List[str] = []
+        current = heading_prefix
+        for para in paragraphs:
+            sep = "\n\n" if current.strip() else ""
+            candidate = current + sep + para
+            if self._count_tokens(candidate) <= max_chunk_size:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                # Start fresh sub-chunk with heading prefix
+                current = heading_prefix + para
+
+        if current:
+            chunks.append(current)
+        return chunks if chunks else [section]
+
+    def _extract_heading_metadata(self, text: str) -> dict:
+        """
+        Return heading metadata for a chunk that begins with a markdown heading.
+
+        Used to enrich SemanticNode.metadata so heading signal is queryable
+        without re-parsing during selection (F11).
+        """
+        stripped = text.strip()
+        match = self._HEADING_FIRST_LINE_RE.match(stripped)
+        if not match:
+            return {}
+        return {
+            "heading_level": len(match.group(1)),
+            "heading_text": match.group(2).strip(),
+            "chunking_strategy_resolved": "markdown_section_v1",
+        }
+
     def _chunk_text(
         self, text: str, max_chunk_size: int = 512, strategy: str = "auto"
     ) -> List[str]:
@@ -412,21 +463,38 @@ class SemanticCompressor:
                 return rendered_semantic_chunks
             except Exception as exc:
                 logger.warning(f"Semantic chunking failed; falling back to fixed chunking: {exc}")
-        # F4-followup: for structured markdown, split strictly on H2/H3 boundaries
+        # F4-followup / F11-fix: for structured markdown, split strictly on H2/H3 boundaries
         # so that each major section becomes its own node, regardless of the
         # min-token floor.  This prevents 3-4 sections being bundled into one
         # node (e.g. a 1592-token doc with 15 H2 sections yielding only 4 nodes).
+        #
+        # F11 root cause: the old gate required BOTH ≥3 headings AND ≥3 list items.
+        # Structured handoff docs have many H2s but zero bullet lists, so they fell
+        # through to paragraph-based chunking.  Multiple sections merged across heading
+        # boundaries, diluting heading embeddings and causing query-guided selection to
+        # miss exact heading matches (cosine similarity < 0.4 instead of ≥ 0.6).
+        #
+        # Fix: use heading-density alone as the gate (≥2 H2/H3 headings, OR ≥3 headings
+        # of any level).  Also sub-split oversized sections with the heading prefix
+        # prepended to each child chunk so the heading signal survives in the embedding.
         _H2H3_RE = re.compile(r"(?=^#{2,3} )", re.MULTILINE)
         _HEADING_DETECT_RE = re.compile(r"^#{1,3} ", re.MULTILINE)
-        _LIST_DETECT_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
+        _H2H3_ONLY_RE = re.compile(r"^#{2,3} ", re.MULTILINE)
         _is_structured = (
-            len(_HEADING_DETECT_RE.findall(text)) >= 3 and len(_LIST_DETECT_RE.findall(text)) >= 3
+            len(_H2H3_ONLY_RE.findall(text)) >= 2 or len(_HEADING_DETECT_RE.findall(text)) >= 3
         )
+        _MAX_SECTION_FACTOR = 1.5
         if _is_structured:
             # Split at H2/H3 heading boundaries, discarding empty pieces
             heading_chunks = [c.strip() for c in _H2H3_RE.split(text) if c.strip()]
             if len(heading_chunks) > 1:
-                return heading_chunks
+                result: list = []
+                for chunk in heading_chunks:
+                    if self._count_tokens(chunk) > max_chunk_size * _MAX_SECTION_FACTOR:
+                        result.extend(self._split_oversized_section(chunk, max_chunk_size))
+                    else:
+                        result.append(chunk)
+                return result
 
         # Split by double newlines first (paragraphs)
         paragraphs = text.split("\n\n")
@@ -645,7 +713,19 @@ class SemanticCompressor:
             # to neighbors, and merges windows whose similarity > 0.92.
             # This reduces input size by 10-30% on repetitive documents,
             # producing a cleaner graph with fewer redundant nodes.
-            if total_tokens > 200:  # Skip for very short texts
+            #
+            # F11 fix: Skip SemToken for structured markdown docs.
+            # SemToken merges similar adjacent windows — on structured docs this
+            # collapses H2/H3 sections into a single block before _chunk_text()
+            # can split on heading boundaries, defeating the heading-aware chunking.
+            # Detect structured docs by counting H2/H3 headings in the ORIGINAL text.
+            import re as _re_semtoken  # noqa: PLC0415
+
+            _H2H3_COUNT = len(_re_semtoken.findall(r"^#{2,3} ", text, _re_semtoken.MULTILINE))
+            _skip_semtoken = _H2H3_COUNT >= 2
+            if (
+                total_tokens > 200 and not _skip_semtoken
+            ):  # Skip for very short texts and structured docs
                 text = await self._semtoken_preprocess(text)
                 preprocessed_tokens = self._count_tokens(text)
                 if preprocessed_tokens < total_tokens:
@@ -694,16 +774,18 @@ class SemanticCompressor:
                 # Create unique node ID
                 node_id = f"{file_id}_n{i}"
 
-                # Create semantic node
+                # Create semantic node (F11: enrich with heading metadata when present)
+                _node_meta: dict = {
+                    "position": i,
+                    "tokens": self._count_tokens(chunk),
+                    "entities": self._extract_key_entities(chunk),
+                }
+                _node_meta.update(self._extract_heading_metadata(chunk))
                 node = SemanticNode(
                     node_id=node_id,
                     text=chunk,
                     embedding=embeddings[i],
-                    metadata={
-                        "position": i,
-                        "tokens": self._count_tokens(chunk),
-                        "entities": self._extract_key_entities(chunk),
-                    },
+                    metadata=_node_meta,
                 )
 
                 self.chunks[node_id] = node
@@ -1317,14 +1399,100 @@ class SemanticCompressor:
 
         return "\n".join(output_lines)
 
+    # ------------------------------------------------------------------
+    # F11 Path C — BM25 + Reciprocal Rank Fusion helpers
+    # ------------------------------------------------------------------
+
+    def _bm25_scores_for_nodes(
+        self,
+        query: str,
+        candidate_nodes: List[Tuple[str, "SemanticNode"]],
+    ) -> List[Tuple[str, float]]:
+        """Compute BM25Okapi scores for a file_id-filtered candidate set.
+
+        IMPORTANT (council patch P1): receives the SAME file_id-filtered
+        candidate_nodes as the dense ranker — NEVER scores self.chunks globally.
+        Scoring the entire corpus would pollute IDF with documents unrelated to
+        the current file_id, degrading both BM25 precision and RRF fusion quality.
+
+        Uses raw node text (node.text) per the Phase 7c-3 lesson: compressed
+        skeleton text contains [HIDDEN] placeholders that produce near-meaningless
+        BM25 IDF vectors. Raw text is the correct scoring surface.
+
+        Args:
+            query: Search query string.
+            candidate_nodes: List of (node_id, SemanticNode) for the file_id scope.
+
+        Returns:
+            List of (node_id, bm25_score) sorted descending.
+            Nodes with score=0 are excluded (zero-score nodes are noise in RRF).
+        """
+        if not candidate_nodes:
+            return []
+
+        node_ids = [nid for nid, _ in candidate_nodes]
+        # Use raw text (not compressed skeleton) — Phase 7c-3 lesson.
+        texts = [node.text for _, node in candidate_nodes]
+
+        raw_scores = _bm25_score_texts(query, texts)
+
+        scored = [
+            (node_id, float(score)) for node_id, score in zip(node_ids, raw_scores) if score > 0.0
+        ]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
+
+    @staticmethod
+    def _rrf_fuse(
+        dense_ranked: List[Tuple[str, float]],
+        bm25_ranked: List[Tuple[str, float]],
+        k: int = _RRF_K,
+        top_k: int = 5,
+    ) -> List[Tuple[str, float]]:
+        """Reciprocal Rank Fusion (Cormack, Clarke, Buettcher — SIGIR 2009).
+
+        RRF(d) = Σ_r  1 / (k + rank_r(d))
+
+        Score-agnostic: cosine and BM25 magnitudes are ignored; only rank
+        position matters. k=60 is the SOTA empirically validated default
+        (arxiv 2210.11934; BigDataBoutique 2026; original Cormack 2009 paper).
+
+        Degrades gracefully to dense-only when bm25_ranked is empty — identical
+        to current Path A behavior, zero regression risk on sparse queries.
+
+        Args:
+            dense_ranked: (node_id, cosine_score) sorted descending.
+            bm25_ranked:  (node_id, bm25_score) sorted descending.
+            k: RRF constant (default 60, tunable via _RRF_K env var).
+            top_k: Number of top results to return.
+
+        Returns:
+            (node_id, rrf_score) sorted descending. rrf_score is NOT a cosine
+            value — callers must check score_type in the handler response to
+            distinguish Path A (cosine) from Path C (rrf).
+        """
+        rrf_scores: Dict[str, float] = {}
+        for rank, (node_id, _) in enumerate(dense_ranked, start=1):
+            rrf_scores[node_id] = rrf_scores.get(node_id, 0.0) + 1.0 / (k + rank)
+        for rank, (node_id, _) in enumerate(bm25_ranked, start=1):
+            rrf_scores[node_id] = rrf_scores.get(node_id, 0.0) + 1.0 / (k + rank)
+        fused = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+        return fused[:top_k]
+
+    # ------------------------------------------------------------------
+    # Public search interface
+    # ------------------------------------------------------------------
+
     def search_semantic_with_scores(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5
     ) -> List[Tuple[str, float]]:
-        """
-        Semantic search using vector similarity with similarity scores.
+        """Ranker dispatch — respects F11_RANKER_PATH env var.
 
-        New in v0.9.0: Returns similarity scores alongside node IDs for better
-        AI decision-making about which content to retrieve.
+        Path "a" (default): dense cosine only (backward compatible).
+        Path "c": BM25 + Reciprocal Rank Fusion hybrid (F11 Path C plan).
+
+        New in v0.9.0: Returns similarity scores alongside node IDs.
+        New in v1.34.35 (F11 Path C): RRF hybrid when F11_RANKER_PATH=c.
 
         Args:
             query: Search query
@@ -1332,25 +1500,41 @@ class SemanticCompressor:
             top_k: Number of results to return
 
         Returns:
-            List of (node_id, similarity_score) tuples ranked by relevance.
-            Similarity scores range from -1.0 to 1.0 (cosine similarity).
+            List of (node_id, score) tuples ranked by relevance.
+            Under Path A: score is cosine similarity in [-1.0, 1.0].
+            Under Path C: score is RRF score (float, NOT bounded to [0,1]).
+                          Callers must NOT assume score is cosine similarity.
         """
-        # Embed the query
-        query_embedding = self.model.encode([query])[0]
-
-        # Get candidate nodes
-        candidates = []
+        # --- Build file_id-filtered candidate list (shared by both paths) ---
+        candidate_nodes: List[Tuple[str, SemanticNode]] = []
         for node_id, node in self.chunks.items():
             if file_id and not node_id.startswith(file_id):
                 continue
+            candidate_nodes.append((node_id, node))
 
+        if not candidate_nodes:
+            return []
+
+        # --- Dense (cosine) ranking — always computed ---
+        query_embedding = self.model.encode([query])[0]
+        dense_ranked: List[Tuple[str, float]] = []
+        for node_id, node in candidate_nodes:
             similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
-            candidates.append((node_id, float(similarity)))
+            dense_ranked.append((node_id, float(similarity)))
+        dense_ranked.sort(key=lambda x: x[1], reverse=True)
 
-        # Sort by similarity (highest first)
-        candidates.sort(key=lambda x: x[1], reverse=True)
+        # --- Path dispatch ---
+        if F11_RANKER_PATH != "c":
+            # Path A (default): dense-only, backward compatible
+            return dense_ranked[:top_k]
 
-        return candidates[:top_k]
+        # Path C: BM25 + RRF hybrid
+        # Council patch P1: BM25 receives the SAME file_id-filtered candidate_nodes,
+        # never self.chunks globally (cross-document IDF pollution prevention).
+        bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
+
+        fused = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k)
+        return fused
 
     def search_semantic(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5

@@ -64,7 +64,7 @@ class TestSetupMCPTools:
         # - Structural Summary + Dead Code Detector: 2 (v0.15.0)
         # - Knowledge Management: 5 (ingest_transcript, compile_knowledge,
         #   get_knowledge_index, lint_knowledge, search_memory_index)
-        assert len(tools) == 126, f"Expected 126 tools, got {len(tools)}"
+        assert len(tools) == 128, f"Expected 128 tools, got {len(tools)}"
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""
