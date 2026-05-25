@@ -295,6 +295,80 @@ class TestIdfPollutionRegression:
             "IDF corpus isolation is not working"
         )
 
+    @pytest.mark.asyncio
+    async def test_search_semantic_with_scores_does_not_pollute_across_files(self, fake_embedder):
+        """
+        Council P3 — handler dispatch path:
+
+        End-to-end test through handle_search_semantic verifying that
+        file_id scoping prevents IDF pollution from a second document.
+
+        Setup:
+          - doc_a: technical Python/asyncpg error terms
+          - doc_b: food/recipe terms (semantically orthogonal)
+
+        Under Path C (BM25+RRF), querying "ValueError asyncpg" scoped to
+        doc_a must return only doc_a nodes.  If _bm25_scores_for_nodes
+        receives the full corpus instead of the filtered candidates, doc_b
+        IDF values bleed into doc_a scores — this test catches that.
+        """
+        import src.semantic_compressor as _sc
+        import src.handlers.compression_handlers as _ch
+        from src.handlers.compression_handlers import handle_search_semantic
+
+        orig_sc = _sc.F11_RANKER_PATH
+        orig_ch = _ch.F11_RANKER_PATH
+        _sc.F11_RANKER_PATH = "c"
+        _ch.F11_RANKER_PATH = "c"
+
+        chunks = {
+            "doc_a::1": {
+                "text": "ValueError asyncpg datetime string conversion failed",
+                "importance": 0.5,
+            },
+            "doc_a::2": {
+                "text": "asyncpg expects datetime object not string isoformat",
+                "importance": 0.5,
+            },
+            "doc_b::1": {
+                "text": "recipe flour sugar butter bake cookie cake oven",
+                "importance": 0.5,
+            },
+            "doc_b::2": {
+                "text": "chocolate brownie frosting vanilla extract confection",
+                "importance": 0.5,
+            },
+        }
+
+        compressor = _make_compressor_with_chunks(chunks, fake_embedder)
+        compressor._generate_summary = lambda text, max_length=100: text[:max_length]
+        compressor._access_tracker = None
+        context = {"compressor": compressor}
+
+        args = {"query": "ValueError asyncpg", "file_id": "doc_a", "top_k": 5}
+
+        try:
+            raw = await handle_search_semantic(context, args)
+            response = json.loads(raw)
+
+            result_ids = [r["node_id"] for r in response.get("results", [])]
+
+            # Primary assertion: no doc_b node should appear in doc_a-scoped search
+            doc_b_leaks = [nid for nid in result_ids if nid.startswith("doc_b")]
+            assert doc_b_leaks == [], (
+                f"IDF pollution detected: doc_b nodes {doc_b_leaks} "
+                "appeared in a doc_a-scoped search_semantic call"
+            )
+
+            # Sanity: at least one doc_a result must be returned
+            doc_a_results = [nid for nid in result_ids if nid.startswith("doc_a")]
+            assert (
+                len(doc_a_results) > 0
+            ), "Expected at least one doc_a result for 'ValueError asyncpg' query"
+        finally:
+            _sc.F11_RANKER_PATH = orig_sc
+            _ch.F11_RANKER_PATH = orig_ch
+
     def test_full_corpus_bm25_differs_from_filtered(self, fake_embedder):
         """
         Explicitly verify that scoring the full corpus produces different IDF
