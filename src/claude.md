@@ -142,6 +142,17 @@ Blind Spot Detector - Self-Correcting Context Loop
 | `class` | `BlindSpotDetector` |
 | `class` | `HaloEffectDetector` |
 
+#### `bm25_utils.py`
+
+BM25 utility functions for semantic search.
+
+| Kind | Name |
+|------|------|
+| `def` | `bm25_tokenize` |
+| `def` | `bm25_idf` |
+| `def` | `bm25_term_freq_with_stemming` |
+| `def` | `bm25_scores` |
+
 #### `budget_monitor.py`
 
 Token budget monitoring with configurable limits and alerts.
@@ -257,6 +268,8 @@ Composable multi-pass pipeline for read-skeleton compression flows.
 
 | Kind | Name |
 |------|------|
+| `def` | `_resolve_auto_mode` |
+| `def` | `_extract_h1_query` |
 | `def` | `_generate_skeleton` |
 | `def` | `_stage_payload` |
 | `def` | `run_read_skeleton_pipeline` |
@@ -1189,10 +1202,15 @@ Optional tensor-grep integration for AST-aware code compression and search.
 | `class` | `RepoMapResult` |
 | `class` | `CodeSearchResult` |
 | `class` | `ASTSearchResult` |
+| `class` | `ContextRenderResult` |
+| `class` | `ScanFinding` |
+| `class` | `ScanResult` |
 | `def` | `is_available` |
 | `def` | `get_repo_map` |
 | `def` | `code_search` |
 | `def` | `ast_search` |
+| `def` | `get_context_render` |
+| `def` | `scan_ruleset` |
 
 #### `token_estimation.py`
 
@@ -1267,6 +1285,22 @@ Type definitions for Token Saver 5000 MCP Server.
 |------|------|
 | `class` | `HandlerContext` |
 | `class` | `ToolArguments` |
+
+#### `url_fetcher.py`
+
+SSRF-hardened URL fetcher for ingest_context file_url parameter.
+
+| Kind | Name |
+|------|------|
+| `class` | `URLFetchError` |
+| `def` | `_normalize_ip_address` |
+| `def` | `_is_private_ip` |
+| `def` | `_is_blocked_hostname` |
+| `def` | `_resolve_host` |
+| `def` | `_check_resolved_ips` |
+| `def` | `_resolve_and_check_host` |
+| `def` | `_check_dns_rebinding` |
+| `async def` | `fetch_url` |
 
 #### `validation_hooks.py`
 

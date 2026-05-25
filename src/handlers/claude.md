@@ -61,12 +61,24 @@ Stable handlers for structured handoff bundles.
 | `async def` | `handle_get_handoff_bundle` |
 | `async def` | `handle_replay_handoff_bundle` |
 
+#### `compress_manifest.py`
+
+MCP tool manifest compression handler (v1.8.0 A2b).
+
+| Kind | Name |
+|------|------|
+| `def` | `_estimate_tokens` |
+| `def` | `_compress_description` |
+| `def` | `handle_compress_manifest` |
+
 #### `compression_handlers.py`
 
 Compression-related MCP tool handlers.
 
 | Kind | Name |
 |------|------|
+| `def` | `_is_structured_markdown` |
+| `def` | `_resolve_chunking_strategy` |
 | `def` | `_scope_kwargs` |
 | `def` | `_scoped_file_id` |
 | `def` | `_scope_filtered_results` |
@@ -140,6 +152,32 @@ Detection Handler Functions
 | `def` | `_validate_file_id` |
 | `async def` | `handle_check_blind_spots` |
 | `async def` | `handle_detect_hallucination` |
+
+#### `docs_handlers.py`
+
+GotContext documentation MCP handlers.
+
+| Kind | Name |
+|------|------|
+| `class` | `DocChunk` |
+| `def` | `_slugify` |
+| `def` | `_tokenize` |
+| `def` | `_count_tokens` |
+| `def` | `_trim_words` |
+| `def` | `_docs_root` |
+| `def` | `_read_llms_txt` |
+| `def` | `_extract_first_url` |
+| `def` | `_parse_llms_txt` |
+| `def` | `_build_doc_maps` |
+| `def` | `_idf` |
+| `def` | `_term_freq_with_stemming` |
+| `def` | `_bm25_scores` |
+| `def` | `_normalize_top_k` |
+| `def` | `_normalize_slug_or_url` |
+| `def` | `_excerpt_around_anchor` |
+| `async def` | `_fetch_url_markdown` |
+| `async def` | `handle_gc_search_docs` |
+| `async def` | `handle_gc_read_doc` |
 
 #### `experiment_handlers.py`
 
