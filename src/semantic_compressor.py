@@ -24,6 +24,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
+from .bm25_utils import bm25_scores as _bm25_score_texts
+from .constants import _RRF_K, F11_RANKER_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -1397,14 +1399,100 @@ class SemanticCompressor:
 
         return "\n".join(output_lines)
 
+    # ------------------------------------------------------------------
+    # F11 Path C — BM25 + Reciprocal Rank Fusion helpers
+    # ------------------------------------------------------------------
+
+    def _bm25_scores_for_nodes(
+        self,
+        query: str,
+        candidate_nodes: List[Tuple[str, "SemanticNode"]],
+    ) -> List[Tuple[str, float]]:
+        """Compute BM25Okapi scores for a file_id-filtered candidate set.
+
+        IMPORTANT (council patch P1): receives the SAME file_id-filtered
+        candidate_nodes as the dense ranker — NEVER scores self.chunks globally.
+        Scoring the entire corpus would pollute IDF with documents unrelated to
+        the current file_id, degrading both BM25 precision and RRF fusion quality.
+
+        Uses raw node text (node.text) per the Phase 7c-3 lesson: compressed
+        skeleton text contains [HIDDEN] placeholders that produce near-meaningless
+        BM25 IDF vectors. Raw text is the correct scoring surface.
+
+        Args:
+            query: Search query string.
+            candidate_nodes: List of (node_id, SemanticNode) for the file_id scope.
+
+        Returns:
+            List of (node_id, bm25_score) sorted descending.
+            Nodes with score=0 are excluded (zero-score nodes are noise in RRF).
+        """
+        if not candidate_nodes:
+            return []
+
+        node_ids = [nid for nid, _ in candidate_nodes]
+        # Use raw text (not compressed skeleton) — Phase 7c-3 lesson.
+        texts = [node.text for _, node in candidate_nodes]
+
+        raw_scores = _bm25_score_texts(query, texts)
+
+        scored = [
+            (node_id, float(score)) for node_id, score in zip(node_ids, raw_scores) if score > 0.0
+        ]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
+
+    @staticmethod
+    def _rrf_fuse(
+        dense_ranked: List[Tuple[str, float]],
+        bm25_ranked: List[Tuple[str, float]],
+        k: int = _RRF_K,
+        top_k: int = 5,
+    ) -> List[Tuple[str, float]]:
+        """Reciprocal Rank Fusion (Cormack, Clarke, Buettcher — SIGIR 2009).
+
+        RRF(d) = Σ_r  1 / (k + rank_r(d))
+
+        Score-agnostic: cosine and BM25 magnitudes are ignored; only rank
+        position matters. k=60 is the SOTA empirically validated default
+        (arxiv 2210.11934; BigDataBoutique 2026; original Cormack 2009 paper).
+
+        Degrades gracefully to dense-only when bm25_ranked is empty — identical
+        to current Path A behavior, zero regression risk on sparse queries.
+
+        Args:
+            dense_ranked: (node_id, cosine_score) sorted descending.
+            bm25_ranked:  (node_id, bm25_score) sorted descending.
+            k: RRF constant (default 60, tunable via _RRF_K env var).
+            top_k: Number of top results to return.
+
+        Returns:
+            (node_id, rrf_score) sorted descending. rrf_score is NOT a cosine
+            value — callers must check score_type in the handler response to
+            distinguish Path A (cosine) from Path C (rrf).
+        """
+        rrf_scores: Dict[str, float] = {}
+        for rank, (node_id, _) in enumerate(dense_ranked, start=1):
+            rrf_scores[node_id] = rrf_scores.get(node_id, 0.0) + 1.0 / (k + rank)
+        for rank, (node_id, _) in enumerate(bm25_ranked, start=1):
+            rrf_scores[node_id] = rrf_scores.get(node_id, 0.0) + 1.0 / (k + rank)
+        fused = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+        return fused[:top_k]
+
+    # ------------------------------------------------------------------
+    # Public search interface
+    # ------------------------------------------------------------------
+
     def search_semantic_with_scores(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5
     ) -> List[Tuple[str, float]]:
-        """
-        Semantic search using vector similarity with similarity scores.
+        """Ranker dispatch — respects F11_RANKER_PATH env var.
 
-        New in v0.9.0: Returns similarity scores alongside node IDs for better
-        AI decision-making about which content to retrieve.
+        Path "a" (default): dense cosine only (backward compatible).
+        Path "c": BM25 + Reciprocal Rank Fusion hybrid (F11 Path C plan).
+
+        New in v0.9.0: Returns similarity scores alongside node IDs.
+        New in v1.34.35 (F11 Path C): RRF hybrid when F11_RANKER_PATH=c.
 
         Args:
             query: Search query
@@ -1412,25 +1500,41 @@ class SemanticCompressor:
             top_k: Number of results to return
 
         Returns:
-            List of (node_id, similarity_score) tuples ranked by relevance.
-            Similarity scores range from -1.0 to 1.0 (cosine similarity).
+            List of (node_id, score) tuples ranked by relevance.
+            Under Path A: score is cosine similarity in [-1.0, 1.0].
+            Under Path C: score is RRF score (float, NOT bounded to [0,1]).
+                          Callers must NOT assume score is cosine similarity.
         """
-        # Embed the query
-        query_embedding = self.model.encode([query])[0]
-
-        # Get candidate nodes
-        candidates = []
+        # --- Build file_id-filtered candidate list (shared by both paths) ---
+        candidate_nodes: List[Tuple[str, SemanticNode]] = []
         for node_id, node in self.chunks.items():
             if file_id and not node_id.startswith(file_id):
                 continue
+            candidate_nodes.append((node_id, node))
 
+        if not candidate_nodes:
+            return []
+
+        # --- Dense (cosine) ranking — always computed ---
+        query_embedding = self.model.encode([query])[0]
+        dense_ranked: List[Tuple[str, float]] = []
+        for node_id, node in candidate_nodes:
             similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
-            candidates.append((node_id, float(similarity)))
+            dense_ranked.append((node_id, float(similarity)))
+        dense_ranked.sort(key=lambda x: x[1], reverse=True)
 
-        # Sort by similarity (highest first)
-        candidates.sort(key=lambda x: x[1], reverse=True)
+        # --- Path dispatch ---
+        if F11_RANKER_PATH != "c":
+            # Path A (default): dense-only, backward compatible
+            return dense_ranked[:top_k]
 
-        return candidates[:top_k]
+        # Path C: BM25 + RRF hybrid
+        # Council patch P1: BM25 receives the SAME file_id-filtered candidate_nodes,
+        # never self.chunks globally (cross-document IDF pollution prevention).
+        bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
+
+        fused = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k)
+        return fused
 
     def search_semantic(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5
