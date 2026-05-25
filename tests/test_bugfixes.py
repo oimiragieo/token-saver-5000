@@ -309,11 +309,14 @@ class TestAtomicPersistence:
         from src.persistence import PersistenceManager
 
         pm = PersistenceManager(str(tmp_path / "store"))
-        # Use a non-existent directory to cause write failure
+        # F8 fix: _atomic_write_json now auto-creates parent directories
+        # (parents=True, exist_ok=True) so callers using file_ids with
+        # forward slashes (e.g. "docs/audits/foo.md") no longer hit ENOENT.
+        # This test previously expected an exception on missing dirs;
+        # updated to assert the new documented behavior: success + file exists.
         target = tmp_path / "nonexistent_dir" / "deep" / "test.json"
-        with pytest.raises(Exception):
-            pm._atomic_write_json(target, {"key": "value"})
-        assert not target.exists()
+        pm._atomic_write_json(target, {"key": "value"})
+        assert target.exists()
 
     def test_atomic_write_npz(self, tmp_path):
         from src.persistence import PersistenceManager
