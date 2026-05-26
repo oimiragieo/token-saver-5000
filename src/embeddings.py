@@ -67,7 +67,7 @@ except ImportError:
 
 # Enable HuggingFace Hub progress bars for model downloads (v0.4.1+)
 try:
-    from huggingface_hub.utils import enable_progress_bars
+    from huggingface_hub.utils.tqdm import enable_progress_bars
 
     enable_progress_bars()
 except ImportError:

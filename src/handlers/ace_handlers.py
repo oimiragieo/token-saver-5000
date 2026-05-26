@@ -120,7 +120,10 @@ def _add_bullet_to_context(
         text_model: Sentence transformer model for creating embeddings
     """
     text = bullet_data["text"]
-    bullet_type = BulletType(bullet_data["bullet_type"])
+    raw_bullet_type = bullet_data.get("bullet_type")
+    if not raw_bullet_type:
+        raise ValueError("bullet_type is required for each bullet (got missing or empty key)")
+    bullet_type = BulletType(raw_bullet_type)
     confidence = bullet_data.get("confidence", 0.5)
 
     # Create embedding

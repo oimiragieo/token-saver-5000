@@ -204,6 +204,24 @@ class TestHelperFunctions:
         bullet = call_args[0][0]
         assert bullet.confidence == 0.5  # Default
 
+    def test_add_bullet_missing_bullet_type_raises_value_error(self, mock_ace_context):
+        """Regression: missing bullet_type must raise ValueError, not KeyError (Sentry 4 events)"""
+        bullet_data = {"text": "No type provided"}
+        text_model = Mock()
+        text_model.encode = Mock(return_value=np.array([0.1]))
+
+        with pytest.raises(ValueError, match="bullet_type is required"):
+            _add_bullet_to_context(mock_ace_context, bullet_data, text_model)
+
+    def test_add_bullet_empty_bullet_type_raises_value_error(self, mock_ace_context):
+        """Regression: empty string bullet_type must also raise ValueError cleanly"""
+        bullet_data = {"text": "Empty type", "bullet_type": ""}
+        text_model = Mock()
+        text_model.encode = Mock(return_value=np.array([0.1]))
+
+        with pytest.raises(ValueError, match="bullet_type is required"):
+            _add_bullet_to_context(mock_ace_context, bullet_data, text_model)
+
     def test_update_bullets_performance_success(self, mock_ace_context):
         """Test updating bullet performance for success"""
         # Setup mock bullets
