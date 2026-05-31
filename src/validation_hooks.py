@@ -54,7 +54,12 @@ def _validate_search(args: Dict[str, Any]) -> List[str]:
 def _validate_ingest(args: Dict[str, Any]) -> List[str]:
     errors = []
     text = args.get("text", "")
-    if not text or len(text.strip()) == 0:
+    file_url = args.get("file_url")
+    # 'text' is only required when 'file_url' is absent. handle_ingest fetches
+    # remote content for file_url and enforces text/file_url mutual exclusivity
+    # itself, so requiring non-empty text here would 422 every legitimate
+    # file_url-only ingest before the URL is ever fetched (v1.43 dogfood bug).
+    if not file_url and (not text or len(text.strip()) == 0):
         errors.append("text cannot be empty or whitespace-only")
     file_id = args.get("file_id", "")
     if file_id:

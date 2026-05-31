@@ -124,6 +124,30 @@ class TestInputValidationHooks:
         errors = validate_tool_input("ingest_context", {"text": "   ", "file_id": "test"})
         assert len(errors) > 0
 
+    def test_ingest_file_url_without_text_passes(self):
+        """file_url alone (no inline text) must validate cleanly.
+
+        handle_ingest fetches remote content for file_url and enforces the
+        text/file_url mutual-exclusivity contract itself. Requiring non-empty
+        'text' at the validation layer blocks legitimate file_url-only ingests
+        (the v1.43 dogfood bug: ``ingest_context(file_url=...)`` 422'd with
+        "text cannot be empty or whitespace-only" before the URL was fetched).
+        """
+        from src.validation_hooks import validate_tool_input
+
+        errors = validate_tool_input(
+            "ingest_context",
+            {"file_url": "https://gotcontext.ai/docs.md", "file_id": "remote-doc"},
+        )
+        assert errors == [], f"file_url-only ingest should validate cleanly, got: {errors}"
+
+    def test_ingest_neither_text_nor_file_url_fails(self):
+        """When BOTH text and file_url are absent, validation still flags the empty text."""
+        from src.validation_hooks import validate_tool_input
+
+        errors = validate_tool_input("ingest_context", {"file_id": "test"})
+        assert len(errors) > 0
+
     def test_file_id_format(self):
         """File IDs must be alphanumeric with underscores."""
         from src.validation_hooks import validate_tool_input
