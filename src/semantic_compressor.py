@@ -9,6 +9,7 @@ Implements the core encoding/decoding logic inspired by:
 import asyncio
 import hashlib
 import logging
+import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +29,22 @@ from .bm25_utils import bm25_scores as _bm25_score_texts
 from .constants import _RRF_K, F11_RANKER_PATH
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Memory-safety constants for graph construction (OOM fix)
+# ---------------------------------------------------------------------------
+
+# Process embeddings in row-blocks of this size when building the similarity
+# graph. Peak similarity memory is O(block × N) rather than O(N²).
+# Overridable via SIMILARITY_BLOCK_SIZE env var.
+_SIMILARITY_BLOCK_SIZE: int = int(os.environ.get("SIMILARITY_BLOCK_SIZE", "256"))
+
+# Hard ceiling on the number of chunks that participate in the dense edge-
+# building loop. Nodes above this index are still created (with uniform
+# PageRank) but no similarity edges are computed for them, bounding both
+# peak memory and O(N²) edge-build time for pathologically large documents.
+# Overridable via MAX_GRAPH_CHUNKS env var.
+_MAX_GRAPH_CHUNKS: int = int(os.environ.get("MAX_GRAPH_CHUNKS", "2500"))
 
 
 class FidelityLevel(Enum):
@@ -565,6 +582,51 @@ class SemanticCompressor:
             return summary
         return text[:max_length] + "..."
 
+    @staticmethod
+    def _build_similarity_edges(
+        embeddings: np.ndarray,
+        node_ids: List[str],
+        similarity_threshold: float,
+        block_size: int = _SIMILARITY_BLOCK_SIZE,
+        max_chunks: int = _MAX_GRAPH_CHUNKS,
+    ) -> List[Tuple[str, str, float]]:
+        """
+        Build the upper-triangle similarity edge list without materialising
+        the full N×N cosine-similarity matrix.
+
+        Embeddings are assumed L2-normalised (cosine sim == dot product).
+        Processes embeddings in row-blocks of ``block_size`` so peak
+        similarity buffer is O(block_size × min(N, max_chunks)), not O(N²).
+
+        Only the first ``max_chunks`` rows participate in edge building;
+        nodes beyond that index still exist but remain unconnected (uniform
+        PageRank fallback).
+
+        Returns:
+            List of (node_id_i, node_id_j, weight) triples where weight is
+            the cosine similarity value (float).
+        """
+        n = len(node_ids)
+        edge_count = min(n, max_chunks)
+        edges: List[Tuple[str, str, float]] = []
+
+        edge_embeddings = embeddings[:edge_count]  # rows that *receive* edges
+
+        for block_start in range(0, edge_count, block_size):
+            block_end = min(block_start + block_size, edge_count)
+            block = embeddings[block_start:block_end]  # shape: (bs, dim)
+            # sim_block[r, c] = cosine_similarity(block_start+r, c)
+            sim_block = block @ edge_embeddings.T  # shape: (bs, edge_count)
+
+            for r in range(block_end - block_start):
+                i = block_start + r
+                for j in range(i + 1, edge_count):
+                    sim = float(sim_block[r, j])
+                    if sim > similarity_threshold:
+                        edges.append((node_ids[i], node_ids[j], sim))
+
+        return edges
+
     async def _encode_async(self, texts: List[str]) -> np.ndarray:
         """
         Async wrapper for model.encode() to prevent blocking.
@@ -766,15 +828,31 @@ class SemanticCompressor:
                     logger.warning(f"Intra-doc deduplication failed for '{file_id}': {exc}")
 
             # 3. Build similarity graph (preserves global structure)
+            # Memory-safety: never materialise the full N×N similarity matrix.
+            # We build the graph in two passes:
+            #   Pass A — create all SemanticNode objects (O(N) memory).
+            #   Pass B — add edges in row-blocks of _SIMILARITY_BLOCK_SIZE so
+            #            peak similarity buffer is O(block×N), not O(N²).
+            # Hard ceiling _MAX_GRAPH_CHUNKS bounds both peak memory and the
+            # O(N²) edge-build time for pathologically large documents.  Nodes
+            # above the ceiling still exist (and get uniform PageRank) but are
+            # not connected via dense similarity edges.
             logger.info("  Building semantic graph...")
+            n_chunks = len(raw_chunks)
+            if n_chunks > _MAX_GRAPH_CHUNKS:
+                logger.warning(
+                    f"  Document '{file_id}' has {n_chunks} chunks which exceeds "
+                    f"_MAX_GRAPH_CHUNKS={_MAX_GRAPH_CHUNKS}. Similarity edges will "
+                    f"only be built for the first {_MAX_GRAPH_CHUNKS} chunks to "
+                    f"bound peak memory. Remaining nodes receive uniform PageRank."
+                )
+            edge_chunk_count = min(n_chunks, _MAX_GRAPH_CHUNKS)
+
             graph = nx.Graph()
-            similarity_matrix = cosine_similarity(embeddings)
 
+            # --- Pass A: create all nodes (no similarity computation yet) ---
             for i, chunk in enumerate(raw_chunks):
-                # Create unique node ID
                 node_id = f"{file_id}_n{i}"
-
-                # Create semantic node (F11: enrich with heading metadata when present)
                 _node_meta: dict = {
                     "position": i,
                     "tokens": self._count_tokens(chunk),
@@ -787,16 +865,21 @@ class SemanticCompressor:
                     embedding=embeddings[i],
                     metadata=_node_meta,
                 )
-
                 self.chunks[node_id] = node
                 graph.add_node(node_id, **node.metadata)
 
-                # Create edges based on semantic similarity
-                for j in range(i + 1, len(raw_chunks)):
-                    similarity = similarity_matrix[i][j]
-                    if similarity > self.similarity_threshold:
-                        edge_id = f"{file_id}_n{j}"
-                        graph.add_edge(node_id, edge_id, weight=float(similarity))
+            # --- Pass B: block-wise edge building (O(block × N) peak memory) ---
+            # Delegate to the static helper so the logic is independently
+            # unit-testable (see TestGraphBuildingBlockWise in the test suite).
+            node_ids = [f"{file_id}_n{i}" for i in range(n_chunks)]
+            for src, dst, weight in self._build_similarity_edges(
+                embeddings=embeddings,
+                node_ids=node_ids,
+                similarity_threshold=self.similarity_threshold,
+                block_size=_SIMILARITY_BLOCK_SIZE,
+                max_chunks=edge_chunk_count,
+            ):
+                graph.add_edge(src, dst, weight=weight)
 
             # 4. Calculate importance via PageRank (rate allocation)
             logger.info("  Calculating importance scores (PageRank)...")
