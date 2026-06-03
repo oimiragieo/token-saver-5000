@@ -250,11 +250,11 @@ class TestGetInlineSummary:
 
 class TestModelPricing:
     def test_model_pricing_claude_opus(self):
-        """claude-opus-4-6 input rate must be $15/MTok."""
+        """claude-opus-4-6 input rate must be $5/MTok (Opus is $5/$25 since 4.5)."""
         tracker = _make_tracker(model="claude-opus-4-6")
         event = tracker.record("ingest_context", 1_000_000, 0)
-        # $15.00 for 1M tokens
-        assert event.cost_without_compression == pytest.approx(15.0, abs=0.001)
+        # $5.00 for 1M tokens
+        assert event.cost_without_compression == pytest.approx(5.0, abs=0.001)
 
     def test_model_pricing_gemini_flash(self):
         """gemini-2.5-flash input rate must be $0.15/MTok."""

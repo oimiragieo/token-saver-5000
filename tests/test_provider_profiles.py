@@ -78,8 +78,13 @@ def test_gemini_auto_priced_between_pro_and_flash():
 
 
 def test_gemini_flash_alias_resolves():
-    assert get_provider_profile("gemini-flash").model == "gemini-3.1-flash"
-    assert get_provider_profile("gemini-2.5-flash").model == "gemini-3.1-flash"
+    # Current flash flagship is Gemini 3.5 Flash (2026-05-19).
+    assert get_provider_profile("gemini-flash").model == "gemini-3.5-flash"
+    assert get_provider_profile("gemini-3.5").model == "gemini-3.5-flash"
+    # gemini-2.5-flash is its own profile; the old "gemini-3.1-flash" id was
+    # really 2.5-Flash-priced and is kept resolvable for back-compat.
+    assert get_provider_profile("gemini-2.5-flash").model == "gemini-2.5-flash"
+    assert get_provider_profile("gemini-3.1-flash").model == "gemini-2.5-flash"
 
 
 def test_gpt5_mini_cheaper_than_full():
@@ -111,18 +116,19 @@ def test_opus_4_7_is_registered():
     profile = get_provider_profile("claude-opus-4.7")
     assert profile.provider == "anthropic"
     assert profile.model == "claude-opus-4.7"
-    assert profile.input_cost_per_million == 15.0
-    assert profile.output_cost_per_million == 75.0
+    # Opus dropped to $5/$25 at the 4.5 release; the 4.7 profile carries the
+    # current rate, not the legacy $15/$75.
+    assert profile.input_cost_per_million == 5.0
+    assert profile.output_cost_per_million == 25.0
     assert profile.context_window == 1_000_000
 
 
 def test_opus_4_7_aliases_resolve():
-    # Unversioned
-    assert get_provider_profile("claude-opus").model == "claude-opus-4.7"
-    # Hyphenated (MCP _meta.model convention in some clients)
+    # Unversioned + unversioned-major resolve to the CURRENT Opus (4.8).
+    assert get_provider_profile("claude-opus").model == "claude-opus-4.8"
+    assert get_provider_profile("claude-opus-4").model == "claude-opus-4.8"
+    # Hyphenated 4.7 (MCP _meta.model convention in some clients) stays pinned.
     assert get_provider_profile("claude-opus-4-7").model == "claude-opus-4.7"
-    # Unversioned major
-    assert get_provider_profile("claude-opus-4").model == "claude-opus-4.7"
 
 
 def test_opus_4_6_still_resolves_with_hyphen_alias():

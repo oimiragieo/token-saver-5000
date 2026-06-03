@@ -157,20 +157,22 @@ class TestComputeCostSavings:
         result = compute_cost_savings(
             original_tokens=100_000, compressed_tokens=20_000, model="claude-opus-4"
         )
-        # Saved 80K tokens at $15/M = $1.20
+        # Saved 80K tokens at $5/M = $0.40 (Opus is $5/$25 since the 4.5 release;
+        # claude-opus-4 resolves to the current Opus 4.8).
         assert result.saved_tokens == 80_000
-        assert abs(result.cost_savings_usd - 1.20) < 0.001
+        assert abs(result.cost_savings_usd - 0.40) < 0.001
 
     def test_haiku_pricing(self):
-        """Haiku model should use $0.80/M input tokens."""
+        """Haiku model should use $1.00/M input tokens (Haiku 4.5)."""
         from src.metrics import compute_cost_savings
 
         result = compute_cost_savings(
             original_tokens=100_000, compressed_tokens=20_000, model="claude-haiku-3.5"
         )
-        # Saved 80K tokens at $0.80/M = $0.064
+        # Saved 80K tokens at $1.00/M = $0.080 (claude-haiku-3.5 resolves to the
+        # current Haiku 4.5; the prior $0.80/M was a Haiku-3.5-era rate).
         assert result.saved_tokens == 80_000
-        assert abs(result.cost_savings_usd - 0.064) < 0.001
+        assert abs(result.cost_savings_usd - 0.080) < 0.001
 
     def test_default_model_uses_sonnet_pricing(self):
         """Unknown or missing model should default to Sonnet pricing."""

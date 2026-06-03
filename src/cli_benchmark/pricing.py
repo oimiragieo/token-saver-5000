@@ -4,15 +4,21 @@ from __future__ import annotations
 
 # Per million tokens pricing
 PRICING: dict[str, dict[str, float]] = {
-    # Claude models
+    # Claude models — verified vs OpenRouter + tokencost.app 2026-06-03.
     "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0, "cache_read": 1.50},
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.0, "cache_read": 0.08},
+    # Opus dropped to $5/$25 at the 4.5 release (was $15/$75).
+    "claude-opus-4-8": {"input": 5.0, "output": 25.0, "cache_read": 0.50},
+    "claude-opus-4-6": {"input": 5.0, "output": 25.0, "cache_read": 0.50},
+    # Haiku 4.5 is $1/$5 (was a stale $0.80/$4.0 Haiku-3.5-era rate).
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0, "cache_read": 0.10},
     # Gemini models
     "gemini-2.5-pro": {"input": 1.25, "output": 10.0, "cache_read": 0.315},
     "gemini-2.5-flash": {"input": 0.15, "output": 0.60, "cache_read": 0.0375},
-    "gemini-3.1-pro": {"input": 1.25, "output": 10.0, "cache_read": 0.315},
+    # Gemini 3.1 Pro is $2/$12 (<=200K); the prior $1.25/$10 was 2.5-Pro's rate.
+    "gemini-3.1-pro": {"input": 2.0, "output": 12.0, "cache_read": 0.20},
     "gemini-3.1-flash": {"input": 0.15, "output": 0.60, "cache_read": 0.0375},
+    # Gemini 3.5 Flash (2026-05-19) — current stable premium Flash route.
+    "gemini-3.5-flash": {"input": 1.50, "output": 9.0, "cache_read": 0.15},
     # GPT models
     "gpt-4o": {"input": 2.50, "output": 10.0, "cache_read": 1.25},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60, "cache_read": 0.075},
