@@ -128,9 +128,12 @@ class TestDiffReingestNullGuard:
         node_without_emb.text = "another text"
         node_without_emb.embedding = None
 
+        # Use the canonical "{file_id}_n{i}" node-ID format the production
+        # ingest path actually emits (audit P1-5 made file_id membership
+        # boundary-aware, so the loose "test_0" prefix no longer matches "test").
         compressor.chunks = {
-            "test_0": node_with_emb,
-            "test_1": node_without_emb,
+            "test_n0": node_with_emb,
+            "test_n1": node_without_emb,
         }
         compressor._chunk_text = MagicMock(return_value=["kept text", "another text", "new text"])
 

@@ -1166,7 +1166,13 @@ class TestEmbeddingManager:
             assert result.shape == (1, 2)
         self._reset_singleton()
 
-    def test_encode_with_fallback_standard_to_tfidf(self):
+    def test_encode_with_fallback_neural_request_refuses_silent_tfidf(self):
+        """Audit P1-6: a NEURAL tier request (ONNX) whose SBERT+ONNX fallbacks
+        both fail must RAISE RuntimeError, NOT silently return TF-IDF garbage.
+
+        (Previously this test asserted the silent TF-IDF fall-through that the
+        audit identified as a correctness bug — updated to lock the new
+        raise-instead-of-garbage contract.)"""
         self._reset_singleton()
         with patch("src.embeddings.SentenceTransformer"):
             from src.embeddings import EmbeddingManager, EmbeddingTier
@@ -1176,13 +1182,14 @@ class TestEmbeddingManager:
             mock_tfidf = MagicMock()
             mock_tfidf.encode.return_value = np.array([[0.1, 0.2]])
 
-            # Make standard fail too
+            # Make standard fail; ONNX unavailable; TF-IDF "available" but must
+            # NOT be used as a substitute for the requested neural tier.
             with patch.object(mgr, "_encode_standard", side_effect=Exception("fail")):
                 with patch("src.embeddings.ONNX_AVAILABLE", False):
                     with patch("src.embeddings.TFIDF_AVAILABLE", True):
                         mgr._tfidf_manager = mock_tfidf
-                        result = mgr._encode_with_fallback(["hello"], EmbeddingTier.ONNX, True)
-            assert result.shape == (1, 2)
+                        with pytest.raises(RuntimeError):
+                            mgr._encode_with_fallback(["hello"], EmbeddingTier.ONNX, True)
         self._reset_singleton()
 
     def test_encode_all_tiers_fail(self):

@@ -413,7 +413,12 @@ class TestQueryAdaptive:
         original = compressor._select_skeleton_nodes
 
         def wrapped(
-            file_nodes, num_skeleton, query=None, redundancy_penalty=0.2, priority_scores=None
+            file_nodes,
+            num_skeleton,
+            query=None,
+            redundancy_penalty=0.2,
+            priority_scores=None,
+            importance_override=None,
         ):
             captured["priority_scores"] = priority_scores
             return original(
@@ -422,6 +427,7 @@ class TestQueryAdaptive:
                 query=query,
                 redundancy_penalty=redundancy_penalty,
                 priority_scores=priority_scores,
+                importance_override=importance_override,
             )
 
         compressor._select_skeleton_nodes = wrapped

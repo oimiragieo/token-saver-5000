@@ -15,10 +15,15 @@ from __future__ import annotations
 import math
 import re
 
-# Minimum token length for prefix-match stemming (v1.34.33 hotfix).
+# Minimum token length for prefix-match stemming (v1.34.33 hotfix; audit P2-5).
 # Terms shorter than this require exact match to avoid false positives.
-# "auth" (4) → exact only; "authentication" (14) → prefix "authen" matches variants.
-_BM25_PREFIX_MATCH_MIN_LEN = 6
+#
+# Audit P2-5: a 6-char threshold made "python" (6) prefix-match "pythonic" — a
+# different word, not a morphological variant — inflating BM25 scores. Raising
+# the bar to 8 keeps useful long-stem matches ("authentication" → variants) while
+# making 6-7 char common words ("python", "import", "return", "config") require
+# exact match. "auth" (4) → exact only; "authentication" (14) → prefix matches.
+_BM25_PREFIX_MATCH_MIN_LEN = 8
 
 # BM25Okapi default hyperparameters (Cormack et al. 2009).
 _BM25_K1 = 1.5

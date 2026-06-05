@@ -174,26 +174,33 @@ def _idf(term: str, tokenized_docs: list[list[str]]) -> float:
     return math.log(1 + (len(tokenized_docs) - docs_with_term + 0.5) / (docs_with_term + 0.5))
 
 
-# v1.34.33 hotfix: minimum prefix length for stemming match. Query terms
-# shorter than this require exact match (avoids false positives on short
-# common words). 6 chars is the sweet spot: "auth" (4) → exact only;
-# "authentication" (14) → matches "authenticate" via "authen" prefix.
-_PREFIX_MATCH_MIN_LEN = 6
+# Minimum prefix length for stemming match. Query terms shorter than this
+# require exact match (avoids false positives on short common words).
+#
+# v1.34.33 introduced this at 6; audit P2-5 raised it to 8 (matching the shared
+# bm25_utils._BM25_PREFIX_MATCH_MIN_LEN fix) because 6 made "python" (6)
+# prefix-match "pythonic" — a different word, not a morphological variant —
+# inflating BM25 scores in the SHIPPED gc_search_docs / gc_lookup free MCP tools.
+# 8 keeps useful long-stem matches ("authentication" → "authenticate") while
+# making 6-7 char common words ("python", "import", "config", "return") require
+# exact match. "auth" (4) → exact only; "authentication" (14) → prefix matches.
+_PREFIX_MATCH_MIN_LEN = 8
 
 
 def _term_freq_with_stemming(term: str, doc: list[str]) -> int:
     """Count occurrences of `term` in `doc`, with prefix-match stemming.
 
-    v1.34.33 hotfix: docs MCP must match morphological variants.
-    Pre-fix `gc_search_docs(query="authentication")` returned 0 results
-    because the corpus has "authenticate" / "auth" / "auth-gated" but
-    not the exact string "authentication" — common English suffixes
-    (-ation, -ing, -ed, etc.) made the exact-match BM25 brittle.
+    docs MCP must match morphological variants. Pre-v1.34.33
+    `gc_search_docs(query="authentication")` returned 0 results because the
+    corpus has "authenticate" / "auth" / "auth-gated" but not the exact string
+    "authentication" — common English suffixes (-ation, -ing, -ed, etc.) made
+    the exact-match BM25 brittle.
 
-    Rule: if query term ≥ 6 chars, match any doc token sharing the
-    first 6 chars as prefix (e.g., "authentication"[:6]="authen" matches
-    "authenticate", "authenticated", "authenticating"). Short query terms
-    (<6 chars) require exact match to avoid false positives.
+    Rule: if query term ≥ _PREFIX_MATCH_MIN_LEN (8) chars, match any doc token
+    sharing the first 8 chars as prefix (e.g., "authentication"[:8]="authenti"
+    matches "authenticate", "authenticated", "authenticating"). Short query
+    terms (< 8 chars) require exact match to avoid false positives such as
+    "python" matching "pythonic" (audit P2-5).
     """
     exact = doc.count(term)
     if len(term) < _PREFIX_MATCH_MIN_LEN:

@@ -258,11 +258,34 @@ def test_term_freq_with_stemming_short_term_exact_only():
 
 
 def test_term_freq_with_stemming_long_term_prefix_match():
-    """v1.34.33 unit: long terms (≥6 chars) match via 6-char prefix."""
+    """Long terms (≥ _PREFIX_MATCH_MIN_LEN chars) match via prefix.
+
+    Audit P2-5 (docs path): the threshold was raised from 6 → 8 to match the
+    shared bm25_utils fix. 'authentication'[:8] = 'authenti' still matches the
+    morphological variants 'authenticate' / 'authenticated' (both start with
+    'authenti'); 'authorization' starts with 'authoriz', no match.
+    """
     doc = ["authenticate", "authenticated", "authorization", "config"]
-    # 'authentication'[:6] = 'authen' → matches 'authenticate' + 'authenticated'
-    # ('authorization' starts with 'author', not 'authen' — no match)
     assert dh._term_freq_with_stemming("authentication", doc) == 2
+
+
+def test_term_freq_with_stemming_python_does_not_match_pythonic():
+    """Audit P2-5 (docs path): a 6-char common word must NOT prefix-match a
+    different word that merely shares the first 6 chars.
+
+    Pre-fix the docs BM25 copy used a 6-char prefix bar, so 'python'[:6]='python'
+    matched 'pythonic' (a different word). gc_search_docs / gc_lookup are SHIPPED
+    free MCP tools, so this false-match degrades live doc retrieval. Raising the
+    bar to 8 makes 'python' (6) require exact match.
+    """
+    doc = ["pythonic", "pythonista", "configure", "important"]
+    # 'python' (6 chars) < 8-char threshold → exact match only → 0 matches.
+    assert dh._term_freq_with_stemming("python", doc) == 0
+    # 'config' (6) must not prefix-match 'configure'; 'import' (6) not 'important'.
+    assert dh._term_freq_with_stemming("config", doc) == 0
+    assert dh._term_freq_with_stemming("import", doc) == 0
+    # Exact tokens still count.
+    assert dh._term_freq_with_stemming("pythonic", ["pythonic", "configure"]) == 1
 
 
 @pytest.mark.asyncio

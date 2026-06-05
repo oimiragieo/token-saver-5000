@@ -148,6 +148,14 @@ class EmbeddingManager:
 
         Returns:
             The single EmbeddingManager instance
+
+        Note on tier locking (Phase 7c-4 war story):
+            The tier is fixed at FIRST construction and shared process-wide. A
+            second construction that requests a CONFLICTING tier does NOT switch
+            the locked instance — it logs CRITICAL and returns the existing one.
+            To avoid silent poisoning, set ``EMBEDDING_TIER`` at process start
+            (before the first ``EmbeddingManager(...)`` call). Use
+            :meth:`reset_for_testing` to clear the singleton between tests.
         """
         if cls._instance is None:
             with cls._lock:
@@ -175,7 +183,35 @@ class EmbeddingManager:
                         logger.warning("LRU cache requested but embedding_cache module unavailable")
 
                     cls._instance = instance
-        return cls._instance
+                    return cls._instance
+
+        # Singleton already exists: warn loudly if the caller asked for a
+        # DIFFERENT tier than the locked one. Silently returning a STANDARD
+        # instance to an ONNX requester is the Phase 7c-4 silent-poisoning bug.
+        existing = cls._instance
+        locked_tier = getattr(existing, "_tier", None)
+        if locked_tier is not None and locked_tier != tier:
+            logger.critical(
+                "EmbeddingManager tier conflict: singleton is locked to "
+                "tier=%s but a new construction requested tier=%s. The locked "
+                "tier WINS — the requested tier is ignored. Set EMBEDDING_TIER "
+                "at process start to avoid silent tier poisoning.",
+                locked_tier.value,
+                tier.value,
+            )
+        return existing
+
+    @classmethod
+    def reset_for_testing(cls) -> None:
+        """Clear the process-wide singleton so the next construction is fresh.
+
+        Test-only helper. Lets a test exercise a specific tier without being
+        poisoned by a tier some earlier test (or import-time call) locked in.
+        Never call this in production code paths — it would orphan the model
+        cache held by the previous instance.
+        """
+        with cls._lock:
+            cls._instance = None
 
     def encode(
         self,
@@ -293,13 +329,24 @@ class EmbeddingManager:
         Encode with automatic tier fallback.
 
         Fallback hierarchy: STANDARD → ONNX → TFIDF
+
+        CORRECTNESS (audit P1-6): TF-IDF vectors are vocabulary-order-dependent
+        and semantically meaningless when used as drop-in replacements for SBERT
+        / ONNX neural embeddings (cosine distances become garbage). We therefore
+        REFUSE to silently fall through to TF-IDF when the caller requested a
+        neural tier (STANDARD or ONNX) and both neural tiers failed. Silently
+        returning TF-IDF garbage corrupts every downstream cosine comparison.
+        Only an explicit TFIDF request is allowed to use TF-IDF here.
         """
+        last_exc: Optional[Exception] = None
+
         # Try STANDARD first (if not already attempted)
         if tier != EmbeddingTier.STANDARD:
             try:
                 logger.info("Falling back to STANDARD tier...")
                 return self._encode_standard(texts, normalize)
             except Exception as e:
+                last_exc = e
                 logger.warning(f"STANDARD tier fallback failed: {e}")
 
         # Try ONNX next (if not already attempted)
@@ -308,14 +355,34 @@ class EmbeddingManager:
                 logger.info("Falling back to ONNX tier...")
                 return self._encode_onnx(texts, normalize)
             except Exception as e:
+                last_exc = e
                 logger.warning(f"ONNX tier fallback failed: {e}")
 
-        # Last resort: TF-IDF
-        if TFIDF_AVAILABLE:
-            logger.info("Falling back to TF-IDF tier (last resort)...")
+        # TF-IDF is only a legitimate result when it was explicitly requested.
+        # For a neural-tier request whose neural fallbacks failed, returning
+        # TF-IDF vectors would be silently-wrong, so we raise instead.
+        if tier == EmbeddingTier.TFIDF and TFIDF_AVAILABLE:
+            logger.info("Using TF-IDF tier (explicitly requested)...")
             return self._encode_tfidf(texts, normalize)
 
-        # If we get here, all tiers failed
+        # Neural tier requested but SBERT + ONNX both failed: refuse to return
+        # garbage TF-IDF vectors. Surface the original failure at error level so
+        # it reaches Sentry rather than being swallowed as a warning.
+        if last_exc is not None:
+            logger.error(
+                "Embedding tier %s requested but SBERT/ONNX neural tiers failed; "
+                "refusing to fall back to semantically-meaningless TF-IDF vectors. "
+                "Original error: %s",
+                tier.value,
+                last_exc,
+                exc_info=last_exc,
+            )
+            raise RuntimeError(
+                f"Embedding tier {tier.value} failed and TF-IDF fallback is not "
+                f"a valid substitute for neural embeddings. Original error: {last_exc}"
+            ) from last_exc
+
+        # No neural fallback attempted and no explicit TF-IDF: nothing worked.
         raise RuntimeError("All embedding tiers failed. Cannot encode texts.")
 
     def get_text_embedder(self, model_name: str = DEFAULT_TEXT_MODEL):

@@ -27,6 +27,7 @@ import tiktoken
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 from .bm25_utils import bm25_scores as _bm25_score_texts
 from .constants import _RRF_K, F11_RANKER_PATH
+from .node_identity import extract_file_id_from_node
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,28 @@ _SIMILARITY_BLOCK_SIZE: int = int(os.environ.get("SIMILARITY_BLOCK_SIZE", "256")
 # peak memory and O(N²) edge-build time for pathologically large documents.
 # Overridable via MAX_GRAPH_CHUNKS env var.
 _MAX_GRAPH_CHUNKS: int = int(os.environ.get("MAX_GRAPH_CHUNKS", "2500"))
+
+# NOTE (audit re-fix): the former _RRF_SUFFICIENCY_THRESHOLD constant was
+# removed. retrieve_evidence() once gated sufficiency on the RRF fusion score
+# under F11 Path C, but RRF encodes rank POSITION not relevance MAGNITUDE — the
+# rank-1 node of any non-empty doc has RRF >= 1/(k+1) ≈ 0.0164, so the bar was
+# cleared unconditionally (sufficient=True for every query, incl. irrelevant
+# ones). Sufficiency now thresholds on the dense COSINE magnitude of the
+# top-ranked candidate against min_similarity for BOTH paths; RRF remains the
+# Path C ranking/ordering method. See SemanticCompressor._max_dense_cosine.
+
+
+def _node_belongs_to_file(node_id: str, file_id: str) -> bool:
+    """Boundary-safe membership test for ``node_id`` against ``file_id``.
+
+    Audit P1-5: a bare ``node_id.startswith(file_id)`` collides across file_ids
+    that share a prefix — ``"foobar_n0".startswith("foo")`` is True, so document
+    ``"foo"`` leaked ``"foobar"`` nodes into skeletons, search, stats and diff
+    re-ingestion. The fix compares the EXTRACTED file_id (boundary-aware for both
+    text ``"{file_id}_n{i}"`` and code ``"{file_id}::{symbol}"`` node formats)
+    against the target, which makes the membership test collision-proof.
+    """
+    return extract_file_id_from_node(node_id) == file_id
 
 
 class FidelityLevel(Enum):
@@ -186,6 +209,11 @@ class SemanticCompressor:
         self.chunks: Dict[str, SemanticNode] = {}
         self.file_metadata: Dict[str, Dict] = {}
         self._baseline_skeleton_cache: Dict[str, str] = {}
+        # Audit P2-4: cache the baseline skeleton's token counts at ingest so
+        # get_stats() can report skeleton_tokens / compression_ratio WITHOUT
+        # re-invoking _generate_skeleton (which had MIG-mutation + cost side
+        # effects). Keyed by file_id → {"skeleton_tokens": int, "ratio": float}.
+        self._baseline_skeleton_stats: Dict[str, Dict[str, float]] = {}
 
         # PageRank cache for performance optimization (v0.4.4)
         # Caches PageRank results to avoid O(K×(N+M)) recomputation
@@ -898,7 +926,7 @@ class SemanticCompressor:
                 # graph (few neighbours) but maximally important to the reader.
                 _boosted: Dict[str, float] = {}
                 for node_id, node in self.chunks.items():
-                    if not node_id.startswith(file_id):
+                    if not _node_belongs_to_file(node_id, file_id):
                         continue
                     t = node.text
                     boost = 0.0
@@ -928,7 +956,7 @@ class SemanticCompressor:
                     all_scores = {
                         nid: (_boosted.get(nid, n.importance))
                         for nid, n in self.chunks.items()
-                        if nid.startswith(file_id)
+                        if _node_belongs_to_file(nid, file_id)
                     }
                     normalised = self._normalize_scores(all_scores)
                     for node_id, score in normalised.items():
@@ -942,6 +970,11 @@ class SemanticCompressor:
             # 5. Generate skeleton
             skeleton_response = self._generate_skeleton(file_id)
             self._baseline_skeleton_cache[file_id] = skeleton_response.skeleton_text
+            # Audit P2-4: cache numeric stats so get_stats() need not re-generate.
+            self._baseline_skeleton_stats[file_id] = {
+                "skeleton_tokens": skeleton_response.skeleton_tokens,
+                "ratio": skeleton_response.compression_ratio,
+            }
 
             logger.info(
                 f"  Compression: {total_tokens} -> {skeleton_response.skeleton_tokens} tokens"
@@ -968,6 +1001,7 @@ class SemanticCompressor:
         query: Optional[str] = None,
         redundancy_penalty: float = 0.2,
         priority_scores: Optional[Dict[str, float]] = None,
+        importance_override: Optional[Dict[str, float]] = None,
     ) -> Set[str]:
         """
         Select skeleton nodes.
@@ -978,17 +1012,28 @@ class SemanticCompressor:
         Query-guided mode:
         - Hybrid ranking: importance + query relevance
         - Redundancy penalty via greedy MMR-style selection
+
+        Args:
+            importance_override: Optional per-node importance scores that take
+                precedence over the persisted ``node.importance`` for THIS call
+                only. Used to thread query-local MIG scores without mutating the
+                shared, long-lived ``SemanticNode.importance`` (audit P1-4).
         """
         if num_skeleton <= 0 or not file_nodes:
             return set()
 
+        override = importance_override or {}
+
+        def _imp(node_id: str, node: "SemanticNode") -> float:
+            return override.get(node_id, node.importance)
+
         if not query or not query.strip():
-            ranked = sorted(file_nodes, key=lambda item: item[1].importance, reverse=True)
+            ranked = sorted(file_nodes, key=lambda item: _imp(item[0], item[1]), reverse=True)
             return {node_id for node_id, _ in ranked[:num_skeleton]}
 
         # Query-guided selection
         query_embedding = self.model.encode([query])[0]
-        importance_scores = {node_id: node.importance for node_id, node in file_nodes}
+        importance_scores = {node_id: _imp(node_id, node) for node_id, node in file_nodes}
         relevance_scores = {
             node_id: float(cosine_similarity([query_embedding], [node.embedding])[0][0])
             for node_id, node in file_nodes
@@ -1088,7 +1133,7 @@ class SemanticCompressor:
         file_nodes = [
             (nid, self.chunks[nid])
             for nid in graph.nodes()
-            if nid.startswith(file_id) and nid not in excluded
+            if _node_belongs_to_file(nid, file_id) and nid not in excluded
         ]
 
         if not file_nodes:
@@ -1162,30 +1207,46 @@ class SemanticCompressor:
 
         # MIG (Marginal Information Gain) node re-ranking:
         # When ``selection_strategy="mig"`` and a query is present, re-rank
-        # nodes using token-level MIG scores aggregated per node.  This
-        # replaces the PageRank importance attribute used in the downstream
-        # ``_select_skeleton_nodes`` call so that the greedy MMR selection
-        # operates on MIG-weighted scores rather than graph centrality.
+        # nodes using token-level MIG scores aggregated per node. These scores
+        # are passed to ``_select_skeleton_nodes`` as a query-local
+        # ``importance_override`` so the greedy MMR selection operates on
+        # MIG-weighted scores rather than graph centrality.
+        #
+        # Audit P1-4: this MUST NOT write ``node.importance``. The compressor is
+        # a long-lived singleton; mutating the shared PageRank importance in
+        # place corrupts every subsequent query on the same document (and the
+        # side-effecting get_stats path). We build a per-call dict instead.
+        mig_importance_override: Optional[Dict[str, float]] = None
         if selection_strategy == "mig" and query and query.strip():
             try:
                 from .token_refiner import MIGConfig, MIGScorer
 
                 mig_scorer = MIGScorer(config=MIGConfig())
+                mig_importance_override = {}
                 for nid, node in file_nodes:
                     tokens = node.text.split()
                     if tokens:
                         scored = mig_scorer.score_tokens_mig(tokens, query)
-                        # Aggregate: mean MIG score across tokens → new importance
-                        node.importance = float(sum(s for _, s in scored) / len(scored))
-                    # nodes with no tokens keep their PageRank importance
+                        # Aggregate: mean MIG score across tokens → query-local score
+                        mig_importance_override[nid] = float(
+                            sum(s for _, s in scored) / len(scored)
+                        )
+                    else:
+                        # nodes with no tokens keep their PageRank importance
+                        mig_importance_override[nid] = node.importance
 
-                # Re-sort by updated importance for stable downstream order
-                file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
+                # Re-sort by the query-local MIG override for stable downstream
+                # order WITHOUT touching node.importance.
+                file_nodes.sort(
+                    key=lambda x: mig_importance_override.get(x[0], x[1].importance),
+                    reverse=True,
+                )
                 logger.info(
                     f"  MIG re-ranking applied for '{file_id}' " f"({len(file_nodes)} nodes scored)"
                 )
             except Exception as exc:
                 logger.warning(f"MIG re-ranking failed for '{file_id}': {exc}")
+                mig_importance_override = None
 
         # Phase 5: Query-adaptive per-section ratios (KVzip/LazyLLM)
         adaptive_priority_scores = None
@@ -1216,6 +1277,7 @@ class SemanticCompressor:
                     num_skeleton,
                     query=query,
                     priority_scores=adaptive_priority_scores,
+                    importance_override=mig_importance_override,
                 )
                 skeleton_nodes.update(selected)
         else:
@@ -1224,6 +1286,7 @@ class SemanticCompressor:
                 num_skeleton,
                 query=query,
                 priority_scores=adaptive_priority_scores,
+                importance_override=mig_importance_override,
             )
 
         # Build skeleton text
@@ -1322,9 +1385,23 @@ class SemanticCompressor:
         if top_k <= 0:
             raise ValueError("top_k must be > 0")
 
+        # Audit re-fix (supersedes the P1-3 RRF-threshold branch): sufficiency
+        # must reflect relevance MAGNITUDE, not rank-fusion POSITION. The prior
+        # fix gated on the RRF fusion score under Path C, but RRF encodes only
+        # rank position — the rank-1 node of ANY non-empty doc has RRF
+        # >= 1/(k+1) ≈ 0.0164, so 0.0164 >= 0.015 was unconditionally True and
+        # `sufficient` was True for EVERY query, including irrelevant ones.
+        #
+        # Correct gate: threshold sufficiency on the DENSE COSINE similarity of
+        # the top-ranked candidate against the cosine bar (min_similarity),
+        # REGARDLESS of whether the RANKING method is cosine (Path A) or RRF
+        # (Path C). RRF stays as the ordering method under Path C; only the
+        # SUFFICIENCY decision uses cosine magnitude.
+        effective_threshold = min_similarity
+
         initial_scores = self.search_semantic_with_scores(query, file_id=file_id, top_k=top_k)
-        best_score = initial_scores[0][1] if initial_scores else 0.0
-        sufficient = best_score >= min_similarity
+        best_cosine = self._max_dense_cosine(query, file_id=file_id)
+        sufficient = best_cosine >= effective_threshold
         used_expanded_search = False
         final_scores = initial_scores
 
@@ -1336,8 +1413,11 @@ class SemanticCompressor:
                 file_id=file_id,
                 top_k=expanded_k,
             )
-            best_score = final_scores[0][1] if final_scores else 0.0
-            sufficient = best_score >= min_similarity
+            # Broadening top_k cannot change the document-wide max cosine, but the
+            # re-query keeps the contract (more candidates surfaced) and a fresh
+            # cosine read guards against any candidate-set drift between calls.
+            best_cosine = self._max_dense_cosine(query, file_id=file_id)
+            sufficient = best_cosine >= effective_threshold
 
         node_ids = [node_id for node_id, _ in final_scores[:top_k]]
         if sufficient:
@@ -1351,12 +1431,47 @@ class SemanticCompressor:
         return EvidenceResult(
             node_ids=node_ids,
             scores=final_scores,
+            # best_score reports the cosine magnitude the sufficiency decision is
+            # made on — NOT the (Path C) RRF fusion score. final_scores still
+            # carries the ranking-method scores for callers that inspect ordering.
             sufficient=sufficient,
-            best_score=best_score,
-            threshold=min_similarity,
+            best_score=best_cosine,
+            threshold=effective_threshold,
             used_expanded_search=used_expanded_search,
             message=message,
         )
+
+    def _max_dense_cosine(self, query: str, file_id: Optional[str] = None) -> float:
+        """Return the max dense cosine similarity of ``query`` vs candidate nodes.
+
+        This is the relevance-MAGNITUDE signal the sufficiency gate thresholds on
+        (see ``retrieve_evidence``). It mirrors the dense-ranking branch of
+        ``search_semantic_with_scores`` but returns only the top cosine value, so
+        the sufficiency decision is independent of the active ranking method
+        (cosine Path A or RRF Path C).
+
+        Args:
+            query: Search query.
+            file_id: Optional file to scope the candidate set.
+
+        Returns:
+            Max cosine similarity in [-1.0, 1.0], or 0.0 when no candidates exist.
+        """
+        candidate_nodes = [
+            node
+            for node_id, node in self.chunks.items()
+            if not (file_id and not _node_belongs_to_file(node_id, file_id))
+        ]
+        if not candidate_nodes:
+            return 0.0
+
+        query_embedding = self.model.encode([query])[0]
+        best = -1.0
+        for node in candidate_nodes:
+            similarity = float(cosine_similarity([query_embedding], [node.embedding])[0][0])
+            if similarity > best:
+                best = similarity
+        return best
 
     def read_skeleton_evidence_aware(
         self,
@@ -1591,7 +1706,7 @@ class SemanticCompressor:
         # --- Build file_id-filtered candidate list (shared by both paths) ---
         candidate_nodes: List[Tuple[str, SemanticNode]] = []
         for node_id, node in self.chunks.items():
-            if file_id and not node_id.startswith(file_id):
+            if file_id and not _node_belongs_to_file(node_id, file_id):
                 continue
             candidate_nodes.append((node_id, node))
 
@@ -1639,26 +1754,119 @@ class SemanticCompressor:
         results = self.search_semantic_with_scores(query, file_id, top_k)
         return [node_id for node_id, _ in results]
 
+    def _baseline_skeleton_metrics(self, file_id: str, total_tokens: int) -> Tuple[int, float]:
+        """Return (skeleton_tokens, compression_ratio) without generating a skeleton.
+
+        Serves from the numeric cache populated at ingest (audit P2-4). Falls
+        back to counting the cached baseline skeleton TEXT if only that is
+        present, and finally — when no baseline cache exists at all (cold cache
+        after a persistence restore that rebuilt the graph but not the caches) —
+        computes a real skeleton-token estimate directly FROM the graph nodes
+        (audit P2-4 edge case). Never invokes ``_generate_skeleton``.
+        """
+        cached = self._baseline_skeleton_stats.get(file_id)
+        if cached is not None:
+            return int(cached["skeleton_tokens"]), float(cached["ratio"])
+
+        baseline_text = self._baseline_skeleton_cache.get(file_id)
+        if baseline_text is not None:
+            skeleton_tokens = self._count_tokens(baseline_text)
+            ratio = total_tokens / max(skeleton_tokens, 1)
+            # Memoize so repeat get_stats calls stay O(1).
+            self._baseline_skeleton_stats[file_id] = {
+                "skeleton_tokens": skeleton_tokens,
+                "ratio": ratio,
+            }
+            return skeleton_tokens, ratio
+
+        # No baseline cache (e.g. document restored from persistence without
+        # re-ingest). Audit P2-4 edge case: returning a flat (total_tokens, 1.0)
+        # reported a misleading "no compression happened" ratio. Instead compute
+        # the skeleton-token estimate from the graph's selected anchor nodes,
+        # WITHOUT regenerating the skeleton (preserves the side-effect-free
+        # property — no MIG mutation, no _generate_skeleton call).
+        skeleton_tokens = self._estimate_skeleton_tokens_from_graph(file_id)
+        if skeleton_tokens > 0:
+            ratio = total_tokens / skeleton_tokens
+            self._baseline_skeleton_stats[file_id] = {
+                "skeleton_tokens": skeleton_tokens,
+                "ratio": ratio,
+            }
+            return skeleton_tokens, ratio
+
+        # Truly nothing to measure (no graph / empty doc) — neutral fallback.
+        return total_tokens, 1.0
+
+    def _estimate_skeleton_tokens_from_graph(self, file_id: str) -> int:
+        """Estimate baseline skeleton token count from the graph nodes alone.
+
+        Side-effect-free (audit P2-4): replicates ONLY the baseline (no-query)
+        node-selection math from ``_generate_skeleton`` — top ``num_skeleton``
+        nodes by importance, where ``num_skeleton = max(1, int(N * ratio))`` —
+        and sums those anchor nodes' raw token counts. Does NOT build summary
+        lines, run MIG/COMI, or mutate ``node.importance``. Returns 0 when no
+        graph or no measurable nodes exist (caller falls back to a neutral
+        ratio).
+        """
+        graph = self.graphs.get(file_id)
+        if graph is None:
+            return 0
+
+        file_nodes = [
+            (nid, self.chunks[nid])
+            for nid in graph.nodes()
+            if _node_belongs_to_file(nid, file_id) and nid in self.chunks
+        ]
+        if not file_nodes:
+            return 0
+
+        effective_ratio = self.skeleton_ratio
+        if effective_ratio == "auto":
+            total_tokens_estimate = sum(len(node.text.split()) for _, node in file_nodes)
+            effective_ratio = compute_adaptive_ratio(total_tokens_estimate)
+
+        num_skeleton = max(1, int(len(file_nodes) * effective_ratio))
+        # Baseline selection = top-N by importance (mirrors _select_skeleton_nodes
+        # with no query). Anchor nodes carry their full raw token count in the
+        # skeleton; the rest collapse to short reference lines, so summing the
+        # anchor nodes' tokens is the side-effect-free proxy for skeleton size.
+        ranked = sorted(file_nodes, key=lambda item: item[1].importance, reverse=True)
+        skeleton_tokens = sum(
+            int(node.metadata.get("tokens", 0)) for _, node in ranked[:num_skeleton]
+        )
+        return skeleton_tokens
+
     def get_stats(self, file_id: Optional[str] = None) -> Dict:
-        """Get statistics about stored documents"""
+        """Get statistics about stored documents.
+
+        Audit P2-4: this is a READ-ONLY introspection call. It must NOT invoke
+        ``_generate_skeleton`` — doing so had side effects (MIG mutation via the
+        skeleton path, recomputation cost) and is wholly unnecessary for stats.
+        Skeleton token counts are served from the baseline cache populated at
+        ingest; if that cache is cold (e.g. a document restored from persistence
+        without re-ingest), the counts are computed directly from the cached
+        baseline skeleton text rather than regenerating it.
+        """
         if file_id:
             if file_id not in self.graphs:
                 raise ValueError(f"File {file_id} not found")
 
             graph = self.graphs[file_id]
-            nodes = [nid for nid in graph.nodes() if nid.startswith(file_id)]
+            nodes = [nid for nid in graph.nodes() if _node_belongs_to_file(nid, file_id)]
 
             total_tokens = sum(self.chunks[nid].metadata["tokens"] for nid in nodes)
 
-            skeleton = self._generate_skeleton(file_id)
+            skeleton_tokens, compression_ratio = self._baseline_skeleton_metrics(
+                file_id, total_tokens
+            )
 
             return {
                 "file_id": file_id,
                 "total_nodes": len(nodes),
                 "total_edges": graph.number_of_edges(),
                 "total_tokens": total_tokens,
-                "skeleton_tokens": skeleton.skeleton_tokens,
-                "compression_ratio": skeleton.compression_ratio,
+                "skeleton_tokens": skeleton_tokens,
+                "compression_ratio": compression_ratio,
                 "metadata": self.file_metadata.get(file_id, {}),
             }
         else:
@@ -1734,7 +1942,9 @@ class SemanticCompressor:
 
     def _compute_diff_stats(self, file_id: str, new_text: str) -> Dict:
         """Compute diff statistics and preserve unchanged embeddings."""
-        old_chunks = {nid: node for nid, node in self.chunks.items() if nid.startswith(file_id)}
+        old_chunks = {
+            nid: node for nid, node in self.chunks.items() if _node_belongs_to_file(nid, file_id)
+        }
         old_texts = {nid: node.text for nid, node in old_chunks.items()}
 
         new_chunk_texts = self._chunk_text(new_text)
@@ -1766,7 +1976,7 @@ class SemanticCompressor:
     def _restore_preserved_embeddings(self, file_id: str, preserved: Dict) -> None:
         """Restore preserved embeddings after re-ingestion."""
         for nid, node in self.chunks.items():
-            if nid.startswith(file_id) and node.text in preserved:
+            if _node_belongs_to_file(nid, file_id) and node.text in preserved:
                 node.embedding = preserved[node.text]
 
     def find_duplicates(self, threshold: float = 0.95, timeout_seconds: float = 30.0) -> List[Dict]:

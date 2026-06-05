@@ -1194,7 +1194,13 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
 
     # Council patch P2: score_type field distinguishes Path C (RRF) from Path A (cosine).
     # Callers must NOT treat RRF scores as cosine similarity values.
-    _score_type = "rrf" if F11_RANKER_PATH == "c" and not evidence_aware else "cosine"
+    #
+    # Audit P2-3: the label is a function of the ACTIVE RANKER PATH only, NOT of
+    # evidence_aware. retrieve_evidence() (the evidence_aware path) goes through
+    # search_semantic_with_scores(), so under Path C its scores are RRF too.
+    # Coupling the label to `not evidence_aware` mislabeled Path-C+evidence-aware
+    # RRF scores as 'cosine', misleading every downstream consumer.
+    _score_type = "rrf" if F11_RANKER_PATH == "c" else "cosine"
 
     # Build structured results with both similarity and importance
     results = []
