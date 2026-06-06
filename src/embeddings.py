@@ -95,7 +95,22 @@ class _EmbeddingManagerAdapter:
         # MUST skip STANDARD tier to avoid recursion:
         # adapter.encode → manager.encode(STANDARD) → _encode_standard
         # → get_text_embedder → adapter → loop!
-        # Force ONNX (or TF-IDF fallback) directly.
+        # Force ONNX directly.
+        #
+        # RECURSION GUARD (defense-in-depth): this adapter only exists because
+        # sentence-transformers is unavailable, so STANDARD can never load here.
+        # If ONNX is ALSO unavailable, re-entering ``manager.encode`` would let
+        # the fallback machinery bounce STANDARD↔ONNX indefinitely. There is no
+        # usable neural embedder offline, so raise ONE clean error immediately
+        # at bounded depth rather than recursing.
+        if not ONNX_AVAILABLE:
+            raise RuntimeError(
+                "No usable embedding backend: sentence-transformers is "
+                "unavailable (ONNX-only adapter active) and the ONNX tier is "
+                "also unavailable (missing onnxruntime/optimum). Install one of "
+                "sentence-transformers or onnxruntime+optimum, or request "
+                "EmbeddingTier.TFIDF explicitly."
+            )
         return self._manager.encode(texts, tier=EmbeddingTier.ONNX, normalize=normalize)
 
 
@@ -340,8 +355,21 @@ class EmbeddingManager:
         """
         last_exc: Optional[Exception] = None
 
-        # Try STANDARD first (if not already attempted)
-        if tier != EmbeddingTier.STANDARD:
+        # Try STANDARD first (if not already attempted).
+        #
+        # INFINITE-RECURSION GUARD (offline/degraded path): when
+        # sentence-transformers is unavailable (``SentenceTransformer is None``),
+        # ``_encode_standard`` cannot load a real model — ``get_text_embedder``
+        # returns an ``_EmbeddingManagerAdapter`` whose ``.encode`` re-enters
+        # ``manager.encode(tier=ONNX)``. If ONNX also can't load, that bounces
+        # straight back into ``_encode_with_fallback(tier=ONNX)``, which would
+        # re-enter the STANDARD branch below, building an O(n²) nested error
+        # string ~330 frames deep (~14s CPU) before finally raising. The
+        # STANDARD fallback is structurally useless in this state, so skip it:
+        #   _encode_with_fallback(ONNX) → _encode_standard → adapter
+        #     → encode(ONNX) → _encode_onnx FAILS → _encode_with_fallback(ONNX) → …
+        # Only attempt STANDARD when a real SentenceTransformer can actually load.
+        if tier != EmbeddingTier.STANDARD and SentenceTransformer is not None:
             try:
                 logger.info("Falling back to STANDARD tier...")
                 return self._encode_standard(texts, normalize)
