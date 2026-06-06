@@ -305,12 +305,21 @@ class ServerFactoryService:
 
     @staticmethod
     def code_adapter_config(*, preload_code_model: bool) -> dict[str, Any]:
-        """Default constructor kwargs for the code compression adapter."""
+        """Default constructor kwargs for the code compression adapter.
+
+        ``skeleton_ratio="auto"`` selects the engine's adaptive curve
+        (``compute_adaptive_ratio``): ~0.8 for <8k-token docs, scaling down to
+        0.1 for >=100k-token docs.  This keeps small/medium docs faithful
+        (a ~5-node prose doc surfaces ~4 nodes) while large docs stay
+        aggressively compressed.  The old fixed 0.2 floored any <=5-node doc to
+        a single node — an over-aggressive summary rather than "the compressed
+        version".  Aggressive 0.2 remains reachable as an explicit caller param.
+        """
         return {
             "text_model": "all-MiniLM-L6-v2",
             "code_model": "microsoft/codebert-base",
             "similarity_threshold": 0.75,
-            "skeleton_ratio": 0.2,
+            "skeleton_ratio": "auto",
             "preload_code_model": preload_code_model,
         }
 

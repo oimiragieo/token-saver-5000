@@ -198,6 +198,24 @@ Tests for async operations in semantic compressor and handlers.
 | `class` | `TestAsyncErrorHandling` |
 | `class` | `TestPerformanceCharacteristics` |
 
+#### `test_audit_compression_correctness.py`
+
+Enterprise audit — compression-engine correctness regression locks.
+
+| Kind | Name |
+|------|------|
+| `class` | `_FakeEmbedder` |
+| `def` | `fake_embedder` |
+| `def` | `_make_compressor_with_chunks` |
+| `class` | `TestRrfSufficiencyReachable` |
+| `class` | `TestMigDoesNotMutateImportance` |
+| `class` | `TestFileIdPrefixIsolation` |
+| `class` | `TestTfidfSilentFallbackRaises` |
+| `class` | `TestEmbeddingManagerSingletonTier` |
+| `class` | `TestScoreTypeUnderPathC` |
+| `class` | `TestGetStatsNoSkeletonSideEffect` |
+| `class` | `TestBm25PrefixMatch` |
+
 #### `test_audited_graph.py`
 
 Tests for Audited Semantic Graph
@@ -1007,6 +1025,7 @@ Documentation and help-surface contract tests for launch readiness.
 | `async def` | `test_search_short_query_requires_exact_match` |
 | `def` | `test_term_freq_with_stemming_short_term_exact_only` |
 | `def` | `test_term_freq_with_stemming_long_term_prefix_match` |
+| `def` | `test_term_freq_with_stemming_python_does_not_match_pythonic` |
 | `async def` | `test_read_doc_enforces_character_cap_on_pathological_output` |
 
 #### `test_e2e_scenarios.py`
@@ -1069,6 +1088,29 @@ Tests for TurboQuant-inspired embedding quantizer.
 | `def` | `test_quantize_zero_vector` |
 | `def` | `test_wrong_dim_raises` |
 | `def` | `test_residual_correction_improves_fidelity` |
+
+#### `test_embeddings_hf_import.py`
+
+Regression tests for src/embeddings.py import hygiene.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_fake_hf_tqdm` |
+| `def` | `test_enable_progress_bars_imported_from_tqdm_submodule` |
+| `def` | `test_enable_progress_bars_import_failure_is_swallowed` |
+
+#### `test_embeddings_offline_recursion.py`
+
+Regression tests for the offline/degraded embedding infinite-recursion bug.
+
+| Kind | Name |
+|------|------|
+| `def` | `_isolated_singleton` |
+| `def` | `_force_no_sentence_transformers` |
+| `def` | `test_offline_no_onnx_raises_clean_runtime_error_without_recursion` |
+| `def` | `test_offline_onnx_model_unloadable_does_not_recurse` |
+| `def` | `test_offline_no_onnx_request_onnx_tier_also_bounded` |
+| `def` | `test_adapter_raises_immediately_when_onnx_unavailable` |
 
 #### `test_enterprise_layout.py`
 
@@ -1317,6 +1359,18 @@ Tests for GitHub connector normalization.
 | Kind | Name |
 |------|------|
 | `def` | `test_collects_repo_files_into_documents` |
+
+#### `test_graph_oom_fix.py`
+
+Tests for the block-wise graph edge-building OOM fix.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_l2_normalised` |
+| `def` | `_reference_edges` |
+| `def` | `_blockwise_edges` |
+| `class` | `TestBlockWiseEdgeEquivalence` |
+| `class` | `TestGraphBuildingMemoryBound` |
 
 #### `test_gtm_benchmarks.py`
 
@@ -2201,6 +2255,20 @@ TDD coverage for query-guided and evidence-aware compression paths.
 | `def` | `test_retrieve_evidence_detects_insufficient_query_signal` |
 | `def` | `test_read_skeleton_evidence_aware_includes_status_and_skeleton` |
 
+#### `test_read_skeleton_auto_fidelity.py`
+
+Regression locks for the read_skeleton production-default fidelity fix.
+
+| Kind | Name |
+|------|------|
+| `def` | `_build_multi_node_doc` |
+| `def` | `_count_anchor_nodes` |
+| `def` | `_count_hidden_nodes` |
+| `class` | `TestProductionReadSkeletonIsFaithful` |
+| `class` | `TestExplicitAggressiveModePreserved` |
+| `class` | `TestHiddenLineCarriesSummary` |
+| `class` | `TestAdaptiveCurveHasNoCliff` |
+
 #### `test_reliability.py`
 
 Comprehensive Tests for Reliability Infrastructure
@@ -2978,6 +3046,16 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `async def` | `test_server_error_raises_error` |
 | `async def` | `test_urlfetcherror_has_code_attribute` |
 | `def` | `test_urlfetcherror_construction` |
+
+#### `test_url_fetcher_ssrf_fence_6b.py`
+
+Phase 2 Chunk 6B SSRF regression fence for token-saver url_fetcher.py.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_transport` |
+| `class` | `TestClassESizeCap` |
+| `class` | `TestClassFSchemeAndRedirectFence` |
 
 #### `test_url_fetcher_ssrf_hardening.py`
 

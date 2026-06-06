@@ -112,7 +112,7 @@ class CodeCompressionAdapter:
         code_model: str = "microsoft/codebert-base",
         preload_code_model: bool = False,
         similarity_threshold: float = 0.75,
-        skeleton_ratio: float = 0.2,
+        skeleton_ratio: Union[float, str] = 0.2,
     ):
         """
         Initialize the code compression adapter.
@@ -122,7 +122,10 @@ class CodeCompressionAdapter:
             code_model: Model for code compression (default: microsoft/codebert-base)
             preload_code_model: If True, load code model immediately instead of lazily
             similarity_threshold: Minimum similarity for graph edges
-            skeleton_ratio: Ratio of nodes to include in skeleton
+            skeleton_ratio: Fraction of nodes to include in the skeleton, or the
+                string ``"auto"`` to adapt the ratio to corpus size via
+                ``compute_adaptive_ratio`` (the production default — see
+                ServerFactoryService.code_adapter_config).
         """
         # Text compressor - always loaded
         self._text_compressor = SemanticCompressor(

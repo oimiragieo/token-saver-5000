@@ -1316,9 +1316,18 @@ class SemanticCompressor:
                 node_map[node_id] = f"ANCHOR: {summary[:50]}..."
                 skeleton_tokens += self._count_tokens(line)
             else:
-                # Low-importance: Just reference
+                # Low-importance: render the already-computed short summary so a
+                # non-drill-down reader is not left empty-handed.  The static
+                # "[HIDDEN] Detail hidden (use modulate_region to expand)" phrase
+                # is preserved verbatim and FIRST (it is regression-locked
+                # downstream); the content summary is appended after it.
                 summary = self._generate_summary(node.text, max_length=50)
-                line = f"[{node_id}] [HIDDEN] Detail hidden (use modulate_region to expand)\n"
+                summary = summary.strip() if summary else ""
+                base = f"[{node_id}] [HIDDEN] Detail hidden (use modulate_region to expand)"
+                if summary:
+                    line = f"{base} - {summary}\n"
+                else:
+                    line = f"{base}\n"
 
                 skeleton_lines.append(line)
                 node_map[node_id] = f"Hidden: {summary[:30]}..."

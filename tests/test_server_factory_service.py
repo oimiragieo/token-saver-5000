@@ -361,11 +361,15 @@ def test_build_helpers_expose_expected_default_configs():
     ace_cfg = module.ServerFactoryService.ace_framework_kwargs()
     monitor = module.ServerFactoryService.default_context_window_monitor()
 
+    # Production MCP build uses the adaptive "auto" ratio (see
+    # code_adapter_config docstring + tests/test_read_skeleton_auto_fidelity.py).
+    # The fixed 0.2 floored small docs to a single node; "auto" keeps small/
+    # medium docs faithful while large docs stay aggressive.
     assert code_cfg == {
         "text_model": "all-MiniLM-L6-v2",
         "code_model": "microsoft/codebert-base",
         "similarity_threshold": 0.75,
-        "skeleton_ratio": 0.2,
+        "skeleton_ratio": "auto",
         "preload_code_model": True,
     }
     assert afm_cfg == {
