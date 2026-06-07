@@ -1072,6 +1072,7 @@ Fidelity-Preserving Semantic Compressor
 
 | Kind | Name |
 |------|------|
+| `def` | `_node_belongs_to_file` |
 | `class` | `FidelityLevel` |
 | `class` | `SemanticNode` |
 | `class` | `SkeletonResponse` |
