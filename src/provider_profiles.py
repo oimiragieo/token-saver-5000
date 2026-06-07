@@ -227,12 +227,19 @@ _PROFILES = {
         recommended_output_format="json",
         notes="Blended-rate profile for Gemini auto routing; cost math is approximate because actual pricing depends on per-turn tier selection.",
     ),
+    # gpt-5.4-mini — $0.75/$4.50 per MTok, $0.075 cache-read. Verified vs
+    # OpenAI official pricing (platform.openai.com/docs/pricing) AND OpenRouter
+    # 2026-06-07; both sources agree. The prior $0.25/$2.0/$0.025 entry was a
+    # stale guess (likely carried from a 4o-mini-era rate) — same stale-price
+    # bug class as the Opus $15/$75 and Gemini 2.5-Pro-on-3.1-Pro burns. This
+    # model is SLUG_OVERRIDES[None] in scripts/audit_model_prices.py so the
+    # weekly OpenRouter auditor never flagged it.
     "gpt-5.4-mini": ProviderProfile(
         model="gpt-5.4-mini",
         provider="openai",
-        input_cost_per_million=0.25,
-        output_cost_per_million=2.0,
-        cached_input_cost_per_million=0.025,
+        input_cost_per_million=0.75,
+        output_cost_per_million=4.50,
+        cached_input_cost_per_million=0.075,
         context_window=400_000,
         cache_read_field="cached_tokens",
         minimum_cacheable_tokens=1024,
