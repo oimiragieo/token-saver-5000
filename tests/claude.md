@@ -1385,6 +1385,18 @@ GTM claim reproduction suite.
 | `class` | `TestToolCountClaims` |
 | `class` | `TestFeatureExistence` |
 
+#### `test_handler_encode_offload.py`
+
+Receipts for roadmap A3: the read_skeleton + search_semantic MCP handlers run
+
+| Kind | Name |
+|------|------|
+| `def` | `_loop_thread_id` |
+| `class` | `_RecordingCompressor` |
+| `def` | `_search_context` |
+| `class` | `TestSearchSemanticOffload` |
+| `class` | `TestReadSkeletonOffload` |
+
 #### `test_health.py`
 
 Tests for health checks and diagnostics.
@@ -1728,6 +1740,21 @@ Tests for MIG (Marginal Information Gain) scoring in src/token_refiner.py.
 | `class` | `TestMIGConfig` |
 | `class` | `TestMIGScorer` |
 | `class` | `TestTokenRefinerMIG` |
+
+#### `test_mmr_vectorization_equivalence.py`
+
+Output-equivalence + speedup receipts for the vectorized MMR skeleton selector
+
+| Kind | Name |
+|------|------|
+| `def` | `_reference_select_skeleton_nodes` |
+| `class` | `_FakeModel` |
+| `def` | `_make_nodes` |
+| `def` | `_random_unit` |
+| `def` | `_build_compressor` |
+| `def` | `_params` |
+| `class` | `TestMMRSelectionEquivalence` |
+| `class` | `TestMMRSpeedup` |
 
 #### `test_model_accounting_hypothesis.py`
 
