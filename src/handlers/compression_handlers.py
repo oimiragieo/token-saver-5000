@@ -15,6 +15,7 @@ This module contains all handlers for document compression operations:
 Version: 0.7.0 - Added rate limiting, text length validation
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List
@@ -954,7 +955,13 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             except (AttributeError, TypeError):
                 raw_text_for_auto = None
 
-        pipeline = run_read_skeleton_pipeline(
+        # A3: offload the synchronous CPU-bound pipeline (query encode + skeleton
+        # generation + MMR selection) onto a worker thread so the event loop is
+        # not blocked while one request compresses. Output is unchanged — this is
+        # the same call, just run via asyncio.to_thread (mirrors the _encode_async
+        # pattern ingest already uses).
+        pipeline = await asyncio.to_thread(
+            run_read_skeleton_pipeline,
             compressor=compressor,
             file_id=scoped_file_id,
             selection_mode=selection_mode,
@@ -1172,8 +1179,14 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
 
     logger.info(f"Semantic search: '{query}' in {scoped_file_id or 'scoped files'}")
 
+    # A3: offload the synchronous CPU-bound retrieval (query encode + cosine /
+    # RRF ranking) onto a worker thread so the event loop is not blocked while
+    # one request searches. Output is unchanged — same calls via asyncio.to_thread
+    # (mirrors the _encode_async pattern ingest already uses).
+    compressor = context["compressor"]
     if evidence_aware:
-        evidence = context["compressor"].retrieve_evidence(
+        evidence = await asyncio.to_thread(
+            compressor.retrieve_evidence,
             query=query,
             file_id=scoped_file_id,
             top_k=search_top_k,
@@ -1183,7 +1196,8 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     else:
         evidence = None
         # Use search_semantic_with_scores to get both node IDs and similarity scores
-        raw_results = context["compressor"].search_semantic_with_scores(
+        raw_results = await asyncio.to_thread(
+            compressor.search_semantic_with_scores,
             query,
             scoped_file_id,
             search_top_k,
