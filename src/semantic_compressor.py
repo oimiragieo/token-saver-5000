@@ -1018,9 +1018,57 @@ class SemanticCompressor:
                 precedence over the persisted ``node.importance`` for THIS call
                 only. Used to thread query-local MIG scores without mutating the
                 shared, long-lived ``SemanticNode.importance`` (audit P1-4).
+
+        Note:
+            Public contract is the selected SET. The ordered greedy pick sequence
+            is computed by ``_select_skeleton_nodes_ordered`` (used by the
+            output-equivalence regression test); this method just returns it as a
+            set so existing call sites are unaffected.
+        """
+        return set(
+            self._select_skeleton_nodes_ordered(
+                file_nodes,
+                num_skeleton,
+                query=query,
+                redundancy_penalty=redundancy_penalty,
+                priority_scores=priority_scores,
+                importance_override=importance_override,
+            )
+        )
+
+    def _select_skeleton_nodes_ordered(
+        self,
+        file_nodes: List[Tuple[str, SemanticNode]],
+        num_skeleton: int,
+        query: Optional[str] = None,
+        redundancy_penalty: float = 0.2,
+        priority_scores: Optional[Dict[str, float]] = None,
+        importance_override: Optional[Dict[str, float]] = None,
+    ) -> List[str]:
+        """
+        Vectorized greedy MMR skeleton selection (roadmap A2).
+
+        Returns the selected node ids in PICK ORDER. Output-equivalent to the
+        prior per-pair ``sklearn.cosine_similarity`` Python loop:
+
+        - Relevance is one L2-normalised matrix–vector product
+          (``E_norm @ q_norm``) instead of N per-node cosine calls.
+        - Redundancy uses a running ``max_sim`` vector updated by a single
+          ``E_norm @ E_norm[picked]`` column per pick, instead of an O(picks)
+          inner ``max`` over per-pair cosine calls each iteration.
+
+        Equivalence notes (load-bearing):
+        - Dot products accumulate in float64 to stay maximally stable; the
+          original sklearn path also upcasts list inputs internally, so this is
+          the closest reproduction (residual diff is float32 BLAS summation-order
+          noise ≈1e-8, far below any realistic selection margin).
+        - Tie-break matches the original ``candidate_score > best_score`` strict
+          comparison over insertion-ordered candidates: ``np.argmax`` returns the
+          FIRST maximal index, so the earliest candidate wins a tie exactly as the
+          Python loop did.
         """
         if num_skeleton <= 0 or not file_nodes:
-            return set()
+            return []
 
         override = importance_override or {}
 
@@ -1029,15 +1077,33 @@ class SemanticCompressor:
 
         if not query or not query.strip():
             ranked = sorted(file_nodes, key=lambda item: _imp(item[0], item[1]), reverse=True)
-            return {node_id for node_id, _ in ranked[:num_skeleton]}
+            return [node_id for node_id, _ in ranked[:num_skeleton]]
+
+        node_ids = [node_id for node_id, _ in file_nodes]
 
         # Query-guided selection
         query_embedding = self.model.encode([query])[0]
+
+        # L2-normalise the node-embedding matrix ONCE (float64 accumulation,
+        # contiguous). cosine(a, b) == dot(a/||a||, b/||b||); normalising up front
+        # means relevance and redundancy are pure dot products against unit rows.
+        embeddings = np.ascontiguousarray(
+            np.stack([np.asarray(node.embedding, dtype=np.float64) for _, node in file_nodes])
+        )
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        # Guard zero-norm rows (degenerate embeddings) — leave them as zero so
+        # their cosine is 0.0, matching sklearn's handling of zero vectors.
+        safe_norms = np.where(norms == 0.0, 1.0, norms)
+        e_norm = embeddings / safe_norms  # (N, dim), unit rows
+
+        q = np.asarray(query_embedding, dtype=np.float64)
+        q_norm_val = np.linalg.norm(q)
+        q_unit = q / q_norm_val if q_norm_val != 0.0 else q
+
+        relevance_vec = e_norm @ q_unit  # (N,) cosine(query, node_i)
+
         importance_scores = {node_id: _imp(node_id, node) for node_id, node in file_nodes}
-        relevance_scores = {
-            node_id: float(cosine_similarity([query_embedding], [node.embedding])[0][0])
-            for node_id, node in file_nodes
-        }
+        relevance_scores = {node_ids[i]: float(relevance_vec[i]) for i in range(len(node_ids))}
 
         importance_norm = self._normalize_scores(importance_scores)
         relevance_norm = self._normalize_scores(relevance_scores)
@@ -1050,48 +1116,49 @@ class SemanticCompressor:
         # Weighted hybrid score: prioritize query relevance while preserving
         # global structure. Query-adaptive ratio scores can additionally boost
         # sections that should retain more detail.
-        hybrid_scores = {
-            node_id: 0.25 * importance_norm.get(node_id, 0.0)
-            + 0.55 * relevance_norm.get(node_id, 0.0)
-            + 0.20 * priority_norm.get(node_id, 0.0)
-            for node_id, _ in file_nodes
-        }
+        hybrid_vec = np.array(
+            [
+                0.25 * importance_norm.get(nid, 0.0)
+                + 0.55 * relevance_norm.get(nid, 0.0)
+                + 0.20 * priority_norm.get(nid, 0.0)
+                for nid in node_ids
+            ],
+            dtype=np.float64,
+        )
 
-        selected: List[str] = []
-        selected_set: Set[str] = set()
-        candidate_ids = [node_id for node_id, _ in file_nodes]
-        node_lookup = {node_id: node for node_id, node in file_nodes}
+        n = len(node_ids)
+        target = min(num_skeleton, n)
+        selected_order: List[str] = []
+        chosen_mask = np.zeros(n, dtype=bool)
+        # Running max cosine similarity of each node vs the already-selected set.
+        # -inf sentinel means "no selection yet" so the first pick uses hybrid only.
+        max_sim = np.full(n, -np.inf, dtype=np.float64)
 
-        while len(selected) < num_skeleton and candidate_ids:
-            best_id = None
-            best_score = float("-inf")
+        while len(selected_order) < target:
+            if not selected_order:
+                scores = hybrid_vec.copy()
+            else:
+                scores = hybrid_vec - redundancy_penalty * max_sim
 
-            for candidate_id in candidate_ids:
-                candidate_score = hybrid_scores[candidate_id]
-                if selected:
-                    max_similarity = max(
-                        float(
-                            cosine_similarity(
-                                [node_lookup[candidate_id].embedding],
-                                [node_lookup[selected_id].embedding],
-                            )[0][0]
-                        )
-                        for selected_id in selected
-                    )
-                    candidate_score -= redundancy_penalty * max_similarity
+            # Mask already-selected candidates so they cannot be re-picked. The
+            # original loop removed them from candidate_ids; -inf is equivalent
+            # and preserves argmax's first-max tie-break over remaining nodes.
+            scores = np.where(chosen_mask, -np.inf, scores)
+            best_idx = int(np.argmax(scores))
 
-                if candidate_score > best_score:
-                    best_score = candidate_score
-                    best_id = candidate_id
-
-            if best_id is None:
+            # Mirror the original guard: if no candidate beats -inf, stop.
+            if not np.isfinite(scores[best_idx]):
                 break
 
-            selected.append(best_id)
-            selected_set.add(best_id)
-            candidate_ids.remove(best_id)
+            selected_order.append(node_ids[best_idx])
+            chosen_mask[best_idx] = True
 
-        return selected_set
+            # Update the running redundancy vector with one matmul column:
+            # cosine(node_i, newly_selected) for all i.
+            sims_to_new = e_norm @ e_norm[best_idx]
+            max_sim = np.maximum(max_sim, sims_to_new)
+
+        return selected_order
 
     def _generate_skeleton(
         self,
