@@ -863,6 +863,13 @@ class SemanticCompressor:
             logger.info("  Generating embeddings...")
             embeddings = await self._encode_async(raw_chunks)
 
+            # 2a. Guard against non-finite embeddings (NaN/Inf) — poisoned vectors
+            # corrupt every downstream cosine similarity and PageRank score.
+            if len(embeddings) and not np.isfinite(np.asarray(embeddings)).all():
+                raise ValueError(
+                    "non-finite embedding (NaN/Inf) detected — refusing to ingest corrupted vectors"
+                )
+
             # 2b. Optional intra-document deduplication (Phase 5: R-KV)
             if len(raw_chunks) > 2:
                 try:
