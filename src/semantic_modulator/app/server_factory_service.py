@@ -315,8 +315,14 @@ class ServerFactoryService:
         a single node — an over-aggressive summary rather than "the compressed
         version".  Aggressive 0.2 remains reachable as an explicit caller param.
         """
+        # A1 (2026-06-08): the flagship text encoder default lives in
+        # ``src.constants.DEFAULT_TEXT_MODEL`` (bge-small-en-v1.5; env-overridable).
+        # Reference the constant so production wiring tracks the upgrade and any
+        # future ``DEFAULT_TEXT_MODEL`` env override.
+        from ...constants import DEFAULT_TEXT_MODEL
+
         return {
-            "text_model": "all-MiniLM-L6-v2",
+            "text_model": DEFAULT_TEXT_MODEL,
             "code_model": "microsoft/codebert-base",
             "similarity_threshold": 0.75,
             "skeleton_ratio": "auto",

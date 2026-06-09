@@ -17,12 +17,21 @@ import os
 # Embedding Models
 # ============================================================================
 
-DEFAULT_TEXT_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_TEXT_MODEL = os.environ.get("DEFAULT_TEXT_MODEL", "BAAI/bge-small-en-v1.5")
 """
 Default embedding model for general text.
-- Size: ~80MB download
-- Dimensions: 384
-- Speed: ~1000 sentences/sec on CPU
+
+A1 (modernization roadmap 2026-06-08): upgraded the flagship text encoder from
+``all-MiniLM-L6-v2`` (2021) to ``BAAI/bge-small-en-v1.5``. bge-small-en-v1.5 is a
+stronger MTEB-retrieval encoder at the SAME 384 dimensions (no halfvec/cache schema
+migration needed) and is already proven on the KB path (``KB_ONNX_EMBEDDING_MODEL``
+default in ``api/app/services/knowledge_embedding.py``). Override at runtime via the
+``DEFAULT_TEXT_MODEL`` env var (mirrors the ``KB_ONNX_EMBEDDING_MODEL`` pattern); set
+``DEFAULT_TEXT_MODEL=all-MiniLM-L6-v2`` to restore the legacy 2021 encoder.
+
+- Size: ~130MB download (bge-small-en-v1.5)
+- Dimensions: 384 (unchanged from all-MiniLM-L6-v2 — no migration)
+- Speed: comparable on CPU (small BERT-class model)
 - Use case: Document compression, general semantic similarity
 """
 
@@ -39,6 +48,59 @@ CLIP model for image-text embeddings.
 - Use case: Multimodal compression (text + images)
 - Architecture: Vision Transformer
 """
+
+# ----------------------------------------------------------------------------
+# A1 calibration (2026-06-08): semantic-chunking boundary threshold is
+# MODEL-AWARE. ``detect_semantic_boundaries`` places a chunk boundary where the
+# cosine similarity between consecutive paragraphs drops below this value.
+#
+# Different encoders have different similarity DISTRIBUTIONS: bge-small-en-v1.5
+# packs embeddings into a narrower (more anisotropic) cone than all-MiniLM-L6-v2,
+# so its baseline inter-paragraph cosine is ~0.25 HIGHER. Measured on distinct vs
+# same-topic paragraph pairs:
+#   all-MiniLM-L6-v2: distinct ~0.09-0.27, same ~0.44-0.56  -> 0.50 separates
+#   bge-small-en-v1.5: distinct ~0.49-0.59, same ~0.68-0.76 -> 0.62 separates
+# Using the legacy 0.50 with bge collapses multi-topic docs into a SINGLE chunk
+# (distinct topics score >0.50, no boundary), which inflates the compression
+# ratio while destroying fidelity. The per-model map keeps each encoder's
+# boundary detection correctly calibrated; override globally via the
+# ``SEMANTIC_CHUNK_BOUNDARY_THRESHOLD`` env var.
+_SEMANTIC_CHUNK_BOUNDARY_THRESHOLDS = {
+    "all-MiniLM-L6-v2": 0.50,
+    "sentence-transformers/all-MiniLM-L6-v2": 0.50,
+    "BAAI/bge-small-en-v1.5": 0.62,
+    "bge-small-en-v1.5": 0.62,
+}
+
+# Default applied when the active model is not in the per-model map above.
+# bge-small is the flagship default (A1), so the fallback is bge-tuned 0.62.
+_DEFAULT_SEMANTIC_CHUNK_BOUNDARY_THRESHOLD = 0.62
+
+
+def get_semantic_chunk_boundary_threshold(model_name: str | None = None) -> float:
+    """Resolve the semantic-chunking boundary threshold for ``model_name``.
+
+    Resolution order:
+      1. ``SEMANTIC_CHUNK_BOUNDARY_THRESHOLD`` env var (global override).
+      2. Per-model calibrated value (``_SEMANTIC_CHUNK_BOUNDARY_THRESHOLDS``).
+      3. ``_DEFAULT_SEMANTIC_CHUNK_BOUNDARY_THRESHOLD`` (bge-tuned 0.62).
+
+    Args:
+        model_name: Active text embedding model id (e.g. ``DEFAULT_TEXT_MODEL``).
+
+    Returns:
+        Boundary similarity threshold in ``[0.0, 1.0]``.
+    """
+    env_override = os.environ.get("SEMANTIC_CHUNK_BOUNDARY_THRESHOLD")
+    if env_override is not None:
+        try:
+            return float(env_override)
+        except (TypeError, ValueError):
+            pass
+    if model_name and model_name in _SEMANTIC_CHUNK_BOUNDARY_THRESHOLDS:
+        return _SEMANTIC_CHUNK_BOUNDARY_THRESHOLDS[model_name]
+    return _DEFAULT_SEMANTIC_CHUNK_BOUNDARY_THRESHOLD
+
 
 # ============================================================================
 # Semantic Compression Parameters

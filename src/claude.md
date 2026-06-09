@@ -351,7 +351,9 @@ Registry for managed connector feeds and available connector types.
 
 Configuration Constants for Semantic Modulator
 
-_No top-level classes or functions (may re-export only)._
+| Kind | Name |
+|------|------|
+| `def` | `get_semantic_chunk_boundary_threshold` |
 
 #### `context_advisor.py`
 
@@ -1063,6 +1065,7 @@ Semantic chunking for context ingestion.
 
 | Kind | Name |
 |------|------|
+| `def` | `_word_token_count` |
 | `def` | `detect_semantic_boundaries` |
 | `def` | `chunk_by_semantics` |
 
