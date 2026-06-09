@@ -1243,8 +1243,13 @@ class TestONNXEmbeddingManager:
     def test_init_defaults(self, tmp_path):
         from src.embeddings_onnx import ONNXEmbeddingManager
 
+        # A1 (2026-06-08): default ONNX model now tracks
+        # src.constants.DEFAULT_TEXT_MODEL (bge-small-en-v1.5; was
+        # sentence-transformers/all-MiniLM-L6-v2).
+        from src.constants import DEFAULT_TEXT_MODEL
+
         mgr = ONNXEmbeddingManager(cache_dir=str(tmp_path / "cache"))
-        assert mgr.model_name == "sentence-transformers/all-MiniLM-L6-v2"
+        assert mgr.model_name == DEFAULT_TEXT_MODEL
         assert mgr.quantized is True
         assert mgr._initialized is False
 

@@ -26,7 +26,7 @@ import tiktoken
 
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 from .bm25_utils import bm25_scores as _bm25_score_texts
-from .constants import _RRF_K, F11_RANKER_PATH
+from .constants import _RRF_K, F11_RANKER_PATH, DEFAULT_TEXT_MODEL
 from .node_identity import extract_file_id_from_node
 
 logger = logging.getLogger(__name__)
@@ -176,7 +176,7 @@ class SemanticCompressor:
 
     def __init__(
         self,
-        model_name: str = "all-MiniLM-L6-v2",
+        model_name: str = DEFAULT_TEXT_MODEL,
         similarity_threshold: float = 0.75,
         skeleton_ratio: float | str = 0.2,
     ):
@@ -195,6 +195,10 @@ class SemanticCompressor:
         # the manager's encode() directly — it has STANDARD→ONNX→TFIDF
         # fallback built in.
         self._embedding_manager = EmbeddingManager()
+        # Retain the requested model id so model-aware tuning (e.g. the
+        # semantic-chunking boundary threshold, A1 calibration) can adapt to the
+        # active encoder's similarity distribution.
+        self.model_name = model_name
         try:
             self.model = self._embedding_manager.get_text_embedder(model_name)
         except (ImportError, TypeError):
@@ -203,6 +207,18 @@ class SemanticCompressor:
             self.model = _EmbeddingManagerAdapter(self._embedding_manager)
         self.similarity_threshold = similarity_threshold
         self.skeleton_ratio = skeleton_ratio
+
+        # B1 (modernization roadmap 2026-06-08): COMI/MIG redundancy weight for
+        # the query-guided skeleton selector. Sourced from the canonical COMI
+        # MIGConfig default (arXiv 2602.01719, lambda_redundancy=0.5) so there is
+        # a SINGLE source of truth. When a query is present, ``_generate_skeleton``
+        # threads this into the VECTORIZED ``_select_skeleton_nodes`` redundancy
+        # term (preserving A2's numpy matmul path) instead of the legacy fixed
+        # 0.2. Callers can override per-session via ``set_lambda_redundancy`` or
+        # per-call by passing ``redundancy_penalty`` to ``_select_skeleton_nodes``.
+        from .token_refiner import MIGConfig
+
+        self.lambda_redundancy: float = MIGConfig().lambda_redundancy
 
         # Storage
         self.graphs: Dict[str, nx.Graph] = {}
@@ -488,10 +504,25 @@ class SemanticCompressor:
                         if sentence.strip()
                     ]
 
+                # A1 calibration (2026-06-08): use a MODEL-AWARE boundary
+                # threshold. bge-small-en-v1.5 has a ~+0.25 higher baseline
+                # inter-paragraph cosine than all-MiniLM-L6-v2; the legacy fixed
+                # 0.5 boundary would never fire under bge (distinct topics score
+                # >0.5), collapsing multi-topic docs into a single chunk. The
+                # per-model threshold keeps chunk granularity comparable across
+                # encoders. See constants.get_semantic_chunk_boundary_threshold.
+                from .constants import get_semantic_chunk_boundary_threshold
+
+                boundary_threshold = get_semantic_chunk_boundary_threshold(
+                    getattr(self, "model_name", None)
+                )
+
                 semantic_chunks = chunk_by_semantics(
                     semantic_units,
                     encode_fn=lambda texts: self.model.encode(texts),
+                    threshold=boundary_threshold,
                     max_chunk_size=max_chunk_size,
+                    token_count_fn=self._count_tokens,
                 )
                 if semantic_chunks and isinstance(semantic_chunks[0], str):
                     rendered_semantic_chunks = semantic_chunks
@@ -983,6 +1014,26 @@ class SemanticCompressor:
 
             return skeleton_response
 
+    def set_lambda_redundancy(self, lambda_redundancy: float) -> None:
+        """Set the COMI/MIG redundancy weight for query-guided skeleton selection.
+
+        B1 (modernization roadmap 2026-06-08): higher values penalise
+        near-duplicate nodes more aggressively, surfacing more diverse evidence
+        at the same skeleton size. ``0.5`` is the COMI default
+        (arXiv 2602.01719); ``0.0`` disables redundancy-aware diversification.
+        Driven by ``CompressionPreset.lambda_redundancy`` when a preset is
+        applied. Only affects the query-present selection path.
+
+        Args:
+            lambda_redundancy: Redundancy weight in ``[0.0, 1.0]``.
+
+        Raises:
+            ValueError: If ``lambda_redundancy`` is outside ``[0.0, 1.0]``.
+        """
+        if not 0.0 <= lambda_redundancy <= 1.0:
+            raise ValueError(f"lambda_redundancy must be in [0.0, 1.0], got {lambda_redundancy}")
+        self.lambda_redundancy = float(lambda_redundancy)
+
     def _normalize_scores(self, values: Dict[str, float]) -> Dict[str, float]:
         """Min-max normalize score dictionary to 0..1 range."""
         if not values:
@@ -1336,6 +1387,25 @@ class SemanticCompressor:
             except Exception as exc:
                 logger.warning(f"Query-adaptive ratio computation failed for '{file_id}': {exc}")
 
+        # B1 (modernization roadmap 2026-06-08): unify on COMI/MIG as the
+        # production redundancy-aware selector. When a query is present, route the
+        # redundancy weight through ``MIGScorer``'s COMI config
+        # (``MIGConfig.lambda_redundancy``, default 0.5) instead of the legacy
+        # fixed 0.2 MMR term. The weight feeds the VECTORIZED
+        # ``_select_skeleton_nodes`` numpy path (``hybrid - lambda * max_sim``) —
+        # A2's matmul selector is preserved, no per-pair cosine loop is
+        # reintroduced. The no-query PageRank-only path keeps the engine default
+        # (0.2); its short-circuit ignores the redundancy term anyway.
+        if query and query.strip():
+            from .token_refiner import MIGConfig, MIGScorer
+
+            # Instantiate the COMI scorer with this compressor's lambda so the
+            # routing is explicit and a single config drives the weight.
+            _mig_scorer = MIGScorer(config=MIGConfig(lambda_redundancy=self.lambda_redundancy))
+            effective_redundancy_penalty = _mig_scorer.config.lambda_redundancy
+        else:
+            effective_redundancy_penalty = 0.2
+
         if anchor_node_ids:
             skeleton_nodes = set(anchor_node_ids)
             if len(skeleton_nodes) < num_skeleton:
@@ -1343,6 +1413,7 @@ class SemanticCompressor:
                     file_nodes,
                     num_skeleton,
                     query=query,
+                    redundancy_penalty=effective_redundancy_penalty,
                     priority_scores=adaptive_priority_scores,
                     importance_override=mig_importance_override,
                 )
@@ -1352,6 +1423,7 @@ class SemanticCompressor:
                 file_nodes,
                 num_skeleton,
                 query=query,
+                redundancy_penalty=effective_redundancy_penalty,
                 priority_scores=adaptive_priority_scores,
                 importance_override=mig_importance_override,
             )

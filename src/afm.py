@@ -33,6 +33,7 @@ import tiktoken
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Import EmbeddingManager for shared model caching
+from .constants import DEFAULT_TEXT_MODEL
 from .embeddings import EmbeddingManager
 
 # Try to import sentence_transformers, fall back to hash-based embedder
@@ -124,8 +125,8 @@ class AFMConfig:
     max_stub_tokens: int = 12
     target_compression_ratio: float = 0.33  # Target 1/3 of original for summaries
 
-    # Embedding model
-    embedding_model_name: str = "all-MiniLM-L6-v2"
+    # Embedding model (A1: flagship default is bge-small-en-v1.5; see constants.py)
+    embedding_model_name: str = DEFAULT_TEXT_MODEL
 
     # LLM-based features (optional)
     use_llm_importance: bool = False
@@ -352,7 +353,7 @@ class Embedder:
 class SentenceTransformerEmbedder(Embedder):
     """Use sentence-transformers for embeddings"""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = DEFAULT_TEXT_MODEL):
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             raise ImportError("sentence-transformers not available")
         # Use EmbeddingManager for shared model caching

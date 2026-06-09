@@ -365,8 +365,15 @@ def test_build_helpers_expose_expected_default_configs():
     # code_adapter_config docstring + tests/test_read_skeleton_auto_fidelity.py).
     # The fixed 0.2 floored small docs to a single node; "auto" keeps small/
     # medium docs faithful while large docs stay aggressive.
+    #
+    # A1 (2026-06-08): the flagship text encoder default is now
+    # ``src.constants.DEFAULT_TEXT_MODEL`` (bge-small-en-v1.5; was all-MiniLM-L6-v2).
+    # Reference the constant so this assertion tracks the upgrade and any
+    # ``DEFAULT_TEXT_MODEL`` env override rather than hard-coding the model id.
+    from src.constants import DEFAULT_TEXT_MODEL
+
     assert code_cfg == {
-        "text_model": "all-MiniLM-L6-v2",
+        "text_model": DEFAULT_TEXT_MODEL,
         "code_model": "microsoft/codebert-base",
         "similarity_threshold": 0.75,
         "skeleton_ratio": "auto",

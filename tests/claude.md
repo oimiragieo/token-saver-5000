@@ -1379,6 +1379,7 @@ GTM claim reproduction suite.
 | Kind | Name |
 |------|------|
 | `class` | `TestDocumentCompressionClaims` |
+| `class` | `TestMeasuredCompressionRegressionLocks` |
 | `class` | `TestCLIOutputOptimizerClaims` |
 | `class` | `TestSchemaCompressionClaims` |
 | `class` | `TestROIClaims` |
@@ -1730,6 +1731,17 @@ Comprehensive Metrics Tests (v1.0.0 - v0.6.1)
 | `class` | `TestGracefulDegradation` |
 | `class` | `TestReset` |
 | `class` | `TestEdgeCases` |
+
+#### `test_mig_lambda_routing.py`
+
+B1 (modernization roadmap 2026-06-08): COMI/MIG lambda_redundancy routing.
+
+| Kind | Name |
+|------|------|
+| `def` | `_build_compressor_with_doc` |
+| `class` | `TestPresetExposesLambdaRedundancy` |
+| `class` | `TestGenerateSkeletonUsesMigLambdaOnQuery` |
+| `class` | `TestA2VectorizedPathPreserved` |
 
 #### `test_mig_scoring.py`
 

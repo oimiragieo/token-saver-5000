@@ -17,6 +17,14 @@ class CompressionPreset:
     description: str
     skeleton_ratio: float
     fidelity: str
+    # B1 (modernization roadmap 2026-06-08): COMI/MIG redundancy weight applied by
+    # the query-guided skeleton selector (``_select_skeleton_nodes`` →
+    # ``MIGScorer``). Higher values penalise near-duplicate nodes more aggressively,
+    # surfacing more diverse evidence at the same skeleton size. ``0.5`` is the COMI
+    # default (arXiv 2602.01719); ``0.0`` disables redundancy-aware diversification
+    # (pure relevance + importance, the legacy behaviour). Only affects the
+    # query-present path; the no-query PageRank-only path ignores it.
+    lambda_redundancy: float = 0.5
 
     def to_dict(self) -> dict:
         return {
@@ -24,6 +32,7 @@ class CompressionPreset:
             "description": self.description,
             "skeleton_ratio": self.skeleton_ratio,
             "fidelity": self.fidelity,
+            "lambda_redundancy": self.lambda_redundancy,
         }
 
     def to_prompt_seed(self) -> dict:
@@ -63,30 +72,39 @@ _PRESETS = {
         description="High fidelity, preserves structure and detail for thorough code review",
         skeleton_ratio=0.5,
         fidelity="DETAILED",
+        # Lower redundancy penalty: code review wants near-duplicate context kept
+        # (e.g. similar call sites) rather than diversified away.
+        lambda_redundancy=0.3,
     ),
     "chat": CompressionPreset(
         name="chat",
         description="Balanced compression for conversational context, keeps outlines",
         skeleton_ratio=0.25,
         fidelity="OUTLINE",
+        lambda_redundancy=0.5,
     ),
     "research": CompressionPreset(
         name="research",
         description="Moderate compression preserving structure for research analysis",
         skeleton_ratio=0.35,
         fidelity="STRUCTURE",
+        lambda_redundancy=0.5,
     ),
     "aggressive": CompressionPreset(
         name="aggressive",
         description="Maximum compression for large codebases, abstract summaries only",
         skeleton_ratio=0.1,
         fidelity="ABSTRACT",
+        # Aggressive compression keeps very few nodes, so diversity matters most:
+        # penalise redundancy harder to maximise distinct evidence per node.
+        lambda_redundancy=0.7,
     ),
     "balanced": CompressionPreset(
         name="balanced",
         description="Default balance between compression and detail preservation",
         skeleton_ratio=0.2,
         fidelity="STRUCTURE",
+        lambda_redundancy=0.5,
     ),
 }
 

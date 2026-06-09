@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import networkx as nx
 import numpy as np
 
+from .constants import DEFAULT_TEXT_MODEL
 from .semantic_compressor import SemanticCompressor, SemanticNode, FidelityLevel
 from .code_compressor import CodeSemanticCompressor, CodeChunk
 
@@ -108,7 +109,7 @@ class CodeCompressionAdapter:
 
     def __init__(
         self,
-        text_model: str = "all-MiniLM-L6-v2",
+        text_model: str = DEFAULT_TEXT_MODEL,
         code_model: str = "microsoft/codebert-base",
         preload_code_model: bool = False,
         similarity_threshold: float = 0.75,
@@ -118,7 +119,7 @@ class CodeCompressionAdapter:
         Initialize the code compression adapter.
 
         Args:
-            text_model: Model for text compression (default: all-MiniLM-L6-v2)
+            text_model: Model for text compression (default: bge-small-en-v1.5)
             code_model: Model for code compression (default: microsoft/codebert-base)
             preload_code_model: If True, load code model immediately instead of lazily
             similarity_threshold: Minimum similarity for graph edges

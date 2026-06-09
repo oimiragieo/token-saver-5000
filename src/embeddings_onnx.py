@@ -29,6 +29,8 @@ from typing import List, Optional, Union
 
 import numpy as np
 
+from .constants import DEFAULT_TEXT_MODEL
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +44,7 @@ class ONNXEmbeddingManager:
 
     def __init__(
         self,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        model_name: str = DEFAULT_TEXT_MODEL,
         cache_dir: Optional[str] = None,
         quantized: bool = True,
     ):
@@ -245,7 +247,7 @@ _onnx_singleton_lock = threading.Lock()
 
 
 def get_onnx_embedding_manager(
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+    model_name: str = DEFAULT_TEXT_MODEL,
     cache_dir: Optional[str] = None,
     quantized: bool = True,
 ) -> ONNXEmbeddingManager:

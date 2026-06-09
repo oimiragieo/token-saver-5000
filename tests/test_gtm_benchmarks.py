@@ -79,6 +79,82 @@ class TestDocumentCompressionClaims:
         assert result["ratio"] >= 1.5, f"Code compression {result['ratio']:.1f}x < 1.5x target"
 
 
+class TestMeasuredCompressionRegressionLocks:
+    """Regression locks that pin the MEASURED compression ratios (not just the
+    loose GTM marketing floors above).
+
+    A1 + B1 (modernization roadmap 2026-06-08) deliberately changed the engine:
+      * A1: flagship text encoder all-MiniLM-L6-v2 (2021) -> BAAI/bge-small-en-v1.5
+        (+ model-aware semantic-chunk boundary threshold so bge does not collapse
+        multi-topic docs into a single chunk).
+      * B1: query-guided skeleton selector unified on COMI/MIG
+        (lambda_redundancy=0.5) instead of the legacy fixed 0.2 MMR term, reusing
+        A2's vectorized numpy path.
+
+    MEASURED before -> after (deterministic, this corpus, SBERT/STANDARD tier):
+      | doc    | old ratio | new ratio | old savings | new savings |
+      |--------|-----------|-----------|-------------|-------------|
+      | medium | 3.84x     | 3.84x     | 73.98%      | 73.98%      | (unchanged)
+      | large  | 7.78x     | 9.54x     | 87.15%      | 89.52%      | (+1.76x A1)
+      | code   | 11.34x    | 11.34x    | 91.18%      | 91.18%      | (unchanged)
+
+    NONE regressed; large improved. These floors are set just below the measured
+    NEW values so a future regression BELOW the new baseline fails fast. They are
+    intentionally a hair under the exact measurement to absorb BLAS summation-order
+    noise; they are NOT lowered to hide a regression.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup_compressor(self):
+        from src.semantic_compressor import SemanticCompressor
+
+        self.compressor = SemanticCompressor()
+
+    def _measure(self, text, file_id):
+        self.compressor.ingest_file(text, file_id)
+        skeleton = self.compressor.read_skeleton(file_id)
+        original = len(text.split())
+        skel = len(skeleton.split()) if skeleton else original
+        return {
+            "ratio": original / skel if skel > 0 else 1.0,
+            "savings_pct": (1 - skel / original) * 100 if original > 0 else 0,
+        }
+
+    def test_medium_holds_at_measured_baseline(self):
+        # A1/B1 left medium unchanged at 3.84x / 73.98%.
+        corpus = Path("benchmarks/corpus/medium.txt")
+        if not corpus.exists():
+            pytest.skip("Benchmark corpus not available")
+        r = self._measure(corpus.read_text(encoding="utf-8"), "reg_medium")
+        assert r["ratio"] >= 3.6, f"medium regressed below 3.84x baseline: {r['ratio']:.2f}x"
+        assert r["savings_pct"] >= 72.0
+
+    def test_large_improved_by_a1_locked_at_new_baseline(self):
+        # A1 (bge-small) lifted large from 7.78x -> 9.54x (+1.76x).
+        corpus = Path("benchmarks/corpus/large.txt")
+        if not corpus.exists():
+            pytest.skip("Benchmark corpus not available")
+        r = self._measure(corpus.read_text(encoding="utf-8"), "reg_large")
+        assert r["ratio"] >= 9.0, (
+            f"large doc regressed below the NEW A1 baseline (was 7.78x pre-A1, "
+            f"9.54x post-A1); got {r['ratio']:.2f}x"
+        )
+        assert r["savings_pct"] >= 89.0
+
+    def test_code_holds_at_measured_baseline(self):
+        # A1/B1 left code unchanged at 11.34x / 91.18%.
+        code_dir = Path("benchmarks/corpus/code")
+        if not code_dir.exists():
+            pytest.skip("Code corpus not available")
+        py_files = sorted(code_dir.glob("*.py"))[:5]
+        if not py_files:
+            pytest.skip("No Python files in code corpus")
+        all_code = "\n\n".join(f.read_text(encoding="utf-8") for f in py_files)
+        r = self._measure(all_code, "reg_code")
+        assert r["ratio"] >= 10.5, f"code regressed below 11.34x baseline: {r['ratio']:.2f}x"
+        assert r["savings_pct"] >= 90.0
+
+
 # --- CLI output strategy count ------------------------------------------------
 
 
