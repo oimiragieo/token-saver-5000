@@ -645,11 +645,29 @@ class ACECurator:
         return context
 
     def _integrate_insight(self, context: ACEContext, insight: Dict[str, Any]) -> None:
-        """Integrate a single insight into the context"""
-        text = insight["text"]
-        bullet_type = BulletType(insight["bullet_type"])
-        confidence = insight["confidence"]
-        source = insight["source"]
+        """Integrate a single insight into the context.
+
+        Insights originate from LLM-generated reflection output, so they may be
+        malformed — missing a required key, or carrying an unrecognized
+        ``bullet_type`` value. Skip a malformed insight with a warning instead of
+        raising: one bad insight must not crash the whole curation pass.
+        (Closes Sentry ``KeyError: 'bullet_type'`` first seen 2026-05-26.)
+        """
+        text = insight.get("text")
+        raw_bullet_type = insight.get("bullet_type")
+        if not text or raw_bullet_type is None:
+            logger.warning(
+                "Skipping malformed insight (missing text/bullet_type): keys=%s",
+                sorted(insight.keys()),
+            )
+            return
+        try:
+            bullet_type = BulletType(raw_bullet_type)
+        except ValueError:
+            logger.warning("Skipping insight with unrecognized bullet_type %r", raw_bullet_type)
+            return
+        confidence = insight.get("confidence", 0.5)
+        source = insight.get("source", "reflection")
 
         # Embed the insight
         embedding = self.text_model.encode(text, convert_to_numpy=True)
