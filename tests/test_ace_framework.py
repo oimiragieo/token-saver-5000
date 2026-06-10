@@ -421,6 +421,60 @@ def test_curator_integrate_new_insight(sample_context, embedding_manager):
     assert len(sample_context.bullets) >= initial_count
 
 
+def test_curator_skips_insight_missing_bullet_type(sample_context, embedding_manager):
+    """Malformed LLM insight (no bullet_type key) is skipped, not raised.
+
+    Regression: Sentry ``KeyError: 'bullet_type'`` from _integrate_insight on
+    untrusted LLM reflection output (first seen 2026-05-26).
+    """
+    curator = ACECurator(embedding_manager)
+    initial_count = len(sample_context.bullets)
+
+    malformed = {"text": "insight with no bullet_type", "confidence": 0.7, "source": "reflection"}
+    # Must not raise — the malformed insight is skipped.
+    curator.curate_insights(context=sample_context, insights=[malformed])
+
+    assert len(sample_context.bullets) == initial_count
+
+
+def test_curator_skips_insight_with_invalid_bullet_type(sample_context, embedding_manager):
+    """Insight carrying an unrecognized bullet_type value is skipped, not raised (ValueError)."""
+    curator = ACECurator(embedding_manager)
+    initial_count = len(sample_context.bullets)
+
+    bad = {
+        "text": "valid text",
+        "bullet_type": "not_a_real_type",
+        "confidence": 0.7,
+        "source": "reflection",
+    }
+    curator.curate_insights(context=sample_context, insights=[bad])
+
+    assert len(sample_context.bullets) == initial_count
+
+
+def test_curator_integrates_valid_insight_despite_malformed_sibling(
+    sample_context, embedding_manager
+):
+    """One malformed insight must not block a valid one in the same batch."""
+    curator = ACECurator(embedding_manager)
+    initial_count = len(sample_context.bullets)
+
+    insights = [
+        {"text": "missing bullet_type"},  # malformed -> skipped
+        {
+            "text": "Cache embeddings to cut repeated-encode latency",
+            "bullet_type": BulletType.TACTIC.value,
+            "confidence": 0.8,
+            "source": "reflection",
+        },
+    ]
+    curator.curate_insights(context=sample_context, insights=insights)
+
+    # The valid insight is integrated even though a malformed sibling preceded it.
+    assert len(sample_context.bullets) >= initial_count + 1
+
+
 def test_curator_update_similar_insight(sample_context, embedding_manager):
     """Test updating similar insight (refine operation)"""
     curator = ACECurator(embedding_manager, deduplication_threshold=0.90)
