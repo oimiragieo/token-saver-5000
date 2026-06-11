@@ -89,6 +89,23 @@ class _EmbeddingManagerAdapter:
 
     def __init__(self, manager: "EmbeddingManager"):
         self._manager = manager
+        self._cached_dim = None
+
+    def get_sentence_embedding_dimension(self) -> int:
+        """SentenceTransformer-compatible embedding-dimension accessor.
+
+        ``MultiModalCompressor`` and ``SCAREnhancedCompressor`` call this on
+        whatever text encoder they hold. In ONNX-only deployments that encoder
+        is THIS adapter, which previously lacked the method -> AttributeError
+        (a latent 500 on ``multimodal_ingest`` / ``scar_compress``). Probe the
+        backend once with a tiny input and cache the dimension.
+        """
+        if self._cached_dim is None:
+            import numpy as np
+
+            vec = np.asarray(self.encode(["x"], normalize_embeddings=False))
+            self._cached_dim = int(vec.shape[-1])
+        return self._cached_dim
 
     def encode(self, texts, **kwargs):
         normalize = kwargs.get("normalize_embeddings", kwargs.get("normalize", True))

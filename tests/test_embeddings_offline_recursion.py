@@ -197,3 +197,33 @@ def test_adapter_raises_immediately_when_onnx_unavailable(monkeypatch):
 
     # Must mention there is no usable backend; must NOT recurse into manager.encode.
     assert "no usable embedding backend" in str(exc_info.value).lower()
+
+
+def test_adapter_exposes_get_sentence_embedding_dimension(monkeypatch):
+    """The adapter must answer get_sentence_embedding_dimension() like a SentenceTransformer.
+
+    ``MultiModalCompressor`` (multimodal_compressor.py:117) and
+    ``SCAREnhancedCompressor`` (scar_compressor.py:309) call this on whatever
+    text encoder they hold. In ONNX-only mode that encoder is this adapter,
+    which previously lacked the method -> AttributeError 500 on
+    ``multimodal_ingest`` / ``scar_compress``. The method probes the backend
+    ONCE with a tiny input and caches the dimension. This test fails against the
+    pre-fix code (AttributeError).
+    """
+    import numpy as np
+
+    manager = EmbeddingManager(tier=EmbeddingTier.ONNX, enable_cache=False)
+    adapter = emb._EmbeddingManagerAdapter(manager)
+
+    calls = {"n": 0}
+
+    def _fake_encode(texts, **_kwargs):
+        calls["n"] += 1
+        return np.zeros((len(texts), 384), dtype=np.float32)
+
+    monkeypatch.setattr(adapter, "encode", _fake_encode)
+
+    assert adapter.get_sentence_embedding_dimension() == 384
+    # Cached: a second call must NOT re-probe the backend.
+    assert adapter.get_sentence_embedding_dimension() == 384
+    assert calls["n"] == 1, "dimension probe should run once and cache"
