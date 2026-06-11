@@ -52,8 +52,8 @@ async def test_calculate_roi_custom_params():
     assert result["model"] == "gpt-4o"
     assert result["team_size"] == 10
     assert result["compression_ratio"] == 0.90
-    # 10 users * $29 = $290/mo plan cost
-    assert result["pro_plan_cost_monthly"] == 290.0
+    # 10 users * $49 = $490/mo plan cost (live Pro price)
+    assert result["pro_plan_cost_monthly"] == 490.0
     assert result["monthly_tokens"] == 1_000_000 * 22 * 10
 
 

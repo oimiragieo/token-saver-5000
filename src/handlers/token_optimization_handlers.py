@@ -632,8 +632,10 @@ async def handle_discover_savings(context: Dict[str, Any], args: Dict[str, Any])
 # Default compression ratio for ROI calculations (conservative)
 _DEFAULT_COMPRESSION_RATIO = 0.85
 
-# Pro plan price per user per month
-_PRO_PLAN_PRICE = 29.0
+# Pro plan price per user per month — matches the live Polar / pricing-page Pro ($49/mo).
+# Was $29 (the original GTM anchor); raised to reflect hosting-cost reality so the ROI
+# calculator users see does not OVERSTATE savings against a stale, cheaper plan price.
+_PRO_PLAN_PRICE = 49.0
 
 
 async def handle_calculate_roi(context: Dict[str, Any], args: Dict[str, Any]) -> str:
