@@ -28,6 +28,38 @@ class ProviderProfile:
 
 
 _PROFILES = {
+    "claude-fable-5": ProviderProfile(
+        model="claude-fable-5",
+        provider="anthropic",
+        input_cost_per_million=10.0,
+        output_cost_per_million=50.0,
+        cached_input_cost_per_million=1.0,
+        context_window=1_000_000,
+        cache_read_field="cache_read_input_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=256,
+        supports_prompt_cache_key=False,
+        cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
+        prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
+        recommended_output_format="toon",
+        notes="Anthropic's Mythos-class flagship (released 2026-06-09): $10/$50 per 1M, $1 cached input (standard 90% discount), 1M-token context, 128K max output. ~2x Opus 4.8 pricing — compression ROI is the highest in the Anthropic lineup. Pricing verified vs anthropic.com + OpenRouter 2026-06-12.",
+    ),
+    "claude-mythos-5": ProviderProfile(
+        model="claude-mythos-5",
+        provider="anthropic",
+        input_cost_per_million=10.0,
+        output_cost_per_million=50.0,
+        cached_input_cost_per_million=1.0,
+        context_window=1_000_000,
+        cache_read_field="cache_read_input_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=256,
+        supports_prompt_cache_key=False,
+        cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
+        prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
+        recommended_output_format="toon",
+        notes="Same underlying model as Fable 5 without the dual-use safety measures; LIMITED PREVIEW (approved orgs only). Same $10/$50 per 1M + $1 cached input. Pricing verified vs OpenRouter 2026-06-12.",
+    ),
     "claude-opus-4.8": ProviderProfile(
         model="claude-opus-4.8",
         provider="anthropic",
@@ -288,6 +320,13 @@ _PROFILES = {
 }
 
 _ALIASES = {
+    # Mythos-class tier (2026-06-09) — Fable 5 is the GA flagship above Opus.
+    "claude-fable": "claude-fable-5",
+    "fable-5": "claude-fable-5",
+    "fable": "claude-fable-5",
+    "claude-mythos": "claude-mythos-5",
+    "mythos-5": "claude-mythos-5",
+    "mythos": "claude-mythos-5",
     # Latest flagship — unversioned name resolves to the current Opus (4.8).
     "claude-opus": "claude-opus-4.8",
     "claude-opus-4": "claude-opus-4.8",

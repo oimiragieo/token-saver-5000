@@ -5,6 +5,9 @@ from __future__ import annotations
 # Per million tokens pricing
 PRICING: dict[str, dict[str, float]] = {
     # Claude models — verified vs OpenRouter + tokencost.app 2026-06-03.
+    # Fable 5 (Mythos-class, 2026-06-09): $10/$50, $1 cached input — verified
+    # vs anthropic.com/claude/fable + OpenRouter 2026-06-12.
+    "claude-fable-5": {"input": 10.0, "output": 50.0, "cache_read": 1.0},
     "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
     # Opus dropped to $5/$25 at the 4.5 release (was $15/$75).
     "claude-opus-4-8": {"input": 5.0, "output": 25.0, "cache_read": 0.50},
