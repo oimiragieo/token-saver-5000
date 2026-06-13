@@ -88,6 +88,9 @@ Unit tests for ACE Framework
 | `def` | `test_reflector_failure_insights` |
 | `def` | `test_curator_creation` |
 | `def` | `test_curator_integrate_new_insight` |
+| `def` | `test_curator_skips_insight_missing_bullet_type` |
+| `def` | `test_curator_skips_insight_with_invalid_bullet_type` |
+| `def` | `test_curator_integrates_valid_insight_despite_malformed_sibling` |
 | `def` | `test_curator_update_similar_insight` |
 | `def` | `test_curator_deduplication` |
 | `def` | `test_curator_pruning` |
@@ -606,6 +609,15 @@ Tests for the gc_compress_manifest handler (v1.8.0 A2b).
 | `class` | `TestCompressManifestHandlerSavings` |
 | `class` | `TestCompressManifestHandlerEdgeCases` |
 
+#### `test_compression_advisor_honesty.py`
+
+#92 (2026-06-12): estimated_ratio honesty locks.
+
+| Kind | Name |
+|------|------|
+| `def` | `_prose` |
+| `class` | `TestEstimateMirrorsAdaptiveCurve` |
+
 #### `test_compression_handlers.py`
 
 Comprehensive tests for compression_handlers.py (v0.4.3).
@@ -655,6 +667,8 @@ Tests for the composable read-skeleton compression pipeline.
 | `def` | `test_resolve_auto_mode_returns_baseline_for_empty_text` |
 | `def` | `test_extract_h1_query_returns_heading_text` |
 | `def` | `test_extract_h1_query_returns_none_when_no_h1` |
+| `def` | `test_auto_mode_with_caller_query_on_prose_resolves_to_query_guided` |
+| `def` | `test_auto_mode_with_caller_query_on_structured_doc_stays_evidence_aware` |
 
 #### `test_compression_profiles.py`
 
@@ -1111,6 +1125,7 @@ Regression tests for the offline/degraded embedding infinite-recursion bug.
 | `def` | `test_offline_onnx_model_unloadable_does_not_recurse` |
 | `def` | `test_offline_no_onnx_request_onnx_tier_also_bounded` |
 | `def` | `test_adapter_raises_immediately_when_onnx_unavailable` |
+| `def` | `test_adapter_exposes_get_sentence_embedding_dimension` |
 
 #### `test_enterprise_layout.py`
 
