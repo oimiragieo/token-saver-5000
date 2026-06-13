@@ -191,14 +191,14 @@ class TestCompressionAdvisor:
     """Test compression size estimation"""
 
     def test_small_document_warning(self):
-        """Small documents should warn about overhead"""
+        """Tiny documents should advise sending as-is (#92 recalibration)"""
         advisor = CompressionAdvisor()
         text = "Short document." * 5  # ~50 tokens
         estimate = advisor.estimate_compression(text)
 
         assert estimate.original_tokens < 100
-        assert estimate.confidence == "low"
-        assert "small" in estimate.reasoning.lower()
+        assert estimate.confidence == "high"
+        assert "as-is" in estimate.reasoning
 
     def test_medium_document_estimate(self):
         """Medium documents should have high confidence"""
@@ -209,8 +209,11 @@ class TestCompressionAdvisor:
         estimate = advisor.estimate_compression(text)
 
         assert 400 < estimate.original_tokens < 600
-        assert estimate.confidence == "high"
-        assert estimate.compression_ratio > 5  # Should be in 5-10× range
+        # #92 recalibration: the engine keeps ~80% of nodes below 8K tokens, so
+        # the estimate must be conservative (~1.2-2x), never the legacy 5-10x
+        # that produced the 7.08x-estimated vs 1.17x-actual dogfood overclaim.
+        assert estimate.confidence == "low"
+        assert 1.0 <= estimate.compression_ratio < 2.5
 
     def test_large_document_estimate(self):
         """Large documents should predict high compression"""
@@ -221,7 +224,8 @@ class TestCompressionAdvisor:
         estimate = advisor.estimate_compression(text)
 
         assert estimate.original_tokens > 1000
-        assert estimate.compression_ratio > 10  # Should be 10-15×
+        # #92: ~2K tokens is still the keep-80% regime — conservative estimate.
+        assert 1.0 <= estimate.compression_ratio < 2.5
 
     def test_redundancy_detection(self):
         """High redundancy should increase compression estimate"""

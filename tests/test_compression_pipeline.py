@@ -294,3 +294,45 @@ def test_extract_h1_query_returns_none_when_no_h1():
     assert _extract_h1_query("## Only H2 here\n\ntext.") is None
     assert _extract_h1_query("") is None
     assert _extract_h1_query(None) is None
+
+
+def test_auto_mode_with_caller_query_on_prose_resolves_to_query_guided():
+    """#92 (2026-06-12): auto + a CALLER-SUPPLIED query on plain prose must
+    honor the query (query_guided). Pre-fix, auto resolved to baseline and
+    silently ignored the query, returning all nodes (dogfood + codex
+    production find)."""
+    compressor = _make_compressor_for_auto([_skeleton("baseline"), _skeleton("query_guided")])
+
+    result = run_read_skeleton_pipeline(
+        compressor=compressor,
+        file_id="doc1",
+        selection_mode="auto",
+        query="where is the budget loop?",
+        top_k=2,
+        min_similarity=0.35,
+        raw_text=_PLAIN_DOC,
+    )
+
+    assert result["final_stage"] == "query_guided"
+    assert result["selection_mode_resolved"] == "auto-resolved: query_guided (caller query honored)"
+
+
+def test_auto_mode_with_caller_query_on_structured_doc_stays_evidence_aware():
+    """Guard: the prose fix must not change structured-doc behavior — a
+    caller query there already flows into the evidence_aware stage."""
+    compressor = _make_compressor_for_auto(
+        [_skeleton("baseline"), _skeleton("query_guided"), _skeleton("evidence_aware")]
+    )
+
+    result = run_read_skeleton_pipeline(
+        compressor=compressor,
+        file_id="doc1",
+        selection_mode="auto",
+        query="rate limiting",
+        top_k=2,
+        min_similarity=0.35,
+        raw_text=_STRUCTURED_DOC,
+    )
+
+    assert result["final_stage"] == "evidence_aware"
+    assert result["selection_mode_resolved"] == "auto-detected: evidence_aware"

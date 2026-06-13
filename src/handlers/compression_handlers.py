@@ -1725,15 +1725,20 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
     advisor = FidelityAdvisor()
     rec = advisor.recommend(use_case_enum, num_nodes, token_budget, query_complexity)
 
-    # Format response
+    # Format response. recommended_level is the enum NAME (e.g. "DETAILED") —
+    # modulate_region's fidelity_level takes the label, not the integer. The
+    # pre-fix code emitted .value, so the usage_tip told agents to pass
+    # fidelity_level='5', which modulate_region rejects (#92; codex production
+    # dogfood, 2026-06-12). The numeric level stays available alongside.
     response = {
-        "recommended_level": rec.recommended_level.value,
+        "recommended_level": rec.recommended_level.name,
+        "recommended_level_value": rec.recommended_level.value,
         "confidence": rec.confidence,
         "reasoning": rec.reasoning,
         "token_estimate": rec.token_estimate,
         "alternatives": rec.alternatives,
         "usage_tip": (
-            f"Use modulate_region with fidelity_level='{rec.recommended_level.value}' "
+            f"Use modulate_region with fidelity_level='{rec.recommended_level.name}' "
             f"to retrieve {num_nodes} nodes (~{rec.token_estimate} tokens)"
         ),
     }

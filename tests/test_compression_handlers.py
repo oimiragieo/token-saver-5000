@@ -1554,6 +1554,25 @@ class TestHandleRecommendFidelity:
         assert "confidence" in response
 
     @pytest.mark.asyncio
+    async def test_recommended_level_is_modulate_region_label(self):
+        """#92 (2026-06-12): recommended_level must be the FidelityLevel NAME —
+        the label modulate_region's `FidelityLevel[fidelity_str]` accepts.
+        Pre-fix it was the enum int, and usage_tip told agents to pass
+        fidelity_level='5', which raises KeyError (codex production dogfood)."""
+        from src.semantic_compressor import FidelityLevel
+
+        args = {"use_case": "question_answering", "num_nodes": 3}
+        response = json.loads(await ch.handle_recommend_fidelity({}, args))
+
+        assert response["recommended_level"] in FidelityLevel.__members__
+        assert isinstance(response["recommended_level_value"], int)
+        assert f"fidelity_level='{response['recommended_level']}'" in response["usage_tip"]
+        for alt in response["alternatives"]:
+            assert (
+                alt["level"] in FidelityLevel.__members__
+            ), f"alternatives must carry labels, got {alt['level']!r}"
+
+    @pytest.mark.asyncio
     async def test_invalid_use_case_raises_error(self):
         """Test that invalid use_case raises error"""
         args = {"use_case": "invalid_case", "num_nodes": 3}

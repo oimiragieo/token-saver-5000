@@ -267,7 +267,10 @@ class FidelityAdvisor:
             savings = self.TOKENS_PER_NODE[recommended] * num_nodes - lower_tokens
             alternatives.append(
                 {
-                    "level": lower.value,
+                    # NAME, not enum int — modulate_region's fidelity_level
+                    # takes the label (#92, 2026-06-12).
+                    "level": lower.name,
+                    "level_value": lower.value,
                     "tokens": lower_tokens,
                     "trade_off": f"Save {savings} tokens, but less detail",
                 }
@@ -283,7 +286,8 @@ class FidelityAdvisor:
             if not token_budget or higher_tokens <= token_budget:
                 alternatives.append(
                     {
-                        "level": higher.value,
+                        "level": higher.name,
+                        "level_value": higher.value,
                         "tokens": higher_tokens,
                         "trade_off": f"Use {cost} more tokens for richer context",
                     }

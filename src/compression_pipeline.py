@@ -119,6 +119,15 @@ def run_read_skeleton_pipeline(
         # caller didn't supply one explicitly.
         if selection_mode == "evidence_aware" and not query:
             query = _extract_h1_query(raw_text) or "key findings and verdict"
+        elif selection_mode == "baseline" and query:
+            # A caller-supplied query is an explicit intent signal — honor it.
+            # Pre-fix, auto on PROSE docs (which fail the structured-detection
+            # criteria above) resolved to baseline and SILENTLY ignored the
+            # query, returning all nodes (#92; dogfood + codex production
+            # find, 2026-06-12). Structured docs already honor the query via
+            # the evidence_aware branch.
+            selection_mode = "query_guided"
+            selection_mode_resolved = "auto-resolved: query_guided (caller query honored)"
     else:
         selection_mode_resolved = selection_mode
 

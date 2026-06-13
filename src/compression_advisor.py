@@ -60,7 +60,7 @@ class CompressionAdvisor:
         >>> text = "..." # 500-token document
         >>> estimate = advisor.estimate_compression(text)
         >>> print(f"Estimated: {estimate.compression_ratio:.1f}×")
-        Estimated: 7.5×
+        Estimated: 1.4×
     """
 
     def __init__(self, encoding_name: str = "cl100k_base"):
@@ -97,45 +97,65 @@ class CompressionAdvisor:
 
         # Step 2: Analyze document characteristics
         redundancy_score = self._estimate_redundancy(text)
-        structure_score = self._estimate_structure(text)
 
-        # Step 3: Apply size-based heuristics
-        if original_tokens < 100:
-            # Small docs: May expand due to skeleton overhead
-            base_ratio = 2.0
+        # Step 3: Apply size-based heuristics.
+        #
+        # Recalibrated 2026-06-12 (#92). The old bands here (7-9x at <500
+        # tokens, 15-20x at 2K+) predicted ratios the adaptive engine NEVER
+        # produces on those sizes — a live dogfood response carried
+        # estimated_ratio=7.08 next to an ACTUAL compression_ratio of 1.17 on
+        # the same document. The engine's real curve
+        # (semantic_compressor.compute_adaptive_ratio) keeps ~80% of nodes
+        # below 8K tokens (faithful-by-design), 50% to 32K, 20% to 100K, 10%
+        # above. Outcomes within a band still swing hard with redundancy
+        # (measured anchors: 1.17x on a dense ~500-token structured doc vs
+        # 9.54x on a highly redundant ~2.3K-token benchmark doc), so these
+        # estimates anchor on the CONSERVATIVE end and say so — a user who
+        # beats the estimate is delighted; the reverse reads as a broken
+        # promise.
+        if original_tokens < 200:
+            base_ratio = 1.0
+            confidence = "high"
+            reasoning = (
+                f"Tiny document ({original_tokens} tokens) - the skeleton's fixed "
+                "overhead (~50 tokens) typically cancels or exceeds any savings. "
+                "Send it as-is; compression is not worthwhile below ~200 tokens."
+            )
+        elif original_tokens < 8_000:
+            base_ratio = 1.2 + (redundancy_score * 0.8)  # ~1.2-2.0x conservative
             confidence = "low"
             reasoning = (
-                f"Small document ({original_tokens} tokens) - compression may not be effective. "
-                "Skeleton format has fixed overhead (~50 tokens). "
-                "Consider ingesting larger documents for better results."
+                f"Small/medium document ({original_tokens} tokens) - the adaptive "
+                "engine keeps ~80% of nodes at this size (faithful-by-design), so "
+                "expect modest savings: ~1.2x measured on a dense structured doc. "
+                "Highly redundant prose can land far above this estimate "
+                "(9.54x benchmark on a redundant doc of similar size), but the "
+                "estimate anchors on the conservative end."
             )
-        elif original_tokens < 500:
-            # Medium docs: Proven range 5-10× (demo_proof: 7.9×)
-            base_ratio = 7.0 + (redundancy_score * 2.0)  # 7-9× based on redundancy
-            confidence = "high"
-            reasoning = (
-                f"Medium document ({original_tokens} tokens) with "
-                f"{'high' if redundancy_score > 0.7 else 'moderate'} redundancy. "
-                "Proven baseline: 7.9× compression on similar-sized documents. "
-                f"Structure quality: {'excellent' if structure_score > 0.7 else 'good'}."
-            )
-        elif original_tokens < 2000:
-            # Large docs: Better compression
-            base_ratio = 10.0 + (redundancy_score * 5.0)  # 10-15×
-            confidence = "high"
-            reasoning = (
-                f"Large document ({original_tokens} tokens) - optimal for compression. "
-                "More semantic redundancy = better compression. "
-                f"Estimated {base_ratio:.1f}× based on structure and repetition analysis."
-            )
-        else:
-            # Very large docs: Best compression
-            base_ratio = 15.0 + (redundancy_score * 5.0)  # 15-20×
+        elif original_tokens < 32_000:
+            base_ratio = 2.0 + (redundancy_score * 1.0)  # ~2-3x
             confidence = "medium"
             reasoning = (
-                f"Very large document ({original_tokens:,} tokens) - excellent compression potential. "
-                "Graph analysis will identify high-importance concepts. "
-                f"Expected {base_ratio:.1f}× compression with {skeleton_ratio*100:.0f}% skeleton ratio."
+                f"Medium-large document ({original_tokens:,} tokens) - the adaptive "
+                "engine keeps ~50% of nodes at this size. Conservative estimate "
+                f"{2.0 + (redundancy_score * 1.0):.1f}x; redundant content can exceed it."
+            )
+        elif original_tokens < 100_000:
+            base_ratio = 4.0 + (redundancy_score * 2.0)  # ~4-6x
+            confidence = "medium"
+            reasoning = (
+                f"Large document ({original_tokens:,} tokens) - the adaptive engine "
+                "keeps ~20% of nodes at this size; compression starts paying "
+                "substantially here."
+            )
+        else:
+            base_ratio = 6.0 + (redundancy_score * 4.0)  # ~6-10x
+            confidence = "medium"
+            reasoning = (
+                f"Very large document ({original_tokens:,} tokens) - the adaptive "
+                "engine keeps ~10% of nodes; this is the strongest-compression "
+                f"regime. Expected ~{6.0 + (redundancy_score * 4.0):.1f}x with "
+                f"{skeleton_ratio * 100:.0f}% skeleton ratio."
             )
 
         # Step 4: Adjust for skeleton ratio
