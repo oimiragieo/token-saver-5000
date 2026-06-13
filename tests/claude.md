@@ -1030,6 +1030,7 @@ Documentation and help-surface contract tests for launch readiness.
 | `async def` | `test_search_returns_results_above_threshold` |
 | `async def` | `test_search_top_k_respected` |
 | `async def` | `test_read_doc_by_slug_returns_markdown` |
+| `async def` | `test_read_doc_unindexed_slug_returns_suggestions_not_noisy_blob` |
 | `async def` | `test_read_doc_truncates_long_responses` |
 | `async def` | `test_session_dedup_does_not_repeat_urls` |
 | `def` | `test_docs_root_returns_none_when_local_path_missing` |

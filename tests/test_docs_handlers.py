@@ -102,6 +102,30 @@ async def test_read_doc_by_slug_returns_markdown():
 
 
 @pytest.mark.asyncio
+async def test_read_doc_unindexed_slug_returns_suggestions_not_noisy_blob():
+    """#99 (codex dogfood): a bare slug that is a SECTION anchor (not a
+    standalone indexed doc) must NOT fetch + truncate the full /docs page.
+    It returns actionable guidance — closest indexed docs + a gc_search_docs
+    nudge — instead of a noisy truncated markdown blob.
+
+    (Production parallel: gc_read_doc("mcp-server") misses because that is a
+    section anchor on the /docs page, not a standalone doc. We use a compound
+    anchor variant that is guaranteed absent from any fixture but still
+    BM25-matchable against the MCP docs for suggestions.)"""
+    unindexed = "mcp-server-configuration-deep-dive"
+    assert unindexed not in dh._DOC_BY_SLUG  # precondition: truly unindexed
+    response = await dh.handle_gc_read_doc({}, {"url_or_slug": unindexed})
+    data = json.loads(response)
+
+    assert data.get("error") == "no_exact_doc"
+    assert "markdown" not in data  # the noisy blob is NOT returned
+    assert "gc_search_docs" in data["message"]
+    assert isinstance(data["suggestions"], list) and len(data["suggestions"]) >= 1
+    top = data["suggestions"][0]
+    assert {"title", "slug", "url", "score"} <= set(top)
+
+
+@pytest.mark.asyncio
 async def test_read_doc_truncates_long_responses():
     long_doc = (
         "# GotContext Docs\n\n"

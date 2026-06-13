@@ -370,10 +370,37 @@ async def handle_gc_read_doc(context: dict[str, Any], args: dict[str, Any]) -> s
     try:
         source_url, anchor_slug = _normalize_slug_or_url(url_or_slug)
         chunk = _DOC_BY_SLUG.get(anchor_slug or "") or _DOC_BY_URL.get(source_url)
+        is_bare_slug = not urlparse(url_or_slug).scheme
 
-        if chunk and not urlparse(url_or_slug).scheme:
+        if chunk and is_bare_slug:
             markdown = chunk.markdown
             source_url = chunk.url
+        elif is_bare_slug:
+            # A bare slug that doesn't match an indexed doc would otherwise
+            # fetch the full /docs page — a large, noisy React-rendered blob
+            # that the char-cap below truncates mid-content (#99, codex
+            # dogfood: gc_read_doc("mcp-server") returned a truncated blob
+            # because that is a SECTION anchor on the docs page, not a
+            # standalone doc slug). Return actionable guidance instead: the
+            # closest indexed docs by relevance + the precise slugs to use.
+            ranked = _bm25_scores(url_or_slug.replace("-", " "), _DOC_CHUNKS)[:5]
+            suggestions = [
+                {"title": c.title, "slug": c.slug, "url": c.url, "score": round(score, 4)}
+                for c, score in ranked
+            ]
+            return json.dumps(
+                {
+                    "error": "no_exact_doc",
+                    "message": (
+                        f"No indexed doc matches the slug '{anchor_slug}'. It may be a "
+                        "section anchor on a larger page rather than a standalone doc. "
+                        "Call gc_search_docs(query=...) to find the right section, or "
+                        "gc_read_doc with one of the suggested slugs below."
+                    ),
+                    "suggestions": suggestions,
+                    "source_url": source_url,
+                }
+            )
         else:
             markdown = await _fetch_url_markdown(source_url)
 
