@@ -12,7 +12,7 @@ Token Saver 5000 is an MCP server that performs semantic compression of text and
 
 ## Monorepo context (gotcontext.ai)
 
-When this directory lives inside **gotcontext-main** (sibling of `api/` and `apps/web/`), the canonical **platform** documentation is the repository root [`../CLAUDE.md`](../CLAUDE.md). That file explains:
+When this engine is vendored inside the gotcontext.ai platform monorepo, the canonical **platform** documentation lives at the monorepo root `CLAUDE.md`. That file explains:
 
 - How the FastAPI app mounts **MCP Streamable HTTP** at `https://api.gotcontext.ai/mcp` using this package’s `src.handlers` toolchain.
 - How **plan gating** and **`GOTCONTEXT_SAAS_MODE`** strip dangerous tools in SaaS.

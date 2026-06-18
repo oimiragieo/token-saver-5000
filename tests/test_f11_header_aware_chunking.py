@@ -58,7 +58,7 @@ oversized section sub-splitting use sentence boundaries instead of paragraph bou
 
 ## Environment notes
 
-The main worktree is at C:/dev/projects/gotcontext-main on branch main.  The F11
+The F11
 fix branch is feature/2026-05-24-f11-ranker-fix.  Python 3.11.  ONNX embedding tier.
 """
 
