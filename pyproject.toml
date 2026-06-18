@@ -3,7 +3,7 @@ name = "gotcontext-server"
 version = "0.11.0"
 description = "Self-hosted MCP server for gotcontext.ai — semantic compression, AST-aware code understanding, and context engineering for LLM agents."
 authors = [{name = "gotcontext.ai"}]
-license = "MIT"
+license = "BUSL-1.1"
 readme = "README.md"
 keywords = ["gotcontext", "mcp", "compression", "llm", "tokens", "semantic"]
 classifiers = [

@@ -795,4 +795,4 @@ Start here:
 
 ## License
 
-MIT (`LICENSE`).
+[Business Source License 1.1](LICENSE) (BSL 1.1). Free to use, modify, and self-host — including inside your own company — for any purpose, **except** offering it to third parties as a competing hosted service. That one case needs a commercial license; see [`COMMERCIAL.md`](COMMERCIAL.md). Each version converts to Apache 2.0 four years after its release.
