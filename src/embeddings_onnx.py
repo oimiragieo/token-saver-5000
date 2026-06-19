@@ -10,6 +10,7 @@ Key Features:
 - Batch inference with configurable parallelism
 - Automatic model download and caching
 - Fallback to standard embeddings on failure
+- Per-model pooling selector (CLS for ModernBERT/granite, mean for bge/MiniLM)
 
 Performance Characteristics:
 - Memory: ~150MB (vs ~400MB for PyTorch sentence-transformers)
@@ -18,6 +19,8 @@ Performance Characteristics:
 
 Supported Models:
 - all-MiniLM-L6-v2 (default, 384 dimensions)
+- BAAI/bge-small-en-v1.5 (384 dimensions, mean pooling)
+- onnx-community/granite-embedding-small-english-r2-ONNX (384 dimensions, CLS pooling)
 - Optimized ONNX models from Hugging Face Optimum
 """
 
@@ -32,6 +35,27 @@ import numpy as np
 from .constants import DEFAULT_TEXT_MODEL
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Per-model pooling policy
+# ---------------------------------------------------------------------------
+# granite-r2 (ibm-granite/ModernBERT architecture) uses CLS pooling —
+# the model card and sentence-transformers Pooling config both confirm
+# pooling_mode_cls_token=True, pooling_mode_mean_tokens=False.
+# All other models we ship (bge-small, MiniLM) use mean pooling.
+# Key = any substring that uniquely identifies the model family.
+_CLS_POOLING_SUBSTRINGS = frozenset(
+    [
+        "granite-embedding",
+        "granite-embedding-small-english-r2",
+    ]
+)
+
+
+def _uses_cls_pooling(model_name: str) -> bool:
+    """Return True when *model_name* is a granite/ModernBERT CLS-pooling model."""
+    name_lower = model_name.lower()
+    return any(sub in name_lower for sub in _CLS_POOLING_SUBSTRINGS)
 
 
 class ONNXEmbeddingManager:
@@ -94,17 +118,35 @@ class ONNXEmbeddingManager:
 
                 if not model_path.exists():
                     logger.info("Downloading and optimizing ONNX model (first-time setup)...")
-                    # Export model to ONNX format
-                    ort_model = ORTModelForFeatureExtraction.from_pretrained(
-                        self.model_name, export=True, cache_dir=str(self.cache_dir)
-                    )
+
+                    # onnx-community pre-exported repos ship an onnx/ subfolder;
+                    # use subfolder='onnx' when the model name signals it.
+                    if "onnx-community" in self.model_name.lower():
+                        ort_model = ORTModelForFeatureExtraction.from_pretrained(
+                            self.model_name,
+                            subfolder="onnx",
+                            file_name="model.onnx",
+                            cache_dir=str(self.cache_dir),
+                        )
+                    else:
+                        # Export model to ONNX format on the fly
+                        ort_model = ORTModelForFeatureExtraction.from_pretrained(
+                            self.model_name, export=True, cache_dir=str(self.cache_dir)
+                        )
 
                     # Save to cache
                     ort_model.save_pretrained(str(model_path))
                     logger.info(f"ONNX model cached to {model_path}")
                 else:
-                    # Load from cache
-                    ort_model = ORTModelForFeatureExtraction.from_pretrained(str(model_path))
+                    # Load from cache (already in local subfolder form)
+                    if "onnx-community" in self.model_name.lower():
+                        ort_model = ORTModelForFeatureExtraction.from_pretrained(
+                            str(model_path),
+                            subfolder="onnx",
+                            file_name="model.onnx",
+                        )
+                    else:
+                        ort_model = ORTModelForFeatureExtraction.from_pretrained(str(model_path))
 
                 self._session = ort_model
 
@@ -164,8 +206,14 @@ class ONNXEmbeddingManager:
         # Run inference
         try:
             outputs = self._session(**encoded)
-            # Mean pooling
-            embeddings = self._mean_pooling(outputs.last_hidden_state, encoded["attention_mask"])
+            # Per-model pooling: CLS for granite/ModernBERT, mean for bge/MiniLM.
+            # L2-normalize EXACTLY ONCE below — do not call normalize inside pooling helpers.
+            if _uses_cls_pooling(self.model_name):
+                embeddings = self._cls_pooling(outputs.last_hidden_state)
+            else:
+                embeddings = self._mean_pooling(
+                    outputs.last_hidden_state, encoded["attention_mask"]
+                )
 
             # Convert to numpy
             embeddings = embeddings.detach().cpu().numpy()
@@ -179,6 +227,24 @@ class ONNXEmbeddingManager:
         except Exception as e:
             logger.error(f"ONNX inference failed: {e}")
             raise
+
+    def _cls_pooling(self, token_embeddings):
+        """
+        CLS pooling — extracts the [CLS] token representation (position 0).
+
+        Required for ModernBERT-architecture models such as granite-embedding-r2.
+        The model card and sentence-transformers Pooling config both confirm
+        pooling_mode_cls_token=True for these models.  Using mean pooling on
+        granite yields cosine ~0.91-0.96 vs the oracle; CLS yields cos=1.000.
+
+        Args:
+            token_embeddings: Tensor of shape (batch, seq_len, hidden_size)
+
+        Returns:
+            Tensor of shape (batch, hidden_size) — the [CLS] token.
+        """
+        # [CLS] is at position 0 in every BERT-family model with add_special_tokens=True
+        return token_embeddings[:, 0, :]
 
     def _mean_pooling(self, token_embeddings, attention_mask):
         """
