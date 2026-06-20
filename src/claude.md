@@ -440,6 +440,7 @@ ONNX Embedding Manager for Token Saver 5000 (v0.6.0)
 
 | Kind | Name |
 |------|------|
+| `def` | `_uses_cls_pooling` |
 | `class` | `ONNXEmbeddingManager` |
 | `def` | `get_onnx_embedding_manager` |
 

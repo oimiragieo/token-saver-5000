@@ -1958,6 +1958,18 @@ Tests for OpenCode enhancements: model database, cache strategy advisor, pricing
 | `class` | `TestBenchmarkProvider` |
 | `class` | `TestMCPCacheStrategyTool` |
 
+#### `test_output_determinism.py`
+
+Cross-process output determinism regression gate.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_extract_key_entities_first_occurrence_deterministic` |
+| `def` | `test_extract_key_entities_dedup_preserves_order` |
+| `def` | `test_skeleton_deterministic_same_process` |
+| `def` | `_run_worker` |
+| `def` | `test_skeleton_deterministic_across_hashseed` |
+
 #### `test_parity_characterization.py`
 
 Phase 0 characterization tests for core MCP compression flows.

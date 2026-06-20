@@ -625,8 +625,12 @@ class SemanticCompressor:
             if word[0].isupper() and i > 0 and words[i - 1][-1] not in ".!?":
                 entities.append(word)
 
-        # Return unique entities
-        return list(set(entities))[:max_entities]
+        # Return unique entities. dict.fromkeys preserves first-occurrence order
+        # (deterministic across processes); list(set(...)) was PYTHONHASHSEED-dependent,
+        # so WHICH entities survived the [:max_entities] truncation varied run-to-run
+        # and the "Key entities:" skeleton line was non-deterministic. See
+        # tests/test_output_determinism.py.
+        return list(dict.fromkeys(entities))[:max_entities]
 
     def _generate_summary(self, text: str, max_length: int = 100) -> str:
         """
