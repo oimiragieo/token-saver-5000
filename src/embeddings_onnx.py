@@ -218,9 +218,15 @@ class ONNXEmbeddingManager:
             # Convert to numpy
             embeddings = embeddings.detach().cpu().numpy()
 
-            # Normalize
+            # Normalize. Guard against a zero-norm row (all-zero model output
+            # from pad-only input or a silent failure): dividing by 0 yields NaN
+            # which then propagates silently into cosine ranking and corrupts
+            # node selection. Replace a zero norm with 1.0 so the row stays
+            # all-zero instead of NaN. (audit 2026-06-24)
             if normalize:
-                embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+                norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+                norms[norms == 0] = 1.0
+                embeddings = embeddings / norms
 
             return embeddings
 

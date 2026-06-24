@@ -1322,6 +1322,21 @@ class SemanticCompressor:
                 coarse_keep = max(2, len(node_scores) // 2)
                 coarse_nodes = node_scores[:coarse_keep]
 
+                # Never let the COMI coarse filter drop an explicitly-anchored
+                # node. Anchors are merged into ``skeleton_nodes`` below, but that
+                # set only controls [ANCHOR]/[HIDDEN] *labelling* — the render
+                # loop iterates ``file_nodes``. An anchor dropped here would be
+                # absent from the output entirely, silently violating the
+                # "always keep this region" anchor / evidence-aware contract.
+                # Union dropped anchors back in. (audit 2026-06-24)
+                if anchor_node_ids:
+                    _anchor_set = set(anchor_node_ids)
+                    _kept_ids = {nid for nid, _, _ in coarse_nodes}
+                    for _scored in node_scores:
+                        if _scored[0] in _anchor_set and _scored[0] not in _kept_ids:
+                            coarse_nodes.append(_scored)
+                            _kept_ids.add(_scored[0])
+
                 # Replace file_nodes with coarse-filtered set
                 file_nodes = [(nid, node) for nid, node, _ in coarse_nodes]
                 # Re-sort by importance for downstream processing

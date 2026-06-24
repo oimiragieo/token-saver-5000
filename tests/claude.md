@@ -174,6 +174,16 @@ Comprehensive tests for afm_handlers.py
 | `class` | `TestHandleAfmExportHistory` |
 | `class` | `TestHandleAfmImportHistory` |
 
+#### `test_anchor_comi_survival.py`
+
+Audit 2026-06-24 CRITICAL regression lock.
+
+| Kind | Name |
+|------|------|
+| `def` | `_build_sectioned_doc` |
+| `def` | `_extract_anchor_ids` |
+| `def` | `test_comi_coarse_pass_never_drops_explicit_anchor` |
+
 #### `test_assessment_handlers.py`
 
 Tests for should_compress assessment handler (v0.9.2+).
