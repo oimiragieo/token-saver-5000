@@ -1145,6 +1145,13 @@ class SemanticCompressor:
 
         # Query-guided selection
         query_embedding = self.model.encode([query])[0]
+        # A degenerate (NaN/Inf) query embedding would make q_unit (and the whole
+        # relevance_vec) NaN — a NaN norm is truthy, so the ``q_norm_val != 0.0``
+        # guard below does NOT catch it — silently corrupting MMR ranking. Fall
+        # back to importance-only ordering (the no-query path) instead. (#134)
+        if not np.isfinite(query_embedding).all():
+            ranked = sorted(file_nodes, key=lambda item: _imp(item[0], item[1]), reverse=True)
+            return [node_id for node_id, _ in ranked[:num_skeleton]]
 
         # L2-normalise the node-embedding matrix ONCE (float64 accumulation,
         # contiguous). cosine(a, b) == dot(a/||a||, b/||b||); normalising up front
@@ -1640,6 +1647,10 @@ class SemanticCompressor:
             return 0.0
 
         query_embedding = self.model.encode([query])[0]
+        # Guard a degenerate (NaN/Inf) query embedding so this returns 0.0
+        # relevance instead of propagating NaN into the sufficiency gate. (#134)
+        if not np.isfinite(query_embedding).all():
+            return 0.0
         best = -1.0
         for node in candidate_nodes:
             similarity = float(cosine_similarity([query_embedding], [node.embedding])[0][0])
@@ -2133,7 +2144,7 @@ class SemanticCompressor:
         chunks_updated = min(len(removed_texts), len(added_texts))
 
         preserved = {}
-        for nid, node in old_chunks.items():
+        for node in old_chunks.values():
             if node.text in unchanged_texts and node.embedding is not None:
                 preserved[node.text] = node.embedding.copy()
 
@@ -2174,7 +2185,11 @@ class SemanticCompressor:
         start_time = time.monotonic()
         for i in range(len(all_nodes)):
             nid_a, node_a = all_nodes[i]
-            file_a = nid_a.rsplit("_", 1)[0] if "_" in nid_a else nid_a
+            # Use the canonical node-id parser, not rsplit("_", 1): a code node
+            # is "file_id::symbol" where the symbol may contain underscores, so
+            # rsplit mis-extracts the file id and two functions in the SAME file
+            # get compared as if cross-file (false-positive duplicates). (#134)
+            file_a = extract_file_id_from_node(nid_a)
 
             for j in range(i + 1, len(all_nodes)):
                 # Check timeout every 1000 comparisons
@@ -2190,7 +2205,7 @@ class SemanticCompressor:
                     return duplicates
 
                 nid_b, node_b = all_nodes[j]
-                file_b = nid_b.rsplit("_", 1)[0] if "_" in nid_b else nid_b
+                file_b = extract_file_id_from_node(nid_b)
 
                 # Only compare across different files
                 if file_a == file_b:

@@ -229,6 +229,17 @@ Enterprise audit — compression-engine correctness regression locks.
 | `class` | `TestGetStatsNoSkeletonSideEffect` |
 | `class` | `TestBm25PrefixMatch` |
 
+#### `test_audit_followups_134.py`
+
+Audit follow-up #134 regression locks (2026-06-24).
+
+| Kind | Name |
+|------|------|
+| `def` | `_node` |
+| `def` | `test_find_duplicates_same_file_code_nodes_not_compared` |
+| `def` | `test_max_dense_cosine_nan_query_returns_zero` |
+| `def` | `test_select_skeleton_ordered_nan_query_falls_back_to_importance` |
+
 #### `test_audited_graph.py`
 
 Tests for Audited Semantic Graph
