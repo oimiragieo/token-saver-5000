@@ -304,6 +304,65 @@ class TestFileIdPrefixIsolation:
             set(diff_stats["preserved"].keys()) & foobar_texts
         ), "diff stats for 'foo' preserved 'foobar' chunk text (prefix collision)"
 
+    @pytest.mark.asyncio
+    async def test_prune_by_relevance_handler_excludes_prefix_sibling(self, monkeypatch):
+        """handle_prune_by_relevance must scope nodes by boundary-safe file_id match,
+        not bare startswith (audit P1-5 straggler). Model-free: fake chunks + a patched
+        embedder so this never touches the SBERT/ONNX model cache."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        from src.handlers import compression_handlers as ch
+
+        compressor = Mock()
+        compressor.graphs = {"report": object(), "report_archive": object()}
+        compressor.chunks = {
+            "report_n0": SimpleNamespace(embedding=np.array([1.0, 0.0], dtype=np.float32)),
+            "report_n1": SimpleNamespace(embedding=np.array([0.0, 1.0], dtype=np.float32)),
+            "report_archive_n0": SimpleNamespace(embedding=np.array([1.0, 1.0], dtype=np.float32)),
+        }
+        fake_mgr = Mock()
+        fake_mgr.encode.return_value = np.array([[1.0, 0.0]], dtype=np.float32)
+        monkeypatch.setattr("src.embeddings.EmbeddingManager", lambda *a, **k: fake_mgr)
+
+        result = json.loads(
+            await ch.handle_prune_by_relevance(
+                {"compressor": compressor},
+                {"doc_id": "report", "query": "auth", "keep_ratio": 0.5},
+            )
+        )
+        assert (
+            result["total_nodes"] == 2
+        ), "prune_by_relevance counted report_archive_* nodes via bare startswith"
+        leaked = [nid for nid in result["kept_node_ids"] if nid.startswith("report_archive")]
+        assert leaked == [], f"prune leaked prefix-sibling nodes: {leaked}"
+
+    @pytest.mark.asyncio
+    async def test_multi_level_skeleton_handler_excludes_prefix_sibling(self):
+        """handle_multi_level_skeleton must scope nodes by boundary-safe file_id match.
+        Model-free: fake chunks, no embedder involved."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        from src.handlers import compression_handlers as ch
+
+        compressor = Mock()
+        compressor.graphs = {"report": object(), "report_archive": object()}
+        compressor.chunks = {
+            "report_n0": SimpleNamespace(text="auth tokens login refresh", importance=0.9),
+            "report_archive_n0": SimpleNamespace(
+                text="ZZZSENTINEL billing cold storage aggregation", importance=0.9
+            ),
+        }
+
+        result = json.loads(
+            await ch.handle_multi_level_skeleton({"compressor": compressor}, {"doc_id": "report"})
+        )
+        # The sibling's unique sentinel text must never appear in 'report's skeleton.
+        assert "ZZZSENTINEL" not in json.dumps(
+            result["levels"]
+        ), "multi_level_skeleton leaked report_archive_* nodes via bare startswith"
+
 
 # ===========================================================================
 # P1-6 — TFIDF silent fallback must raise when SBERT+ONNX fail

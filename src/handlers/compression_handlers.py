@@ -2370,10 +2370,12 @@ async def handle_prune_by_relevance(context: HandlerContext, args: Dict[str, Any
     if doc_id not in compressor.graphs:
         return json.dumps({"error": f"Document '{doc_id}' not found"})
 
-    # Collect node embeddings for this doc
+    # Collect node embeddings for this doc. Boundary-safe match (extract_file_id_from_node)
+    # not bare startswith — else file_ids sharing a prefix ('report' vs 'report_archive')
+    # cross-contaminate: 'report_archive_n3'.startswith('report') is True. (audit P1-5)
     node_embeddings = {}
     for nid, node in compressor.chunks.items():
-        if nid.startswith(doc_id):
+        if extract_file_id_from_node(nid) == doc_id:
             node_embeddings[nid] = node.embedding
 
     if not node_embeddings:
@@ -2409,10 +2411,11 @@ async def handle_multi_level_skeleton(context: HandlerContext, args: Dict[str, A
     if doc_id not in compressor.graphs:
         return json.dumps({"error": f"Document '{doc_id}' not found"})
 
-    # Build node list with importance scores
+    # Build node list with importance scores. Boundary-safe match (see prune_by_relevance;
+    # bare startswith cross-contaminates prefix-sharing file_ids — audit P1-5).
     nodes = []
     for nid, node in compressor.chunks.items():
-        if nid.startswith(doc_id):
+        if extract_file_id_from_node(nid) == doc_id:
             nodes.append(
                 {
                     "node_id": nid,
