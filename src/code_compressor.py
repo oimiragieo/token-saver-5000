@@ -167,8 +167,8 @@ class CodeSemanticCompressor:
 
         # Extract functions and classes
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                # Extract function
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Extract function (async def is a sibling type, not a subclass — #194)
                 func_code = ast.get_source_segment(code, node)
                 docstring = ast.get_docstring(node)
 
@@ -200,7 +200,11 @@ class CodeSemanticCompressor:
                 docstring = ast.get_docstring(node)
 
                 # Get method names
-                methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef)]
+                methods = [
+                    n.name
+                    for n in node.body
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                ]
 
                 chunks.append(
                     CodeChunk(
