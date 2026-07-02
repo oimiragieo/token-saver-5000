@@ -1464,8 +1464,13 @@ class SemanticCompressor:
         # Build skeleton text
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
+        skeleton_lines.append("Skeleton-Version: 2")
         skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
-        skeleton_lines.append(f"Compression: {effective_ratio:.0%} of content shown\n")
+        skeleton_lines.append(f"Compression: {effective_ratio:.0%} of content shown")
+        # Explain hidden-region drill-down ONCE here (Skeleton-Version 2) instead of
+        # repeating the phrase on every [HIDDEN] node — the per-node repetition was a
+        # hard ratio ceiling (~15-20x). Consumers can branch on Skeleton-Version.
+        skeleton_lines.append("Hidden regions expand via modulate_region(node_id).\n")
 
         node_map = {}
         total_tokens = 0
@@ -1488,18 +1493,20 @@ class SemanticCompressor:
                 node_map[node_id] = f"ANCHOR: {summary[:50]}..."
                 skeleton_tokens += self._count_tokens(line)
             else:
-                # Low-importance: render the already-computed short summary so a
-                # non-drill-down reader is not left empty-handed.  The static
-                # "[HIDDEN] Detail hidden (use modulate_region to expand)" phrase
-                # is preserved verbatim and FIRST (it is regression-locked
-                # downstream); the content summary is appended after it.
+                # Low-importance: keep the [node_id] (drill-down addressability) and
+                # the [HIDDEN] marker, plus the already-computed short summary so a
+                # non-drill-down reader is not left empty-handed. The verbose
+                # "Detail hidden (use modulate_region to expand)" phrase is HOISTED to
+                # the skeleton header once (Skeleton-Version 2) rather than repeated
+                # per node — repetition capped the ratio. Live web consumers (gc_lookup,
+                # KB search) prefer raw_text over this text, so dropping the repeated
+                # phrase is wire-safe; the [HIDDEN] marker + header pointer remain.
                 summary = self._generate_summary(node.text, max_length=50)
                 summary = summary.strip() if summary else ""
-                base = f"[{node_id}] [HIDDEN] Detail hidden (use modulate_region to expand)"
                 if summary:
-                    line = f"{base} - {summary}\n"
+                    line = f"[{node_id}] [HIDDEN] - {summary}\n"
                 else:
-                    line = f"{base}\n"
+                    line = f"[{node_id}] [HIDDEN]\n"
 
                 skeleton_lines.append(line)
                 node_map[node_id] = f"Hidden: {summary[:30]}..."

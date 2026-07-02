@@ -77,7 +77,7 @@ class TestBasicFunctionality:
         assert skeleton is not None
         assert len(skeleton) > 0
         assert "SEMANTIC SKELETON" in skeleton
-        assert "ANCHOR" in skeleton or "Detail hidden" in skeleton
+        assert "ANCHOR" in skeleton or "[HIDDEN]" in skeleton
 
         print("\n✅ Skeleton Generation:")
         print(f"   Length: {len(skeleton)} characters")

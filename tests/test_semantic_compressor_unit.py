@@ -484,9 +484,7 @@ Related paragraph two."""
         result = self.compressor.ingest_file(text, "skeleton_anchor_test")
 
         # Should have at least one ANCHOR node
-        assert (
-            "[ANCHOR]" in result.skeleton_text or "[HIDDEN] Detail hidden" in result.skeleton_text
-        )
+        assert "[ANCHOR]" in result.skeleton_text or "[HIDDEN]" in result.skeleton_text
 
     def test_skeleton_hidden_nodes_marked(self):
         """Test that low-importance nodes are marked as hidden"""
@@ -499,7 +497,7 @@ Related paragraph two."""
         # With 10 paragraphs and 20% ratio, should have some hidden nodes
         # Only check if we have multiple nodes
         if result.total_nodes > 1:
-            assert "[HIDDEN] Detail hidden" in result.skeleton_text
+            assert "[HIDDEN]" in result.skeleton_text
         else:
             # If all combined into one chunk, should have anchor
             assert "[ANCHOR]" in result.skeleton_text

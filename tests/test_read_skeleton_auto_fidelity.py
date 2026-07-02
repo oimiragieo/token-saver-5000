@@ -167,19 +167,16 @@ class TestHiddenLineCarriesSummary:
         lines = skeleton.skeleton_text.splitlines()
         hidden_lines = [ln for ln in lines if "[HIDDEN]" in ln]
         assert hidden_lines, f"expected at least one [HIDDEN] line:\n{skeleton.skeleton_text}"
-        # The static pointer phrase is preserved (regression-locked), but each
-        # hidden line must now ALSO carry an appended content summary — i.e. the
-        # line must be strictly longer than the bare placeholder.  Pre-fix the
-        # line was EXACTLY the placeholder (summary discarded).
-        placeholder = "[HIDDEN] Detail hidden (use modulate_region to expand)"
 
+        # Skeleton-Version 2 (2026-07-01): the verbose "Detail hidden (use
+        # modulate_region to expand)" phrase was hoisted to the header ONCE (ratio
+        # ceiling fix); each hidden node line is now "[node_id] [HIDDEN] - {summary}".
+        # The line must still carry a content summary after the [HIDDEN] marker.
         def _carries_summary(line: str) -> bool:
-            # Strip the leading "[node_id] " prefix, then require content after
-            # the static placeholder.
-            idx = line.find(placeholder)
+            idx = line.find("[HIDDEN]")
             if idx < 0:
                 return False
-            tail = line[idx + len(placeholder) :].strip()
+            tail = line[idx + len("[HIDDEN]") :].lstrip(" -").strip()
             return len(tail) > 0
 
         assert any(_carries_summary(ln) for ln in hidden_lines), (

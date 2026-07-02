@@ -21,6 +21,13 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.handlers import compression_handlers as ch
+from src.semantic_compressor import SemanticCompressor
+
+_MULTI_NODE_DOC = "\n\n".join(
+    f"Section {i}: This paragraph discusses topic number {i} in enough detail to form "
+    f"its own semantic node with distinct vocabulary about subject {i} and its uses."
+    for i in range(10)
+)
 
 
 def _make_context():
@@ -109,3 +116,34 @@ async def test_ingest_small_doc_returns_honesty_note():
     assert data["note"] is not None
     assert "too small" in data["note"].lower()
     assert data["token_savings_percent"] <= 0
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — HIDDEN boilerplate hoisted to a one-time header (ratio-ceiling win).
+# Council (codex+droid) reclassified this from low→MEDIUM (wire-format contract):
+# repeating "Detail hidden (use modulate_region to expand)" per hidden node capped
+# the ratio (~15-20x). Fix hoists the explanation to the header ONCE + a
+# Skeleton-Version marker; per-node keeps [node_id] + [HIDDEN] (addressability).
+# Live web consumers prefer raw_text, so dropping the repeated phrase is wire-safe.
+# ---------------------------------------------------------------------------
+
+
+def test_hidden_boilerplate_hoisted_to_header_once():
+    """The verbose per-node phrase must be gone; [node_id]+[HIDDEN]+pointer survive."""
+    compressor = SemanticCompressor(skeleton_ratio=0.2)
+    compressor.ingest_file(_MULTI_NODE_DOC, "wc_hidden_doc")
+    skeleton = compressor._generate_skeleton("wc_hidden_doc")
+    text = skeleton.skeleton_text
+
+    hidden_node_lines = [
+        ln for ln in text.splitlines() if ln.lstrip().startswith("[") and "[HIDDEN]" in ln
+    ]
+    assert hidden_node_lines, f"expected hidden nodes at aggressive ratio:\n{text}"
+    # Pre-fix this phrase repeated once per hidden node — the ratio ceiling.
+    assert text.count("Detail hidden (use modulate_region to expand)") == 0
+    for ln in hidden_node_lines:
+        assert "[HIDDEN]" in ln
+        assert ln.lstrip().startswith("[")  # node_id preserved for modulate_region
+    # The drill-down pointer + a version marker now live in the header (once).
+    assert "modulate_region" in text
+    assert "Skeleton-Version: 2" in text
