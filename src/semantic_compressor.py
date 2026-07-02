@@ -614,36 +614,139 @@ class SemanticCompressor:
     def _extract_key_entities(self, text: str, max_entities: int = 5) -> List[str]:
         """
         Simple entity extraction (can be enhanced with NER).
-        Currently uses capitalized words as proxy for entities.
+        Uses capitalized words as a proxy for entities, minus common English words
+        that are capitalized only because they follow punctuation — e.g. after a
+        colon "Section 2: This ..." must NOT surface "This" as an entity (Task 4:
+        dogfood found "Key entities: This" garbage). Also strips surrounding
+        punctuation so entities read clean.
         """
-        # Find capitalized phrases (simple heuristic)
+        # Capitalized-but-not-an-entity words (sentence openers / determiners /
+        # pronouns / aux verbs). Local frozenset — entity extraction runs once per
+        # chunk at ingest, so the rebuild cost is negligible.
+        stopwords = frozenset(
+            {
+                "The",
+                "This",
+                "That",
+                "These",
+                "Those",
+                "A",
+                "An",
+                "It",
+                "Its",
+                "He",
+                "She",
+                "They",
+                "We",
+                "You",
+                "In",
+                "On",
+                "At",
+                "For",
+                "But",
+                "And",
+                "Or",
+                "Nor",
+                "If",
+                "So",
+                "As",
+                "Of",
+                "To",
+                "From",
+                "By",
+                "With",
+                "Then",
+                "There",
+                "Here",
+                "When",
+                "Where",
+                "What",
+                "Which",
+                "Who",
+                "Whom",
+                "How",
+                "Why",
+                "Section",
+                "Also",
+                "However",
+                "Their",
+                "Our",
+                "Your",
+                "His",
+                "Her",
+                "My",
+                "Not",
+                "No",
+                "Yes",
+                "Is",
+                "Are",
+                "Was",
+                "Were",
+                "Will",
+                "Would",
+                "Can",
+                "Could",
+                "Should",
+                "May",
+                "Might",
+                "Must",
+                "Do",
+                "Does",
+                "Did",
+                "Have",
+                "Has",
+                "Had",
+                "Be",
+                "Been",
+                "Being",
+                "Each",
+                "Every",
+                "Some",
+                "Any",
+                "All",
+                "Both",
+                "Because",
+            }
+        )
         words = text.split()
         entities = []
-
         for i, word in enumerate(words):
-            # Look for capitalized words that aren't sentence starts
+            # Capitalized and NOT a sentence start (prev word didn't end a sentence).
             if word[0].isupper() and i > 0 and words[i - 1][-1] not in ".!?":
-                entities.append(word)
+                cleaned = word.strip(".,;:!?\"'()[]{}")
+                if len(cleaned) >= 2 and cleaned not in stopwords:
+                    entities.append(cleaned)
 
-        # Return unique entities. dict.fromkeys preserves first-occurrence order
-        # (deterministic across processes); list(set(...)) was PYTHONHASHSEED-dependent,
-        # so WHICH entities survived the [:max_entities] truncation varied run-to-run
-        # and the "Key entities:" skeleton line was non-deterministic. See
-        # tests/test_output_determinism.py.
+        # dict.fromkeys preserves first-occurrence order (deterministic across
+        # PYTHONHASHSEED); list(set(...)) was hashseed-dependent, so the surviving
+        # entities after [:max_entities] varied run-to-run. See test_output_determinism.py.
         return list(dict.fromkeys(entities))[:max_entities]
 
     def _generate_summary(self, text: str, max_length: int = 100) -> str:
         """
-        Generate a simple extractive summary.
-        Takes first sentence or first max_length characters.
+        Generate a simple extractive summary: the first substantive sentence with
+        markdown noise stripped (Task 4 — dogfood found headings/links/backticks
+        leaking into the "Summary:" line, e.g. a summary that was literally "## Section").
         """
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-        if sentences:
-            summary = sentences[0]
-            if len(summary) > max_length:
-                summary = summary[:max_length] + "..."
-            return summary
-        return text[:max_length] + "..."
+        # Strip inline markdown so the summary reads as prose, not raw markup.
+        cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
+        cleaned = cleaned.replace("`", "")
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        summary = ""
+        for candidate in sentences:
+            # Drop leading heading / list markers from the candidate sentence.
+            candidate = re.sub(r"^\s*#{1,6}\s+", "", candidate)
+            candidate = re.sub(r"^\s*[-*+]\s+", "", candidate)
+            candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
+            candidate = candidate.strip()
+            if candidate:
+                summary = candidate
+                break
+        if not summary:
+            summary = cleaned.strip()
+        if len(summary) > max_length:
+            summary = summary[:max_length] + "..."
+        return summary
 
     @staticmethod
     def _build_similarity_edges(
