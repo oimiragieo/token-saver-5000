@@ -3221,6 +3221,19 @@ Integration tests for Phase 5 wiring — verifies that modules are actually
 | `class` | `TestQueryAdaptive` |
 | `class` | `TestWorkflowGuidance` |
 
+#### `test_worldclass_batch1.py`
+
+World-Class Compression Sprint — Batch 1 regression locks (2026-07-01).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_context` |
+| `def` | `_make_skeleton` |
+| `def` | `_make_estimate` |
+| `async def` | `test_ingest_surfaces_reasoning_confidence_and_estimated_compressed` |
+| `async def` | `test_ingest_small_doc_returns_honesty_note` |
+| `def` | `test_hidden_boilerplate_hoisted_to_header_once` |
+
 ---
 
 Symbols are **top-level only** (nested methods and inner functions are not listed). Regenerate: `python scripts/generate_claude_folder_guides.py`.
