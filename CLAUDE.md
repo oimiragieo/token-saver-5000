@@ -183,3 +183,16 @@ All tools accept optional `workspace_id`, `user_id`, `agent_id`, `session_id` fo
 ## Compression Behavior
 
 Small documents (<100 tokens) may *expand* due to skeleton overhead. The system is optimized for medium-to-large documents (500+ tokens → 5-20x compression). This is by design.
+
+## Skeleton output format — `Skeleton-Version: 2` (2026-07-02)
+
+The skeleton render format is a **wire contract** consumed by the platform MCP (`gc_read_skeleton`), the dashboard, and any agent that reads a `[HIDDEN]` marker. As of the world-class compression sprint:
+
+- The header carries a **`Skeleton-Version: 2`** marker + a single line `Hidden regions expand via modulate_region(node_id).` — the per-node `[HIDDEN] Detail hidden (use modulate_region to expand) - {summary}` boilerplate was **hoisted once to the header** to raise the compression ratio ceiling. Per-node hidden lines are now `[{node_id}] [HIDDEN] - {summary}` (or `[{node_id}] [HIDDEN]` when there is no summary). Locked by `tests/test_worldclass_batch1.py::test_hidden_boilerplate_hoisted_to_header_once` + the `[HIDDEN]` substring asserts in `test_functional.py` / `test_semantic_compressor_unit.py` / `test_read_skeleton_auto_fidelity.py`.
+- **Perceived-quality fixes** (`_extract_key_entities` + `_generate_summary` in `src/semantic_compressor.py`): entity extraction now filters stopwords + strips trailing punctuation (killed the dogfood-visible `Key entities: This`), and summaries strip markdown noise (headings/inline-links/backticks) and pick the first substantive sentence. Locked model-free in `tests/test_worldclass_batch2.py`.
+- **When you change the render format**, treat it as a contract change: `tg callers` the render path, blast-radius the platform consumers, and dogfood the LIVE MCP after the pin bump (an engine pin bump does NOT change the api version string, so the version is not a deploy signal — a live `gc_ingest`→`gc_read_skeleton` round-trip is).
+
+## Model-free engine testing + HF-cache repair (2026-07-02)
+
+- **Model-free testing:** pure text functions (`_extract_key_entities`, `_generate_summary`, entity/summary/render helpers) can be unit-tested WITHOUT a model load via `object.__new__(SemanticCompressor)` — they use only their arguments, no instance/model state. This is the pattern to reach for when the local HF cache is broken or on Python 3.14 where the event-loop teardown flakes real-model tests. See `tests/test_worldclass_batch2.py` + `tests/test_audit_compression_correctness.py::_make_compressor_with_chunks`.
+- **HF-cache corruption repair:** if `SentenceTransformer(...)` / `SemanticCompressor().ingest_file(...)` fails at model load (`JSONDecodeError` on an empty `config.json`, or a downloader exit-5), the local `HF_HOME` cache JSON configs are likely 0-byte. This is NOT "offline" — the SentenceTransformer downloader chokes on the empty leftovers. Fix: `python -c "from huggingface_hub import snapshot_download; snapshot_download('BAAI/bge-small-en-v1.5')"` (public embedders need no token) repopulates cleanly; then the model loads. If a model still 404s, delete `HF_HOME/hub/models--<org>--<name>` first, then re-`snapshot_download`. CI is authoritative for real-ingest tests (clean cache + bge caching).
