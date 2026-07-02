@@ -23,10 +23,17 @@ import pytest
 from src.handlers import compression_handlers as ch
 from src.semantic_compressor import SemanticCompressor
 
-_MULTI_NODE_DOC = "\n\n".join(
-    f"Section {i}: This paragraph discusses topic number {i} in enough detail to form "
-    f"its own semantic node with distinct vocabulary about subject {i} and its uses."
-    for i in range(10)
+# H2 section headers force one semantic node per section regardless of embedding tier
+# (mirrors test_read_skeleton_auto_fidelity._build_multi_node_doc). Plain paragraphs get
+# merged into a single node by the chunker, which yields zero hidden nodes.
+_MULTI_NODE_DOC = "# System Overview\n\n" + "\n\n".join(
+    f"## {topic}\n\n"
+    + " ".join(
+        f"Sentence {k} about the {topic} subsystem behavior and design rationale "
+        f"unique to {topic} number {k}."
+        for k in range(20)
+    )
+    for topic in ("Authentication", "Billing", "Resilience", "Caching", "Webhooks")
 )
 
 
