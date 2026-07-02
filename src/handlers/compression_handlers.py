@@ -346,6 +346,12 @@ def get_read_skeleton_output_fields() -> List[str]:
     return _flatten_output_fields(READ_SKELETON_RESPONSE_TEMPLATE)
 
 
+# Below this token count the semantic-skeleton's fixed overhead (headers, anchors,
+# node IDs) can exceed the savings, so tiny inputs may EXPAND. Mirrors the REST
+# guard at api/app/routers/v1/compress.py so MCP and REST give the same honest signal.
+_SMALL_INPUT_TOKEN_THRESHOLD = 200
+
+
 INGEST_CONTEXT_RESPONSE_TEMPLATE: Dict[str, Any] = {
     "status": "success",
     "file_id": "",
@@ -357,8 +363,12 @@ INGEST_CONTEXT_RESPONSE_TEMPLATE: Dict[str, Any] = {
     "token_savings_percent": 0.0,
     "estimate": {
         "estimated_ratio": 0.0,
+        "estimated_compressed": 0,
+        "confidence": "",
+        "reasoning": "",
         "accuracy": "",
     },
+    "note": None,
     "chunking_strategy_used": "",
     "query_skeleton": None,
     "message": "",
@@ -683,6 +693,39 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         else "good" if abs(actual_ratio - estimate.compression_ratio) < 5 else "fair"
     )
 
+    token_savings_percent = (
+        round((1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1)
+        if skeleton.total_tokens > 0
+        else 0.0
+    )
+
+    # Surface the honest estimate the advisor already computed. Pre-fix reasoning/
+    # confidence were logged then dropped, so a connected MCP agent got no "is this
+    # worth it?" signal (the activation gap). isinstance guards keep the response
+    # JSON-safe when a test injects a bare Mock estimate — a real CompressionEstimate
+    # always yields str reasoning/confidence + int estimated_compressed.
+    estimate_out: Dict[str, Any] = {
+        "estimated_ratio": estimate.compression_ratio,
+        "accuracy": estimate_accuracy,
+    }
+    if isinstance(getattr(estimate, "estimated_compressed", None), int):
+        estimate_out["estimated_compressed"] = estimate.estimated_compressed
+    if isinstance(getattr(estimate, "confidence", None), str):
+        estimate_out["confidence"] = estimate.confidence
+    if isinstance(getattr(estimate, "reasoning", None), str):
+        estimate_out["reasoning"] = estimate.reasoning
+
+    # Small-doc honesty note (mirrors the REST path). Below ~200 tokens the skeleton
+    # overhead exceeds the savings, so a first-time evaluator sees "it got bigger" and
+    # bounces. Only set when the input is genuinely small AND no real saving landed.
+    note = None
+    if token_savings_percent <= 0.0 and 0 < skeleton.total_tokens < _SMALL_INPUT_TOKEN_THRESHOLD:
+        note = (
+            f"Input too small to compress: at {skeleton.total_tokens} tokens the "
+            "semantic-skeleton overhead exceeds the savings. Compression pays off on "
+            "documents of ~1,000+ tokens — try a larger file to see real savings."
+        )
+
     # Build JSON response
     response = {
         "status": "success",
@@ -692,12 +735,9 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         "skeleton_tokens": skeleton.skeleton_tokens,
         "compression_ratio": skeleton.compression_ratio,
         "token_savings": skeleton.total_tokens - skeleton.skeleton_tokens,
-        "token_savings_percent": (
-            round((1 - skeleton.skeleton_tokens / skeleton.total_tokens) * 100, 1)
-            if skeleton.total_tokens > 0
-            else 0.0
-        ),
-        "estimate": {"estimated_ratio": estimate.compression_ratio, "accuracy": estimate_accuracy},
+        "token_savings_percent": token_savings_percent,
+        "estimate": estimate_out,
+        "note": note,
         "chunking_strategy_used": chunking_strategy_used,
         "message": f"Document ingested successfully with {skeleton.total_nodes} semantic nodes",
     }
