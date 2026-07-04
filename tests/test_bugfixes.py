@@ -585,6 +585,81 @@ class TestFindDuplicatesTimeout:
 
 
 # =========================================================================
+# find_duplicates multi-tenant scope isolation
+# =========================================================================
+
+
+class TestFindDuplicatesTenantScoping:
+    """handle_find_duplicates must not leak duplicate pairs across tenants.
+
+    The compressor's chunk store is process-wide and shared across tenants
+    (keyed by scoped file_id). Sibling handlers (e.g. handle_search_semantic)
+    already filter their results through scope_matches(); handle_find_duplicates
+    forgot to, so a caller with a scope could see duplicate pairs whose file_ids
+    belong to a DIFFERENT tenant sharing the process.
+    """
+
+    @pytest.mark.asyncio
+    async def test_handle_find_duplicates_isolates_by_scope(self):
+        from src.handlers.compression_handlers import handle_find_duplicates
+        from src.identity_scope import compose_scoped_file_id
+
+        compressor = SemanticCompressor.__new__(SemanticCompressor)
+
+        # Two near-duplicate docs for tenant A, two near-duplicate docs for
+        # tenant B — all four chunks share the same embedding so every
+        # cross-file pair within a tenant is a genuine duplicate.
+        file_a1 = compose_scoped_file_id("doc1", user_id="userA")
+        file_a2 = compose_scoped_file_id("doc2", user_id="userA")
+        file_b1 = compose_scoped_file_id("doc1", user_id="userB")
+        file_b2 = compose_scoped_file_id("doc2", user_id="userB")
+
+        def _node():
+            node = MagicMock()
+            node.embedding = np.array([1.0, 0.0, 0.0])
+            return node
+
+        compressor.chunks = {
+            f"{file_a1}_n0": _node(),
+            f"{file_a2}_n0": _node(),
+            f"{file_b1}_n0": _node(),
+            f"{file_b2}_n0": _node(),
+        }
+
+        result = await handle_find_duplicates(
+            {"compressor": compressor},
+            {"threshold": 0.9, "user_id": "userA"},
+        )
+        parsed = json.loads(result)
+
+        assert parsed["status"] == "success"
+        # Only the tenant-A cross-file pair should survive scope filtering.
+        assert parsed["duplicate_count"] == 1
+        pair = parsed["duplicates"][0]
+        assert "userB" not in pair["node_a"]
+        assert "userB" not in pair["node_b"]
+
+    @pytest.mark.asyncio
+    async def test_handle_find_duplicates_unscoped_call_is_unaffected(self):
+        """A caller that passes no scope args keeps the pre-fix, unfiltered
+        behavior (mirrors _has_scope_args gating on sibling handlers)."""
+        from src.handlers.compression_handlers import handle_find_duplicates
+
+        compressor = SemanticCompressor.__new__(SemanticCompressor)
+        node_a = MagicMock()
+        node_a.embedding = np.array([1.0, 0.0, 0.0])
+        node_b = MagicMock()
+        node_b.embedding = np.array([1.0, 0.0, 0.0])
+        compressor.chunks = {"fileA_n0": node_a, "fileB_n0": node_b}
+
+        result = await handle_find_duplicates({"compressor": compressor}, {"threshold": 0.9})
+        parsed = json.loads(result)
+
+        assert parsed["status"] == "success"
+        assert parsed["duplicate_count"] == 1
+
+
+# =========================================================================
 # Validation hooks for destructive operations
 # =========================================================================
 

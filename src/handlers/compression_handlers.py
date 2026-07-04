@@ -107,6 +107,31 @@ def _has_scope_args(args: Dict[str, Any]) -> bool:
     return any(_scope_kwargs(args).values())
 
 
+def _scope_filtered_duplicates(
+    duplicates: List[Dict[str, Any]], args: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Filter find_duplicates() pairs to the caller's tenant scope.
+
+    Keeps a pair only when BOTH nodes' file_ids match the caller's scope
+    (mirrors the _scope_filtered_results idiom used by handle_search_semantic).
+    The timeout sentinel pair (node_a == node_b == "__timeout__") carries no
+    tenant identity and is always preserved so the warning still surfaces.
+    """
+    scope_kwargs = _scope_kwargs(args)
+    filtered = []
+    for pair in duplicates:
+        node_a = pair.get("node_a")
+        node_b = pair.get("node_b")
+        if node_a == "__timeout__" or node_b == "__timeout__":
+            filtered.append(pair)
+            continue
+        if scope_matches(extract_file_id_from_node(node_a), **scope_kwargs) and scope_matches(
+            extract_file_id_from_node(node_b), **scope_kwargs
+        ):
+            filtered.append(pair)
+    return filtered
+
+
 def _compressor_temporal_graph(compressor: Any) -> Any:
     sentinel = object()
     static_attr = inspect.getattr_static(compressor, "_temporal_graph", sentinel)
@@ -2350,6 +2375,8 @@ async def handle_find_duplicates(context: HandlerContext, args: Dict[str, Any]) 
         duplicates = compressor.find_duplicates(
             threshold=threshold, timeout_seconds=timeout_seconds
         )
+        if _has_scope_args(args):
+            duplicates = _scope_filtered_duplicates(duplicates, args)
         return json.dumps(
             {
                 "status": "success",
