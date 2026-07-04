@@ -165,11 +165,27 @@ class CodeSemanticCompressor:
                 )
             )
 
+        # #195: ast.walk recurses INTO classes, so a method is chunked as a
+        # FunctionDef. Track each node's parent so a method can be qualified by
+        # its class — an unqualified f"{file_id}::{method}" collides across
+        # classes (and with a same-named top-level function), and self.chunks is
+        # a dict keyed by chunk_id, so the collision silently OVERWRITES.
+        for _parent in ast.walk(tree):
+            for _child in ast.iter_child_nodes(_parent):
+                _child._tsk_parent = _parent
+
         # Extract functions and classes
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Extract function (async def is a sibling type, not a subclass — #194)
                 func_code = ast.get_source_segment(code, node)
+                # #195: qualify methods by their enclosing class (A.foo vs B.foo).
+                _parent = getattr(node, "_tsk_parent", None)
+                _qualified_name = (
+                    f"{_parent.name}.{node.name}"
+                    if isinstance(_parent, ast.ClassDef)
+                    else node.name
+                )
                 docstring = ast.get_docstring(node)
 
                 # Find dependencies (function calls)
@@ -183,7 +199,7 @@ class CodeSemanticCompressor:
 
                 chunks.append(
                     CodeChunk(
-                        chunk_id=f"{file_id}::{node.name}",
+                        chunk_id=f"{file_id}::{_qualified_name}",
                         chunk_type="function",
                         code=func_code or "",
                         name=node.name,

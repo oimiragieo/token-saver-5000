@@ -210,12 +210,39 @@ class TestPythonCodeChunking:
             # Import chunks should have specific format
             if chunk.chunk_type == "import":
                 assert chunk.chunk_id == "test_file::imports"
-            # Function chunks should include function name after ::
+            # Function chunks include the (possibly class-qualified) name after ::
+            # (#195: a method is qualified as Class.method so A.foo and B.foo
+            # don't collide; a top-level function stays test_file::name).
             elif chunk.chunk_type == "function":
-                assert chunk.chunk_id == f"test_file::{chunk.name}"
+                assert chunk.chunk_id == f"test_file::{chunk.name}" or chunk.chunk_id.endswith(
+                    f".{chunk.name}"
+                )
             # Class chunks should include class name after ::
             elif chunk.chunk_type == "class":
                 assert chunk.chunk_id == f"test_file::{chunk.name}"
+
+    def test_same_named_methods_across_classes_do_not_collide(self):
+        """#195: A.foo and B.foo must get DISTINCT chunk_ids.
+
+        self.chunks is a dict keyed by chunk_id, so an unqualified
+        test_file::foo silently overwrites the earlier method. RED before the
+        fix: both methods produce test_file::foo (1 distinct id).
+        """
+        code = (
+            "class A:\n"
+            "    def foo(self):\n"
+            "        return 1\n"
+            "\n\n"
+            "class B:\n"
+            "    def foo(self):\n"
+            "        return 2\n"
+        )
+        chunks = self.compressor.chunk_python_code(code, "test_file")
+        method_ids = [c.chunk_id for c in chunks if c.chunk_type == "function" and c.name == "foo"]
+        assert len(method_ids) == 2
+        assert len(set(method_ids)) == 2
+        assert "test_file::A.foo" in method_ids
+        assert "test_file::B.foo" in method_ids
 
 
 class TestJavaScriptCodeChunking:
