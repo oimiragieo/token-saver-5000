@@ -76,9 +76,14 @@ def _validate_ingest(args: Dict[str, Any]) -> List[str]:
 @_register("modulate_region")
 def _validate_modulate(args: Dict[str, Any]) -> List[str]:
     errors = []
-    node_ids = args.get("node_ids", [])
+    # Honor the documented singular `node_id` convenience alias (schema says it
+    # wraps to [node_id] and satisfies the requirement on its own). Pre-fix this
+    # hook read only `node_ids`, so a caller passing node_id="X" alone was
+    # rejected with "node_ids must not be empty" even though the handler accepts
+    # it — a broken shortcut on the core zoom-in tool (dogfood 2026-07-04).
+    node_ids = args.get("node_ids") or ([args["node_id"]] if args.get("node_id") else [])
     if not node_ids:
-        errors.append("node_ids must not be empty")
+        errors.append("node_ids (or node_id) must not be empty")
     return errors
 
 

@@ -922,6 +922,15 @@ class TestValidationHooks:
         errors = validate_tool_input("modulate_region", {"node_ids": ["n0", "n1"]})
         assert len(errors) == 0
 
+    def test_modulate_region_singular_node_id_honored(self):
+        # dogfood 2026-07-04: the documented singular `node_id` convenience alias
+        # was rejected ("node_ids must not be empty") because the hook read only
+        # node_ids. It must satisfy the requirement on its own.
+        from src.validation_hooks import validate_tool_input
+
+        errors = validate_tool_input("modulate_region", {"node_id": "n0"})
+        assert len(errors) == 0
+
     def test_modulate_region_missing_key(self):
         from src.validation_hooks import validate_tool_input
 
