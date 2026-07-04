@@ -215,6 +215,19 @@ class CodeSemanticCompressor:
                 class_code = ast.get_source_segment(code, node)
                 docstring = ast.get_docstring(node)
 
+                # #220 rank 5: qualify a NESTED class by its enclosing class,
+                # mirroring the FunctionDef fix above. ast.walk recurses into
+                # classes, so two same-named nested classes (e.g. Django's
+                # `class Meta` inside two different outer classes) both produced
+                # f"{file_id}::Meta" and the second silently OVERWROTE the first
+                # in the chunk_id-keyed dict — dropping it from the skeleton.
+                _class_parent = getattr(node, "_tsk_parent", None)
+                _qualified_class_name = (
+                    f"{_class_parent.name}.{node.name}"
+                    if isinstance(_class_parent, ast.ClassDef)
+                    else node.name
+                )
+
                 # Get method names
                 methods = [
                     n.name
@@ -224,7 +237,7 @@ class CodeSemanticCompressor:
 
                 chunks.append(
                     CodeChunk(
-                        chunk_id=f"{file_id}::{node.name}",
+                        chunk_id=f"{file_id}::{_qualified_class_name}",
                         chunk_type="class",
                         code=class_code or "",
                         name=node.name,

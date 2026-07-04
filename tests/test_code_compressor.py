@@ -244,6 +244,30 @@ class TestPythonCodeChunking:
         assert "test_file::A.foo" in method_ids
         assert "test_file::B.foo" in method_ids
 
+    def test_same_named_nested_classes_do_not_collide(self):
+        """#220 rank 5: A.Meta and B.Meta must get DISTINCT chunk_ids.
+
+        ast.walk recurses into classes, so a nested `class Meta` inside two
+        different outer classes (e.g. Django models) both produced
+        test_file::Meta and the second silently OVERWROTE the first
+        (chunk_id-keyed dict). RED before the fix: both produce test_file::Meta.
+        """
+        code = (
+            "class A:\n"
+            "    class Meta:\n"
+            "        x = 1\n"
+            "\n\n"
+            "class B:\n"
+            "    class Meta:\n"
+            "        y = 2\n"
+        )
+        chunks = self.compressor.chunk_python_code(code, "test_file")
+        meta_ids = [c.chunk_id for c in chunks if c.chunk_type == "class" and c.name == "Meta"]
+        assert len(meta_ids) == 2
+        assert len(set(meta_ids)) == 2
+        assert "test_file::A.Meta" in meta_ids
+        assert "test_file::B.Meta" in meta_ids
+
 
 class TestJavaScriptCodeChunking:
     """Test regex-based JavaScript code chunking"""
