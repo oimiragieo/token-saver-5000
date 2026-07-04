@@ -1910,8 +1910,17 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
         if not isinstance(text, str):
             raise ValueError(f"documents[{i}].text must be a string, got {type(text).__name__}")
 
-        # Create BatchDocument
-        batch_documents.append(BatchDocument(file_id=file_id, text=text, metadata=metadata))
+        # Scope the file_id (mirrors handle_ingest's contract, and the
+        # sibling handle_ingest_directory) so two tenants batch-ingesting the
+        # same plain file_id (e.g. "notes") don't collide on the process-wide
+        # compressor store keyed by internal scoped id. must_exist=False
+        # mirrors handle_ingest's ingest-time validation.
+        scoped_file_id = _scoped_file_id(file_id, args)
+        validate_file_id(scoped_file_id, context, must_exist=False)
+
+        # Create BatchDocument using the internal scoped id; the caller-visible
+        # display id is restored from result.file_id below via display_file_id().
+        batch_documents.append(BatchDocument(file_id=scoped_file_id, text=text, metadata=metadata))
 
     # Log batch operation
     logger.info(
@@ -1937,7 +1946,10 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
     result_list = []
     for result in results:
         entry = {
-            "file_id": result.file_id,
+            # result.file_id is the internal scoped id (see BatchDocument
+            # construction above) -- unscope it so the caller sees the raw
+            # file_id it passed in, never the internal tenant-scoped key.
+            "file_id": display_file_id(result.file_id),
             "success": result.success,
             "processing_time": round(result.processing_time, 2),
         }
@@ -1968,7 +1980,7 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
     }
 
     if failed > 0:
-        failed_ids = [r.file_id for r in results if not r.success]
+        failed_ids = [display_file_id(r.file_id) for r in results if not r.success]
         response["failed_file_ids"] = failed_ids
         response["tip"] = (
             f"[WARN] {failed} documents failed. Check error messages for each failed document."

@@ -660,6 +660,118 @@ class TestFindDuplicatesTenantScoping:
 
 
 # =========================================================================
+# handle_batch_ingest tenant scoping (mirrors handle_find_duplicates above
+# and handle_ingest's own file_id scoping contract)
+# =========================================================================
+
+
+class TestHandleBatchIngestTenantScoping:
+    """handle_batch_ingest must scope file_id per-tenant like handle_ingest.
+
+    The compressor's document store is process-wide and multi-tenant.
+    handle_ingest composes a scoped internal id via _scoped_file_id() before
+    ever touching the compressor, so two tenants can reuse the same plain
+    file_id without collision. handle_batch_ingest forgot to do the same
+    for BatchDocument.file_id (it passed the raw, unscoped caller value
+    straight through to BatchCompressionManager -> compressor.ingest_file_async),
+    so two tenants batch-ingesting the same plain file_id (e.g. "notes") would
+    collide on one unscoped process-wide key -- the second caller's ingest
+    silently overwrote the first's.
+    """
+
+    @pytest.mark.asyncio
+    async def test_batch_ingest_scopes_file_id_per_tenant(self):
+        from src.handlers.compression_handlers import handle_batch_ingest
+        from src.identity_scope import compose_scoped_file_id
+
+        recorded_file_ids = []
+
+        async def _fake_ingest_file_async(text, file_id, metadata):
+            recorded_file_ids.append(file_id)
+            return MagicMock(
+                skeleton_text=f"skeleton for {file_id}",
+                compression_ratio=2.0,
+                total_nodes=1,
+            )
+
+        fake_compressor = MagicMock()
+        fake_compressor.ingest_file_async = AsyncMock(side_effect=_fake_ingest_file_async)
+
+        context = {"compressor": fake_compressor}
+
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
+            result_a = await handle_batch_ingest(
+                context,
+                {
+                    "documents": [{"file_id": "notes", "text": "tenant A notes"}],
+                    "user_id": "userA",
+                },
+            )
+            result_b = await handle_batch_ingest(
+                context,
+                {
+                    "documents": [{"file_id": "notes", "text": "tenant B notes"}],
+                    "user_id": "userB",
+                },
+            )
+
+        parsed_a = json.loads(result_a)
+        parsed_b = json.loads(result_b)
+
+        assert parsed_a["successful"] == 1
+        assert parsed_b["successful"] == 1
+
+        expected_a = compose_scoped_file_id("notes", user_id="userA")
+        expected_b = compose_scoped_file_id("notes", user_id="userB")
+
+        # Pre-fix, both entries are the bare "notes" string -- a collision on
+        # one unscoped process-wide key. Post-fix each tenant gets a distinct
+        # internal key.
+        assert recorded_file_ids == [expected_a, expected_b]
+        assert expected_a != expected_b
+
+        # The caller-visible file_id in the response must stay the RAW id the
+        # caller passed in -- never the internal scoped key (mirrors
+        # handle_ingest / handle_ingest_directory's display_file_id contract).
+        assert parsed_a["results"][0]["file_id"] == "notes"
+        assert parsed_b["results"][0]["file_id"] == "notes"
+
+    @pytest.mark.asyncio
+    async def test_batch_ingest_unscoped_call_is_unaffected(self):
+        """A caller that passes no scope args keeps the pre-fix, unscoped
+        behavior (file_id passed straight through unchanged)."""
+        from src.handlers.compression_handlers import handle_batch_ingest
+
+        recorded_file_ids = []
+
+        async def _fake_ingest_file_async(text, file_id, metadata):
+            recorded_file_ids.append(file_id)
+            return MagicMock(skeleton_text="skeleton", compression_ratio=2.0, total_nodes=1)
+
+        fake_compressor = MagicMock()
+        fake_compressor.ingest_file_async = AsyncMock(side_effect=_fake_ingest_file_async)
+
+        context = {"compressor": fake_compressor}
+
+        with patch(
+            "src.handlers.compression_handlers.RATE_LIMITERS",
+            {"batch_ingest": AsyncMock(acquire=AsyncMock())},
+        ):
+            result = await handle_batch_ingest(
+                context,
+                {"documents": [{"file_id": "unscoped_doc", "text": "hello"}]},
+            )
+
+        parsed = json.loads(result)
+        assert parsed["successful"] == 1
+        assert recorded_file_ids == ["unscoped_doc"]
+        assert parsed["results"][0]["file_id"] == "unscoped_doc"
+
+
+# =========================================================================
 # Validation hooks for destructive operations
 # =========================================================================
 
@@ -679,23 +791,36 @@ class TestValidationHooksDestructive:
         assert errors == []
 
     def test_batch_ingest_empty_list(self):
+        # The real MCP tool name is "batch_ingest_documents" (see
+        # mcp_core.py's tools/call dispatch table) -- the validator was
+        # previously registered under the never-invoked "batch_ingest" key,
+        # so this hook silently never fired on real batch ingest calls.
         from src.validation_hooks import validate_tool_input
 
-        errors = validate_tool_input("batch_ingest", {"documents": []})
+        errors = validate_tool_input("batch_ingest_documents", {"documents": []})
         assert len(errors) == 1
         assert "empty" in errors[0]
 
     def test_batch_ingest_too_many(self):
         from src.validation_hooks import validate_tool_input
 
-        errors = validate_tool_input("batch_ingest", {"documents": [{}] * 101})
+        errors = validate_tool_input("batch_ingest_documents", {"documents": [{}] * 101})
         assert len(errors) == 1
         assert "100" in errors[0]
 
     def test_batch_ingest_valid(self):
         from src.validation_hooks import validate_tool_input
 
-        errors = validate_tool_input("batch_ingest", {"documents": [{"text": "a"}]})
+        errors = validate_tool_input("batch_ingest_documents", {"documents": [{"text": "a"}]})
+        assert errors == []
+
+    def test_batch_ingest_wrong_legacy_key_is_inert(self):
+        # Locks the fix: the old (wrong) registration key no longer matches
+        # anything, since the router calls validate_tool_input(name, args)
+        # with the REAL tool name -- "batch_ingest" was never that name.
+        from src.validation_hooks import validate_tool_input
+
+        errors = validate_tool_input("batch_ingest", {"documents": []})
         assert errors == []
 
     def test_unregistered_tool_passes(self):

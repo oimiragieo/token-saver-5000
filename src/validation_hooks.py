@@ -96,7 +96,7 @@ def _validate_delete(args: Dict[str, Any]) -> List[str]:
     return errors
 
 
-@_register("batch_ingest")
+@_register("batch_ingest_documents")
 def _validate_batch_ingest(args: Dict[str, Any]) -> List[str]:
     errors = []
     documents = args.get("documents", [])
