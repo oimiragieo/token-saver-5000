@@ -211,6 +211,16 @@ Tests for async operations in semantic compressor and handlers.
 | `class` | `TestAsyncErrorHandling` |
 | `class` | `TestPerformanceCharacteristics` |
 
+#### `test_audit_194_async_chunking.py`
+
+Audit #194 regression lock: async def functions/methods must be chunked.
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare` |
+| `def` | `test_top_level_async_def_is_chunked` |
+| `def` | `test_async_method_counted_in_class_methods` |
+
 #### `test_audit_compression_correctness.py`
 
 Enterprise audit — compression-engine correctness regression locks.
@@ -337,6 +347,8 @@ Tests for bug fixes discovered during deep audit.
 | `class` | `TestNewMCPHandlers` |
 | `class` | `TestToolRegistration` |
 | `class` | `TestFindDuplicatesTimeout` |
+| `class` | `TestFindDuplicatesTenantScoping` |
+| `class` | `TestHandleBatchIngestTenantScoping` |
 | `class` | `TestValidationHooksDestructive` |
 | `class` | `TestMetricsWiring` |
 
@@ -2316,6 +2328,28 @@ Tests for the MCP proxy core components.
 | `class` | `TestProxyConfig` |
 | `class` | `TestProxyServer` |
 
+#### `test_quality_gate.py`
+
+Deterministic, INDEPENDENT-oracle compression quality gate (Phase 0).
+
+| Kind | Name |
+|------|------|
+| `class` | `GradeResult` |
+| `def` | `grade_answerability` |
+| `def` | `grade_byte_identity` |
+| `def` | `grade_source_order` |
+| `def` | `grade_modulate_region_roundtrip` |
+| `def` | `_sections` |
+| `def` | `_build_correct_skeleton` |
+| `class` | `TestAnswerabilityGrader` |
+| `class` | `TestByteIdentityGrader` |
+| `class` | `TestSourceOrderGrader` |
+| `def` | `_make_compressor_with_raw_chunks` |
+| `class` | `TestModulateRegionRoundtripGrader` |
+| `class` | `TestGateItselfIsNotBroken` |
+| `def` | `_probe_model_load` |
+| `class` | `TestRealCompressorIntegration` |
+
 #### `test_quality_predictor.py`
 
 Tests for src/quality_predictor.py — PoC compression quality prediction.
@@ -3233,6 +3267,16 @@ World-Class Compression Sprint — Batch 1 regression locks (2026-07-01).
 | `async def` | `test_ingest_surfaces_reasoning_confidence_and_estimated_compressed` |
 | `async def` | `test_ingest_small_doc_returns_honesty_note` |
 | `def` | `test_hidden_boilerplate_hoisted_to_header_once` |
+
+#### `test_worldclass_batch2.py`
+
+World-Class Compression Sprint — Task 4: summary + entity quality (2026-07-02).
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare_compressor` |
+| `class` | `TestEntityStopwordFilter` |
+| `class` | `TestSummaryMarkdownStrip` |
 
 ---
 

@@ -84,6 +84,7 @@ Compression-related MCP tool handlers.
 | `def` | `_scope_filtered_results` |
 | `def` | `_scope_filtered_file_ids` |
 | `def` | `_has_scope_args` |
+| `def` | `_scope_filtered_duplicates` |
 | `def` | `_compressor_temporal_graph` |
 | `def` | `_temporal_graph` |
 | `def` | `_temporal_excluded_node_ids` |
