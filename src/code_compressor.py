@@ -13,6 +13,7 @@ Supports: Python, JavaScript, TypeScript, Java, C++, Go, Rust
 
 import ast
 import logging
+import os
 import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
@@ -22,9 +23,16 @@ import numpy as np
 import networkx as nx
 
 from .embeddings import EmbeddingManager
-from .semantic_compressor import _MAX_GRAPH_CHUNKS, _SIMILARITY_BLOCK_SIZE
 
 logger = logging.getLogger(__name__)
+
+# Code-graph memory-safety bounds (task #236 rank11). Defined locally rather than
+# imported from semantic_compressor so `import code_compressor` does NOT eagerly
+# import the heavy semantic_compressor module (which pulls the embedding stack) --
+# same env vars + defaults as semantic_compressor._MAX_GRAPH_CHUNKS /
+# _SIMILARITY_BLOCK_SIZE, so an operator override affects both paths identically.
+_SIMILARITY_BLOCK_SIZE: int = int(os.environ.get("SIMILARITY_BLOCK_SIZE", "256"))
+_MAX_GRAPH_CHUNKS: int = int(os.environ.get("MAX_GRAPH_CHUNKS", "2500"))
 
 
 class CodeLanguage(Enum):
