@@ -162,6 +162,42 @@ async def test_mitigation_4_exactly_10_mb_is_allowed():
     assert len(result) == 10 * 1024 * 1024
 
 
+@pytest.mark.asyncio
+async def test_mitigation_4_size_cap_aborts_stream_without_buffering_whole_body():
+    """H2 (supply-chain-hardening): an oversized body with NO Content-Length must
+    abort DURING the stream — the fetcher must NOT read the entire response into
+    memory before checking the cap. A malicious server on an attacker-controlled
+    file_url that omits Content-Length and streams multi-GB of text/plain would
+    otherwise OOM the host before the post-buffer len() check ever runs.
+    """
+    chunk = b"x" * (1024 * 1024)  # 1 MB
+    produced = {"bytes": 0}
+
+    async def _body():
+        # Would total 32 MB if the consumer drains the whole stream.
+        for _ in range(32):
+            produced["bytes"] += len(chunk)
+            yield chunk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # NOTE: deliberately NO content-length header — forces the streaming path.
+        return httpx.Response(
+            status_code=200,
+            headers={"content-type": "text/plain"},
+            content=_body(),
+        )
+
+    transport = httpx.MockTransport(handler)
+    with pytest.raises(URLFetchError) as exc_info:
+        await fetch_url("https://example.com/stream.txt", _transport=transport)
+    assert exc_info.value.code == "too_large"
+    # The cap must fire mid-stream — well before the full 32 MB is pulled into memory.
+    assert produced["bytes"] <= 12 * 1024 * 1024, (
+        f"buffered {produced['bytes'] // (1024 * 1024)} MB before the cap fired — "
+        "fetch_url must stream + abort at the cap, not read the whole body into memory"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Mitigation 6: CONTENT-TYPE ALLOWLIST
 # ---------------------------------------------------------------------------

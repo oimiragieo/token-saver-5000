@@ -256,7 +256,70 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
             _check_dns_rebinding(host, first_ips)
 
         try:
-            response = await client.get(url)
+            # Mitigation 6 depends on STREAMING, not a buffered .get(): a malicious
+            # server that omits Content-Length (or lies) could stream unbounded bytes
+            # into memory before any post-download len() check runs — an OOM/DoS on an
+            # attacker-controlled file_url. client.stream() gives us the headers up front
+            # (redirect/status/content-type/content-length checks below) while the body is
+            # consumed incrementally so we can abort AT the cap, capping memory at _MAX_BYTES.
+            async with client.stream("GET", url) as response:
+                # --- Mitigation 5: NO REDIRECTS — reject 3xx ---
+                if response.is_redirect or response.status_code in (301, 302, 303, 307, 308):
+                    raise URLFetchError(
+                        f"Redirects are not followed. Got HTTP {response.status_code} from '{url}'.",
+                        code="redirect_blocked",
+                    )
+
+                # Surface non-2xx as generic errors (not an SSRF mitigation, but good hygiene)
+                if response.status_code < 200 or response.status_code >= 300:
+                    raise URLFetchError(
+                        f"HTTP {response.status_code} from '{url}'.",
+                        code="private_ip",
+                    )
+
+                # --- Mitigation 8: CONTENT-TYPE ALLOWLIST (header available pre-body) ---
+                content_type = response.headers.get("content-type", "")
+                # Strip parameters (e.g. "text/html; charset=utf-8" → "text/html")
+                ct_base = content_type.split(";")[0].strip().lower()
+                if not any(ct_base.startswith(p) for p in _ALLOWED_CONTENT_TYPE_PREFIXES):
+                    raise URLFetchError(
+                        f"Content-Type '{ct_base}' is not in the allowlist "
+                        f"({', '.join(_ALLOWED_CONTENT_TYPE_PREFIXES)}). "
+                        "Only text and structured-data content types are accepted.",
+                        code="content_type_not_allowed",
+                    )
+
+                # --- Mitigation 6a: SIZE CAP — Content-Length header pre-check (fast reject) ---
+                content_length_header = response.headers.get("content-length")
+                if content_length_header is not None:
+                    try:
+                        declared_size = int(content_length_header)
+                        if declared_size > _MAX_BYTES:
+                            raise URLFetchError(
+                                f"Response Content-Length {declared_size:,} bytes exceeds "
+                                f"the {_MAX_BYTES // (1024 * 1024)} MB limit.",
+                                code="too_large",
+                            )
+                    except ValueError:
+                        pass  # Malformed header — the streaming counter below still bounds us
+
+                # --- Mitigation 6b: SIZE CAP — streaming byte counter (bounds memory) ---
+                # Accumulate chunks and abort the moment we cross the cap, so a lying or
+                # absent Content-Length can never buffer more than _MAX_BYTES into memory.
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > _MAX_BYTES:
+                        raise URLFetchError(
+                            f"Response body exceeds the {_MAX_BYTES // (1024 * 1024)} MB "
+                            "limit (streaming abort).",
+                            code="too_large",
+                        )
+                    chunks.append(chunk)
+                body_bytes = b"".join(chunks)
+                # Charset comes from the Content-Type header (available without the body).
+                encoding = response.encoding or "utf-8"
         except httpx.TimeoutException as exc:
             raise URLFetchError(
                 f"Request to '{url}' timed out: {exc}",
@@ -268,60 +331,8 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
                 code="private_ip",
             ) from exc
 
-        # --- Mitigation 5: NO REDIRECTS — reject 3xx ---
-        if response.is_redirect or response.status_code in (301, 302, 303, 307, 308):
-            raise URLFetchError(
-                f"Redirects are not followed. Got HTTP {response.status_code} from '{url}'.",
-                code="redirect_blocked",
-            )
-
-        # Surface non-2xx as generic errors (not an SSRF mitigation, but good hygiene)
-        if response.status_code < 200 or response.status_code >= 300:
-            raise URLFetchError(
-                f"HTTP {response.status_code} from '{url}'.",
-                code="private_ip",
-            )
-
-        # --- Mitigation 8: CONTENT-TYPE ALLOWLIST ---
-        content_type = response.headers.get("content-type", "")
-        # Strip parameters (e.g. "text/html; charset=utf-8" → "text/html")
-        ct_base = content_type.split(";")[0].strip().lower()
-        if not any(ct_base.startswith(p) for p in _ALLOWED_CONTENT_TYPE_PREFIXES):
-            raise URLFetchError(
-                f"Content-Type '{ct_base}' is not in the allowlist "
-                f"({', '.join(_ALLOWED_CONTENT_TYPE_PREFIXES)}). "
-                "Only text and structured-data content types are accepted.",
-                code="content_type_not_allowed",
-            )
-
-        # --- Mitigation 6: SIZE CAP — Content-Length header pre-check ---
-        content_length_header = response.headers.get("content-length")
-        if content_length_header is not None:
-            try:
-                declared_size = int(content_length_header)
-                if declared_size > _MAX_BYTES:
-                    raise URLFetchError(
-                        f"Response Content-Length {declared_size:,} bytes exceeds "
-                        f"the {_MAX_BYTES // (1024 * 1024)} MB limit.",
-                        code="too_large",
-                    )
-            except ValueError:
-                pass  # Malformed header — proceed with streaming check
-
-        # --- Mitigation 6: SIZE CAP — streaming byte counter ---
-        # httpx has already buffered the body at this point for a non-streaming .get().
-        # We read .content (bytes) and check length.
-        body_bytes = response.content
-        if len(body_bytes) > _MAX_BYTES:
-            raise URLFetchError(
-                f"Response body {len(body_bytes):,} bytes exceeds "
-                f"the {_MAX_BYTES // (1024 * 1024)} MB limit.",
-                code="too_large",
-            )
-
-        # Decode: prefer charset from Content-Type, fall back to apparent encoding
-        encoding = response.encoding or "utf-8"
-        try:
-            return body_bytes.decode(encoding)
-        except (UnicodeDecodeError, LookupError):
-            return body_bytes.decode("utf-8", errors="replace")
+    # Decode: prefer charset from Content-Type, fall back to UTF-8 replacement.
+    try:
+        return body_bytes.decode(encoding)
+    except (UnicodeDecodeError, LookupError):
+        return body_bytes.decode("utf-8", errors="replace")
