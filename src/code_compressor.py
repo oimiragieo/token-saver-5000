@@ -22,6 +22,7 @@ import numpy as np
 import networkx as nx
 
 from .embeddings import EmbeddingManager
+from .semantic_compressor import _MAX_GRAPH_CHUNKS, _SIMILARITY_BLOCK_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +336,59 @@ class CodeSemanticCompressor:
 
         return chunks
 
+    @staticmethod
+    def _build_similarity_edges(
+        embeddings: np.ndarray,
+        chunk_ids: List[str],
+        similarity_threshold: float,
+        block_size: int = _SIMILARITY_BLOCK_SIZE,
+        max_chunks: int = _MAX_GRAPH_CHUNKS,
+    ) -> List[Tuple[str, str, float]]:
+        """Build the upper-triangle cosine-similarity edge list for code chunks
+        without materialising the full N x N similarity matrix.
+
+        Mirrors SemanticCompressor._build_similarity_edges (task #30 OOM fix),
+        but explicitly L2-normalises each row before taking block-wise dot
+        products. Code embedding models (e.g. the default
+        "microsoft/codebert-base") are NOT guaranteed to ship a built-in
+        Normalize pooling layer the way many sentence-transformers text models
+        do, so a bare dot product would silently diverge from sklearn's
+        cosine_similarity() on non-unit-norm vectors. Normalising here keeps
+        output IDENTICAL to the pre-fix ``cosine_similarity(embeddings)`` +
+        nested-loop approach (up to float precision) while bounding peak memory
+        to O(block_size x min(N, max_chunks)) instead of O(N^2).
+
+        Only the first ``max_chunks`` rows participate in edge building; chunks
+        beyond that index still exist but remain unconnected via dense
+        similarity edges (uniform PageRank fallback). Returns (i_id, j_id,
+        weight) triples for i < j only.
+        """
+        n = len(chunk_ids)
+        edge_count = min(n, max_chunks)
+        edges: List[Tuple[str, str, float]] = []
+        if edge_count < 2:
+            return edges
+
+        # L2-normalise once -- O(edge_count x dim), not O(N^2) -- so a plain
+        # dot product reproduces cosine similarity exactly regardless of
+        # whether the source embeddings were already unit-norm.
+        edge_embeddings = np.asarray(embeddings[:edge_count])
+        norms = np.linalg.norm(edge_embeddings, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)  # guard zero vectors
+        normalised = edge_embeddings / norms
+
+        for block_start in range(0, edge_count, block_size):
+            block_end = min(block_start + block_size, edge_count)
+            block = normalised[block_start:block_end]  # (bs, dim)
+            sim_block = block @ normalised.T  # (bs, edge_count)
+            for r in range(block_end - block_start):
+                i = block_start + r
+                for j in range(i + 1, edge_count):
+                    sim = float(sim_block[r, j])
+                    if sim > similarity_threshold:
+                        edges.append((chunk_ids[i], chunk_ids[j], sim))
+        return edges
+
     def ingest_code_file(
         self,
         code: str,
@@ -412,30 +466,35 @@ class CodeSemanticCompressor:
                     if other_chunk.name == dep and other_chunk.chunk_id != chunk.chunk_id:
                         graph.add_edge(chunk.chunk_id, other_chunk.chunk_id, type="dependency")
 
-        # Add semantic similarity edges
-        from sklearn.metrics.pairwise import cosine_similarity
-
-        # Only compute similarity if we have chunks
-        if len(chunks) > 1:
-            similarity_matrix = cosine_similarity(embeddings)
-
-            for i in range(len(chunks)):
-                for j in range(i + 1, len(chunks)):
-                    similarity = similarity_matrix[i][j]
-                    if similarity > self.similarity_threshold:
-                        # Undirected similarity edge
-                        graph.add_edge(
-                            chunks[i].chunk_id,
-                            chunks[j].chunk_id,
-                            type="semantic",
-                            weight=float(similarity),
-                        )
-                        graph.add_edge(
-                            chunks[j].chunk_id,
-                            chunks[i].chunk_id,
-                            type="semantic",
-                            weight=float(similarity),
-                        )
+        # Add semantic similarity edges.
+        # Memory-safety (task #236 rank11 OOM fix, mirrors the #30 fix in
+        # semantic_compressor.py): never materialise the full N x N
+        # cosine-similarity matrix, and cap the number of chunks that
+        # participate in dense edge-building so a pathologically large source
+        # file cannot blow up peak RSS. Chunks beyond the cap still exist
+        # (uniform PageRank fallback) but are not densely connected.
+        n_chunks = len(chunks)
+        if n_chunks > 1:
+            if n_chunks > _MAX_GRAPH_CHUNKS:
+                logger.warning(
+                    f"  Code file '{file_id}' has {n_chunks} chunks, exceeding "
+                    f"_MAX_GRAPH_CHUNKS={_MAX_GRAPH_CHUNKS}. Similarity edges will "
+                    f"only be built for the first {_MAX_GRAPH_CHUNKS} chunks to bound "
+                    f"peak memory; remaining chunks receive uniform PageRank."
+                )
+            edge_chunk_count = min(n_chunks, _MAX_GRAPH_CHUNKS)
+            chunk_ids = [c.chunk_id for c in chunks]
+            for src, dst, weight in self._build_similarity_edges(
+                embeddings=embeddings,
+                chunk_ids=chunk_ids,
+                similarity_threshold=self.similarity_threshold,
+                block_size=_SIMILARITY_BLOCK_SIZE,
+                max_chunks=edge_chunk_count,
+            ):
+                # Undirected similarity edge -- mirrors the pre-fix behaviour of
+                # adding both directions on the DiGraph.
+                graph.add_edge(src, dst, type="semantic", weight=weight)
+                graph.add_edge(dst, src, type="semantic", weight=weight)
 
         # Calculate importance using PageRank
         print("  Calculating importance scores...")

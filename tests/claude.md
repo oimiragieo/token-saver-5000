@@ -617,6 +617,18 @@ Comprehensive tests for code_compressor.py (AST-based code compression)
 | `class` | `TestCodeChunkRetrieval` |
 | `class` | `TestCodeCompressorEdgeCases` |
 
+#### `test_code_graph_oom_fix.py`
+
+Block-wise code-graph edge-building OOM fix (task #236 rank11).
+
+| Kind | Name |
+|------|------|
+| `def` | `_emb` |
+| `def` | `_reference_edges` |
+| `def` | `_blockwise_edges` |
+| `class` | `TestCodeBlockWiseEdgeEquivalence` |
+| `class` | `TestCodeGraphBuildingMemoryBound` |
+
 #### `test_codex_enhancements.py`
 
 Tests for Codex CLI token optimization enhancements (v0.11.0).
@@ -3158,6 +3170,7 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `async def` | `test_mitigation_4_content_length_header_too_large` |
 | `async def` | `test_mitigation_4_body_too_large_no_content_length` |
 | `async def` | `test_mitigation_4_exactly_10_mb_is_allowed` |
+| `async def` | `test_mitigation_4_size_cap_aborts_stream_without_buffering_whole_body` |
 | `async def` | `test_mitigation_6_binary_content_type_rejected` |
 | `async def` | `test_mitigation_6_image_content_type_rejected` |
 | `async def` | `test_mitigation_6_text_html_allowed` |
