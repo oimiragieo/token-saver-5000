@@ -200,6 +200,32 @@ class TestPythonCodeChunking:
         # All chunks should be of type "block" (fallback type)
         assert all(c.chunk_type == "block" for c in chunks)
 
+    def test_chunk_python_code_deeply_nested_source_falls_back_not_crashes(self):
+        """Task #237 FIX 1 (HIGH, DoS): a crafted deeply-nested Python payload
+        (e.g. posted to /v1/compress-code) must degrade to the line-based
+        fallback instead of crashing the worker process.
+
+        ``ast.parse`` on a sufficiently deep expression tree raises
+        ``RecursionError`` ("maximum recursion depth exceeded during ast
+        construction") -- a RuntimeError subclass that pre-fix was NOT caught
+        by the bare ``except SyntaxError`` in ``chunk_python_code``, so it
+        propagated out and would crash the worker serving every tenant sharing
+        that Fly machine (soft_limit=64 shared, reachable by any free-tier gc_
+        key). A deeply-bracketed payload like ``"[" * N + "]" * N`` is already
+        safely rejected as a ``SyntaxError`` ("too many nested parentheses") by
+        modern CPython's PEG parser, so this uses a bracket-free chained-unary-
+        operator payload, which reliably reproduces the uncaught RecursionError
+        at this depth without risking the C-stack segfault that deeper payloads
+        (~6000+) can trigger.
+        """
+        malicious_code = "-" * 4000 + "1"
+
+        chunks = self.compressor.chunk_python_code(malicious_code, "malicious_file")
+
+        # Falls back to line-based chunking instead of crashing the process.
+        assert len(chunks) > 0
+        assert all(c.chunk_type == "block" for c in chunks)
+
     def test_chunk_python_code_preserves_chunk_ids(self):
         """Test that chunk IDs are properly formatted with :: separator"""
         chunks = self.compressor.chunk_python_code(SAMPLE_PYTHON_CODE, "test_file")

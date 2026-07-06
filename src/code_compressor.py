@@ -144,8 +144,19 @@ class CodeSemanticCompressor:
 
         try:
             tree = ast.parse(code)
-        except SyntaxError:
-            logger.warning(f"Syntax error in {file_id}, falling back to line-based chunking")
+        except (SyntaxError, RecursionError, MemoryError, ValueError) as exc:
+            # #237 rank-1 HIGH (DoS): a crafted deeply-nested payload (e.g.
+            # chained unary operators or bracket nesting) can blow CPython's
+            # parser recursion/stack guards, raising RecursionError or
+            # MemoryError instead of SyntaxError -- neither is a parse-time
+            # syntax problem, but both mean "can't parse this safely," so we
+            # degrade to the same line-based fallback rather than let the
+            # exception crash the worker for every tenant sharing this
+            # process. ValueError covers null-byte source.
+            logger.warning(
+                f"Failed to parse {file_id} as Python ({type(exc).__name__}), "
+                "falling back to line-based chunking"
+            )
             return self._chunk_by_lines(code, file_id)
 
         # Extract imports
