@@ -452,29 +452,49 @@ class TestRealCompressorSourceOrderEndToEnd:
         )
         assert result.score == 1.0
 
-    def test_real_multi_node_importance_actually_diverges_from_position(self) -> None:
-        """Guards against the test above passing VACUOUSLY (i.e. the engine
-        happening to keep PageRank importance monotonic with position, which
-        would make this fixture no better than the single-node integration
-        fixture). Confirms the recap section (last in the doc) has
-        importance strictly greater than at least one earlier section --
-        the precondition that makes the order-preservation test above
-        actually exercise the render-reorder fix."""
+    def test_real_render_order_ignores_reversed_importance(self) -> None:
+        """NON-VACUOUS by construction, on every environment. The engine's real
+        PageRank produces UNIFORM importance for topically-isolated sections (all
+        1.0 on the CI bge model), which would make an unforced order test vacuous
+        -- with equal importance the pre-fix importance-desc *stable* sort already
+        happens to preserve insertion order. So instead we FORCE each node's
+        importance to DECREASE with document position: importance-descending order
+        becomes the exact REVERSE of document order. The pre-fix render loop
+        (iterating the importance-sorted ``file_nodes``) would emit
+        EPSILON..ALPHA and FAIL ``grade_source_order``; the fix renders by
+        document ``position`` and PASSES. ``_generate_skeleton`` reads the cached
+        ``node.importance`` (PageRank runs at ingest, not here), so the mutation
+        is respected."""
         compressor = SemanticCompressor(skeleton_ratio=1.0)
-        file_id = "qg_source_order_divergence_check"
+        file_id = "qg_source_order_forced_divergence"
         compressor.ingest_file(_SOURCE_ORDER_DOC, file_id)
         nodes = sorted(
             (n for nid, n in compressor.chunks.items() if nid.startswith(file_id)),
             key=lambda n: n.metadata["position"],
         )
         assert len(nodes) >= 4, "fixture must yield multiple real nodes, not merge to one"
-        recap_importance = nodes[-1].importance
-        earlier_importances = [n.importance for n in nodes[:-1]]
-        assert any(recap_importance > imp for imp in earlier_importances), (
-            "fixture precondition failed: recap section must out-rank at least "
-            f"one earlier section on PageRank importance; got recap={recap_importance}, "
-            f"earlier={earlier_importances}"
+
+        # Reverse-rank: earliest section LOWEST importance, last HIGHEST -> the
+        # importance-desc order (last..first) is the exact reverse of document
+        # order. (idx+1 keeps every importance strictly positive.)
+        for idx, node in enumerate(nodes):
+            node.importance = float(idx + 1)
+
+        # Precondition holds by construction: importance order != document order.
+        importance_order = [
+            n.metadata["position"] for n in sorted(nodes, key=lambda n: n.importance, reverse=True)
+        ]
+        document_order = [n.metadata["position"] for n in nodes]
+        assert importance_order != document_order, "forced divergence did not take effect"
+
+        response = compressor._generate_skeleton(file_id, query=None)
+        result = grade_source_order(response.skeleton_text, _SOURCE_ORDER_MARKERS)
+        assert result.passed, (
+            "render loop must emit sections in document order even when node "
+            f"importance is reversed: missing={result.missing}\n"
+            f"--- skeleton ---\n{response.skeleton_text}"
         )
+        assert result.score == 1.0
 
 
 # ===========================================================================
