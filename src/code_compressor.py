@@ -356,6 +356,36 @@ class CodeSemanticCompressor:
         return chunks
 
     @staticmethod
+    def _build_dependency_edges(chunks: List[CodeChunk]) -> List[Tuple[str, str]]:
+        """Resolve chunk.dependencies into (src_chunk_id, dst_chunk_id) edges.
+
+        Task #236 rank11 — builds a name -> [chunk_id] index once (O(C)), then
+        looks each dependency up in O(1), replacing the previous nested
+        ``for dep in chunk.dependencies: for other_chunk in chunks`` scan that
+        was O(C x D x C). Behaviour-identical to the nested-loop version:
+        every chunk whose ``name`` equals a dependency string gets an edge from
+        the depending chunk, self-edges are excluded, and duplicate dependency
+        mentions collapse to the same edge set (nx.add_edge was already
+        idempotent, so de-duplicating here changes nothing downstream).
+        """
+        name_index: Dict[str, List[str]] = {}
+        for chunk in chunks:
+            name_index.setdefault(chunk.name, []).append(chunk.chunk_id)
+
+        edges: List[Tuple[str, str]] = []
+        seen: set = set()
+        for chunk in chunks:
+            for dep in chunk.dependencies:
+                for other_id in name_index.get(dep, ()):
+                    if other_id == chunk.chunk_id:
+                        continue
+                    edge = (chunk.chunk_id, other_id)
+                    if edge not in seen:
+                        seen.add(edge)
+                        edges.append(edge)
+        return edges
+
+    @staticmethod
     def _build_similarity_edges(
         embeddings: np.ndarray,
         chunk_ids: List[str],
@@ -478,12 +508,13 @@ class CodeSemanticCompressor:
                 },
             )
 
-            # Add dependency edges
-            for dep in chunk.dependencies:
-                # Find chunks with matching names
-                for other_chunk in chunks:
-                    if other_chunk.name == dep and other_chunk.chunk_id != chunk.chunk_id:
-                        graph.add_edge(chunk.chunk_id, other_chunk.chunk_id, type="dependency")
+        # Add dependency edges via a name index — O(C + total_deps), not the
+        # former O(C x D x C) repeated list-scan (task #236 rank11; ports the
+        # #30 indexing discipline to the dependency-edge pass). A function
+        # body's ast.Call walk can emit hundreds of dependency names, so the
+        # nested rescan of `chunks` per dependency was quadratic in input size.
+        for src_id, dst_id in self._build_dependency_edges(chunks):
+            graph.add_edge(src_id, dst_id, type="dependency")
 
         # Add semantic similarity edges.
         # Memory-safety (task #236 rank11 OOM fix, mirrors the #30 fix in
