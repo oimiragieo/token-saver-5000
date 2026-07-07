@@ -934,6 +934,25 @@ Entry point for token-saver-proxy CLI command.
 |------|------|
 | `def` | `main` |
 
+#### `quality_gate.py`
+
+Independent, sealed-fixture utility oracle for compression-quality gating (MF1).
+
+| Kind | Name |
+|------|------|
+| `class` | `GradeResult` |
+| `def` | `grade_answerability` |
+| `def` | `grade_byte_identity` |
+| `def` | `grade_source_order` |
+| `def` | `grade_modulate_region_roundtrip` |
+| `class` | `UtilityFixtureLike` |
+| `class` | `CorpusFixtureReport` |
+| `class` | `CorpusReport` |
+| `def` | `evaluate_compressor` |
+| `def` | `identity_compressor` |
+| `def` | `empty_compressor` |
+| `def` | `first_paragraph_compressor` |
+
 #### `quality_predictor.py`
 
 PoC quality predictor for semantic compression.

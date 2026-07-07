@@ -59,11 +59,22 @@ engine change, out of scope for this gate-only task.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List
 
 import pytest
 
+from src.quality_gate import (
+    CorpusFixtureReport,
+    CorpusReport,
+    empty_compressor,
+    evaluate_compressor,
+    first_paragraph_compressor,
+    grade_answerability,
+    grade_byte_identity,
+    grade_modulate_region_roundtrip,
+    grade_source_order,
+    identity_compressor,
+)
 from src.semantic_compressor import FidelityLevel, SemanticCompressor, SemanticNode
 from tests.fixtures.quality_gate_fixtures import (
     ALL_FIXTURES,
@@ -74,86 +85,17 @@ from tests.fixtures.quality_gate_fixtures import (
     QualityGateFixture,
 )
 
-# ===========================================================================
-# Grader result type
-# ===========================================================================
-
-
-@dataclass(frozen=True)
-class GradeResult:
-    """Pass/fail + score for one grader run against one skeleton."""
-
-    passed: bool
-    score: float
-    missing: List[str] = field(default_factory=list)
-
-
-# ===========================================================================
-# Graders (pure functions -- no ranker/embedder involvement)
-# ===========================================================================
-
-
-def grade_answerability(skeleton_text: str, answer_spans: Sequence[str]) -> GradeResult:
-    """Each fixed answer span must survive verbatim somewhere in the skeleton."""
-    if not answer_spans:
-        return GradeResult(passed=True, score=1.0, missing=[])
-    missing = [span for span in answer_spans if span not in skeleton_text]
-    hits = len(answer_spans) - len(missing)
-    return GradeResult(
-        passed=not missing,
-        score=hits / len(answer_spans),
-        missing=missing,
-    )
-
-
-def grade_byte_identity(skeleton_text: str, load_bearing_tokens: Sequence[str]) -> GradeResult:
-    """Numbers/identifiers/code tokens must appear BYTE-IDENTICAL in the skeleton."""
-    if not load_bearing_tokens:
-        return GradeResult(passed=True, score=1.0, missing=[])
-    missing = [tok for tok in load_bearing_tokens if tok not in skeleton_text]
-    hits = len(load_bearing_tokens) - len(missing)
-    return GradeResult(
-        passed=not missing,
-        score=hits / len(load_bearing_tokens),
-        missing=missing,
-    )
-
-
-def grade_source_order(skeleton_text: str, order_markers: Sequence[str]) -> GradeResult:
-    """Surviving order markers must appear in the SAME relative order as given.
-
-    A marker that is entirely missing means order cannot be verified for it,
-    so a missing marker fails the grader (it does not vacuously pass).
-    """
-    if not order_markers:
-        return GradeResult(passed=True, score=1.0, missing=[])
-    positions: List[int] = []
-    missing: List[str] = []
-    for marker in order_markers:
-        idx = skeleton_text.find(marker)
-        if idx == -1:
-            missing.append(marker)
-        else:
-            positions.append(idx)
-    if missing:
-        return GradeResult(passed=False, score=0.0, missing=missing)
-    in_order = positions == sorted(positions)
-    return GradeResult(passed=in_order, score=1.0 if in_order else 0.0, missing=[])
-
-
-def grade_modulate_region_roundtrip(
-    compressor: SemanticCompressor,
-    node_id: str,
-    expected_substring: str,
-) -> GradeResult:
-    """A ``[HIDDEN]``/node_id marker must resolve back to real source content."""
-    output = compressor.modulate_region([node_id], fidelity_level=FidelityLevel.RAW)
-    passed = "[WARN] Node not found" not in output and expected_substring in output
-    return GradeResult(
-        passed=passed,
-        score=1.0 if passed else 0.0,
-        missing=[] if passed else [expected_substring],
-    )
+# NOTE (2026-07-07): ``GradeResult`` + the 4 graders (``grade_answerability``,
+# ``grade_byte_identity``, ``grade_source_order``,
+# ``grade_modulate_region_roundtrip``) used to be defined INLINE in this test
+# file. They are now promoted, byte-for-byte unchanged, to
+# ``src/quality_gate.py`` so a real ratio-flip / reranker-flip / TOON-routing
+# change (design doc §8 Wave 3) can call the SAME oracle a CI gate would use
+# instead of re-deriving the grading logic inline in a test. This file keeps
+# every existing test unchanged (just imports the logic instead of defining
+# it) and adds ``TestBidirectionalCompressorEvaluation`` below, which proves
+# the corpus-level entry point (``evaluate_compressor``) discriminates a
+# known-good, a known-bad, and a partial reference compressor.
 
 
 # ===========================================================================
@@ -428,3 +370,57 @@ class TestRealCompressorIntegration:
             f"real modulate_region round-trip failed byte-identity: missing={result.missing}\n"
             f"--- recovered raw ---\n{all_raw}"
         )
+
+
+# ===========================================================================
+# Bidirectional CORPUS-level evaluation (MF1 hard prerequisite) -- proves
+# `evaluate_compressor`, the entry point any future ratio/reranker/routing
+# flip (design doc §8 Wave 3) must call, actually discriminates: a known-good
+# compressor passes the whole sealed corpus, a known-bad compressor fails the
+# whole corpus, and a deterministic PARTIAL compressor lands strictly between
+# the two extremes -- proving the oracle grades degrees of quality loss, not
+# just a binary pass/fail (compression-quality-eval skill, P6: "bidirectionally
+# validate the gate before trusting a batch").
+# ===========================================================================
+
+
+class TestBidirectionalCompressorEvaluation:
+    def test_identity_compressor_passes_entire_corpus(self) -> None:
+        """KNOWN-GOOD direction: a passthrough compressor must pass every
+        sealed fixture (prose/code/mixed/json/qa) -- it returns the fixture's
+        own source text, which by construction contains every one of its
+        own hand-labelled answer_spans/load_bearing_tokens."""
+        report = evaluate_compressor(identity_compressor, ALL_FIXTURES)
+        assert isinstance(report, CorpusReport)
+        assert report.all_passed, (
+            f"identity compressor should pass every fixture; " f"failed={report.failed_fixture_ids}"
+        )
+        for fixture_report in report.fixture_reports:
+            assert isinstance(fixture_report, CorpusFixtureReport)
+            assert fixture_report.answerability.score == 1.0
+            assert fixture_report.byte_identity.score == 1.0
+
+    def test_empty_compressor_fails_entire_corpus(self) -> None:
+        """KNOWN-BAD direction: a compressor that emits nothing must fail
+        every sealed fixture -- if it didn't, the oracle would be the exact
+        broken-oracle trap the skill warns about (a stub passing as if it
+        were a capability)."""
+        report = evaluate_compressor(empty_compressor, ALL_FIXTURES)
+        assert not report.all_passed
+        assert set(report.failed_fixture_ids) == {f.fixture_id for f in ALL_FIXTURES}
+        for fixture_report in report.fixture_reports:
+            assert fixture_report.answerability.score == 0.0
+            assert fixture_report.byte_identity.score == 0.0
+
+    def test_partial_compressor_scores_strictly_between_pass_and_fail(self) -> None:
+        """A deterministic PARTIAL compressor (keeps only the fixture's first
+        of three sections) must land STRICTLY BETWEEN the identity-compressor
+        ceiling (1.0) and the empty-compressor floor (0.0) -- proving the
+        oracle can discriminate a mid-fidelity regression, not just detect
+        the two extremes above."""
+        report = evaluate_compressor(first_paragraph_compressor, [PROSE_FIXTURE])
+        (fixture_report,) = report.fixture_reports
+        assert 0.0 < fixture_report.answerability.score < 1.0, fixture_report.answerability
+        assert 0.0 < fixture_report.byte_identity.score < 1.0, fixture_report.byte_identity
+        assert not fixture_report.passed
+        assert not report.all_passed

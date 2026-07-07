@@ -256,6 +256,10 @@ class CodeCompressionAdapter:
             removed += 1
         tc.graphs.pop(file_id, None)
         tc.file_metadata.pop(file_id, None)
+        # 2026-07-06 knob-honesty fix: clear any per-document skeleton_ratio
+        # override so a deleted-then-re-ingested file_id without an explicit
+        # skeleton_ratio doesn't silently inherit a stale prior request.
+        tc._file_skeleton_ratio_overrides.pop(file_id, None)
 
         # Code compressor (if loaded)
         if self._code_compressor is not None:

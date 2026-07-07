@@ -252,6 +252,13 @@ class TestHandleIngestProtection:
         compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
         compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
         compressor.estimate_compression = MagicMock(return_value=MagicMock(compression_ratio=5.0))
+        # 2026-07-06 knob-honesty fix: set_file_skeleton_ratio is a genuinely
+        # SYNCHRONOUS method on the real compressor (handle_ingest calls it,
+        # not awaits it). The base AsyncMock() auto-generates unconfigured
+        # attributes as AsyncMock too, which would make this call return an
+        # unawaited coroutine and trip the exact RuntimeWarning this test
+        # asserts is absent — same pattern as the other sync methods above.
+        compressor.set_file_skeleton_ratio = MagicMock()
         compressor.model = MagicMock(
             encode=MagicMock(return_value=np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]))
         )

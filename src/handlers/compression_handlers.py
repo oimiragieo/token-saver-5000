@@ -24,7 +24,7 @@ import inspect
 import re
 
 from ..types import HandlerContext  # TypedDict for handler context
-from ..semantic_compressor import FidelityLevel
+from ..semantic_compressor import FidelityLevel, compute_adaptive_ratio
 from ..fidelity_advisor import FidelityAdvisor, UseCase
 from ..error_helpers import SmartError
 from ..compression_advisor import CompressionAdvisor
@@ -580,6 +580,22 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     metadata = args.get("metadata")
     scoped_file_id = _scoped_file_id(file_id, args)
 
+    # 2026-07-06 knob-honesty fix (architecture plan Move 5): the schema has
+    # long advertised `skeleton_ratio` but nothing ever read it — an agent
+    # asking for more compression got a silent no-op (same bug class as the
+    # activation-honesty fix). Validate it here; `set_file_skeleton_ratio`
+    # below is what actually makes it take effect.
+    skeleton_ratio_arg = args.get("skeleton_ratio")
+    if skeleton_ratio_arg is not None and skeleton_ratio_arg != "auto":
+        _is_number = isinstance(skeleton_ratio_arg, (int, float)) and not isinstance(
+            skeleton_ratio_arg, bool
+        )
+        if not _is_number or not (0.0 < skeleton_ratio_arg <= 1.0):
+            raise ValueError(
+                f"Invalid skeleton_ratio: {skeleton_ratio_arg!r}\n"
+                "Tip: skeleton_ratio must be a number in (0.0, 1.0], or the string 'auto'."
+            )
+
     # Text content length validation (v0.7.0 security hardening)
     text_bytes = len(text.encode("utf-8"))
     if text_bytes > MAX_TEXT_LENGTH_BYTES:
@@ -630,7 +646,13 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     # NEW v0.4.1: Provide compression estimate before actual compression
     advisor = CompressionAdvisor()
-    estimate = advisor.estimate_compression(text, skeleton_ratio=0.2)
+    # 2026-07-06: mirror the real ratio the engine will use instead of always
+    # previewing at the hardcoded 0.2 — a caller-supplied skeleton_ratio (or
+    # the "auto"/unset adaptive default) now shapes the estimate too.
+    _estimate_ratio = skeleton_ratio_arg
+    if _estimate_ratio is None or _estimate_ratio == "auto":
+        _estimate_ratio = compute_adaptive_ratio(len(text.split()))
+    estimate = advisor.estimate_compression(text, skeleton_ratio=_estimate_ratio)
     logger.info(
         f"Compression estimate: {estimate.compression_ratio:.1f}× "
         f"({estimate.original_tokens} → ~{estimate.estimated_compressed} tokens)"
@@ -638,6 +660,11 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     try:
         chunking_strategy, chunking_strategy_used = _resolve_chunking_strategy(args, text)
+        # Thread the (validated) caller-requested ratio through as a
+        # per-document override BEFORE ingest — the baseline skeleton cached
+        # for read_skeleton's cache_stable_prefix is generated INSIDE
+        # ingest_file_async, so the override must already be in place.
+        context["compressor"].set_file_skeleton_ratio(scoped_file_id, skeleton_ratio_arg)
         skeleton = await context["compressor"].ingest_file_async(
             text, scoped_file_id, metadata, chunking_strategy=chunking_strategy
         )

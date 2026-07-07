@@ -208,6 +208,19 @@ class SemanticCompressor:
         self.similarity_threshold = similarity_threshold
         self.skeleton_ratio = skeleton_ratio
 
+        # Per-document skeleton_ratio override (2026-07-06, knob-honesty fix,
+        # architecture plan Move 5). This compressor instance is a long-lived
+        # singleton shared across concurrent MCP requests (production wiring —
+        # ``server_factory_service.code_adapter_config``). The REST engine
+        # (``api/app/services/compression.py``) safely mutates
+        # ``compressor.skeleton_ratio`` per call because each request thread
+        # owns its OWN compressor there; doing the same on the shared MCP
+        # singleton would race concurrently in-flight calls on DIFFERENT
+        # documents. Keying the override by file_id avoids that race: each
+        # document's requested ratio is independent and read back by
+        # ``_resolve_skeleton_ratio`` instead of the shared default.
+        self._file_skeleton_ratio_overrides: Dict[str, float | str] = {}
+
         # B1 (modernization roadmap 2026-06-08): COMI/MIG redundancy weight for
         # the query-guided skeleton selector. Sourced from the canonical COMI
         # MIGConfig default (arXiv 2602.01719, lambda_redundancy=0.5) so there is
@@ -1332,6 +1345,30 @@ class SemanticCompressor:
 
         return selected_order
 
+    def set_file_skeleton_ratio(self, file_id: str, ratio: float | str | None) -> None:
+        """Record (or clear) a per-document ``skeleton_ratio`` override.
+
+        Read back by ``_resolve_skeleton_ratio`` instead of the shared
+        ``self.skeleton_ratio`` default. This is the mechanism that makes the
+        ``ingest_context`` MCP tool's ``skeleton_ratio`` schema parameter a
+        real, race-safe knob on the shared singleton compressor — see the
+        ``_file_skeleton_ratio_overrides`` note in ``__init__``.
+
+        Args:
+            file_id: Document identifier the override applies to.
+            ratio: A float in (0.0, 1.0], the string ``"auto"``, or ``None`` to
+                clear any existing override for this document (falls back to
+                the instance default).
+        """
+        if ratio is None:
+            self._file_skeleton_ratio_overrides.pop(file_id, None)
+            return
+        self._file_skeleton_ratio_overrides[file_id] = ratio
+
+    def _resolve_skeleton_ratio(self, file_id: str) -> float | str:
+        """Return this document's skeleton_ratio override, or the instance default."""
+        return self._file_skeleton_ratio_overrides.get(file_id, self.skeleton_ratio)
+
     def _generate_skeleton(
         self,
         file_id: str,
@@ -1397,8 +1434,10 @@ class SemanticCompressor:
         file_nodes.sort(key=lambda x: x[1].importance, reverse=True)
 
         # Determine skeleton nodes (top N%)
-        # Use adaptive ratio if skeleton_ratio is "auto"
-        effective_ratio = self.skeleton_ratio
+        # Use adaptive ratio if skeleton_ratio is "auto". Per-document override
+        # (2026-07-06 knob-honesty fix) takes precedence over the shared
+        # instance default — see _resolve_skeleton_ratio.
+        effective_ratio = self._resolve_skeleton_ratio(file_id)
         if effective_ratio == "auto":
             total_tokens_estimate = sum(len(node.text.split()) for _, node in file_nodes)
             effective_ratio = compute_adaptive_ratio(total_tokens_estimate)
@@ -1518,8 +1557,26 @@ class SemanticCompressor:
                 }
                 # Use adaptive ratios to tune overall budget as well as
                 # per-node selection priority.
-                num_skeleton = sum(1 for r in per_node_ratios if r >= effective_ratio)
-                num_skeleton = max(1, num_skeleton)
+                #
+                # Collapse-bug clamp (2026-07-06, architecture plan Move 5,
+                # plan item MF6): counting nodes whose PER-NODE ratio clears
+                # the (uniform) effective_ratio bar is a live bug when query
+                # relevance concentrates on a small subset of sections —
+                # compute_section_ratios keeps the ratio AVERAGE at
+                # effective_ratio, but a highly concentrated relevance
+                # distribution pushes most per-node ratios toward min_ratio
+                # (0.05), so the count-based budget can collapse to as few as
+                # 1 node regardless of document size. That silently discards
+                # the proportional budget the caller actually requested via
+                # skeleton_ratio/fidelity. Clamp to the PROPORTIONAL floor
+                # already computed above (num_skeleton = max(1, int(N *
+                # effective_ratio))) — the query-adaptive budget may GROW that
+                # floor (more relevant sections get more detail) but must
+                # never shrink below it.
+                num_skeleton_query_adaptive = sum(
+                    1 for r in per_node_ratios if r >= effective_ratio
+                )
+                num_skeleton = max(num_skeleton, num_skeleton_query_adaptive)
             except Exception as exc:
                 logger.warning(f"Query-adaptive ratio computation failed for '{file_id}': {exc}")
 
@@ -2115,7 +2172,7 @@ class SemanticCompressor:
         if not file_nodes:
             return 0
 
-        effective_ratio = self.skeleton_ratio
+        effective_ratio = self._resolve_skeleton_ratio(file_id)
         if effective_ratio == "auto":
             total_tokens_estimate = sum(len(node.text.split()) for _, node in file_nodes)
             effective_ratio = compute_adaptive_ratio(total_tokens_estimate)

@@ -564,7 +564,17 @@ COMPRESSION_PROFILES = {
         "description": "Quick overview, fits in compacted context",
     },
     "balanced": {
-        "skeleton_ratio": 0.25,
+        # 2026-07-06 knob-honesty fix (architecture plan Move 5): was 0.25,
+        # silently disagreeing with every other "balanced" definition in the
+        # codebase — REST's FIDELITY_PRESETS (api/app/services/compression.py,
+        # 0.20), the older compression_presets.py registry (0.2), and the
+        # SemanticCompressor constructor default (semantic_compressor.py, 0.2).
+        # Converged to 0.20 so "balanced" means the same thing everywhere;
+        # this profile registry has no live callers yet (set_compression_profile
+        # / apply_profile are not wired into ingest_context or read_skeleton),
+        # so the change has zero effect on any currently-firing compression —
+        # it only fixes what a caller inspecting the preset is told.
+        "skeleton_ratio": 0.20,
         "fidelity": "STRUCTURE",
         "chunk_size": 512,
         "description": "Default, good for most tasks",

@@ -219,8 +219,14 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     },
                     "skeleton_ratio": {
                         "type": ["number", "string"],
-                        "description": "Skeleton ratio (0.0-1.0) or 'auto' for adaptive sizing based on corpus size. Default: 0.2",
-                        "default": 0.2,
+                        "description": (
+                            "Optional: override the skeleton ratio for THIS document — a "
+                            "number in (0.0, 1.0] (fraction of nodes kept as anchors), or "
+                            "the string 'auto' for adaptive sizing based on corpus size. "
+                            "When omitted, the server's adaptive default applies (~80% of "
+                            "nodes kept below 8K tokens, scaling down to ~10% above 100K). "
+                            "Applies to this file_id's later read_skeleton calls."
+                        ),
                     },
                     "chunking_strategy": {
                         "type": "string",

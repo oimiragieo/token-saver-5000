@@ -435,7 +435,7 @@ class CodeSemanticCompressor:
         else:
             language = CodeLanguage.UNKNOWN
 
-        print(f"  Language: {language.value}")
+        logger.info(f"  Language: {language.value}")
 
         # Chunk code based on language
         if language == CodeLanguage.PYTHON:
@@ -446,10 +446,10 @@ class CodeSemanticCompressor:
             # Fallback to line-based chunking
             chunks = self._chunk_by_lines(code, file_id)
 
-        print(f"  Created {len(chunks)} code chunks")
+        logger.info(f"  Created {len(chunks)} code chunks")
 
         # Generate embeddings
-        print("  Generating embeddings...")
+        logger.info("  Generating embeddings...")
         chunk_texts = []
         for chunk in chunks:
             # Combine code + docstring for better semantic representation
@@ -461,7 +461,7 @@ class CodeSemanticCompressor:
         embeddings = self.model.encode(chunk_texts, show_progress_bar=True)
 
         # Build dependency graph
-        print("  Building dependency graph...")
+        logger.info("  Building dependency graph...")
         graph = nx.DiGraph()  # Directed graph for code dependencies
 
         for i, chunk in enumerate(chunks):
@@ -516,7 +516,7 @@ class CodeSemanticCompressor:
                 graph.add_edge(dst, src, type="semantic", weight=weight)
 
         # Calculate importance using PageRank
-        print("  Calculating importance scores...")
+        logger.info("  Calculating importance scores...")
         if len(graph.nodes) > 0:
             # Convert to undirected for PageRank
             undirected = graph.to_undirected()
@@ -548,10 +548,10 @@ class CodeSemanticCompressor:
             "graph_edges": graph.number_of_edges(),
         }
 
-        print(f"  [OK] Parsed {len(chunks)} chunks:")
-        print(f"     Functions: {stats['chunk_types']['functions']}")
-        print(f"     Classes: {stats['chunk_types']['classes']}")
-        print(f"     Dependencies: {graph.number_of_edges()}")
+        logger.info(f"  [OK] Parsed {len(chunks)} chunks:")
+        logger.info(f"     Functions: {stats['chunk_types']['functions']}")
+        logger.info(f"     Classes: {stats['chunk_types']['classes']}")
+        logger.info(f"     Dependencies: {graph.number_of_edges()}")
 
         return stats
 

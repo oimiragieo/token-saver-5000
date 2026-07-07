@@ -617,6 +617,15 @@ Comprehensive tests for code_compressor.py (AST-based code compression)
 | `class` | `TestCodeChunkRetrieval` |
 | `class` | `TestCodeCompressorEdgeCases` |
 
+#### `test_code_compressor_no_stdout_print.py`
+
+Regression lock: code-ingest path must never write to stdout (2026-07-06).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestIngestCodeFileNeverPrintsToStdout` |
+| `def` | `test_no_bare_print_calls_left_in_ingest_code_file` |
+
 #### `test_code_graph_oom_fix.py`
 
 Block-wise code-graph edge-building OOM fix (task #236 rank11).
@@ -2346,11 +2355,6 @@ Deterministic, INDEPENDENT-oracle compression quality gate (Phase 0).
 
 | Kind | Name |
 |------|------|
-| `class` | `GradeResult` |
-| `def` | `grade_answerability` |
-| `def` | `grade_byte_identity` |
-| `def` | `grade_source_order` |
-| `def` | `grade_modulate_region_roundtrip` |
 | `def` | `_sections` |
 | `def` | `_build_correct_skeleton` |
 | `class` | `TestAnswerabilityGrader` |
@@ -2361,6 +2365,7 @@ Deterministic, INDEPENDENT-oracle compression quality gate (Phase 0).
 | `class` | `TestGateItselfIsNotBroken` |
 | `def` | `_probe_model_load` |
 | `class` | `TestRealCompressorIntegration` |
+| `class` | `TestBidirectionalCompressorEvaluation` |
 
 #### `test_quality_predictor.py`
 
@@ -2376,6 +2381,16 @@ Tests for src/quality_predictor.py — PoC compression quality prediction.
 | `class` | `TestSimulateCompression` |
 | `class` | `TestPredictAllProfiles` |
 | `class` | `TestAutoSelectProfile` |
+
+#### `test_query_adaptive_budget_floor.py`
+
+Regression lock: query-adaptive skeleton budget must never collapse below
+
+| Kind | Name |
+|------|------|
+| `def` | `_build_ten_topic_doc` |
+| `def` | `_anchor_count` |
+| `class` | `TestQueryAdaptiveBudgetNeverCollapsesBelowFloor` |
 
 #### `test_query_guided_compression.py`
 
@@ -2832,6 +2847,17 @@ Tests for SessionJournal (src/session_journal.py).
 | `class` | `TestSessionIsolation` |
 | `class` | `TestPersistence` |
 | `class` | `TestWALMode` |
+
+#### `test_skeleton_ratio_knob.py`
+
+Regression lock: `ingest_context`'s `skeleton_ratio` param must actually
+
+| Kind | Name |
+|------|------|
+| `def` | `_multi_section_doc` |
+| `def` | `_count_anchors` |
+| `class` | `TestSkeletonRatioValidation` |
+| `class` | `TestSkeletonRatioTakesEffect` |
 
 #### `test_skill_external_adapters.py`
 

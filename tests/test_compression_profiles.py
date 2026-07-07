@@ -55,9 +55,15 @@ def test_summary_profile_values():
 
 
 def test_balanced_profile_values():
-    """balanced profile has skeleton_ratio=0.25, fidelity=STRUCTURE, chunk_size=512."""
+    """balanced profile has skeleton_ratio=0.20, fidelity=STRUCTURE, chunk_size=512.
+
+    2026-07-06 (knob-honesty fix, architecture plan Move 5): was 0.25, which
+    disagreed with every other "balanced" definition (REST FIDELITY_PRESETS,
+    compression_presets.py, the SemanticCompressor constructor default) — all
+    of which are 0.20. Converged so "balanced" means one thing everywhere.
+    """
     p = get_profile("balanced")
-    assert p.skeleton_ratio == pytest.approx(0.25)
+    assert p.skeleton_ratio == pytest.approx(0.20)
     assert p.fidelity == "STRUCTURE"
     assert p.chunk_size == 512
 
@@ -268,8 +274,9 @@ def test_apply_profile_partial_override():
 
     # chunk_size is overridden
     assert result["chunk_size"] == 2048
-    # Others come from balanced profile
-    assert result["skeleton_ratio"] == pytest.approx(0.25)
+    # Others come from balanced profile (0.20 as of the 2026-07-06 knob-honesty
+    # unification — see test_balanced_profile_values)
+    assert result["skeleton_ratio"] == pytest.approx(0.20)
     assert result["fidelity"] == "STRUCTURE"
 
 
