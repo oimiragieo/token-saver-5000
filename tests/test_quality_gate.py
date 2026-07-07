@@ -41,20 +41,22 @@ rendered skeleton, which is a real (if orthogonal) engine property, not a
 grader bug. See the "blockers for the orchestrator" note at the bottom of
 this docstring.
 
-BLOCKER FOR THE ORCHESTRATOR (found while building this gate, not fixed --
-this task only adds the gate): ``_generate_skeleton`` sorts ``file_nodes`` by
-PageRank ``importance`` descending (semantic_compressor.py:1397/1453), NOT by
-original document position. So ``grade_source_order`` is NOT currently
-guaranteed end-to-end by the real engine for a multi-node document -- it is
-only satisfied incidentally when nodes are otherwise-equal-importance ties
-(Python's stable sort then preserves insertion order). The
-``TestRealCompressorIntegration`` test therefore does not exercise
-``grade_source_order`` (it uses a single-node fixture where order is
-vacuous); the grader itself IS fully bidirectionally proven against
-hand-authored skeleton text. If per-document source-order becomes a hard
-product requirement, ``_generate_skeleton`` would need an explicit
-"preserve original order among skeleton_nodes" render step -- that is an
-engine change, out of scope for this gate-only task.
+FIXED (world-class compression audit #2, 2026-07-07): ``_generate_skeleton``
+used to sort ``file_nodes`` by PageRank ``importance`` descending
+(semantic_compressor.py:1434/1492) AND render in that same order
+(semantic_compressor.py:1639), so ``grade_source_order`` was NOT guaranteed
+end-to-end for a multi-node document -- it only passed incidentally when
+nodes were otherwise-equal-importance ties (Python's stable sort then
+preserves insertion order). The fix is a pure RENDER reorder: node
+SELECTION (skeleton_nodes / anchors / COMI / MMR) is untouched; immediately
+before the render loop, nodes-to-render are re-sorted by
+``metadata["position"]`` (original document order) with a ``node_id``
+tiebreak for determinism. ``TestRealCompressorIntegration`` still uses a
+single-node fixture (order is vacuous there -- see that class's docstring
+for why), but ``TestRealCompressorSourceOrderEndToEnd`` below exercises the
+real chunker + real PageRank + the fix end-to-end on a 5-node document where
+the ACTUAL importance ranking (not just a contrived one) diverges from
+document order.
 """
 
 from __future__ import annotations
@@ -369,6 +371,109 @@ class TestRealCompressorIntegration:
         assert result.passed, (
             f"real modulate_region round-trip failed byte-identity: missing={result.missing}\n"
             f"--- recovered raw ---\n{all_raw}"
+        )
+
+
+# ===========================================================================
+# End-to-end source-order proof (world-class compression audit #2,
+# 2026-07-07) -- runs the REAL compressor (real chunker, real embedding
+# model, real PageRank) on a 5-section document deliberately shaped so a
+# LATER section (a "recap" paragraph that echoes vocabulary from three
+# earlier sections) becomes a similarity-graph hub and out-ranks earlier,
+# topically-isolated sections on PageRank importance. Pre-fix this is
+# RENDERED first (importance-descending render order); post-fix it renders
+# in its true document position. skeleton_ratio=1.0 keeps every node an
+# ANCHOR so every order_marker survives verbatim (no [HIDDEN] truncation
+# noise in the order check).
+# ===========================================================================
+
+_SOURCE_ORDER_DOC = (
+    "## ALPHA_AUTH_SECTION\n\n"
+    "Authentication in gotcontext.ai resolves an inbound request to a "
+    "(user_id, plan) tuple using one of three mechanisms: a Clerk-issued "
+    "session JWT verified against the JWKS endpoint, a gc_ prefixed API key "
+    "verified via HMAC signature, or a self-hosted Ed25519 license token. "
+    "Each mechanism populates request.state with the resolved plan so "
+    "downstream middleware can apply plan-gating without a second lookup.\n\n"
+    "## BETA_BILLING_SECTION\n\n"
+    "Billing is handled entirely by Polar as the merchant of record. Webhook "
+    "events for subscription.created, subscription.updated, and "
+    "subscription.canceled are verified with Svix signatures before the "
+    "handler mutates the local subscriptions table. A daily reconciliation "
+    "cron treats the Polar API as the source of truth and never downgrades "
+    "a user's plan on an empty or unparseable provider response.\n\n"
+    "## GAMMA_CACHE_SECTION\n\n"
+    "The semantic cache stores compressed skeleton output keyed by a hash "
+    "of the source document plus the requested fidelity level. Cache "
+    "entries live in Upstash Redis with a five minute TTL for the plan "
+    "cache and a longer TTL for the semantic cache proper, using pgvector "
+    "HNSW indexing for approximate nearest-neighbor lookups.\n\n"
+    "## DELTA_WEBHOOK_SECTION\n\n"
+    "Outbound webhook delivery is best effort with a durable retry queue "
+    "backed by a webhook_deliveries table. A drain cron runs hourly and "
+    "attempts redelivery for any row still marked pending, applying "
+    "exponential backoff between attempts and giving up after a bounded "
+    "number of retries so a permanently dead endpoint cannot loop forever.\n\n"
+    "## EPSILON_RECAP_SECTION\n\n"
+    "To recap: authentication resolves a JWT or API key to a plan, billing "
+    "runs through Polar webhooks reconciled daily against the provider, the "
+    "semantic cache uses Redis and pgvector HNSW for fast lookups, and "
+    "outbound webhook delivery retries through a durable queue with "
+    "exponential backoff until a bounded retry ceiling is reached."
+)
+_SOURCE_ORDER_MARKERS = [
+    "ALPHA_AUTH_SECTION",
+    "BETA_BILLING_SECTION",
+    "GAMMA_CACHE_SECTION",
+    "DELTA_WEBHOOK_SECTION",
+    "EPSILON_RECAP_SECTION",
+]
+
+
+@pytest.mark.skipif(not _MODEL_AVAILABLE, reason=_MODEL_SKIP_REASON)
+class TestRealCompressorSourceOrderEndToEnd:
+    """LOAD-BEARING: proves the render-reorder fix on the REAL engine, not
+    just on hand-authored skeleton strings. The recap section's real
+    PageRank importance genuinely out-ranks the earlier, topically-isolated
+    sections (verified empirically, not assumed) -- this is not a contrived
+    ``importance=`` override on a fake node."""
+
+    def test_real_multi_node_skeleton_preserves_document_order(self) -> None:
+        compressor = SemanticCompressor(skeleton_ratio=1.0)
+        file_id = "qg_source_order_real"
+        compressor.ingest_file(_SOURCE_ORDER_DOC, file_id)
+        response = compressor._generate_skeleton(file_id, query=None)
+
+        result = grade_source_order(response.skeleton_text, _SOURCE_ORDER_MARKERS)
+        assert result.passed, (
+            "real compressor output should render sections in original "
+            f"document order: missing={result.missing}\n"
+            f"--- skeleton ---\n{response.skeleton_text}"
+        )
+        assert result.score == 1.0
+
+    def test_real_multi_node_importance_actually_diverges_from_position(self) -> None:
+        """Guards against the test above passing VACUOUSLY (i.e. the engine
+        happening to keep PageRank importance monotonic with position, which
+        would make this fixture no better than the single-node integration
+        fixture). Confirms the recap section (last in the doc) has
+        importance strictly greater than at least one earlier section --
+        the precondition that makes the order-preservation test above
+        actually exercise the render-reorder fix."""
+        compressor = SemanticCompressor(skeleton_ratio=1.0)
+        file_id = "qg_source_order_divergence_check"
+        compressor.ingest_file(_SOURCE_ORDER_DOC, file_id)
+        nodes = sorted(
+            (n for nid, n in compressor.chunks.items() if nid.startswith(file_id)),
+            key=lambda n: n.metadata["position"],
+        )
+        assert len(nodes) >= 4, "fixture must yield multiple real nodes, not merge to one"
+        recap_importance = nodes[-1].importance
+        earlier_importances = [n.importance for n in nodes[:-1]]
+        assert any(recap_importance > imp for imp in earlier_importances), (
+            "fixture precondition failed: recap section must out-rank at least "
+            f"one earlier section on PageRank importance; got recap={recap_importance}, "
+            f"earlier={earlier_importances}"
         )
 
 

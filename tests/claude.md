@@ -626,6 +626,19 @@ Regression lock: code-ingest path must never write to stdout (2026-07-06).
 | `class` | `TestIngestCodeFileNeverPrintsToStdout` |
 | `def` | `test_no_bare_print_calls_left_in_ingest_code_file` |
 
+#### `test_code_dependency_edges.py`
+
+Task #236 rank11 — dependency-edge building must be indexed, not quadratic.
+
+| Kind | Name |
+|------|------|
+| `def` | `_chunk` |
+| `def` | `_naive_reference_edges` |
+| `class` | `_IterCountingList` |
+| `class` | `TestDependencyEdgeParity` |
+| `class` | `TestDependencyEdgeComplexity` |
+| `class` | `TestIngestIntegrationModelFree` |
+
 #### `test_code_graph_oom_fix.py`
 
 Block-wise code-graph edge-building OOM fix (task #236 rank11).
@@ -2365,6 +2378,7 @@ Deterministic, INDEPENDENT-oracle compression quality gate (Phase 0).
 | `class` | `TestGateItselfIsNotBroken` |
 | `def` | `_probe_model_load` |
 | `class` | `TestRealCompressorIntegration` |
+| `class` | `TestRealCompressorSourceOrderEndToEnd` |
 | `class` | `TestBidirectionalCompressorEvaluation` |
 
 #### `test_quality_predictor.py`

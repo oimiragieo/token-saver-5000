@@ -1636,7 +1636,29 @@ class SemanticCompressor:
         total_tokens = 0
         skeleton_tokens = 0
 
-        for node_id, node in file_nodes:
+        # Render in ORIGINAL DOCUMENT ORDER, not importance-descending order
+        # (world-class compression audit #2, 2026-07-07). Node SELECTION above
+        # (skeleton_nodes / anchor_node_ids / the COMI+MMR machinery) is
+        # UNCHANGED — it still picks which nodes survive by importance, query
+        # relevance, and redundancy. Only the ITERATION ORDER for the render
+        # loop below changes. Rendering in importance order destroys
+        # narrative/legal/code document structure: a supporting section can
+        # render AFTER the section that depends on it, or after a [HIDDEN]
+        # marker whose detail hasn't been drilled into yet. Every node
+        # created during ingest carries its original position in
+        # ``metadata["position"]`` (see the Pass-A node-construction loop
+        # above). Stable sort with a ``(position, node_id)`` tiebreak keeps
+        # output fully deterministic (no PYTHONHASHSEED dependence, no
+        # reliance on dict/set iteration order) even for nodes that are
+        # missing the key (defensive ``.get(..., 0)`` fallback, consistent
+        # with the existing ``persistence.py`` / ``graph_visualizer.py``
+        # pattern for this same field).
+        render_nodes = sorted(
+            file_nodes,
+            key=lambda item: (item[1].metadata.get("position") or 0, item[0]),
+        )
+
+        for node_id, node in render_nodes:
             total_tokens += node.metadata["tokens"]
 
             if node_id in skeleton_nodes:
