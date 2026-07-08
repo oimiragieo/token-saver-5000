@@ -25,8 +25,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
-from .bm25_utils import bm25_scores as _bm25_score_texts
-from .constants import _RRF_K, F11_RANKER_PATH, DEFAULT_TEXT_MODEL
+from .bm25_utils import (
+    bm25_scores as _bm25_score_texts,
+    query_has_lexical_shape as _gate_query_has_lexical_shape,
+    bm25_top1_is_discriminative as _gate_bm25_top1_is_discriminative,
+)
+from .constants import (
+    _RRF_K,
+    F11_RANKER_PATH,
+    F11_GATE_IDF_TAU,
+    F11_GATE_SCORE_FLOOR,
+    DEFAULT_TEXT_MODEL,
+)
 from .node_identity import extract_file_id_from_node
 
 logger = logging.getLogger(__name__)
@@ -68,6 +78,47 @@ def _node_belongs_to_file(node_id: str, file_id: str) -> bool:
     against the target, which makes the membership test collision-proof.
     """
     return extract_file_id_from_node(node_id) == file_id
+
+
+def _gate_should_fuse_g(
+    query: str,
+    bm25_ranked: List[Tuple[str, float]],
+    candidate_nodes: List[Tuple[str, "SemanticNode"]],
+) -> bool:
+    """F11 Path G gate (design memo idea #1, EXPERIMENTAL --
+    ``docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md`` section 2):
+    should this query's ranking fuse BM25+RRF, or fall back to Path A
+    dense-only?
+
+    Gate = OR of two cheap, deterministic, model-free predicates:
+
+    1. Query-shape (``query_has_lexical_shape``): the query itself contains
+       a digit-bearing token, an identifier-shaped token, or a quoted
+       phrase -- the classes the 2026-07-08 gate-data measurement showed
+       BM25 wins or ties-at-rank-1 on.
+    2. Match-quality (``bm25_top1_is_discriminative``): BM25's own top-1
+       candidate matched a term that is discriminative WITHIN this
+       file_id-scoped candidate set (or the raw top-1 score is already an
+       unambiguous lexical hit) -- kills the "system"/"calling" false-signal
+       case where a paraphrase query has only stopword-grade BM25 overlap.
+
+    Pure function, no model dependency -- unit-testable in isolation (see
+    ``tests/test_f11_gated_fusion.py``).
+    """
+    if _gate_query_has_lexical_shape(query):
+        return True
+    if not bm25_ranked:
+        return False
+    texts_by_id = {node_id: node.text for node_id, node in candidate_nodes}
+    top1_node_id, top1_score = bm25_ranked[0]
+    return _gate_bm25_top1_is_discriminative(
+        query,
+        texts_by_id[top1_node_id],
+        list(texts_by_id.values()),
+        top1_score=top1_score,
+        idf_tau=F11_GATE_IDF_TAU,
+        score_floor=F11_GATE_SCORE_FLOOR,
+    )
 
 
 class FidelityLevel(Enum):
@@ -124,6 +175,12 @@ class EvidenceResult:
     threshold: float
     used_expanded_search: bool
     message: str
+    # Ranker score_type of ``scores`` -- "cosine" (Path A / Path G gate-closed)
+    # or "rrf" (Path C / Path G gate-open). Lets the handler label the wire
+    # `score_type` from what ACTUALLY ran, not a hardcoded path check
+    # (blocker-3 fix, 2026-07-08 codex review). Defaults to "cosine" so any
+    # older constructor path stays valid.
+    score_type: str = "cosine"
 
 
 @dataclass
@@ -1769,16 +1826,19 @@ class SemanticCompressor:
         # SUFFICIENCY decision uses cosine magnitude.
         effective_threshold = min_similarity
 
-        initial_scores = self.search_semantic_with_scores(query, file_id=file_id, top_k=top_k)
+        initial_scores, initial_score_type = self.search_semantic_with_scores_typed(
+            query, file_id=file_id, top_k=top_k
+        )
         best_cosine = self._max_dense_cosine(query, file_id=file_id)
         sufficient = best_cosine >= effective_threshold
         used_expanded_search = False
         final_scores = initial_scores
+        final_score_type = initial_score_type
 
         if not sufficient:
             used_expanded_search = True
             expanded_k = max(top_k + 1, top_k * max(1, expansion_factor))
-            final_scores = self.search_semantic_with_scores(
+            final_scores, final_score_type = self.search_semantic_with_scores_typed(
                 query,
                 file_id=file_id,
                 top_k=expanded_k,
@@ -1809,6 +1869,7 @@ class SemanticCompressor:
             threshold=effective_threshold,
             used_expanded_search=used_expanded_search,
             message=message,
+            score_type=final_score_type,
         )
 
     def _max_dense_cosine(self, query: str, file_id: Optional[str] = None) -> float:
@@ -2055,16 +2116,93 @@ class SemanticCompressor:
     # Public search interface
     # ------------------------------------------------------------------
 
+    def search_semantic_with_scores_typed(
+        self, query: str, file_id: Optional[str] = None, top_k: int = 5
+    ) -> Tuple[List[Tuple[str, float]], str]:
+        """Ranker dispatch that ALSO reports what it actually ran.
+
+        Returns ``(ranked, score_type)`` where ``score_type`` is:
+          - "cosine" — Path A (default), OR Path G when the gate stayed closed
+            (dense-only fallback);
+          - "rrf" — Path C (unconditional fusion), OR Path G when the gate
+            opened and BM25+RRF fusion was applied.
+
+        This is the single source of truth for the F11 dispatch. The public
+        ``search_semantic_with_scores`` wraps it and discards the label (its
+        return shape is UNCHANGED). ``retrieve_evidence`` uses it to surface the
+        per-call label on ``EvidenceResult.score_type`` so the MCP handler can
+        label the wire ``score_type`` from what ACTUALLY ran under Path G
+        (blocker-3 fix, 2026-07-08 codex review) instead of a hardcoded
+        ``== "c"`` check.
+
+        Args:
+            query: Search query
+            file_id: Optional file to search within
+            top_k: Number of results to return
+
+        Returns:
+            (ranked (node_id, score) tuples, score_type). Under a "cosine"
+            score_type the scores are cosine similarity in [-1.0, 1.0]; under
+            "rrf" they are RRF scores (NOT bounded to [0, 1]).
+        """
+        # --- Build file_id-filtered candidate list (shared by all paths) ---
+        candidate_nodes: List[Tuple[str, SemanticNode]] = []
+        for node_id, node in self.chunks.items():
+            if file_id and not _node_belongs_to_file(node_id, file_id):
+                continue
+            candidate_nodes.append((node_id, node))
+
+        if not candidate_nodes:
+            return [], "cosine"
+
+        # --- Dense (cosine) ranking — always computed ---
+        query_embedding = self.model.encode([query])[0]
+        dense_ranked: List[Tuple[str, float]] = []
+        for node_id, node in candidate_nodes:
+            similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
+            dense_ranked.append((node_id, float(similarity)))
+        dense_ranked.sort(key=lambda x: x[1], reverse=True)
+
+        # --- Path dispatch ---
+        if F11_RANKER_PATH == "c":
+            # Path C: BM25 + RRF hybrid — unconditional fusion (HOLD as of
+            # 2026-07-08; see docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md).
+            # Council patch P1: BM25 receives the SAME file_id-filtered
+            # candidate_nodes, never self.chunks globally (cross-document IDF
+            # pollution prevention).
+            bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
+            return self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k), "rrf"
+
+        if F11_RANKER_PATH == "g":
+            # Path G: gated fusion (design memo idea #1, EXPERIMENTAL) — fuse
+            # only when the query has provable lexical signal; otherwise
+            # degrade to Path A dense-only. See _gate_should_fuse_g docstring.
+            bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
+            if _gate_should_fuse_g(query, bm25_ranked, candidate_nodes):
+                return self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k), "rrf"
+            return dense_ranked[:top_k], "cosine"
+
+        # Path A (default): dense-only, backward compatible
+        return dense_ranked[:top_k], "cosine"
+
     def search_semantic_with_scores(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5
     ) -> List[Tuple[str, float]]:
         """Ranker dispatch — respects F11_RANKER_PATH env var.
 
         Path "a" (default): dense cosine only (backward compatible).
-        Path "c": BM25 + Reciprocal Rank Fusion hybrid (F11 Path C plan).
+        Path "c": BM25 + Reciprocal Rank Fusion hybrid (F11 Path C plan; HOLD).
+        Path "g": Gated fusion (EXPERIMENTAL) — fuses BM25+RRF only when the
+            query has provable lexical signal, else Path A dense-only. See
+            docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md section 2.
+
+        Thin wrapper over ``search_semantic_with_scores_typed`` — return shape is
+        UNCHANGED (list of tuples). Callers that need the score_type label call
+        the typed method directly.
 
         New in v0.9.0: Returns similarity scores alongside node IDs.
         New in v1.34.35 (F11 Path C): RRF hybrid when F11_RANKER_PATH=c.
+        New (F11 Path G, EXPERIMENTAL): gated hybrid when F11_RANKER_PATH=g.
 
         Args:
             query: Search query
@@ -2076,37 +2214,12 @@ class SemanticCompressor:
             Under Path A: score is cosine similarity in [-1.0, 1.0].
             Under Path C: score is RRF score (float, NOT bounded to [0,1]).
                           Callers must NOT assume score is cosine similarity.
+            Under Path G: score is cosine similarity when the gate stayed
+                          closed (Path A fallback), or RRF score when the
+                          gate opened (same caveat as Path C).
         """
-        # --- Build file_id-filtered candidate list (shared by both paths) ---
-        candidate_nodes: List[Tuple[str, SemanticNode]] = []
-        for node_id, node in self.chunks.items():
-            if file_id and not _node_belongs_to_file(node_id, file_id):
-                continue
-            candidate_nodes.append((node_id, node))
-
-        if not candidate_nodes:
-            return []
-
-        # --- Dense (cosine) ranking — always computed ---
-        query_embedding = self.model.encode([query])[0]
-        dense_ranked: List[Tuple[str, float]] = []
-        for node_id, node in candidate_nodes:
-            similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
-            dense_ranked.append((node_id, float(similarity)))
-        dense_ranked.sort(key=lambda x: x[1], reverse=True)
-
-        # --- Path dispatch ---
-        if F11_RANKER_PATH != "c":
-            # Path A (default): dense-only, backward compatible
-            return dense_ranked[:top_k]
-
-        # Path C: BM25 + RRF hybrid
-        # Council patch P1: BM25 receives the SAME file_id-filtered candidate_nodes,
-        # never self.chunks globally (cross-document IDF pollution prevention).
-        bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
-
-        fused = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k)
-        return fused
+        ranked, _score_type = self.search_semantic_with_scores_typed(query, file_id, top_k)
+        return ranked
 
     def search_semantic(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5

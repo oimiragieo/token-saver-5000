@@ -1276,6 +1276,17 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     # one request searches. Output is unchanged — same calls via asyncio.to_thread
     # (mirrors the _encode_async pattern ingest already uses).
     compressor = context["compressor"]
+    # Fallback label when the ranker doesn't surface a per-call score_type
+    # (older/stub compressor or a test Mock without the typed API): mirror the
+    # pre-Path-G behavior — Path C is RRF, everything else cosine.
+    _fallback_score_type = "rrf" if F11_RANKER_PATH == "c" else "cosine"
+
+    def _valid_score_type(candidate: object) -> str:
+        # Value-validate rather than presence-detect: a unittest.mock.Mock
+        # auto-vivifies any attribute, so `getattr(mock, "score_type")` is a
+        # Mock, not a str — accept only the known labels, else fall back.
+        return candidate if candidate in ("cosine", "rrf") else _fallback_score_type
+
     if evidence_aware:
         evidence = await asyncio.to_thread(
             compressor.retrieve_evidence,
@@ -1285,28 +1296,52 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
             min_similarity=min_similarity,
         )
         search_results = _scope_filtered_results(evidence.scores, args)
+        # retrieve_evidence surfaces the per-call ranker label (Path G gate may
+        # have fused or fallen back). Read + value-validate it.
+        _ranker_score_type = _valid_score_type(getattr(evidence, "score_type", None))
     else:
         evidence = None
-        # Use search_semantic_with_scores to get both node IDs and similarity scores
-        raw_results = await asyncio.to_thread(
-            compressor.search_semantic_with_scores,
-            query,
-            scoped_file_id,
-            search_top_k,
-        )
+        # Prefer the typed ranker so Path G reports "rrf" only when the gate
+        # actually fused for THIS query, "cosine" when it fell back to dense
+        # (blocker-3 fix). The typed method returns (results, score_type); only
+        # trust it when it returns exactly that shape with a known label —
+        # otherwise (stub / Mock) use the plain call + fallback label.
+        typed_fn = getattr(compressor, "search_semantic_with_scores_typed", None)
+        raw_results = None
+        _ranker_score_type = _fallback_score_type
+        if callable(typed_fn):
+            typed_out = await asyncio.to_thread(typed_fn, query, scoped_file_id, search_top_k)
+            if (
+                isinstance(typed_out, tuple)
+                and len(typed_out) == 2
+                and typed_out[1] in ("cosine", "rrf")
+            ):
+                raw_results, _ranker_score_type = typed_out
+        if raw_results is None:
+            raw_results = await asyncio.to_thread(
+                compressor.search_semantic_with_scores,
+                query,
+                scoped_file_id,
+                search_top_k,
+            )
+            _ranker_score_type = _fallback_score_type
         search_results = _scope_filtered_results(raw_results, args)
 
     search_results = _temporal_filter_search_results(context, search_results, args)[:top_k]
 
-    # Council patch P2: score_type field distinguishes Path C (RRF) from Path A (cosine).
+    # Council patch P2: score_type field distinguishes RRF from cosine scores.
     # Callers must NOT treat RRF scores as cosine similarity values.
     #
     # Audit P2-3: the label is a function of the ACTIVE RANKER PATH only, NOT of
     # evidence_aware. retrieve_evidence() (the evidence_aware path) goes through
-    # search_semantic_with_scores(), so under Path C its scores are RRF too.
-    # Coupling the label to `not evidence_aware` mislabeled Path-C+evidence-aware
-    # RRF scores as 'cosine', misleading every downstream consumer.
-    _score_type = "rrf" if F11_RANKER_PATH == "c" else "cosine"
+    # the typed ranker too, so under Path C its scores are RRF.
+    #
+    # Blocker-3 fix (2026-07-08 codex review): under Path G the label is
+    # PER-CALL — "rrf" iff the gate fused for THIS query, else "cosine". We now
+    # take the label from what the ranker ACTUALLY ran (typed API /
+    # EvidenceResult.score_type), never a hardcoded `== "c"` check. Path "a" and
+    # "c" labels are unchanged (typed ranker returns "cosine"/"rrf" for them).
+    _score_type = _ranker_score_type
 
     # Build structured results with both similarity and importance
     results = []

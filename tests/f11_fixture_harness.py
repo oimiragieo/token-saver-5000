@@ -59,6 +59,12 @@ from tests.fixtures.f11_multi_node_fixtures import (  # noqa: E402
 
 RANKER_PATHS: Tuple[str, str] = ("a", "c")
 
+# #187 gated-fusion measurement arm -- Path G (EXPERIMENTAL,
+# F11_RANKER_PATH="g") added alongside A and C. Opt-in via
+# ``compare_paths(paths=RANKER_PATHS_GAC)`` / ``per_class_summary_gac`` /
+# ``format_report_gac``; the plain A-vs-C functions above are UNCHANGED.
+RANKER_PATHS_GAC: Tuple[str, str, str] = ("a", "c", "g")
+
 
 # ===========================================================================
 # Model availability probe (mirrors tests/test_quality_gate.py's pattern --
@@ -261,17 +267,25 @@ def run_fixture(
 
 def compare_paths(
     fixtures: List[F11MultiNodeFixture] = ALL_F11_FIXTURES,
+    *,
+    paths: Tuple[str, ...] = RANKER_PATHS,
     **run_kwargs,
 ) -> Dict[str, List[PerQueryResult]]:
-    """Run every fixture's queries through both ranker paths.
+    """Run every fixture's queries through every ranker path in ``paths``.
 
-    Returns ``{"a": [...], "c": [...]}``, each a flat list of
+    Returns ``{"a": [...], "c": [...], ...}``, each a flat list of
     ``PerQueryResult`` across all fixtures (query order preserved so
     ``results["a"][i]`` and ``results["c"][i]`` are the same query).
+
+    ``paths`` defaults to ``RANKER_PATHS`` (``("a", "c")``) for backward
+    compatibility with existing callers/tests. Pass
+    ``paths=RANKER_PATHS_GAC`` (``("a", "c", "g")``) to also measure the
+    #187 gated-fusion build (``F11_RANKER_PATH="g"``,
+    ``docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md`` section 2).
     """
-    by_path: Dict[str, List[PerQueryResult]] = {p: [] for p in RANKER_PATHS}
+    by_path: Dict[str, List[PerQueryResult]] = {p: [] for p in paths}
     for fixture in fixtures:
-        for path in RANKER_PATHS:
+        for path in paths:
             by_path[path].extend(run_fixture(fixture, path, **run_kwargs))
     return by_path
 
@@ -399,5 +413,161 @@ def main() -> None:
     print(f"\nReceipt written to {receipt_path}")
 
 
+# ===========================================================================
+# #187 gated-fusion (Path G) three-way A-vs-C-vs-G measurement.
+# ===========================================================================
+
+
+@dataclass
+class ThreeWayClassSummary:
+    query_class: str
+    n: int
+    top1_hit_rate_a: Optional[float]
+    top1_hit_rate_c: Optional[float]
+    top1_hit_rate_g: Optional[float]
+    recall_at_5_rate_a: float
+    recall_at_5_rate_c: float
+    recall_at_5_rate_g: float
+    mean_answerability_a: float
+    mean_answerability_c: float
+    mean_answerability_g: float
+    byte_identity_rate_a: float
+    byte_identity_rate_c: float
+    byte_identity_rate_g: float
+    wins_g_vs_a: int  # A wrong (recall@5), G right
+    losses_g_vs_a: int  # A right, G wrong
+    ties_g_vs_a: int
+
+
+def per_class_summary_gac(
+    by_path: Dict[str, List[PerQueryResult]],
+) -> Dict[str, ThreeWayClassSummary]:
+    """Per-class A-vs-C-vs-G summary with G-vs-A win/loss/tie (recall@5) --
+    the pairing the #187 ship bar (design memo section 3 / this build's
+    orchestrator prompt) is measured against: does gated fusion (G) ever
+    regress vs today's shipped default (A)?"""
+    a_results = {r.query_id: r for r in by_path["a"]}
+    c_results = {r.query_id: r for r in by_path["c"]}
+    g_results = {r.query_id: r for r in by_path["g"]}
+    assert (
+        a_results.keys() == c_results.keys() == g_results.keys()
+    ), "paths a, c, and g must cover the same queries"
+
+    summaries: Dict[str, ThreeWayClassSummary] = {}
+    for qclass in ALL_QUERY_CLASSES:
+        ids = [qid for qid, r in a_results.items() if r.query_class == qclass]
+        if not ids:
+            continue
+        a_rows = [a_results[qid] for qid in ids]
+        c_rows = [c_results[qid] for qid in ids]
+        g_rows = [g_results[qid] for qid in ids]
+        n = len(ids)
+
+        def _top1_rate(rows: List[PerQueryResult]) -> Optional[float]:
+            vals = [r.top1_hit for r in rows if r.top1_hit is not None]
+            return (sum(vals) / len(vals)) if vals else None
+
+        wins_g = losses_g = ties_g = 0
+        for qid in ids:
+            a_ok = a_results[qid].recall_at_5
+            g_ok = g_results[qid].recall_at_5
+            if a_ok == g_ok:
+                ties_g += 1
+            elif g_ok and not a_ok:
+                wins_g += 1
+            else:
+                losses_g += 1
+
+        summaries[qclass] = ThreeWayClassSummary(
+            query_class=qclass,
+            n=n,
+            top1_hit_rate_a=_top1_rate(a_rows),
+            top1_hit_rate_c=_top1_rate(c_rows),
+            top1_hit_rate_g=_top1_rate(g_rows),
+            recall_at_5_rate_a=sum(r.recall_at_5 for r in a_rows) / n,
+            recall_at_5_rate_c=sum(r.recall_at_5 for r in c_rows) / n,
+            recall_at_5_rate_g=sum(r.recall_at_5 for r in g_rows) / n,
+            mean_answerability_a=sum(r.answerability_score for r in a_rows) / n,
+            mean_answerability_c=sum(r.answerability_score for r in c_rows) / n,
+            mean_answerability_g=sum(r.answerability_score for r in g_rows) / n,
+            byte_identity_rate_a=sum(r.byte_identity_passed for r in a_rows) / n,
+            byte_identity_rate_c=sum(r.byte_identity_passed for r in c_rows) / n,
+            byte_identity_rate_g=sum(r.byte_identity_passed for r in g_rows) / n,
+            wins_g_vs_a=wins_g,
+            losses_g_vs_a=losses_g,
+            ties_g_vs_a=ties_g,
+        )
+    return summaries
+
+
+def format_report_gac(summaries: Dict[str, ThreeWayClassSummary]) -> str:
+    def fmt_pct(v: Optional[float]) -> str:
+        return "n/a" if v is None else f"{v:.0%}"
+
+    lines = [
+        f"{'class':<16} {'n':>3} {'top1 A':>7} {'top1 C':>7} {'top1 G':>7} "
+        f"{'rec5 A':>7} {'rec5 C':>7} {'rec5 G':>7} "
+        f"{'ans A':>6} {'ans C':>6} {'ans G':>6} "
+        f"{'byte A':>7} {'byte C':>7} {'byte G':>7} {'G-vs-A W/L/T':>14}",
+        "-" * 145,
+    ]
+    for qclass in ALL_QUERY_CLASSES:
+        s = summaries.get(qclass)
+        if s is None:
+            continue
+        lines.append(
+            f"{qclass:<16} {s.n:>3} "
+            f"{fmt_pct(s.top1_hit_rate_a):>7} {fmt_pct(s.top1_hit_rate_c):>7} "
+            f"{fmt_pct(s.top1_hit_rate_g):>7} "
+            f"{s.recall_at_5_rate_a:>6.0%} {s.recall_at_5_rate_c:>6.0%} "
+            f"{s.recall_at_5_rate_g:>6.0%} "
+            f"{s.mean_answerability_a:>5.2f} {s.mean_answerability_c:>5.2f} "
+            f"{s.mean_answerability_g:>5.2f} "
+            f"{s.byte_identity_rate_a:>6.0%} {s.byte_identity_rate_c:>6.0%} "
+            f"{s.byte_identity_rate_g:>6.0%} "
+            f"{s.wins_g_vs_a}/{s.losses_g_vs_a}/{s.ties_g_vs_a:>2}"
+        )
+    total_wins = sum(s.wins_g_vs_a for s in summaries.values())
+    total_losses = sum(s.losses_g_vs_a for s in summaries.values())
+    total_ties = sum(s.ties_g_vs_a for s in summaries.values())
+    lines.append("-" * 145)
+    lines.append(
+        f"TOTAL (all classes, recall@5 win/loss/tie for Path G vs Path A): "
+        f"{total_wins}W / {total_losses}L / {total_ties}T"
+    )
+    return "\n".join(lines)
+
+
+def main_gac() -> None:
+    """Entry point for the #187 gated-fusion A-vs-C-vs-G measurement.
+
+    Usage:: python -m tests.f11_fixture_harness --gac
+    """
+    available, reason = probe_model_load()
+    if not available:
+        print(f"SKIPPED: real embedding model unavailable ({reason})")
+        return
+
+    by_path = compare_paths(paths=RANKER_PATHS_GAC)
+    summaries = per_class_summary_gac(by_path)
+    print(format_report_gac(summaries))
+
+    receipt_path = os.path.join(os.path.dirname(__file__), "f11_gac_fixture_harness_receipt.json")
+    with open(receipt_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "results": {path: [r.__dict__ for r in rows] for path, rows in by_path.items()},
+                "summary": {qc: s.__dict__ for qc, s in summaries.items()},
+            },
+            f,
+            indent=2,
+            default=list,
+        )
+    print(f"\nReceipt written to {receipt_path}")
+
+
 if __name__ == "__main__":
-    main()
+    if "--gac" in sys.argv:
+        main_gac()
+    else:
+        main()

@@ -659,8 +659,43 @@ F11_RANKER_PATH = os.getenv("F11_RANKER_PATH", "a").lower().strip()
 """
 F11 ranker path selector.
 - "a" (default): dense cosine similarity only (backward-compatible Path A).
-- "c": BM25+RRF hybrid retrieval (v1.34.35 Path C council patches).
+- "c": BM25+RRF hybrid retrieval (v1.34.35 Path C council patches). HOLD as of
+  2026-07-08 -- unconditional fusion regresses pure-paraphrase queries (see
+  the design memo below). Left untouched; do not flip in prod.
+- "g": Gated fusion (design memo idea #1, EXPERIMENTAL, not yet the default).
+  Fuses BM25+RRF only when the query has provable lexical signal
+  (``bm25_utils.query_has_lexical_shape`` / ``bm25_top1_is_discriminative``);
+  otherwise degrades to Path A dense-only. See
+  ``docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md`` section 2, idea #1.
 - Environment variable: F11_RANKER_PATH
 WHY: Path A is the existing default; Path C adds BM25 re-ranking via Reciprocal
      Rank Fusion without touching Path A's behavior when F11_RANKER_PATH != "c".
+     Path G adds a per-query gate on top of Path C's fusion machinery without
+     touching Path A or Path C's behavior when F11_RANKER_PATH != "g".
+"""
+
+F11_GATE_IDF_TAU = float(os.getenv("F11_GATE_IDF_TAU", "0.8"))
+"""
+F11 Path G gate predicate #2 threshold: minimum smoothed BM25 IDF (see
+``bm25_utils.bm25_idf``) a matched query term must clear, within the
+file_id-scoped candidate set, to count as "discriminative" (does NOT appear
+in most sections).
+- Environment variable: F11_GATE_IDF_TAU
+WHY: 0.8 separates "term appears in <=~1/3 of this doc's sections" (idf >= ~0.7-0.8
+     at typical N=4-8 sections) from "term appears in most sections" (idf < 0.3),
+     the exact distinction the design memo's "system"/"calling" false-signal
+     example needs to fail. Dev-tuned on the #250 fixture corpus
+     (``tests/f11_fixture_harness.py``); not yet verified on a sealed split.
+"""
+
+F11_GATE_SCORE_FLOOR = float(os.getenv("F11_GATE_SCORE_FLOOR", "5.0"))
+"""
+F11 Path G gate predicate #2 threshold: absolute BM25 top-1 score that alone
+(regardless of IDF) counts as an unambiguous lexical hit.
+- Environment variable: F11_GATE_SCORE_FLOOR
+WHY: design memo section 1 cites an observed noise-list top score of ~0.3 vs
+     an exact-identifier-hit top score of ~12; 5.0 sits between, favoring the
+     IDF check for borderline cases while still gating open on a clearly
+     dominant BM25 match. Dev-tuned on the #250 fixture corpus; not yet
+     verified on a sealed split.
 """

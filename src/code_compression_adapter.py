@@ -676,6 +676,20 @@ class CodeCompressionAdapter:
 
         return candidates[:top_k]
 
+    def search_semantic_with_scores_typed(
+        self,
+        query: str,
+        file_id: Optional[str] = None,
+        top_k: int = 5,
+    ) -> Tuple[List[Tuple[str, float]], str]:
+        """Typed ranker for parity with ``SemanticCompressor`` (blocker-3 fix,
+        2026-07-08 codex review). The adapter joins text+code nodes with a plain
+        cosine ranking and NEVER applies BM25+RRF fusion, so the score_type is
+        ALWAYS "cosine". Defined explicitly (not left to ``__getattr__``
+        delegation) so the handler's typed call routes through the adapter's own
+        code+text join, not the text compressor's F11 dispatch."""
+        return self.search_semantic_with_scores(query, file_id=file_id, top_k=top_k), "cosine"
+
     def _generate_summary(self, text: str, max_length: int = 100) -> str:
         """Generate summary for text (delegates to text compressor)."""
         return self._text_compressor._generate_summary(text, max_length)
