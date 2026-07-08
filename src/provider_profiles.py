@@ -124,6 +124,30 @@ _PROFILES = {
         recommended_output_format="toon",
         notes="Balanced cost/quality profile suited to cache-first prompt orchestration.",
     ),
+    # Claude Sonnet 5 — INTRODUCTORY $2/$10 per MTok, $0.20 cache-read (10%),
+    # in effect through 2026-08-31; reverts to STANDARD $3/$15/$0.30 on
+    # 2026-09-01. Verified vs anthropic.com/news/claude-sonnet-5 +
+    # openrouter.ai/anthropic/claude-sonnet-5 (2026-07-08). The catalog carries
+    # the CURRENT (introductory) rate so it matches OpenRouter's live price and
+    # doesn't false-trip the weekly price-audit drift check. **ACTION 2026-09-01:
+    # bump input 2.0->3.0, output 10.0->15.0, cached 0.20->0.30** when the
+    # introductory window closes (the audit will flag the drift as the reminder).
+    "claude-sonnet-5": ProviderProfile(
+        model="claude-sonnet-5",
+        provider="anthropic",
+        input_cost_per_million=2.0,
+        output_cost_per_million=10.0,
+        cached_input_cost_per_million=0.20,
+        context_window=200_000,
+        cache_read_field="cache_read_input_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=256,
+        supports_prompt_cache_key=False,
+        cache_routing_strategy="Favor byte-identical prompt prefixes and stable tool/system ordering across turns.",
+        prompt_prefix_strategy="Stabilize prefixes and pin reusable context before chat history and current query.",
+        recommended_output_format="toon",
+        notes="Current-generation Sonnet (Claude 5 family). Introductory $2/$10 per MTok through 2026-08-31, then $3/$15. Strong compression ROI at the $10-15 output rate.",
+    ),
     # Claude Haiku 4.5 — $1/$5 per MTok, $0.10 cache-read (10%). Verified vs
     # OpenRouter + tokencost.app 2026-06-03. The prior "claude-haiku-4" entry
     # carried a stale $0.80/$4.0 (a Haiku-3.5-era rate); the current small
