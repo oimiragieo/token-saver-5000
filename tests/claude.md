@@ -2928,6 +2928,16 @@ Tests for structured segment controls in skill compression engine.
 | `def` | `test_structured_rate_tag_overrides_global_ratio_for_tagged_block` |
 | `def` | `test_structured_invalid_marker_raises_clear_error` |
 
+#### `test_source_order_render_surfaces.py`
+
+Source-order render locks for the code skeleton + multi-level skeleton surfaces.
+
+| Kind | Name |
+|------|------|
+| `def` | `_chunk` |
+| `class` | `TestCodeSkeletonRendersInSourceOrder` |
+| `class` | `TestMultiLevelSkeletonRendersInInputOrder` |
+
 #### `test_structural_summary.py`
 
 Tests for structural_summary.py -- AST-based code outline generator.

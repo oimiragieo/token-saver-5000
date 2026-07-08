@@ -32,16 +32,24 @@ def generate_multi_level_skeleton(
         empty = {"nodes": [], "text": "", "node_count": 0}
         return {"headline": dict(empty), "summary": dict(empty), "full": dict(empty)}
 
-    # Sort by importance descending
-    sorted_nodes = sorted(nodes, key=lambda n: n.get("importance", 0), reverse=True)
+    # SELECT the top-k nodes by importance, but RENDER each tier in the ORIGINAL
+    # input order (which the caller supplies in document order — the handler
+    # iterates compressor.chunks, whose insertion order is ingest/document order).
+    # World-class compression audit #2, 2026-07-07: rendering tiers in
+    # importance order scrambles document structure (headline/summary text reads
+    # out of sequence). Selection is unchanged; only the emitted order changes.
+    ranked = sorted(nodes, key=lambda n: n.get("importance", 0), reverse=True)
 
-    n = len(sorted_nodes)
+    n = len(ranked)
     headline_k = max(1, math.ceil(n * headline_ratio))
     summary_k = max(headline_k, math.ceil(n * summary_ratio))
 
-    headline_nodes = sorted_nodes[:headline_k]
-    summary_nodes = sorted_nodes[:summary_k]
-    full_nodes = sorted_nodes
+    headline_ids = {node["node_id"] for node in ranked[:headline_k]}
+    summary_ids = {node["node_id"] for node in ranked[:summary_k]}
+
+    headline_nodes = [node for node in nodes if node["node_id"] in headline_ids]
+    summary_nodes = [node for node in nodes if node["node_id"] in summary_ids]
+    full_nodes = list(nodes)
 
     def build_tier(tier_nodes):
         text = " ".join(n["text"] for n in tier_nodes)

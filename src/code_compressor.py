@@ -623,8 +623,18 @@ class CodeSemanticCompressor:
                     skeleton_lines.append(f"   ... and {len(chunk.dependencies) - 5} more")
             skeleton_lines.append("")
 
-        # Show top N important chunks
+        # Show top N important chunks. SELECTION is by importance (top-N of the
+        # importance-sorted file_chunks); RENDER order is document/source order
+        # (world-class compression audit #2, 2026-07-07 — same fix as the text
+        # skeleton in semantic_compressor.py). Rendering code in importance order
+        # scrambles structure: a helper can print above the function that uses it,
+        # or after an [IMPORTS] block that references it. start_line is set on
+        # every chunk at ingest; the (start_line, name) tiebreak is deterministic.
         top_chunks = [c for cid, c in file_chunks[:show_top_n] if c.chunk_type != "import"]
+        # (start_line, name, chunk_id) is a TOTAL order — chunk_id breaks any
+        # start_line+name tie deterministically instead of falling back to the
+        # importance order the fix is replacing (codex 2026-07-07).
+        top_chunks.sort(key=lambda c: (c.start_line, c.name, c.chunk_id))
 
         for chunk in top_chunks:
             if chunk.chunk_type == "function":
