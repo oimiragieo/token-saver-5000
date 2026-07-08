@@ -177,5 +177,10 @@ jobs:
           pip install -e .
 
       - name: Run full test suite with coverage
+        # --timeout converts a single hung test (previously cancelled the whole 45-min
+        # job with no gate, #191) into a fast per-test failure that NAMES the culprit.
+        # --timeout-method=thread interrupts hangs inside C extensions (torch/onnx model
+        # load) that the default signal method cannot. 600s is generous enough for the
+        # slowest legit model-load test yet far below the job cap.
         run: |
-          python -m pytest tests/ -q --cov=src --cov-report=term --cov-fail-under=70 --ignore=tests/test_performance.py
+          python -m pytest tests/ -q --cov=src --cov-report=term --cov-fail-under=70 --ignore=tests/test_performance.py --timeout=600 --timeout-method=thread

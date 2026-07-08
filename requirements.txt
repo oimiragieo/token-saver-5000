@@ -46,6 +46,7 @@ psutil>=5.9.0
 pytest>=7.0.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.0.0
+pytest-timeout>=2.3.0  # per-test timeout so one hung test fails fast instead of cancelling the whole Full Validation job (#191)
 hypothesis>=6.0.0
 black>=23.0.0
 ruff>=0.1.0
