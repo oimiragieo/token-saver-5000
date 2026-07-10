@@ -488,15 +488,18 @@ token-saver-stats --csv            # Spreadsheet export
 Calculate your return on investment via the `calculate_roi` MCP tool:
 
 ```
-Input:  model=claude-opus-4-6, tokens_per_day=500000, team_size=10
+Input:  model=claude-opus-4-8, tokens_per_day=500000, team_size=10
 Output:
   Without gotcontext: $1,650.00/mo
   With gotcontext:      $247.50/mo (85% savings)
-  Pro plan cost:        $290.00/mo ($29/user × 10 users)
-  Net savings:        $1,112.50/mo (5.7x ROI)
+  gotcontext Team plan: $99.00/mo (flat, 10 seats)
+  Net savings:        $1,303.50/mo (~13x ROI)
 ```
 
-Supports 20+ models with real pricing data.
+Savings are workload-dependent: large or structure-heavy docs compress most
+(this heavy example is ~85%), while typical mixed workloads land nearer 50%.
+Pricing reflects current gotcontext plans (Pro $49/mo, Team $99/mo, both flat,
+not per-seat). Supports 20+ models with real pricing data.
 
 ## Token Budget Monitoring (NEW)
 
