@@ -47,6 +47,29 @@ Shared pytest fixtures for Token Saver 5000 test suite.
 | `def` | `assert_valid_skeleton` |
 | `def` | `assert_valid_embedding` |
 
+#### `f11_fixture_harness.py`
+
+Reusable A-vs-C comparison harness for the #250 multi-node fixture corpus.
+
+| Kind | Name |
+|------|------|
+| `def` | `probe_model_load` |
+| `def` | `set_ranker_path` |
+| `def` | `node_section_marker` |
+| `class` | `PerQueryResult` |
+| `def` | `_rank_metrics` |
+| `def` | `run_query` |
+| `def` | `run_fixture` |
+| `def` | `compare_paths` |
+| `class` | `ClassSummary` |
+| `def` | `per_class_summary` |
+| `def` | `format_report` |
+| `def` | `main` |
+| `class` | `ThreeWayClassSummary` |
+| `def` | `per_class_summary_gac` |
+| `def` | `format_report_gac` |
+| `def` | `main_gac` |
+
 #### `test_ace_context_manager_module.py`
 
 Contract tests for ACE context manager module extraction.
@@ -1291,6 +1314,39 @@ Tests for experimental handlers.
 | Kind | Name |
 |------|------|
 | `def` | `test_extractive_compressor_prioritizes_query_relevant_sentences` |
+
+#### `test_f11_fixture_corpus.py`
+
+Regression locks + measurement smoke for the #250 F11 multi-node fixture
+
+| Kind | Name |
+|------|------|
+| `class` | `TestParaphraseQueriesHaveZeroContentOverlap` |
+| `class` | `TestLexicalTrapConstructionIsValid` |
+| `class` | `TestQueryClassCoverage` |
+| `class` | `TestChunkCountEngagesF11` |
+| `class` | `TestHarnessRunsEndToEndOnBothPaths` |
+
+#### `test_f11_gated_fusion.py`
+
+F11 Path G — gated fusion (design memo idea #1) — TDD unit tests.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestQueryHasLexicalShape` |
+| `class` | `TestBlocker1QuotedPhraseSignalIsDoubleQuoteOnly` |
+| `class` | `TestBm25Top1IsDiscriminative` |
+| `class` | `TestBlocker2GateUsesPrefixStemLikeBm25Scorer` |
+| `class` | `_StubNode` |
+| `class` | `TestGateShouldFuseGCombinator` |
+| `class` | `_FakeEmbedder` |
+| `def` | `fake_embedder` |
+| `def` | `_make_compressor_with_chunks` |
+| `def` | `_set_path` |
+| `class` | `TestPathGMatchesPathAWhenGateClosed` |
+| `class` | `TestPathGMatchesPathCWhenGateOpen` |
+| `class` | `TestPathAAndPathCRemainUntouched` |
+| `class` | `TestBlocker3ScoreTypeLabelReflectsWhatRan` |
 
 #### `test_f11_header_aware_chunking.py`
 
@@ -3340,6 +3396,10 @@ World-Class Compression Sprint — Task 4: summary + entity quality (2026-07-02)
 | `def` | `_bare_compressor` |
 | `class` | `TestEntityStopwordFilter` |
 | `class` | `TestSummaryMarkdownStrip` |
+
+### Other files
+
+- `f11_gac_fixture_harness_receipt.json`
 
 ---
 
