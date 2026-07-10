@@ -77,3 +77,26 @@ class TestInterceptorIdentifierPreservation:
         interceptor = ResponseInterceptor()
         compressed, _stats = interceptor.intercept_text(self._blob())
         assert "[preserved identifiers:" not in compressed
+
+
+class TestHardeningBounds:
+    """codex 2026-07-10: ReDoS + footer byte-bloat defenses."""
+
+    def test_extract_bounded_on_pathological_slashy_input(self):
+        # A ~2 MB slash-heavy blob must return quickly (bounded scan window +
+        # segment-capped regex), not hang the engine on catastrophic backtracking.
+        blob = ("a/" * 1_000_000) + "x"
+        toks = extract_critical_identifiers(blob)  # must return, not hang
+        assert isinstance(toks, list)
+
+    def test_extract_skips_absurdly_long_tokens(self):
+        toks = extract_critical_identifiers("ECONNREFUSED " + ("A" * 5000))
+        assert "ECONNREFUSED" in toks
+        assert all(len(t) <= 256 for t in toks)
+
+    def test_guard_footer_is_byte_capped(self):
+        long_tokens = ["TOKEN" + "x" * 200 + str(i) for i in range(200)]
+        final, reinjected = apply_identifier_guard("c", long_tokens)
+        # Footer bounded well under a multi-MB blowup; count cap not reached.
+        assert len(final) < 6000
+        assert len(reinjected) < 200

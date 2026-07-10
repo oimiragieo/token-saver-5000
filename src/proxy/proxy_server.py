@@ -30,10 +30,14 @@ class ProxyConfig:
             the full upstream tool list.
         refiner_ratio: Fraction of tokens to keep per tool-result (0.0–1.0).
         enable_meta_tokens: Whether to run the MetaToken compression stage.
-        preserve_identifiers: When ``True`` (default), force-keep execution-critical
+        preserve_identifiers: When ``True``, force-keep execution-critical
             identifiers (file paths, error codes, symbols, URLs, stack frames, env
             vars, UUIDs) in compressed tool results — the "amnesia tax" guard, so an
             agent never has to re-run a tool to recover a token the compressor elided.
+            Defaults ``False`` (ship-dormant per the enablement discipline: this
+            appends a "[preserved identifiers: ...]" footer, an observable output
+            change, so it graduates to on via a conscious flag-flip, not silently
+            on upgrade).
     """
 
     upstream_command: str
@@ -44,7 +48,7 @@ class ProxyConfig:
     enable_schema_compression: bool = False
     refiner_ratio: float = 0.7
     enable_meta_tokens: bool = True
-    preserve_identifiers: bool = True
+    preserve_identifiers: bool = False
 
 
 @dataclass
