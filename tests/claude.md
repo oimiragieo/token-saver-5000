@@ -1337,7 +1337,6 @@ F11 Path G — gated fusion (design memo idea #1) — TDD unit tests.
 | `class` | `TestBlocker1QuotedPhraseSignalIsDoubleQuoteOnly` |
 | `class` | `TestBm25Top1IsDiscriminative` |
 | `class` | `TestBlocker2GateUsesPrefixStemLikeBm25Scorer` |
-| `class` | `_StubNode` |
 | `class` | `TestGateShouldFuseGCombinator` |
 | `class` | `_FakeEmbedder` |
 | `def` | `fake_embedder` |

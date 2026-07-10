@@ -312,77 +312,51 @@ class TestBlocker2GateUsesPrefixStemLikeBm25Scorer:
 # ===========================================================================
 
 
-class _StubNode:
-    """Minimal stand-in for SemanticNode -- the gate only reads .text."""
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
 class TestGateShouldFuseGCombinator:
     def _import(self):
         from src.semantic_compressor import _gate_should_fuse_g
 
         return _gate_should_fuse_g
 
-    def test_query_shape_alone_opens_gate_regardless_of_bm25(self) -> None:
+    def test_query_shape_alone_opens_gate(self) -> None:
         gate = self._import()
-        candidate_nodes = [("n1", _StubNode("some unrelated text"))]
-        # bm25_ranked deliberately empty/weak -- query-shape predicate must
-        # short-circuit True without even needing bm25_ranked.
-        assert gate("API_KEY_HMAC_SECRET", [], candidate_nodes) is True
+        assert gate("API_KEY_HMAC_SECRET") is True
 
-    def test_no_lexical_shape_and_empty_bm25_gates_closed(self) -> None:
+    def test_no_lexical_shape_gates_closed(self) -> None:
         gate = self._import()
-        candidate_nodes = [("n1", _StubNode("some unrelated text"))]
-        assert gate("how does it stop someone calling too often", [], candidate_nodes) is False
+        assert gate("how does it stop someone calling too often") is False
 
-    def test_no_lexical_shape_but_discriminative_bm25_top1_opens_gate(self) -> None:
+    def test_no_lexical_shape_gate_closed_even_when_bm25_would_look_discriminative(self) -> None:
+        """#267 (2026-07-10): the bm25-top1-discriminative predicate was REMOVED
+        and the gate no longer receives BM25 at all (it is evaluated BEFORE BM25
+        is computed). The #266 scaled significance corpus proved that predicate
+        fired on 14/15 pure_paraphrase queries as a FALSE POSITIVE -- a single
+        incidental rare-term match reads as "discriminative" on a small
+        candidate set -- regressing pure_paraphrase top-1 67->20%. The gate is
+        now query-shape ONLY: an NL query with no digit/identifier/quoted-phrase
+        signal stays CLOSED, so BM25 is never computed for it."""
         gate = self._import()
-        candidate_nodes = [
-            ("n1", _StubNode("cache invalidation runs on ttl expiry for stale entries")),
-            ("n2", _StubNode("the system calling convention uses stack frames")),
-            ("n3", _StubNode("the system calling thread pool handles requests")),
-            ("n4", _StubNode("webhook retry backoff uses jitter and calling code")),
-            ("n5", _StubNode("rate limiter enforces a token bucket per calling key")),
-            ("n6", _StubNode("the system logs every calling attempt for audit")),
-        ]
-        bm25_ranked = [("n1", 0.3)]  # weak score, but "invalidation" is rare
-        assert gate("cache invalidation strategy", bm25_ranked, candidate_nodes) is True
+        assert gate("cache invalidation strategy") is False
 
-    def test_no_lexical_shape_and_common_term_bm25_top1_gates_closed(self) -> None:
+    def test_all_caps_acronym_and_kebab_identifier_stay_closed_on_path_a(self) -> None:
+        """codex 2026-07-10: query-shape is deliberately NARROW -- an all-caps
+        acronym (``JWKS``) or a kebab-case token (``acme-cli``) does NOT trip it,
+        so those queries stay on Path A dense-only. That is SAFE, not a
+        regression: the #266 corpus shows identifier top-1 is already 100% on
+        Path A, so fusing them would add risk without upside. Locked here so the
+        narrowness is an intentional, tested contract (#267)."""
         gate = self._import()
-        candidate_nodes = [
-            ("n1", _StubNode("the system calling convention uses stack frames")),
-            ("n2", _StubNode("the system calling thread pool handles requests")),
-            ("n3", _StubNode("webhook retry backoff uses jitter and calling code")),
-            ("n4", _StubNode("rate limiter enforces a token bucket per calling key")),
-            ("n5", _StubNode("cache invalidation runs on ttl expiry for stale entries")),
-            ("n6", _StubNode("the system logs every calling attempt for audit")),
-        ]
-        bm25_ranked = [("n1", 0.3)]
-        assert (
-            gate("how does it stop someone calling too often", bm25_ranked, candidate_nodes)
-            is False
-        )
+        assert gate("JWKS") is False
+        assert gate("acme-cli") is False
 
-    def test_documented_known_risk_digit_shaped_lexical_trap_still_opens_gate(self) -> None:
-        """Design-memo-documented trade-off, NOT a bug: a lexical_trap query
-        that happens to be digit-shaped (e.g. a bare port number that appears
-        MORE often in a decoy section) still gates OPEN via predicate #1,
-        because query-shape is evaluated independently of which candidate
-        BM25 actually ranks first. This is why the memo calls lexical_trap
-        "adversarial for BM25 -- the class that punishes an over-eager gate."
-        The per-class harness measurement is what proves whether this
-        trade-off costs a regression in practice."""
+    def test_digit_shaped_lexical_trap_still_opens_gate(self) -> None:
+        """Design-memo-documented trade-off, NOT a bug: a digit-shaped
+        lexical_trap query (a bare port number) still gates OPEN via the
+        query-shape predicate, independent of which candidate BM25 ranks first.
+        The per-class harness proves this costs no regression (lexical_trap
+        recall@5 ties Path A)."""
         gate = self._import()
-        candidate_nodes = [
-            ("decoy", _StubNode("the decoy section mentions 8000 8000 8000 repeatedly")),
-            ("gold", _StubNode("the gold section mentions 8000 exactly once")),
-        ]
-        # BM25 top-1 is the WRONG (decoy) node -- gate still opens on shape.
-        bm25_ranked = [("decoy", 9.0), ("gold", 1.0)]
-        assert gate("8000", bm25_ranked, candidate_nodes) is True
+        assert gate("8000") is True
 
 
 # ===========================================================================

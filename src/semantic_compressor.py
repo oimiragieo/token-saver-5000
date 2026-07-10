@@ -28,13 +28,10 @@ from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 from .bm25_utils import (
     bm25_scores as _bm25_score_texts,
     query_has_lexical_shape as _gate_query_has_lexical_shape,
-    bm25_top1_is_discriminative as _gate_bm25_top1_is_discriminative,
 )
 from .constants import (
     _RRF_K,
     F11_RANKER_PATH,
-    F11_GATE_IDF_TAU,
-    F11_GATE_SCORE_FLOOR,
     DEFAULT_TEXT_MODEL,
 )
 from .node_identity import extract_file_id_from_node
@@ -80,45 +77,34 @@ def _node_belongs_to_file(node_id: str, file_id: str) -> bool:
     return extract_file_id_from_node(node_id) == file_id
 
 
-def _gate_should_fuse_g(
-    query: str,
-    bm25_ranked: List[Tuple[str, float]],
-    candidate_nodes: List[Tuple[str, "SemanticNode"]],
-) -> bool:
+def _gate_should_fuse_g(query: str) -> bool:
     """F11 Path G gate (design memo idea #1, EXPERIMENTAL --
     ``docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md`` section 2):
     should this query's ranking fuse BM25+RRF, or fall back to Path A
     dense-only?
 
-    Gate = OR of two cheap, deterministic, model-free predicates:
+    Gate = query-shape ONLY: fuse only when the query itself carries a
+    provable lexical signal -- a digit-bearing token, an identifier-shaped
+    token, or a quoted phrase (``query_has_lexical_shape``). These are the
+    classes BM25 wins or ties-at-rank-1 on.
 
-    1. Query-shape (``query_has_lexical_shape``): the query itself contains
-       a digit-bearing token, an identifier-shaped token, or a quoted
-       phrase -- the classes the 2026-07-08 gate-data measurement showed
-       BM25 wins or ties-at-rank-1 on.
-    2. Match-quality (``bm25_top1_is_discriminative``): BM25's own top-1
-       candidate matched a term that is discriminative WITHIN this
-       file_id-scoped candidate set (or the raw top-1 score is already an
-       unambiguous lexical hit) -- kills the "system"/"calling" false-signal
-       case where a paraphrase query has only stopword-grade BM25 overlap.
+    The former second predicate (``bm25_top1_is_discriminative``) was REMOVED
+    2026-07-10 (#267): the #266 scaled significance corpus (15 fixtures / 104
+    queries) proved it fires on 14/15 ``pure_paraphrase`` queries as a FALSE
+    POSITIVE -- a single incidental stemmed-term match on a small candidate
+    set reads as "discriminative" (high IDF), opens the gate, and RRF then
+    drops the true answer on a zero-overlap NL query. It regressed
+    ``pure_paraphrase`` top-1 67->20% to gain only +7pp on ``lexical_trap``.
+    Query-shape alone has ZERO false positives on NL in the corpus and keeps
+    the bare_numeric top-1 win (43->100%). See ``f11_fixture_harness --gac``
+    + memory ``compression-ranker-flipped-to-g``. The gate now takes ONLY the
+    query -- it is evaluated before BM25 is computed, so a closed NL query
+    never pays for (or can fail inside) BM25 scoring (#267 / codex 2026-07-10).
 
     Pure function, no model dependency -- unit-testable in isolation (see
     ``tests/test_f11_gated_fusion.py``).
     """
-    if _gate_query_has_lexical_shape(query):
-        return True
-    if not bm25_ranked:
-        return False
-    texts_by_id = {node_id: node.text for node_id, node in candidate_nodes}
-    top1_node_id, top1_score = bm25_ranked[0]
-    return _gate_bm25_top1_is_discriminative(
-        query,
-        texts_by_id[top1_node_id],
-        list(texts_by_id.values()),
-        top1_score=top1_score,
-        idf_tau=F11_GATE_IDF_TAU,
-        score_floor=F11_GATE_SCORE_FLOOR,
-    )
+    return _gate_query_has_lexical_shape(query)
 
 
 class FidelityLevel(Enum):
@@ -2177,8 +2163,11 @@ class SemanticCompressor:
             # Path G: gated fusion (design memo idea #1, EXPERIMENTAL) — fuse
             # only when the query has provable lexical signal; otherwise
             # degrade to Path A dense-only. See _gate_should_fuse_g docstring.
-            bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
-            if _gate_should_fuse_g(query, bm25_ranked, candidate_nodes):
+            # The gate is query-shape only (#267) so it is checked BEFORE
+            # computing BM25 — a closed NL query never pays for, or can fail
+            # inside, BM25 scoring (codex 2026-07-10).
+            if _gate_should_fuse_g(query):
+                bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
                 return self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k), "rrf"
             return dense_ranked[:top_k], "cosine"
 

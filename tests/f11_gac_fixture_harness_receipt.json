@@ -5247,8 +5247,8 @@
           "GAMMA_CACHE_SECTION",
           "EPSILON_RECAP_SECTION",
           "ALPHA_AUTH_SECTION",
-          "BETA_BILLING_SECTION",
-          "DELTA_WEBHOOK_SECTION"
+          "DELTA_WEBHOOK_SECTION",
+          "ZETA_MONITORING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -5270,16 +5270,16 @@
         ],
         "ranked_markers": [
           "BETA_BILLING_SECTION",
+          "ALPHA_AUTH_SECTION",
           "EPSILON_RECAP_SECTION",
           "ZETA_MONITORING_SECTION",
-          "ALPHA_AUTH_SECTION",
           "DELTA_WEBHOOK_SECTION"
         ],
-        "rank_of_best_gold": 4,
+        "rank_of_best_gold": 2,
         "top1_hit": false,
-        "recall_at_3": false,
+        "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.25,
+        "mrr_at_5": 0.5,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": false,
@@ -5296,8 +5296,8 @@
         ],
         "ranked_markers": [
           "EPSILON_RECAP_SECTION",
-          "BETA_BILLING_SECTION",
           "ALPHA_AUTH_SECTION",
+          "BETA_BILLING_SECTION",
           "DELTA_WEBHOOK_SECTION",
           "ZETA_MONITORING_SECTION"
         ],
@@ -5320,17 +5320,17 @@
           "DELTA_WEBHOOK_SECTION"
         ],
         "ranked_markers": [
-          "DELTA_WEBHOOK_SECTION",
           "ZETA_MONITORING_SECTION",
-          "BETA_BILLING_SECTION",
+          "DELTA_WEBHOOK_SECTION",
           "EPSILON_RECAP_SECTION",
+          "BETA_BILLING_SECTION",
           "ALPHA_AUTH_SECTION"
         ],
-        "rank_of_best_gold": 1,
-        "top1_hit": true,
+        "rank_of_best_gold": 2,
+        "top1_hit": false,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 1.0,
+        "mrr_at_5": 0.5,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -5546,17 +5546,17 @@
           "BETA_RATELIMIT_SECTION"
         ],
         "ranked_markers": [
-          "EPSILON_SUMMARY_SECTION",
           "BETA_RATELIMIT_SECTION",
-          "ALPHA_AUTH_SECTION",
+          "EPSILON_SUMMARY_SECTION",
           "DELTA_RETRY_SECTION",
-          "GAMMA_CACHE_SECTION"
+          "ALPHA_AUTH_SECTION",
+          "ZETA_METRICS_SECTION"
         ],
-        "rank_of_best_gold": 2,
+        "rank_of_best_gold": 1,
         "top1_hit": null,
-        "recall_at_3": true,
+        "recall_at_3": false,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": false,
@@ -5672,10 +5672,10 @@
         ],
         "ranked_markers": [
           "GAMMA_LIMIT_SECTION",
-          "ZETA_AUDIT_SECTION",
           "DELTA_CACHE_SECTION",
-          "ALPHA_SERVICE_SECTION",
-          "BETA_RETRY_SECTION"
+          "BETA_RETRY_SECTION",
+          "ZETA_AUDIT_SECTION",
+          "EPSILON_RECAP_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -5697,10 +5697,10 @@
         ],
         "ranked_markers": [
           "DELTA_CACHE_SECTION",
-          "GAMMA_LIMIT_SECTION",
           "ZETA_AUDIT_SECTION",
-          "EPSILON_RECAP_SECTION",
-          "BETA_RETRY_SECTION"
+          "GAMMA_LIMIT_SECTION",
+          "BETA_RETRY_SECTION",
+          "EPSILON_RECAP_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -5825,8 +5825,8 @@
           "ERROR_CODES_SECTION",
           "RATELIMIT_SECTION",
           "AUTH_HEADERS_SECTION",
-          "IDEMPOTENCY_SECTION",
-          "WEBHOOK_EVENTS_SECTION"
+          "WEBHOOK_EVENTS_SECTION",
+          "IDEMPOTENCY_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -5847,17 +5847,17 @@
           "WEBHOOK_EVENTS_SECTION"
         ],
         "ranked_markers": [
-          "RATELIMIT_SECTION",
           "WEBHOOK_EVENTS_SECTION",
-          "PAGINATION_SECTION",
+          "RATELIMIT_SECTION",
           "ERROR_CODES_SECTION",
-          "IDEMPOTENCY_SECTION"
+          "IDEMPOTENCY_SECTION",
+          "PAGINATION_SECTION"
         ],
-        "rank_of_best_gold": 2,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -5999,10 +5999,10 @@
         ],
         "ranked_markers": [
           "SECRET_ROTATION_SECTION",
-          "HEALTHCHECK_SECTION",
-          "DEPLOY_ROLLBACK_SECTION",
           "SCALING_SECTION",
-          "INCIDENT_ESCALATION_SECTION"
+          "DEPLOY_ROLLBACK_SECTION",
+          "BACKUP_RESTORE_SECTION",
+          "HEALTHCHECK_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6025,9 +6025,9 @@
         "ranked_markers": [
           "BACKUP_RESTORE_SECTION",
           "SECRET_ROTATION_SECTION",
-          "INCIDENT_ESCALATION_SECTION",
+          "DEPLOY_ROLLBACK_SECTION",
           "HEALTHCHECK_SECTION",
-          "DEPLOY_ROLLBACK_SECTION"
+          "SCALING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6049,9 +6049,9 @@
         ],
         "ranked_markers": [
           "BACKUP_RESTORE_SECTION",
-          "DEPLOY_ROLLBACK_SECTION",
           "HEALTHCHECK_SECTION",
           "SECRET_ROTATION_SECTION",
+          "DEPLOY_ROLLBACK_SECTION",
           "INCIDENT_ESCALATION_SECTION"
         ],
         "rank_of_best_gold": 1,
@@ -6076,9 +6076,9 @@
         "ranked_markers": [
           "DEPLOY_ROLLBACK_SECTION",
           "HEALTHCHECK_SECTION",
-          "SECRET_ROTATION_SECTION",
           "BACKUP_RESTORE_SECTION",
-          "INCIDENT_ESCALATION_SECTION"
+          "SECRET_ROTATION_SECTION",
+          "SCALING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": null,
@@ -6175,10 +6175,10 @@
         ],
         "ranked_markers": [
           "TAX_HANDLING_SECTION",
-          "REFUND_WINDOW_SECTION",
           "PRORATION_SECTION",
-          "TRIAL_TERMS_SECTION",
-          "DUNNING_SECTION"
+          "REFUND_WINDOW_SECTION",
+          "DUNNING_SECTION",
+          "TRIAL_TERMS_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6200,16 +6200,16 @@
         ],
         "ranked_markers": [
           "DUNNING_SECTION",
-          "REFUND_WINDOW_SECTION",
           "TRIAL_TERMS_SECTION",
+          "REFUND_WINDOW_SECTION",
           "PRORATION_SECTION",
-          "OVERAGE_METERING_SECTION"
+          "TAX_HANDLING_SECTION"
         ],
-        "rank_of_best_gold": 5,
+        "rank_of_best_gold": null,
         "top1_hit": false,
         "recall_at_3": false,
-        "recall_at_5": true,
-        "mrr_at_5": 0.2,
+        "recall_at_5": false,
+        "mrr_at_5": 0.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -6225,10 +6225,10 @@
         ],
         "ranked_markers": [
           "DUNNING_SECTION",
-          "OVERAGE_METERING_SECTION",
           "REFUND_WINDOW_SECTION",
+          "PRORATION_SECTION",
           "TRIAL_TERMS_SECTION",
-          "PRORATION_SECTION"
+          "OVERAGE_METERING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6352,8 +6352,8 @@
         "ranked_markers": [
           "RISK_SCORING_SECTION",
           "INJECTION_RISK_SECTION",
-          "AUTH_BYPASS_SECTION",
           "AUDIT_SUMMARY_SECTION",
+          "AUTH_BYPASS_SECTION",
           "RATELIMIT_GAP_SECTION"
         ],
         "rank_of_best_gold": 1,
@@ -6375,17 +6375,17 @@
           "AUTH_BYPASS_SECTION"
         ],
         "ranked_markers": [
-          "RATELIMIT_GAP_SECTION",
           "AUTH_BYPASS_SECTION",
-          "RISK_SCORING_SECTION",
+          "RATELIMIT_GAP_SECTION",
           "REMEDIATION_PLAN_SECTION",
-          "INJECTION_RISK_SECTION"
+          "RISK_SCORING_SECTION",
+          "AUDIT_SUMMARY_SECTION"
         ],
-        "rank_of_best_gold": 2,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -6403,8 +6403,8 @@
           "REMEDIATION_PLAN_SECTION",
           "RATELIMIT_GAP_SECTION",
           "AUDIT_SUMMARY_SECTION",
-          "INJECTION_RISK_SECTION",
-          "AUTH_BYPASS_SECTION"
+          "AUTH_BYPASS_SECTION",
+          "RISK_SCORING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6429,8 +6429,8 @@
           "RISK_SCORING_SECTION",
           "AUTH_BYPASS_SECTION",
           "AUDIT_SUMMARY_SECTION",
-          "REMEDIATION_PLAN_SECTION",
-          "RATELIMIT_GAP_SECTION"
+          "RATELIMIT_GAP_SECTION",
+          "REMEDIATION_PLAN_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": null,
@@ -6553,9 +6553,9 @@
         "ranked_markers": [
           "MOTIVATION_SECTION",
           "METHOD_SECTION",
-          "DATASET_SECTION",
-          "ABLATION_SECTION",
-          "LIMITATIONS_SECTION"
+          "LIMITATIONS_SECTION",
+          "RESULTS_SECTION",
+          "ABLATION_SECTION"
         ],
         "rank_of_best_gold": 2,
         "top1_hit": false,
@@ -6580,7 +6580,7 @@
           "LIMITATIONS_SECTION",
           "MOTIVATION_SECTION",
           "DATASET_SECTION",
-          "METHOD_SECTION"
+          "RESULTS_SECTION"
         ],
         "rank_of_best_gold": 2,
         "top1_hit": false,
@@ -6727,17 +6727,17 @@
           "ACCEPTANCE_TERMS_SECTION"
         ],
         "ranked_markers": [
-          "LICENSE_GRANT_SECTION",
           "ACCEPTANCE_TERMS_SECTION",
+          "LICENSE_GRANT_SECTION",
           "DATA_PRIVACY_SECTION",
-          "TERMINATION_CLAUSE_SECTION",
-          "LIABILITY_LIMIT_SECTION"
+          "LIABILITY_LIMIT_SECTION",
+          "TERMINATION_CLAUSE_SECTION"
         ],
-        "rank_of_best_gold": 2,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -6754,9 +6754,9 @@
         "ranked_markers": [
           "TERMINATION_CLAUSE_SECTION",
           "LIABILITY_LIMIT_SECTION",
-          "ACCEPTANCE_TERMS_SECTION",
           "GOVERNING_LAW_SECTION",
-          "LICENSE_GRANT_SECTION"
+          "DATA_PRIVACY_SECTION",
+          "ACCEPTANCE_TERMS_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6779,10 +6779,10 @@
         ],
         "ranked_markers": [
           "LICENSE_GRANT_SECTION",
-          "GOVERNING_LAW_SECTION",
           "TERMINATION_CLAUSE_SECTION",
-          "DATA_PRIVACY_SECTION",
-          "ACCEPTANCE_TERMS_SECTION"
+          "GOVERNING_LAW_SECTION",
+          "ACCEPTANCE_TERMS_SECTION",
+          "LIABILITY_LIMIT_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": null,
@@ -6880,9 +6880,9 @@
         "ranked_markers": [
           "DETECTION_GAP_SECTION",
           "IMPACT_ASSESSMENT_SECTION",
-          "INCIDENT_TIMELINE_SECTION",
           "PREVENTION_FOLLOWUP_SECTION",
-          "REMEDIATION_STEPS_SECTION"
+          "INCIDENT_TIMELINE_SECTION",
+          "ROOT_CAUSE_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -6903,17 +6903,17 @@
           "PREVENTION_FOLLOWUP_SECTION"
         ],
         "ranked_markers": [
-          "ROOT_CAUSE_SECTION",
+          "PREVENTION_FOLLOWUP_SECTION",
           "DETECTION_GAP_SECTION",
           "INCIDENT_TIMELINE_SECTION",
-          "IMPACT_ASSESSMENT_SECTION",
+          "ROOT_CAUSE_SECTION",
           "REMEDIATION_STEPS_SECTION"
         ],
-        "rank_of_best_gold": null,
-        "top1_hit": false,
-        "recall_at_3": false,
-        "recall_at_5": false,
-        "mrr_at_5": 0.0,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
+        "recall_at_3": true,
+        "recall_at_5": true,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -6929,16 +6929,16 @@
         ],
         "ranked_markers": [
           "DETECTION_GAP_SECTION",
-          "REMEDIATION_STEPS_SECTION",
           "PREVENTION_FOLLOWUP_SECTION",
           "INCIDENT_TIMELINE_SECTION",
+          "REMEDIATION_STEPS_SECTION",
           "IMPACT_ASSESSMENT_SECTION"
         ],
-        "rank_of_best_gold": 2,
+        "rank_of_best_gold": 4,
         "top1_hit": false,
-        "recall_at_3": true,
+        "recall_at_3": false,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 0.25,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -6954,17 +6954,17 @@
           "IMPACT_ASSESSMENT_SECTION"
         ],
         "ranked_markers": [
-          "INCIDENT_TIMELINE_SECTION",
-          "IMPACT_ASSESSMENT_SECTION",
           "ROOT_CAUSE_SECTION",
+          "IMPACT_ASSESSMENT_SECTION",
+          "INCIDENT_TIMELINE_SECTION",
           "DETECTION_GAP_SECTION",
           "REMEDIATION_STEPS_SECTION"
         ],
-        "rank_of_best_gold": 2,
+        "rank_of_best_gold": 1,
         "top1_hit": null,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -7056,9 +7056,9 @@
         "ranked_markers": [
           "OUTAGE_SUMMARY_SECTION",
           "FOLLOWUP_ACTIONS_SECTION",
-          "BLAST_RADIUS_SECTION",
+          "TRIGGER_EVENT_SECTION",
           "MITIGATION_SECTION",
-          "TRIGGER_EVENT_SECTION"
+          "RECOVERY_STEPS_SECTION"
         ],
         "rank_of_best_gold": 2,
         "top1_hit": false,
@@ -7079,11 +7079,11 @@
           "MITIGATION_SECTION"
         ],
         "ranked_markers": [
-          "RECOVERY_STEPS_SECTION",
           "FOLLOWUP_ACTIONS_SECTION",
+          "RECOVERY_STEPS_SECTION",
           "MITIGATION_SECTION",
           "TRIGGER_EVENT_SECTION",
-          "BLAST_RADIUS_SECTION"
+          "OUTAGE_SUMMARY_SECTION"
         ],
         "rank_of_best_gold": 3,
         "top1_hit": false,
@@ -7106,8 +7106,8 @@
         "ranked_markers": [
           "RECOVERY_STEPS_SECTION",
           "MITIGATION_SECTION",
-          "BLAST_RADIUS_SECTION",
           "OUTAGE_SUMMARY_SECTION",
+          "BLAST_RADIUS_SECTION",
           "FOLLOWUP_ACTIONS_SECTION"
         ],
         "rank_of_best_gold": 1,
@@ -7131,10 +7131,10 @@
         ],
         "ranked_markers": [
           "RECOVERY_STEPS_SECTION",
-          "TRIGGER_EVENT_SECTION",
           "OUTAGE_SUMMARY_SECTION",
+          "TRIGGER_EVENT_SECTION",
           "FOLLOWUP_ACTIONS_SECTION",
-          "BLAST_RADIUS_SECTION"
+          "MITIGATION_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": null,
@@ -7231,8 +7231,8 @@
         ],
         "ranked_markers": [
           "AUTH_SETUP_SECTION",
+          "FIRST_REQUEST_SECTION",
           "TROUBLESHOOTING_SECTION",
-          "PREREQUISITES_SECTION",
           "INSTALLATION_STEPS_SECTION",
           "NEXT_STEPS_SECTION"
         ],
@@ -7256,10 +7256,10 @@
         ],
         "ranked_markers": [
           "NEXT_STEPS_SECTION",
-          "PREREQUISITES_SECTION",
           "FIRST_REQUEST_SECTION",
-          "TROUBLESHOOTING_SECTION",
-          "INSTALLATION_STEPS_SECTION"
+          "INSTALLATION_STEPS_SECTION",
+          "PREREQUISITES_SECTION",
+          "TROUBLESHOOTING_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7282,9 +7282,9 @@
         "ranked_markers": [
           "TROUBLESHOOTING_SECTION",
           "AUTH_SETUP_SECTION",
+          "FIRST_REQUEST_SECTION",
           "NEXT_STEPS_SECTION",
-          "INSTALLATION_STEPS_SECTION",
-          "FIRST_REQUEST_SECTION"
+          "INSTALLATION_STEPS_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7307,10 +7307,10 @@
         ],
         "ranked_markers": [
           "FIRST_REQUEST_SECTION",
-          "TROUBLESHOOTING_SECTION",
           "AUTH_SETUP_SECTION",
+          "TROUBLESHOOTING_SECTION",
           "INSTALLATION_STEPS_SECTION",
-          "NEXT_STEPS_SECTION"
+          "PREREQUISITES_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": null,
@@ -7408,8 +7408,8 @@
         "ranked_markers": [
           "SUPPORTED_MODELS_SECTION",
           "SELF_HOSTING_SECTION",
-          "DATA_RETENTION_SECTION",
           "SUPPORT_CHANNELS_SECTION",
+          "DATA_RETENTION_SECTION",
           "WHAT_IS_SECTION"
         ],
         "rank_of_best_gold": 1,
@@ -7431,17 +7431,17 @@
           "SELF_HOSTING_SECTION"
         ],
         "ranked_markers": [
-          "SUPPORTED_MODELS_SECTION",
           "SELF_HOSTING_SECTION",
           "SUPPORT_CHANNELS_SECTION",
-          "DATA_RETENTION_SECTION",
-          "WHAT_IS_SECTION"
+          "SUPPORTED_MODELS_SECTION",
+          "WHAT_IS_SECTION",
+          "DATA_RETENTION_SECTION"
         ],
-        "rank_of_best_gold": 2,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -7584,9 +7584,9 @@
         "ranked_markers": [
           "RESILIENCE_SECTION",
           "REQUEST_FLOW_SECTION",
-          "PERSISTENCE_LAYER_SECTION",
+          "AUTH_LAYER_SECTION",
           "OBSERVABILITY_SECTION",
-          "COMPRESSION_ENGINE_SECTION"
+          "PERSISTENCE_LAYER_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7607,17 +7607,17 @@
           "PERSISTENCE_LAYER_SECTION"
         ],
         "ranked_markers": [
-          "OBSERVABILITY_SECTION",
           "PERSISTENCE_LAYER_SECTION",
-          "RESILIENCE_SECTION",
+          "OBSERVABILITY_SECTION",
           "REQUEST_FLOW_SECTION",
-          "COMPRESSION_ENGINE_SECTION"
+          "COMPRESSION_ENGINE_SECTION",
+          "RESILIENCE_SECTION"
         ],
-        "rank_of_best_gold": 2,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.5,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -7633,10 +7633,10 @@
         ],
         "ranked_markers": [
           "OBSERVABILITY_SECTION",
-          "PERSISTENCE_LAYER_SECTION",
           "REQUEST_FLOW_SECTION",
-          "AUTH_LAYER_SECTION",
-          "RESILIENCE_SECTION"
+          "PERSISTENCE_LAYER_SECTION",
+          "RESILIENCE_SECTION",
+          "AUTH_LAYER_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7760,9 +7760,9 @@
         "ranked_markers": [
           "DEPLOY_STEPS_SECTION",
           "ROLLBACK_PROCEDURE_SECTION",
-          "PREFLIGHT_CHECKS_SECTION",
           "POST_DEPLOY_SECTION",
-          "VERSION_BUMP_SECTION"
+          "VERSION_BUMP_SECTION",
+          "PREFLIGHT_CHECKS_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7783,17 +7783,17 @@
           "POST_DEPLOY_SECTION"
         ],
         "ranked_markers": [
-          "ROLLBACK_PROCEDURE_SECTION",
-          "DEPLOY_STEPS_SECTION",
           "POST_DEPLOY_SECTION",
+          "DEPLOY_STEPS_SECTION",
+          "ROLLBACK_PROCEDURE_SECTION",
           "PREFLIGHT_CHECKS_SECTION",
-          "VERSION_BUMP_SECTION"
+          "SMOKE_VERIFICATION_SECTION"
         ],
-        "rank_of_best_gold": 3,
-        "top1_hit": false,
+        "rank_of_best_gold": 1,
+        "top1_hit": true,
         "recall_at_3": true,
         "recall_at_5": true,
-        "mrr_at_5": 0.3333333333333333,
+        "mrr_at_5": 1.0,
         "answerability_score": 0.0,
         "answerability_passed": false,
         "byte_identity_passed": true,
@@ -7810,9 +7810,9 @@
         "ranked_markers": [
           "ROLLBACK_PROCEDURE_SECTION",
           "POST_DEPLOY_SECTION",
-          "VERSION_BUMP_SECTION",
           "SMOKE_VERIFICATION_SECTION",
-          "DEPLOY_STEPS_SECTION"
+          "PREFLIGHT_CHECKS_SECTION",
+          "VERSION_BUMP_SECTION"
         ],
         "rank_of_best_gold": 1,
         "top1_hit": true,
@@ -7836,8 +7836,8 @@
         "ranked_markers": [
           "VERSION_BUMP_SECTION",
           "DEPLOY_STEPS_SECTION",
-          "POST_DEPLOY_SECTION",
           "ROLLBACK_PROCEDURE_SECTION",
+          "POST_DEPLOY_SECTION",
           "PREFLIGHT_CHECKS_SECTION"
         ],
         "rank_of_best_gold": 1,
@@ -7934,7 +7934,7 @@
       "n": 15,
       "top1_hit_rate_a": 0.6666666666666666,
       "top1_hit_rate_c": 0.2,
-      "top1_hit_rate_g": 0.2,
+      "top1_hit_rate_g": 0.6666666666666666,
       "recall_at_5_rate_a": 0.9333333333333333,
       "recall_at_5_rate_c": 0.9333333333333333,
       "recall_at_5_rate_g": 0.9333333333333333,
@@ -7944,16 +7944,16 @@
       "byte_identity_rate_a": 0.8666666666666667,
       "byte_identity_rate_c": 0.8666666666666667,
       "byte_identity_rate_g": 0.8666666666666667,
-      "wins_g_vs_a": 1,
-      "losses_g_vs_a": 1,
-      "ties_g_vs_a": 13
+      "wins_g_vs_a": 0,
+      "losses_g_vs_a": 0,
+      "ties_g_vs_a": 15
     },
     "lexical_trap": {
       "query_class": "lexical_trap",
       "n": 15,
       "top1_hit_rate_a": 0.7333333333333333,
       "top1_hit_rate_c": 0.8,
-      "top1_hit_rate_g": 0.8,
+      "top1_hit_rate_g": 0.7333333333333333,
       "recall_at_5_rate_a": 1.0,
       "recall_at_5_rate_c": 1.0,
       "recall_at_5_rate_g": 1.0,
