@@ -151,6 +151,9 @@ BM25 utility functions for semantic search.
 | `def` | `bm25_tokenize` |
 | `def` | `bm25_idf` |
 | `def` | `bm25_term_freq_with_stemming` |
+| `def` | `_query_has_quoted_phrase` |
+| `def` | `query_has_lexical_shape` |
+| `def` | `bm25_top1_is_discriminative` |
 | `def` | `bm25_scores` |
 
 #### `budget_monitor.py`
@@ -1096,6 +1099,7 @@ Fidelity-Preserving Semantic Compressor
 | Kind | Name |
 |------|------|
 | `def` | `_node_belongs_to_file` |
+| `def` | `_gate_should_fuse_g` |
 | `class` | `FidelityLevel` |
 | `class` | `SemanticNode` |
 | `class` | `SkeletonResponse` |
