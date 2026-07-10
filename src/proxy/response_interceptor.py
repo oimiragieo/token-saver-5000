@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from ..token_refiner import TokenRefiner
 from ..meta_tokens import MetaTokenCompressor
 from ..cli_output_optimizer import CLIOutputOptimizer
+from ..identifier_preservation import apply_identifier_guard, extract_critical_identifiers
 
 # Minimum text length (characters) before compression is attempted.
 # Texts shorter than this pass through unchanged to avoid skeleton overhead
@@ -69,6 +70,7 @@ class ResponseInterceptor:
         refiner_ratio: float = 0.7,
         enable_meta_tokens: bool = True,
         enable_cli_filters: bool = False,
+        preserve_identifiers: bool = False,
     ) -> None:
         self._refiner = TokenRefiner()
         self._meta: MetaTokenCompressor | None = (
@@ -78,6 +80,11 @@ class ResponseInterceptor:
         self._cli_optimizer: CLIOutputOptimizer | None = (
             CLIOutputOptimizer() if enable_cli_filters else None
         )
+        # Opt-in "amnesia tax" guard: reinject execution-critical identifiers
+        # (file paths, error codes, symbols, URLs, stack frames, env vars, UUIDs)
+        # that compression dropped, so an agent reading a compressed tool result
+        # never loses the token it needs. Off by default for backward compat.
+        self._preserve_identifiers = preserve_identifiers
 
     # ------------------------------------------------------------------
     # Public API
@@ -129,6 +136,17 @@ class ResponseInterceptor:
             if meta_result.savings_tokens > 0:
                 current = meta_result.compressed_text
                 stages.append("meta_tokens")
+
+        # Stage 3: identifier preservation (opt-in). Extract execution-critical
+        # identifiers from the ORIGINAL text and reinject any that compression
+        # dropped, so an agent never has to re-run a tool to recover a file
+        # path / error code / symbol the compressor elided (the "amnesia tax").
+        # Same guarantee the REST /v1/compress/tool-output endpoint provides.
+        if self._preserve_identifiers:
+            critical = extract_critical_identifiers(text)
+            current, reinjected = apply_identifier_guard(current, critical)
+            if reinjected:
+                stages.append(f"identifier_guard:{len(reinjected)}")
 
         compressed_len = len(current)
         # Rough estimate: 1 token ≈ 4 characters

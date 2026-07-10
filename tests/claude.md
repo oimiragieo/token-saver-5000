@@ -1602,6 +1602,16 @@ Tests for HTTP Server Module
 | `async def` | `test_handlers_accept_request_parameter` |
 | `class` | `TestHTTPEdgeCases` |
 
+#### `test_identifier_preservation.py`
+
+Tests for engine identifier-preservation + the proxy ResponseInterceptor wiring.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestExtractCriticalIdentifiers` |
+| `class` | `TestApplyIdentifierGuard` |
+| `class` | `TestInterceptorIdentifierPreservation` |
+
 #### `test_integration_workflows.py`
 
 Integration Workflow Tests for Token Saver 5000 v0.7.0

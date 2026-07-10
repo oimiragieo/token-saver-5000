@@ -627,6 +627,15 @@ HTTP Server for Health Checks and Metrics Endpoints
 | `def` | `is_http_enabled` |
 | `def` | `get_http_config` |
 
+#### `identifier_preservation.py`
+
+Execution-critical identifier preservation for compressed tool output.
+
+| Kind | Name |
+|------|------|
+| `def` | `extract_critical_identifiers` |
+| `def` | `apply_identifier_guard` |
+
 #### `identity_scope.py`
 
 Helpers for tenant-aware document identity and filtering.
