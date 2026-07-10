@@ -302,8 +302,11 @@ For details, see `docs/claude-code-token-optimization-enhancements.md`,
 ## Proven Benchmark Results
 
 **Document compression (locally measured, reproducible):**
-Token Saver achieves **13x document compression** (16,461 tokens -> 1,269 tokens)
-via semantic graph + PageRank + token-level refinement + lossless meta-tokens.
+Token Saver achieves **~9.5x compression on large documents** (benchmark-locked at
+9.54x in `tests/test_gtm_benchmarks.py`). Best case runs higher on structure-heavy
+docs (e.g. 16,461 tokens -> 1,269 tokens) via semantic graph + PageRank +
+token-level refinement + lossless meta-tokens. Typical mixed-workload savings land
+nearer 50%; smaller docs compress less (skeleton overhead), larger docs more.
 
 **API input token savings (real measurements, total content tokens):**
 
