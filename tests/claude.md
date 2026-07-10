@@ -1611,6 +1611,7 @@ Tests for engine identifier-preservation + the proxy ResponseInterceptor wiring.
 | `class` | `TestExtractCriticalIdentifiers` |
 | `class` | `TestApplyIdentifierGuard` |
 | `class` | `TestInterceptorIdentifierPreservation` |
+| `class` | `TestHardeningBounds` |
 
 #### `test_integration_workflows.py`
 
