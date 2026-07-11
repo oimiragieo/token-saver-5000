@@ -44,6 +44,25 @@ _IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("env_var", re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")),
     # Python/TS/Go identifiers in error contexts (camelCase or snake_case symbols)
     ("symbol", re.compile(r"\b(?:[a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]*)\b")),
+    # #284 (2026-07-11) — NOTABLE numeric literals an agent's tool output hinges
+    # on: currency ($1,234.50), scientific (1e-07), percentage (-0.001%),
+    # decimal (3.14), dotted version (1.58.7). Bare integers are deliberately
+    # NOT force-kept (they'd bloat the byte-capped footer on number-dense docs;
+    # `http_status` already covers 3-digit codes). EVERY quantifier is BOUNDED
+    # ({1,20}/{0,10}/{1,6}) so a long digit/comma blob cannot cause O(n^2)
+    # backtracking — the module's ReDoS-hardening contract (see TestHardeningBounds).
+    (
+        "numeric_literal",
+        re.compile(
+            r"[-+]?(?:"
+            r"\d{1,20}(?:\.\d{1,20}){2,10}"  # dotted version: 1.58.7
+            r"|[$€£¥]\d{1,20}(?:,\d{3}){0,10}(?:\.\d{1,20})?"  # currency: $1,234.50 / $1234.50
+            r"|\d{1,20}(?:,\d{3}){0,10}(?:\.\d{1,20})?[eE][-+]?\d{1,6}"  # scientific: 1e-07
+            r"|\d{1,20}(?:,\d{3}){0,10}(?:\.\d{1,20})?%"  # percent: 99.9%, 50%
+            r"|\d{1,20}(?:,\d{3}){0,10}\.\d{1,20}"  # decimal: 3.14, 1,234.50
+            r")"
+        ),
+    ),
 ]
 
 # Minimum token length to preserve: we don't force-keep single chars.

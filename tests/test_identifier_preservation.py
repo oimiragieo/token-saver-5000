@@ -35,6 +35,33 @@ class TestExtractCriticalIdentifiers:
         assert toks.count("ECONNREFUSED") == 1
         assert "ab" not in toks  # below _MIN_PRESERVE_TOKEN_LEN
 
+    def test_preserves_notable_numeric_literals_not_bare_ints(self):
+        """#284 (2026-07-11): the amnesia-tax guard must preserve NOTABLE numeric
+        literals an agent's tool output hinges on (currency, scientific,
+        percentage, decimal, dotted version) while NOT force-keeping bare
+        integers — choice (c): avoids footer bloat on number-dense docs;
+        http_status already covers 3-digit codes."""
+        text = (
+            "Charge was $1,234.50 at rate -0.001% with tolerance 1e-07; "
+            "engine v1.58.7 processed 42 rows in 3.14s, plain $1234.50, id 12."
+        )
+        toks = extract_critical_identifiers(text)
+        # Notable numerics preserved verbatim:
+        assert "$1,234.50" in toks
+        assert "-0.001%" in toks
+        assert "1e-07" in toks
+        assert "1.58.7" in toks
+        assert "3.14" in toks
+        assert "$1234.50" in toks  # non-comma currency (the \d{1,3}-cap bug guard)
+        # Bare integers NOT force-preserved (choice c):
+        assert "42" not in toks
+        assert "12" not in toks
+
+    def test_currency_extracted_byte_identical(self):
+        """A currency figure survives byte-identical (no reformatting/splitting)."""
+        toks = extract_critical_identifiers("Total: $12,345,678.90 refunded.")
+        assert "$12,345,678.90" in toks
+
 
 class TestApplyIdentifierGuard:
     def test_reinjects_missing_token_in_footer(self):
@@ -88,6 +115,19 @@ class TestHardeningBounds:
         blob = ("a/" * 1_000_000) + "x"
         toks = extract_critical_identifiers(blob)  # must return, not hang
         assert isinstance(toks, list)
+
+    def test_numeric_pattern_bounded_on_pathological_digit_comma_blob(self):
+        """#284: the numeric_literal alt uses BOUNDED quantifiers so a long
+        digit/comma blob (no decimal to satisfy the pattern) cannot cause
+        O(n^2)/catastrophic backtracking. Must return in well under a second."""
+        import time as _time
+
+        blob = ("1," * 50_000) + "x"  # ~100k chars, no decimal anywhere
+        t0 = _time.perf_counter()
+        toks = extract_critical_identifiers(blob)  # must return, not hang
+        elapsed = _time.perf_counter() - t0
+        assert isinstance(toks, list)
+        assert elapsed < 2.0, f"numeric pattern backtracked catastrophically ({elapsed:.2f}s)"
 
     def test_extract_skips_absurdly_long_tokens(self):
         toks = extract_critical_identifiers("ECONNREFUSED " + ("A" * 5000))
