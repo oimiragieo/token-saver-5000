@@ -35,6 +35,27 @@ def test_read_skeleton_query_guided_adds_selection_metadata():
     assert "Query: basil tomato sauce" in skeleton
 
 
+def test_query_guided_header_skeleton_count_matches_rendered_anchors():
+    """#287: the query_guided header must report the ACTUAL anchor count, which is
+    always <= total nodes. Previously it echoed the target `num_skeleton` sized off
+    the full node set while file_nodes was narrowed to the query subset, producing
+    impossible headers like 'Total nodes: 19 | Skeleton nodes: 30'."""
+    import re
+
+    compressor = SemanticCompressor(skeleton_ratio=0.34)
+    compressor.ingest_file(TEST_DOCUMENT, "query_doc")
+    skeleton = compressor.read_skeleton("query_doc", query="basil tomato sauce")
+
+    m = re.search(r"Total nodes:\s*(\d+)\s*\|\s*Skeleton nodes:\s*(\d+)", skeleton)
+    assert m, skeleton
+    total, skel = int(m.group(1)), int(m.group(2))
+    assert skel <= total, f"Skeleton nodes ({skel}) > Total nodes ({total})\n{skeleton}"
+    anchor_count = len(_extract_anchor_ids(skeleton))
+    assert (
+        skel == anchor_count
+    ), f"header claims {skel} skeleton nodes but {anchor_count} anchors rendered"
+
+
 def test_query_guided_anchors_include_top_semantic_hit():
     compressor = SemanticCompressor(skeleton_ratio=0.34)
     compressor.ingest_file(TEST_DOCUMENT, "query_doc")

@@ -88,6 +88,21 @@ class TestEntityMarkdownLinkStrip:
         assert "TCP/IP" in ents, ents
         assert "CI/CD" in ents, ents
 
+    def test_bold_emphasis_markers_stripped(self):
+        """#287 (dogfood 2026-07-11): markdown emphasis asterisks must not leak into
+        entities ('JWT**' surfaced as an entity). Strip leading/trailing '*' only;
+        keep mid-word underscores (gc_kb_query), slashes (TCP/IP) AND legit
+        trailing-underscore identifiers (codex: don't strip '_') intact."""
+        c = _bare_compressor()
+        ents = c._extract_key_entities("The token is a JWT** bearer for the Config service.")
+        assert "JWT" in ents, ents
+        assert "JWT**" not in ents, ents
+        # Mid-word underscore/slash identifiers preserved; trailing '_' NOT stripped.
+        ents2 = c._extract_key_entities("We deploy Gc_Kb_Query over TCP/IP, keep Type_ intact.")
+        assert "Gc_Kb_Query" in ents2, ents2
+        assert "TCP/IP" in ents2, ents2
+        assert "Type_" in ents2, ents2  # legit trailing-underscore identifier kept
+
 
 class TestSummaryMarkdownStrip:
     def test_heading_marker_stripped(self):

@@ -834,7 +834,14 @@ class SemanticCompressor:
         for i, word in enumerate(words):
             # Capitalized and NOT a sentence start (prev word didn't end a sentence).
             if word[0].isupper() and i > 0 and words[i - 1][-1] not in ".!?":
-                cleaned = word.strip(".,;:!?\"'()[]{}")
+                # Strip surrounding punctuation AND markdown emphasis asterisks so
+                # "JWT**" -> "JWT" (dogfood 2026-07-11 #287). Only '*' is added, NOT
+                # '_': codex flagged that stripping trailing '_' would mangle legit
+                # identifier conventions (Type_, id_), and '_'-wrapped emphasis
+                # (_JWT_) is already excluded by the leading-'_' isupper check.
+                # .strip() only touches the ends, so mid-word underscores
+                # (gc_kb_query) and slashes (TCP/IP) are preserved.
+                cleaned = word.strip(".,;:!?\"'()[]{}*")
                 # An entity is a WORD, not a link. '://' catches URLs (codex
                 # 2026-07-11: a bare '/' wrongly dropped legit tech entities like
                 # TCP/IP, CI/CD, AC/DC); '](' catches a malformed/split markdown
@@ -1807,10 +1814,21 @@ class SemanticCompressor:
             )
 
         # Build skeleton text
+        # "Skeleton nodes" is the ACTUAL anchor count rendered, not the target
+        # `num_skeleton`. On the query_guided path `file_nodes` is narrowed to the
+        # query-relevant subset but `num_skeleton` was sized off the original node
+        # set, so the header showed impossible counts like "Total 19 | Skeleton 30"
+        # (dogfood 2026-07-11 #287). Intersect the selected anchor ids with the
+        # in-scope nodes so the count is always <= Total.
+        # file_nodes are (node_id, node) tuples (see the render loop below).
+        _file_node_ids = {item[0] for item in file_nodes}
+        _num_rendered_skeleton = len(set(skeleton_nodes) & _file_node_ids)
         skeleton_lines = []
         skeleton_lines.append(f"=== SEMANTIC SKELETON: {file_id} ===")
         skeleton_lines.append("Skeleton-Version: 2")
-        skeleton_lines.append(f"Total nodes: {len(file_nodes)} | Skeleton nodes: {num_skeleton}")
+        skeleton_lines.append(
+            f"Total nodes: {len(file_nodes)} | Skeleton nodes: {_num_rendered_skeleton}"
+        )
         skeleton_lines.append(f"Compression: {effective_ratio:.0%} of content shown")
         # Explain hidden-region drill-down ONCE here (Skeleton-Version 2) instead of
         # repeating the phrase on every [HIDDEN] node — the per-node repetition was a

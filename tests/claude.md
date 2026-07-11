@@ -2532,6 +2532,7 @@ TDD coverage for query-guided and evidence-aware compression paths.
 |------|------|
 | `def` | `_extract_anchor_ids` |
 | `def` | `test_read_skeleton_query_guided_adds_selection_metadata` |
+| `def` | `test_query_guided_header_skeleton_count_matches_rendered_anchors` |
 | `def` | `test_query_guided_anchors_include_top_semantic_hit` |
 | `def` | `test_retrieve_evidence_detects_insufficient_query_signal` |
 | `def` | `test_read_skeleton_evidence_aware_includes_status_and_skeleton` |
