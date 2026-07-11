@@ -1,0 +1,91 @@
+"""Structured-content detection + record splitting for the JSON/table
+compression path (#190).
+
+Pure functions, no model load. These are the foundation of the structured-data
+compression fix: a raw JSON array otherwise collapses to ONE mega-node under the
+markdown/sentence chunker (dogfood 2026-07-11: a 100-record array -> 1 node,
+skeleton hides ~99% = DATA LOSS, unrecoverable by agents). Splitting on RECORD
+boundaries lets records become individually rankable / queryable nodes instead
+of one hidden blob. The chunker (next wiring step) groups the returned records
+by its existing size target.
+"""
+
+from __future__ import annotations
+
+import csv as _csv
+import io
+import json
+from typing import Optional
+
+# A 1-element array/collection is not worth the structured path (nothing to
+# split); require at least this many records.
+_MIN_RECORDS = 2
+
+
+def detect_structured_content(text: str) -> Optional[str]:
+    """Classify ``text`` as structured data.
+
+    Returns ``"json_array"`` | ``"json_object"`` | ``"jsonl"`` | ``"csv"`` |
+    ``None``. Conservative on purpose: prose and markdown return ``None`` so the
+    normal text path is unaffected.
+    """
+    if not text or not text.strip():
+        return None
+    stripped = text.strip()
+
+    # JSON array or object (parse the whole thing first — a pretty-printed array
+    # spanning many lines must resolve here, not fall through to JSONL).
+    if stripped[0] in "[{":
+        try:
+            parsed = json.loads(stripped)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, list) and len(parsed) >= _MIN_RECORDS:
+            return "json_array"
+        if isinstance(parsed, dict):
+            return "json_object"
+
+    lines = [ln for ln in stripped.splitlines() if ln.strip()]
+
+    # JSONL: >=2 non-empty lines, each a standalone JSON value.
+    if len(lines) >= _MIN_RECORDS and all(ln.strip()[:1] in "[{" for ln in lines):
+        ok = 0
+        for ln in lines:
+            try:
+                json.loads(ln)
+                ok += 1
+            except (ValueError, TypeError):
+                break
+        if ok == len(lines):
+            return "jsonl"
+
+    # CSV: >=2 rows, first row has a delimiter, consistent column count >=2.
+    if len(lines) >= _MIN_RECORDS and "," in lines[0]:
+        try:
+            rows = list(_csv.reader(io.StringIO(stripped)))
+        except (_csv.Error, ValueError):
+            rows = []
+        rows = [r for r in rows if r]
+        if len(rows) >= _MIN_RECORDS:
+            ncol = len(rows[0])
+            if ncol >= 2 and all(len(r) == ncol for r in rows):
+                return "csv"
+
+    return None
+
+
+def split_json_records(text: str) -> Optional[list[str]]:
+    """Split a JSON array into its top-level elements as compact JSON strings.
+
+    Returns a list of record strings (so the chunker can group them by size into
+    nodes), or ``None`` when ``text`` is not a JSON array of >=2 elements.
+    """
+    if not text or not text.strip():
+        return None
+    try:
+        parsed = json.loads(text.strip())
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, list) or len(parsed) < _MIN_RECORDS:
+        return None
+    return [json.dumps(el, ensure_ascii=False, separators=(",", ":")) for el in parsed]

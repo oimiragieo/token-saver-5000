@@ -3112,6 +3112,15 @@ Tests for structural_summary.py -- AST-based code outline generator.
 | `def` | `test_registry_rejects_scope_mismatch_on_get` |
 | `def` | `test_registry_replays_bundle_in_requested_format` |
 
+#### `test_structured_content.py`
+
+#190 structured-content detection + record splitting (model-free).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestDetectStructuredContent` |
+| `class` | `TestSplitJsonRecords` |
+
 #### `test_structured_logging.py`
 
 Tests for structured logging with async context propagation.

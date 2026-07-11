@@ -1202,6 +1202,15 @@ Scoped registry for durable handoff bundles.
 | `class` | `HandoffBundleRecord` |
 | `class` | `HandoffBundleRegistry` |
 
+#### `structured_content.py`
+
+Structured-content detection + record splitting for the JSON/table
+
+| Kind | Name |
+|------|------|
+| `def` | `detect_structured_content` |
+| `def` | `split_json_records` |
+
 #### `structured_logging.py`
 
 Structured logging with async context propagation and OpenTelemetry integration.
