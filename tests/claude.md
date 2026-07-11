@@ -3393,6 +3393,16 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `async def` | `test_urlfetcherror_has_code_attribute` |
 | `def` | `test_urlfetcherror_construction` |
 
+#### `test_url_fetcher_ip_pinning.py`
+
+#282 — DNS-rebind TOCTOU close: pin the validated IP to the connection.
+
+| Kind | Name |
+|------|------|
+| `def` | `_fake_getaddrinfo_for` |
+| `class` | `TestPinRequest` |
+| `class` | `TestFetchUrlPinsConnection` |
+
 #### `test_url_fetcher_ssrf_fence_6b.py`
 
 Phase 2 Chunk 6B SSRF regression fence for token-saver url_fetcher.py.

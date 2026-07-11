@@ -5,7 +5,9 @@ Implements 8 mitigations against Server-Side Request Forgery (SSRF):
   2. BLOCKED HOSTNAMES — denies metadata endpoints, *.internal TLD, bare 'metadata'
   3. PUBLIC IP ONLY — blocks RFC1918, loopback, link-local, IPv6-private after DNS resolution
      (includes IPv4-mapped IPv6 normalisation — ::ffff:127.0.0.1 collapses to 127.0.0.1)
-  4. DNS REBINDING — re-resolves after pre-connect check; rejects if IP set changes
+  4. DNS REBINDING — re-resolves after pre-connect check; rejects if IP set changes,
+     then PINS the validated IP into the connection (URL host -> IP + sni_hostname) so
+     httpx performs no third connect-time resolution an attacker could rebind (TOCTOU close)
   5. NO REDIRECTS — follow_redirects=False
   6. SIZE CAP — 10 MB hard limit checked via Content-Length header + streaming counter
   7. TIMEOUT — connect=10s, read=30s
@@ -191,19 +193,69 @@ def _check_dns_rebinding(host: str, first_ips: set[str]) -> None:
         )
 
 
+def _pin_request(
+    url: str, host: str, validated_ips: set[str]
+) -> tuple[httpx.URL, dict[str, str], dict[str, str]]:
+    """Pin the connection to a validated IP, preserving Host + TLS SNI (mitigation 4b).
+
+    Rewrites the URL host to a deterministic validated IP so httpx connects to the exact
+    IP that passed the SSRF check. There is NO third DNS resolution at connect time, which
+    closes the DNS-rebinding TOCTOU: the gap between ``_check_dns_rebinding`` (resolution #2)
+    and httpx's own connect-time resolution (#3) an attacker could rebind through.
+
+    The original hostname is preserved for:
+      - the ``Host`` header (virtual-host routing), and
+      - the TLS SNI + certificate hostname check, via httpx's ``sni_hostname`` request
+        extension — so certificate verification still targets the real hostname, not the IP.
+        A naive URL-host->IP rewrite WITHOUT ``sni_hostname`` would break TLS verification
+        (cert is issued for the hostname, not the IP) or, worse, weaken it.
+
+    ``sni_hostname`` is a ``str`` because httpcore forwards it to the stdlib ssl
+    ``server_hostname`` argument, which rejects bytes.
+
+    Returns ``(pinned_url, headers, extensions)`` for
+    ``client.stream("GET", pinned_url, headers=headers, extensions=extensions)``.
+    """
+    pinned_ip = sorted(validated_ips)[0]  # deterministic across processes
+    parsed = httpx.URL(url)
+    pinned_url = parsed.copy_with(host=pinned_ip)
+    port = parsed.port  # None for the default port (443/80); the int otherwise
+    # Bracket an IPv6-literal host so the Host authority is well-formed (RFC 3986
+    # host = IP-literal in brackets): [::1]:8443, not ::1:8443. A ':' in host
+    # reliably means IPv6 — DNS hostnames never contain colons.
+    header_host = f"[{host}]" if ":" in host else host
+    host_header = f"{header_host}:{port}" if port else header_host
+    headers = {"Host": host_header}
+    extensions: dict[str, str] = {}
+    if parsed.scheme == "https":
+        extensions["sni_hostname"] = host
+    return pinned_url, headers, extensions
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] = None) -> str:
+async def fetch_url(
+    url: str,
+    *,
+    _transport: Optional[httpx.AsyncBaseTransport] = None,
+    _skip_dns: Optional[bool] = None,
+) -> str:
     """Fetch *url* with SSRF hardening and return the response body as text.
 
     The ``_transport`` parameter is for testing only (allows MockTransport injection).
 
     Args:
         url: The URL to fetch. Must use https scheme.
-        _transport: Optional httpx transport override (test hook only).
+        _transport: Optional httpx transport override (test hook only). When set, DNS
+            resolution + IP pinning are skipped by default (the mock has no real socket).
+        _skip_dns: Test hook to force-enable or force-disable DNS resolution + IP pinning
+            independent of ``_transport``. When ``None`` (default) it follows
+            ``_transport is not None``. Pass ``False`` alongside a capturing ``_transport``
+            to exercise the pin path (resolve -> validate -> rewrite URL to IP + sni_hostname)
+            without a real network call.
 
     Returns:
         The response body decoded as UTF-8 text (or best-effort charset decoding).
@@ -236,10 +288,12 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
             code="blocked_hostname",
         )
 
-    # --- Mitigations 3 + 4: PUBLIC IP ONLY + DNS REBINDING ---
-    # Skip DNS check when a mock transport is injected (unit tests)
+    # --- Mitigations 3 + 4: PUBLIC IP ONLY + DNS REBINDING + PIN ---
+    # Skip DNS resolution + pinning when a mock transport is injected (unit tests),
+    # unless a test explicitly forces it via _skip_dns=False.
+    skip_dns = _skip_dns if _skip_dns is not None else (_transport is not None)
     first_ips: Optional[set[str]] = None
-    if _transport is None:
+    if not skip_dns:
         first_ips = _resolve_and_check_host(host)
 
     # --- Build client ---
@@ -252,8 +306,16 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
 
     async with httpx.AsyncClient(**client_kwargs) as client:
         # --- Mitigation 4: DNS REBINDING — second resolution just before connect ---
-        if _transport is None and first_ips is not None:
+        # --- Mitigation 4b: PIN the validated IP into the request so httpx does not
+        #     perform its own (rebind-able) third resolution at connect time. The URL
+        #     host becomes the validated IP; the original hostname is preserved for the
+        #     Host header and the TLS SNI/certificate check (sni_hostname extension).
+        request_url: httpx.URL | str = url
+        request_headers: Optional[dict[str, str]] = None
+        request_extensions: Optional[dict[str, str]] = None
+        if not skip_dns and first_ips is not None:
             _check_dns_rebinding(host, first_ips)
+            request_url, request_headers, request_extensions = _pin_request(url, host, first_ips)
 
         try:
             # Mitigation 6 depends on STREAMING, not a buffered .get(): a malicious
@@ -262,7 +324,9 @@ async def fetch_url(url: str, *, _transport: Optional[httpx.AsyncBaseTransport] 
             # attacker-controlled file_url. client.stream() gives us the headers up front
             # (redirect/status/content-type/content-length checks below) while the body is
             # consumed incrementally so we can abort AT the cap, capping memory at _MAX_BYTES.
-            async with client.stream("GET", url) as response:
+            async with client.stream(
+                "GET", request_url, headers=request_headers, extensions=request_extensions
+            ) as response:
                 # --- Mitigation 5: NO REDIRECTS — reject 3xx ---
                 if response.is_redirect or response.status_code in (301, 302, 303, 307, 308):
                     raise URLFetchError(

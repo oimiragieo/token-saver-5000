@@ -1367,6 +1367,7 @@ SSRF-hardened URL fetcher for ingest_context file_url parameter.
 | `def` | `_check_resolved_ips` |
 | `def` | `_resolve_and_check_host` |
 | `def` | `_check_dns_rebinding` |
+| `def` | `_pin_request` |
 | `async def` | `fetch_url` |
 
 #### `validation_hooks.py`
