@@ -374,7 +374,10 @@ def get_read_skeleton_output_fields() -> List[str]:
 # Below this token count the semantic-skeleton's fixed overhead (headers, anchors,
 # node IDs) can exceed the savings, so tiny inputs may EXPAND. Mirrors the REST
 # guard at api/app/routers/v1/compress.py so MCP and REST give the same honest signal.
-_SMALL_INPUT_TOKEN_THRESHOLD = 200
+# Below this, a non-positive-savings result gets the honesty note. Set to 1000 to
+# match the note's own "~1,000+ tokens" guidance (#142 dogfood: a 213-token doc with
+# -29% savings slipped past the old 200 threshold and got no "it got bigger" signal).
+_SMALL_INPUT_TOKEN_THRESHOLD = 1000
 
 
 INGEST_CONTEXT_RESPONSE_TEMPLATE: Dict[str, Any] = {

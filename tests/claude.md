@@ -1241,6 +1241,15 @@ Contract tests for enterprise package layout scaffolding.
 | `def` | `test_bootstrap_wrapper_exposes_server_factory` |
 | `def` | `test_server_uses_enterprise_tooling_gateway` |
 
+#### `test_estimate_positive_ratio.py`
+
+#142 regression: the ingest estimate ratio must stay POSITIVE for high skeleton
+
+| Kind | Name |
+|------|------|
+| `def` | `test_estimate_ratio_stays_positive_for_high_skeleton_ratio` |
+| `def` | `test_estimate_designed_band_boost_preserved` |
+
 #### `test_evidence_bundle.py`
 
 Tests for Evidence Bundle System

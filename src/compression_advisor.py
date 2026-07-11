@@ -161,7 +161,13 @@ class CompressionAdvisor:
         # Step 4: Adjust for skeleton ratio
         # Skeleton ratio = % of nodes shown as anchors
         # Lower skeleton ratio = more compression
-        ratio_adjustment = 1.0 + (0.2 - skeleton_ratio) * 5  # Boost if skeleton < 20%
+        # Boost the ratio for low skeleton ratios; CLAMP to a sane positive band so a
+        # high skeleton_ratio (small docs get ~0.8 from compute_adaptive_ratio) can't
+        # drive this to zero (ZeroDivisionError below) or negative -> a nonsensical
+        # negative estimated_ratio. #142 dogfood: a 213-token doc returned
+        # estimated_ratio -2.45 (ratio_adjustment -2.0 * base 1.2). A compression ratio
+        # is always positive; a value below 1.0 is honest expansion (skeleton overhead).
+        ratio_adjustment = max(0.5, min(2.0, 1.0 + (0.2 - skeleton_ratio) * 5))
         adjusted_ratio = base_ratio * ratio_adjustment
 
         # Step 5: Calculate estimates
