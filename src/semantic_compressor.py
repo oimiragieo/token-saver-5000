@@ -1102,8 +1102,10 @@ class SemanticCompressor:
                     "non-finite embedding (NaN/Inf) detected — refusing to ingest corrupted vectors"
                 )
 
-            # 2b. Optional intra-document deduplication (Phase 5: R-KV)
-            if len(raw_chunks) > 2:
+            # 2b. Optional intra-document deduplication (Phase 5: R-KV). Skipped for
+            # a json_array (#190): identical records must NOT be collapsed — that
+            # would silently drop records (codex P1 = data loss).
+            if len(raw_chunks) > 2 and _structured_kind != "json_array":
                 try:
                     from .intra_doc_dedup import collapse_redundant_nodes
 
@@ -2539,7 +2541,14 @@ class SemanticCompressor:
         }
         old_texts = {nid: node.text for nid, node in old_chunks.items()}
 
-        new_chunk_texts = self._chunk_text(new_text)
+        # #190: mirror the ingest chunking so a re-ingested structured doc diffs
+        # against record-level chunks, not the text chunker — otherwise every record
+        # reads as changed (codex P2). Flag OFF -> _diff_kind None -> identical.
+        from .constants import STRUCTURED_CHUNKING_ENABLED  # noqa: PLC0415
+        from .structured_content import detect_structured_content  # noqa: PLC0415
+
+        _diff_kind = detect_structured_content(new_text) if STRUCTURED_CHUNKING_ENABLED else None
+        new_chunk_texts = self._prepare_raw_chunks(new_text, _diff_kind)
 
         old_text_set = set(old_texts.values())
         new_text_set = set(new_chunk_texts)

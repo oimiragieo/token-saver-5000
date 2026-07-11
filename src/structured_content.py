@@ -114,6 +114,12 @@ def group_records_by_size(records, max_tokens, count_tokens):
     rather than being split mid-record. This is what lets a big JSON array become
     N size-bounded, rankable nodes instead of one hidden mega-node.
 
+    KNOWN LIMITATION (#190, codex P1): a single record larger than the embedding
+    window (~512 tok) stays atomic, so its tail is present + readable in the
+    skeleton but not embedding-searchable (the encoder truncates). Data is
+    preserved; only dense retrieval-by-tail on a huge single record degrades.
+    Hierarchical sub-record chunking is deferred (splitting a record breaks it).
+
     Args:
         records: list of record strings (e.g. from ``split_json_records``).
         max_tokens: soft ceiling per chunk (records are never split to fit).
