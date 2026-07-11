@@ -1069,7 +1069,10 @@ class SemanticCompressor:
             _structured_kind = (
                 detect_structured_content(text) if STRUCTURED_CHUNKING_ENABLED else None
             )
-            _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind is not None
+            # Only json_array has a record-level chunker path; other detected kinds
+            # (csv/jsonl/json_object) fall through to _chunk_text, so they must NOT
+            # skip SemToken (codex #190 P2: prose-with-commas can classify as csv).
+            _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind == "json_array"
             if (
                 total_tokens > 200 and not _skip_semtoken
             ):  # Skip for very short texts and structured docs

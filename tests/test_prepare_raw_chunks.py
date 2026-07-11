@@ -28,7 +28,8 @@ def test_json_array_uses_record_chunking_not_text_chunker():
     assert chunks != ["<TEXT_CHUNKER>"]  # the record path was taken
     joined = "\n".join(chunks)
     for i in range(10):
-        assert f'"id":{i}' in joined  # every record survives — no data loss
+        # records keep their ORIGINAL (json.dumps-spaced) form — every one survives
+        assert f'"id": {i}' in joined  # no data loss
 
 
 def test_prose_falls_through_to_text_chunker():

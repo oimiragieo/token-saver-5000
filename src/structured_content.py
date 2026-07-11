@@ -38,7 +38,7 @@ def detect_structured_content(text: str) -> Optional[str]:
     if stripped[0] in "[{":
         try:
             parsed = json.loads(stripped)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             parsed = None
         if isinstance(parsed, list) and len(parsed) >= _MIN_RECORDS:
             return "json_array"
@@ -54,7 +54,7 @@ def detect_structured_content(text: str) -> Optional[str]:
             try:
                 json.loads(ln)
                 ok += 1
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, RecursionError):
                 break
         if ok == len(lines):
             return "jsonl"
@@ -75,20 +75,36 @@ def detect_structured_content(text: str) -> Optional[str]:
 
 
 def split_json_records(text: str) -> Optional[list[str]]:
-    """Split a JSON array into its top-level elements as compact JSON strings.
+    """Split a JSON array into its top-level elements, PRESERVING each element's
+    ORIGINAL source substring.
 
-    Returns a list of record strings (so the chunker can group them by size into
-    nodes), or ``None`` when ``text`` is not a JSON array of >=2 elements.
+    Walks element boundaries with ``raw_decode`` and slices the source rather than
+    deserialize/reserialize — so duplicate keys, exact numeric literals (e.g.
+    ``1e400``), and formatting survive intact (fidelity is the whole point of the
+    structured path). Returns the record strings, or ``None`` when ``text`` is not
+    a JSON array of >=2 elements.
     """
-    if not text or not text.strip():
+    stripped = (text or "").strip()
+    if not stripped or stripped[0] != "[":
         return None
+    decoder = json.JSONDecoder()
+    records: list[str] = []
+    i = 1  # past the opening '['
+    n = len(stripped)
     try:
-        parsed = json.loads(text.strip())
-    except (ValueError, TypeError):
+        while i < n:
+            while i < n and stripped[i] in " \t\r\n,":
+                i += 1
+            if i >= n or stripped[i] == "]":
+                break
+            _element, end = decoder.raw_decode(stripped, i)
+            records.append(stripped[i:end].strip())
+            i = end
+    except (ValueError, TypeError, RecursionError):
         return None
-    if not isinstance(parsed, list) or len(parsed) < _MIN_RECORDS:
+    if len(records) < _MIN_RECORDS:
         return None
-    return [json.dumps(el, ensure_ascii=False, separators=(",", ":")) for el in parsed]
+    return records
 
 
 def group_records_by_size(records, max_tokens, count_tokens):
@@ -108,13 +124,14 @@ def group_records_by_size(records, max_tokens, count_tokens):
     current_tokens = 0
     for record in records:
         record_tokens = count_tokens(record)
-        if current and current_tokens + record_tokens > max_tokens:
+        separator = 1 if current else 0  # the "\n" that joins records within a chunk
+        if current and current_tokens + separator + record_tokens > max_tokens:
             chunks.append("\n".join(current))
             current = [record]
             current_tokens = record_tokens
         else:
             current.append(record)
-            current_tokens += record_tokens
+            current_tokens += separator + record_tokens
     if current:
         chunks.append("\n".join(current))
     return chunks

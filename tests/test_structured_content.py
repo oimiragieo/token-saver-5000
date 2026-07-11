@@ -83,15 +83,23 @@ class TestSplitJsonRecords:
     def test_scalar_array_splits(self):
         assert split_json_records("[1, 2, 3]") == ["1", "2", "3"]
 
-    def test_records_are_compact(self):
+    def test_records_preserve_original_source(self):
+        # span-preserving: keep each element's ORIGINAL substring (fidelity), not a
+        # reserialized form.
         out = split_json_records('[{"a": 1, "b": 2}, {"a": 3, "b": 4}]')
-        assert out == ['{"a":1,"b":2}', '{"a":3,"b":4}']
+        assert out == ['{"a": 1, "b": 2}', '{"a": 3, "b": 4}']
+
+    def test_split_preserves_duplicate_keys_and_exact_numbers(self):
+        # codex #190 P1: reserializing would drop the duplicate key and turn 1e400
+        # into non-standard "Infinity". Span-slicing keeps the source bytes.
+        out = split_json_records('[{"id":1,"id":2}, 1e400]')
+        assert out == ['{"id":1,"id":2}', "1e400"]
 
 
 class TestGroupRecordsBySize:
     def test_groups_within_budget(self):
-        # 4-char records, budget 8 -> two per chunk.
-        assert group_records_by_size(["aaaa", "bbbb", "cccc"], 8, len) == ["aaaa\nbbbb", "cccc"]
+        # 4-char records + a 1-char separator -> "aaaa\nbbbb" is 9; budget 9 packs two.
+        assert group_records_by_size(["aaaa", "bbbb", "cccc"], 9, len) == ["aaaa\nbbbb", "cccc"]
 
     def test_all_records_preserved_in_order(self):
         records = [str(i) for i in range(20)]
