@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import json
 
-from src.structured_content import detect_structured_content, split_json_records
+from src.structured_content import (
+    detect_structured_content,
+    group_records_by_size,
+    split_json_records,
+)
 
 
 class TestDetectStructuredContent:
@@ -82,3 +86,22 @@ class TestSplitJsonRecords:
     def test_records_are_compact(self):
         out = split_json_records('[{"a": 1, "b": 2}, {"a": 3, "b": 4}]')
         assert out == ['{"a":1,"b":2}', '{"a":3,"b":4}']
+
+
+class TestGroupRecordsBySize:
+    def test_groups_within_budget(self):
+        # 4-char records, budget 8 -> two per chunk.
+        assert group_records_by_size(["aaaa", "bbbb", "cccc"], 8, len) == ["aaaa\nbbbb", "cccc"]
+
+    def test_all_records_preserved_in_order(self):
+        records = [str(i) for i in range(20)]
+        out = group_records_by_size(records, 5, len)
+        assert "\n".join(out).split("\n") == records
+
+    def test_oversized_record_is_its_own_chunk(self):
+        out = group_records_by_size(["x" * 100, "y"], 10, len)
+        assert out[0] == "x" * 100
+        assert "y" in out[-1]
+
+    def test_empty_records(self):
+        assert group_records_by_size([], 512, len) == []

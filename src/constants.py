@@ -665,6 +665,16 @@ WHY: k=60 was empirically shown to be robust across diverse retrieval tasks in t
 RERANK_ENABLED = os.getenv("GOTCONTEXT_RERANK_ENABLED", "0").strip() == "1"
 RERANK_POOL_SIZE = int(os.getenv("GOTCONTEXT_RERANK_POOL_SIZE", "50"))
 
+# --- Structured-data (JSON/table) record-level chunking (#190, WORLD-CLASS #4).
+# Default-OFF. When enabled, ingest detects a structured JSON array and chunks it
+# on RECORD boundaries (records grouped by size become individually rankable
+# nodes) instead of the text chunker collapsing it to one hidden mega-node
+# (dogfood 2026-07-11: a 100-record array -> 1 node, ~99% hidden = data loss).
+# When OFF the ingest path is byte-identical to the pre-#190 behaviour. The flip
+# to prod is gated on a live A/B dogfood (records survive, no prose regression)
+# + codex review.
+STRUCTURED_CHUNKING_ENABLED = os.getenv("GOTCONTEXT_STRUCTURED_CHUNKING", "0").strip() == "1"
+
 F11_RANKER_PATH = os.getenv("F11_RANKER_PATH", "a").lower().strip()
 """
 F11 ranker path selector.

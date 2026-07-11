@@ -89,3 +89,32 @@ def split_json_records(text: str) -> Optional[list[str]]:
     if not isinstance(parsed, list) or len(parsed) < _MIN_RECORDS:
         return None
     return [json.dumps(el, ensure_ascii=False, separators=(",", ":")) for el in parsed]
+
+
+def group_records_by_size(records, max_tokens, count_tokens):
+    """Greedily pack record strings into newline-joined chunks up to ``max_tokens``.
+
+    Keeps records ATOMIC — an oversized single record becomes its own chunk
+    rather than being split mid-record. This is what lets a big JSON array become
+    N size-bounded, rankable nodes instead of one hidden mega-node.
+
+    Args:
+        records: list of record strings (e.g. from ``split_json_records``).
+        max_tokens: soft ceiling per chunk (records are never split to fit).
+        count_tokens: callable ``str -> int`` token counter.
+    """
+    chunks: list[str] = []
+    current: list[str] = []
+    current_tokens = 0
+    for record in records:
+        record_tokens = count_tokens(record)
+        if current and current_tokens + record_tokens > max_tokens:
+            chunks.append("\n".join(current))
+            current = [record]
+            current_tokens = record_tokens
+        else:
+            current.append(record)
+            current_tokens += record_tokens
+    if current:
+        chunks.append("\n".join(current))
+    return chunks

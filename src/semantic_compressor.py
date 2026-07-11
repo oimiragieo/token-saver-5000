@@ -526,6 +526,22 @@ class SemanticCompressor:
             "chunking_strategy_resolved": "markdown_section_v1",
         }
 
+    def _prepare_raw_chunks(self, text: str, structured_kind, strategy: str = "auto") -> List[str]:
+        """Choose raw chunks for ingest.
+
+        For a detected JSON array, chunk on RECORD boundaries (records grouped by
+        size become individually rankable nodes) so structured data survives
+        compression instead of collapsing to one hidden mega-node (#190). All
+        other content uses the semantic/fixed text chunker unchanged.
+        """
+        if structured_kind == "json_array":
+            from .structured_content import group_records_by_size, split_json_records
+
+            records = split_json_records(text)
+            if records:
+                return group_records_by_size(records, 512, self._count_tokens)
+        return self._chunk_text(text, strategy=strategy)
+
     def _chunk_text(
         self, text: str, max_chunk_size: int = 512, strategy: str = "auto"
     ) -> List[str]:
@@ -1043,7 +1059,17 @@ class SemanticCompressor:
             import re as _re_semtoken  # noqa: PLC0415
 
             _H2H3_COUNT = len(_re_semtoken.findall(r"^#{2,3} ", text, _re_semtoken.MULTILINE))
-            _skip_semtoken = _H2H3_COUNT >= 2
+            # #190: detect structured data (JSON/table) on the ORIGINAL text.
+            # SemToken would merge "similar" records and the text chunker collapses
+            # a raw JSON array into one hidden mega-node — skip SemToken for
+            # structured content and chunk on record boundaries (see below).
+            from .constants import STRUCTURED_CHUNKING_ENABLED  # noqa: PLC0415
+            from .structured_content import detect_structured_content  # noqa: PLC0415
+
+            _structured_kind = (
+                detect_structured_content(text) if STRUCTURED_CHUNKING_ENABLED else None
+            )
+            _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind is not None
             if (
                 total_tokens > 200 and not _skip_semtoken
             ):  # Skip for very short texts and structured docs
@@ -1055,8 +1081,11 @@ class SemanticCompressor:
                         f"({round((1 - preprocessed_tokens / total_tokens) * 100, 1)}% reduced)"
                     )
 
-            # 1. Chunk the text semantically
-            raw_chunks = self._chunk_text(text, strategy=chunking_strategy)
+            # 1. Chunk the text — record-level for a structured JSON array (#190,
+            # so records survive as rankable nodes), else the semantic/fixed chunker.
+            raw_chunks = self._prepare_raw_chunks(
+                text, _structured_kind, strategy=chunking_strategy
+            )
             logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 
             # 2. Generate embeddings (async to prevent MCP timeout)

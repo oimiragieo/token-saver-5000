@@ -2286,6 +2286,17 @@ Tests for Phase 5 features - 11 new capabilities based on 2025 research papers.
 | `class` | `TestGenerativeRewrite` |
 | `class` | `TestPhase5MCPWiring` |
 
+#### `test_prepare_raw_chunks.py`
+
+#190 unit 2: SemanticCompressor._prepare_raw_chunks routes a structured JSON
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare_compressor` |
+| `def` | `test_json_array_uses_record_chunking_not_text_chunker` |
+| `def` | `test_prose_falls_through_to_text_chunker` |
+| `def` | `test_json_array_kind_but_unsplittable_falls_back` |
+
 #### `test_progress_service.py`
 
 Contract tests for app-layer progress rendering service.
@@ -3120,6 +3131,7 @@ Tests for structural_summary.py -- AST-based code outline generator.
 |------|------|
 | `class` | `TestDetectStructuredContent` |
 | `class` | `TestSplitJsonRecords` |
+| `class` | `TestGroupRecordsBySize` |
 
 #### `test_structured_logging.py`
 
