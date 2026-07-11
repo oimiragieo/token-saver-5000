@@ -804,6 +804,40 @@ class SemanticCompressor:
             summary = summary[:max_length] + "..."
         return summary
 
+    def _extractive_anchor_content(self, text: str, token_budget: int) -> str:
+        """Budgeted extractive render for a KEPT anchor (world-class audit #1).
+
+        A kept anchor previously rendered only a 1-sentence ``_generate_summary``
+        (<=150 chars) -- an outline, not a compression: the actual content lived
+        only behind ``modulate_region``. Instead keep the leading markdown-cleaned
+        sentences of ``text`` up to ``token_budget`` tokens so the skeleton itself
+        is faithful (LLMLingua-2 faithfulness lever). At least one sentence is
+        always kept (a tiny budget still yields content); the 1-sentence summary
+        stays the fallback for ``[HIDDEN]`` nodes. Deterministic (source sentence
+        order preserved), no model load -- unit-tested via ``object.__new__``.
+        """
+        if not text or token_budget <= 0:
+            return ""
+        cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
+        cleaned = cleaned.replace("`", "")
+        kept: list[str] = []
+        used = 0
+        for candidate in re.split(r"(?<=[.!?])\s+", cleaned):
+            candidate = re.sub(r"^\s*#{1,6}\s+", "", candidate)
+            candidate = re.sub(r"^\s*[-*+]\s+", "", candidate)
+            candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
+            candidate = candidate.strip()
+            if not candidate:
+                continue
+            t = self._count_tokens(candidate)
+            if kept and used + t > token_budget:
+                break  # keep >=1 sentence even if it alone exceeds the budget
+            kept.append(candidate)
+            used += t
+            if used >= token_budget:
+                break
+        return " ".join(kept)
+
     @staticmethod
     def _build_similarity_edges(
         embeddings: np.ndarray,

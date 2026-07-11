@@ -1307,6 +1307,20 @@ Tests for experimental handlers.
 | `class` | `TestMCPCoreIntegration` |
 | `class` | `TestOptionalDependencies` |
 
+#### `test_extractive_anchor.py`
+
+Model-free unit tests for `_extractive_anchor_content` (world-class audit #1).
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare` |
+| `def` | `test_empty_text_or_zero_budget_returns_empty` |
+| `def` | `test_keeps_multiple_sentences_up_to_budget` |
+| `def` | `test_at_least_one_sentence_even_if_over_budget` |
+| `def` | `test_strips_markdown_noise` |
+| `def` | `test_budget_truncates_before_second_sentence` |
+| `def` | `test_deterministic_source_order_preserved` |
+
 #### `test_extractive_baseline.py`
 
 (no module docstring — see symbols below)
