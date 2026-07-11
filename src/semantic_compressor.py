@@ -110,6 +110,22 @@ def _gate_should_fuse_g(query: str) -> bool:
     return _gate_query_has_lexical_shape(query)
 
 
+def _strip_admonition_markers(text: str) -> str:
+    """Remove leading mkdocs / python-markdown admonition markers.
+
+    ``!!! note``, ``??? tip "Title"``, ``???+ warning`` otherwise fragment on the
+    sentence splitter (which treats ``!!!`` as a sentence end) into a bare "!!!"
+    summary (dogfood 2026-07-11: httpx's mkdocs docs surfaced ``Summary: "!!!"``).
+    Strips the marker + admonition type + optional quoted title, leaving the
+    admonition body as the first substantive text. Pure function, model-free.
+    """
+    return re.sub(
+        r'(?m)^[ \t]*[!?]{3}\+?[ \t]+[\w-]+(?:[ \t]+"[^"]*")?[ \t]*',
+        "",
+        text,
+    )
+
+
 class FidelityLevel(Enum):
     """
     Semantic fidelity levels for adaptive transmission
@@ -829,6 +845,10 @@ class SemanticCompressor:
         # Strip inline markdown so the summary reads as prose, not raw markup.
         cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
         cleaned = cleaned.replace("`", "")
+        # Strip mkdocs/python-markdown admonition markers ('!!! note', '??? tip "Title"')
+        # BEFORE the split: the sentence splitter treats '!!!' as a sentence end, so a
+        # leading admonition fragmented into a bare "!!!" summary (dogfood 2026-07-11).
+        cleaned = _strip_admonition_markers(cleaned)
         sentences = re.split(r"(?<=[.!?])\s+", cleaned)
         summary = ""
         for candidate in sentences:
@@ -836,8 +856,9 @@ class SemanticCompressor:
             candidate = re.sub(r"^\s*#{1,6}\s+", "", candidate)
             candidate = re.sub(r"^\s*[-*+]\s+", "", candidate)
             candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
-            candidate = candidate.strip()
-            if candidate:
+            candidate = re.sub(r"\s+", " ", candidate).strip()  # collapse internal whitespace
+            # Require substantive content: skip punctuation-only fragments ('!!!', '---').
+            if candidate and re.search(r"[A-Za-z0-9]", candidate):
                 summary = candidate
                 break
         if not summary:
@@ -862,14 +883,16 @@ class SemanticCompressor:
             return ""
         cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
         cleaned = cleaned.replace("`", "")
+        cleaned = _strip_admonition_markers(cleaned)
         kept: list[str] = []
         used = 0
         for candidate in re.split(r"(?<=[.!?])\s+", cleaned):
             candidate = re.sub(r"^\s*#{1,6}\s+", "", candidate)
             candidate = re.sub(r"^\s*[-*+]\s+", "", candidate)
             candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
-            candidate = candidate.strip()
-            if not candidate:
+            candidate = re.sub(r"\s+", " ", candidate).strip()
+            # Skip punctuation-only fragments ('!!!', '---') -- not substantive content.
+            if not candidate or not re.search(r"[A-Za-z0-9]", candidate):
                 continue
             t = self._count_tokens(candidate)
             if kept and used + t > token_budget:

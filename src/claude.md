@@ -1127,6 +1127,7 @@ Fidelity-Preserving Semantic Compressor
 |------|------|
 | `def` | `_node_belongs_to_file` |
 | `def` | `_gate_should_fuse_g` |
+| `def` | `_strip_admonition_markers` |
 | `class` | `FidelityLevel` |
 | `class` | `SemanticNode` |
 | `class` | `SkeletonResponse` |

@@ -3161,6 +3161,15 @@ Tests for structured logging with async context propagation.
 | `class` | `TestRequestIDGeneration` |
 | `class` | `TestEdgeCases` |
 
+#### `test_summary_admonition_strip.py`
+
+Dogfood 2026-07-11: a live compress of httpx's mkdocs docs surfaced
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare` |
+| `class` | `TestSummaryAdmonitionStrip` |
+
 #### `test_tee_recovery.py`
 
 Tests for the tee/recovery system.
