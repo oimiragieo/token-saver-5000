@@ -161,13 +161,18 @@ class CompressionAdvisor:
         # Step 4: Adjust for skeleton ratio
         # Skeleton ratio = % of nodes shown as anchors
         # Lower skeleton ratio = more compression
-        # Boost the ratio for low skeleton ratios; CLAMP to a sane positive band so a
-        # high skeleton_ratio (small docs get ~0.8 from compute_adaptive_ratio) can't
-        # drive this to zero (ZeroDivisionError below) or negative -> a nonsensical
-        # negative estimated_ratio. #142 dogfood: a 213-token doc returned
-        # estimated_ratio -2.45 (ratio_adjustment -2.0 * base 1.2). A compression ratio
-        # is always positive; a value below 1.0 is honest expansion (skeleton overhead).
-        ratio_adjustment = max(0.5, min(2.0, 1.0 + (0.2 - skeleton_ratio) * 5))
+        # Boost the ratio for LOW skeleton ratios (aggressive mode); clamp to [1.0, 2.0]
+        # so a HIGH skeleton_ratio (small/medium docs get ~0.5-0.8 from
+        # compute_adaptive_ratio) never DRAGS the estimate below base_ratio. That
+        # downward drag was doubly wrong: (#142) it went negative for skeleton_ratio>0.4
+        # (a 213-token doc returned estimated_ratio -2.45) or zero at 0.4
+        # (ZeroDivisionError below); and (#277) it made a 6182-token doc that ACTUALLY
+        # compresses 4.15x estimate 0.65x -- predicting EXPANSION, telling a connected
+        # agent "not worth it" when the engine compresses via per-node [HIDDEN]
+        # content-hiding regardless of how many nodes are kept. Never below 1.0 keeps
+        # the estimate conservative-but-positive (the #92 intent: anchor low, delight
+        # when beaten -- but never predict expansion for a doc that compresses).
+        ratio_adjustment = max(1.0, min(2.0, 1.0 + (0.2 - skeleton_ratio) * 5))
         adjusted_ratio = base_ratio * ratio_adjustment
 
         # Step 5: Calculate estimates

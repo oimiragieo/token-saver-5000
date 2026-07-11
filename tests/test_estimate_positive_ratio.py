@@ -32,3 +32,28 @@ def test_estimate_designed_band_boost_preserved():
     r_low = a.estimate_compression(_TXT, skeleton_ratio=0.05).compression_ratio
     r_center = a.estimate_compression(_TXT, skeleton_ratio=0.2).compression_ratio
     assert r_low > r_center > 0
+
+
+def test_medium_doc_never_predicts_expansion():
+    """#277: a doc that actually compresses must NEVER estimate a ratio below 1.0.
+
+    The old ratio_adjustment drag (clamp floor 0.5) made a 6182-token doc that the
+    engine compresses 4.15x estimate 0.65x -- predicting EXPANSION, so a connected
+    agent read "not worth it" (activation harm). The clamp floor is now 1.0: the
+    estimate stays conservative (below the #92 sub-8K ceiling) but never predicts a
+    doc will get bigger when it compresses.
+    """
+    a = CompressionAdvisor()
+
+    def _sized_prose(sentences: int) -> str:
+        return " ".join(
+            f"The deployment pipeline builds artifact number {i} for the staging cluster."
+            for i in range(sentences)
+        )
+
+    for sentences in (50, 200, 500):  # ~600 / ~2.4K / ~6K tokens
+        est = a.estimate_compression(_sized_prose(sentences))
+        assert (
+            est.compression_ratio >= 1.0
+        ), f"{sentences}-sentence doc predicts expansion: {est.compression_ratio:.2f}x"
+        assert est.estimated_compressed <= est.original_tokens
