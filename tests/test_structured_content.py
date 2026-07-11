@@ -14,6 +14,7 @@ from src.structured_content import (
     detect_structured_content,
     group_records_by_size,
     split_json_records,
+    split_jsonl_records,
 )
 
 
@@ -113,3 +114,32 @@ class TestGroupRecordsBySize:
 
     def test_empty_records(self):
         assert group_records_by_size([], 512, len) == []
+
+
+class TestSplitJsonlRecords:
+    def test_splits_lines_into_records(self):
+        text = '{"id": 1}\n{"id": 2}\n{"id": 3}'
+        assert split_jsonl_records(text) == ['{"id": 1}', '{"id": 2}', '{"id": 3}']
+
+    def test_preserves_original_line_source(self):
+        # span-preserving: keep each line's own JSON text (dup keys, exact numbers).
+        text = '{"id":1,"id":2}\n{"x": 1e400}'
+        assert split_jsonl_records(text) == ['{"id":1,"id":2}', '{"x": 1e400}']
+
+    def test_ignores_blank_lines(self):
+        text = '{"a": 1}\n\n  \n{"a": 2}'
+        assert split_jsonl_records(text) == ['{"a": 1}', '{"a": 2}']
+
+    def test_single_line_returns_none(self):
+        assert split_jsonl_records('{"a": 1}') is None
+
+    def test_prose_returns_none(self):
+        assert split_jsonl_records("just some prose\nmore prose") is None
+
+    def test_line_that_is_not_json_returns_none(self):
+        # one bad line poisons the whole split -> fall back to the text chunker.
+        assert split_jsonl_records('{"a": 1}\nnot json\n{"a": 3}') is None
+
+    def test_empty_returns_none(self):
+        assert split_jsonl_records("") is None
+        assert split_jsonl_records("   ") is None

@@ -42,3 +42,27 @@ def test_json_array_kind_but_unsplittable_falls_back():
     # -> fall back to the text chunker rather than raise.
     c = _bare_compressor()
     assert c._prepare_raw_chunks('{"a": 1}', "json_array") == ["<TEXT_CHUNKER>"]
+
+
+def test_jsonl_uses_record_chunking_not_text_chunker():
+    c = _bare_compressor()
+    text = "\n".join(f'{{"id": {i}, "v": {i}}}' for i in range(10))
+    chunks = c._prepare_raw_chunks(text, "jsonl")
+    assert chunks != ["<TEXT_CHUNKER>"]  # the record path was taken
+    joined = "\n".join(chunks)
+    for i in range(10):
+        assert f'"id": {i}' in joined  # no data loss
+
+
+def test_jsonl_kind_but_unsplittable_falls_back():
+    # kind claims jsonl but it is a single JSON line -> split returns None ->
+    # fall back to the text chunker rather than raise.
+    c = _bare_compressor()
+    assert c._prepare_raw_chunks('{"a": 1}', "jsonl") == ["<TEXT_CHUNKER>"]
+
+
+def test_csv_kind_falls_through_to_text_chunker():
+    # csv record-chunking is deferred (#280) pending a quote-aware span scanner;
+    # a detected csv must fall through to the text chunker, not raise.
+    c = _bare_compressor()
+    assert c._prepare_raw_chunks("a,b\n1,2\n3,4", "csv") == ["<TEXT_CHUNKER>"]

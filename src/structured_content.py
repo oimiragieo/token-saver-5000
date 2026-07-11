@@ -107,6 +107,35 @@ def split_json_records(text: str) -> Optional[list[str]]:
     return records
 
 
+def split_jsonl_records(text: str) -> Optional[list[str]]:
+    """Split JSONL (one JSON object or array per line) into per-line record strings.
+
+    Each record's JSON value is preserved VERBATIM (duplicate keys and exact
+    numeric literals like ``1e400`` survive — no reserialization). Line framing is
+    normalized: leading/trailing whitespace per line is trimmed and blank lines are
+    dropped, so this is line-preserving, NOT byte-preserving. Returns ``None`` when
+    ``text`` is not >=2 non-empty lines each a standalone JSON object or array — one
+    non-JSON line poisons the whole split so the caller falls back to the text
+    chunker rather than mis-splitting prose. (Scalar-valued JSONL like ``1\\n2\\n3``
+    is intentionally excluded: a bare number/string per line is ambiguous with a
+    single-column CSV, so it stays on the safe text path.)
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return None
+    lines = [ln.strip() for ln in stripped.splitlines() if ln.strip()]
+    if len(lines) < _MIN_RECORDS:
+        return None
+    for line in lines:
+        if line[:1] not in "[{":
+            return None
+        try:
+            json.loads(line)
+        except (ValueError, TypeError, RecursionError):
+            return None
+    return lines
+
+
 def group_records_by_size(records, max_tokens, count_tokens):
     """Greedily pack record strings into newline-joined chunks up to ``max_tokens``.
 

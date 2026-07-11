@@ -529,15 +529,24 @@ class SemanticCompressor:
     def _prepare_raw_chunks(self, text: str, structured_kind, strategy: str = "auto") -> List[str]:
         """Choose raw chunks for ingest.
 
-        For a detected JSON array, chunk on RECORD boundaries (records grouped by
-        size become individually rankable nodes) so structured data survives
-        compression instead of collapsing to one hidden mega-node (#190). All
-        other content uses the semantic/fixed text chunker unchanged.
+        For a detected JSON array or JSONL document, chunk on RECORD boundaries
+        (records grouped by size become individually rankable nodes) so structured
+        data survives compression instead of collapsing to one hidden mega-node
+        (#190 + #279). Both split paths are non-destructive (``group_records_by_size``
+        keeps every record). All other content — including CSV, whose safe
+        record-chunking needs a quote-aware span scanner (deferred, #280) — uses
+        the semantic/fixed text chunker unchanged.
         """
         if structured_kind == "json_array":
             from .structured_content import group_records_by_size, split_json_records
 
             records = split_json_records(text)
+            if records:
+                return group_records_by_size(records, 512, self._count_tokens)
+        elif structured_kind == "jsonl":
+            from .structured_content import group_records_by_size, split_jsonl_records
+
+            records = split_jsonl_records(text)
             if records:
                 return group_records_by_size(records, 512, self._count_tokens)
         return self._chunk_text(text, strategy=strategy)
@@ -1069,10 +1078,15 @@ class SemanticCompressor:
             _structured_kind = (
                 detect_structured_content(text) if STRUCTURED_CHUNKING_ENABLED else None
             )
-            # Only json_array has a record-level chunker path; other detected kinds
-            # (csv/jsonl/json_object) fall through to _chunk_text, so they must NOT
-            # skip SemToken (codex #190 P2: prose-with-commas can classify as csv).
-            _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind == "json_array"
+            # json_array and jsonl have a record-level chunker path (#190 + #279):
+            # skip SemToken so it cannot merge "similar" records into one block
+            # before record-splitting runs. json_object and csv still fall through
+            # to _chunk_text (csv record-chunking is deferred to #280 pending a
+            # quote-aware span scanner + header-budget), so they must NOT skip it.
+            _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind in (
+                "json_array",
+                "jsonl",
+            )
             if (
                 total_tokens > 200 and not _skip_semtoken
             ):  # Skip for very short texts and structured docs
@@ -1103,9 +1117,11 @@ class SemanticCompressor:
                 )
 
             # 2b. Optional intra-document deduplication (Phase 5: R-KV). Skipped for
-            # a json_array (#190): identical records must NOT be collapsed — that
-            # would silently drop records (codex P1 = data loss).
-            if len(raw_chunks) > 2 and _structured_kind != "json_array":
+            # record-chunked structured data (json_array/jsonl — #190 + #279):
+            # identical or near-identical records (e.g. repeated log lines) must NOT
+            # be collapsed — that would silently drop records (codex P1 = data
+            # loss). csv is not record-chunked yet (#280) so it is not listed here.
+            if len(raw_chunks) > 2 and _structured_kind not in ("json_array", "jsonl"):
                 try:
                     from .intra_doc_dedup import collapse_redundant_nodes
 
