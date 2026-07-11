@@ -383,6 +383,14 @@ Context decay and eviction for stale document management.
 | `class` | `AccessTracker` |
 | `def` | `compute_decay_score` |
 
+#### `cross_encoder_scorer.py`
+
+ONNX cross-encoder relevance scorer for the recall-gated rerank stage (#187).
+
+| Kind | Name |
+|------|------|
+| `class` | `CrossEncoderScorer` |
+
 #### `dataset_registry.py`
 
 Named dataset registry for experiment runs.

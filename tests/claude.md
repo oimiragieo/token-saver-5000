@@ -989,6 +989,17 @@ Coverage boost tests - Round 4.
 | `class` | `TestAFMHandlersRateLimit` |
 | `class` | `TestCompressionHandlersModulate` |
 
+#### `test_cross_encoder_scorer.py`
+
+Tests for CrossEncoderScorer (#187 rerank model-wire).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_empty_documents_returns_empty_without_loading` |
+| `def` | `test_usable_as_injected_scorer_when_rerank_disabled_no_load` |
+| `def` | `_model_cached` |
+| `def` | `test_real_onnx_cross_encoder_ranks_relevant_above_irrelevant` |
+
 #### `test_cujs.py`
 
 Tests for Critical User Journey (CUJ) baselines.
