@@ -2298,7 +2298,8 @@ Tests for Phase 5 features - 11 new capabilities based on 2025 research papers.
 | `def` | `test_json_array_kind_but_unsplittable_falls_back` |
 | `def` | `test_jsonl_uses_record_chunking_not_text_chunker` |
 | `def` | `test_jsonl_kind_but_unsplittable_falls_back` |
-| `def` | `test_csv_kind_falls_through_to_text_chunker` |
+| `def` | `test_csv_uses_record_chunking_header_as_own_node` |
+| `def` | `test_csv_multiline_quoted_falls_through` |
 
 #### `test_progress_service.py`
 
@@ -3136,6 +3137,7 @@ Tests for structural_summary.py -- AST-based code outline generator.
 | `class` | `TestSplitJsonRecords` |
 | `class` | `TestGroupRecordsBySize` |
 | `class` | `TestSplitJsonlRecords` |
+| `class` | `TestSplitCsvRecords` |
 
 #### `test_structured_logging.py`
 

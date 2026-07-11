@@ -13,6 +13,7 @@ import json
 from src.structured_content import (
     detect_structured_content,
     group_records_by_size,
+    split_csv_records,
     split_json_records,
     split_jsonl_records,
 )
@@ -143,3 +144,31 @@ class TestSplitJsonlRecords:
     def test_empty_returns_none(self):
         assert split_jsonl_records("") is None
         assert split_jsonl_records("   ") is None
+
+
+class TestSplitCsvRecords:
+    def test_splits_header_and_rows(self):
+        text = "id,name,score\n1,alice,90\n2,bob,85"
+        assert split_csv_records(text) == ("id,name,score", ["1,alice,90", "2,bob,85"])
+
+    def test_preserves_original_row_source(self):
+        header, rows = split_csv_records("a,b\n1,2\n3,4")
+        assert header == "a,b"
+        assert rows == ["1,2", "3,4"]
+
+    def test_ignores_blank_lines(self):
+        assert split_csv_records("a,b\n1,2\n\n3,4\n") == ("a,b", ["1,2", "3,4"])
+
+    def test_multiline_quoted_field_bails(self):
+        # A quoted field with an embedded newline makes one logical row span two
+        # physical lines: csv.reader sees 3 logical rows, splitlines sees 4 -> bail
+        # rather than corrupt the record (codex #280 HIGH-1).
+        text = 'a,b\n1,"line1\nline2"\n3,4'
+        assert split_csv_records(text) is None
+
+    def test_header_only_returns_none(self):
+        assert split_csv_records("a,b,c") is None
+
+    def test_empty_returns_none(self):
+        assert split_csv_records("") is None
+        assert split_csv_records("   ") is None

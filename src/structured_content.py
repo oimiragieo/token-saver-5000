@@ -136,6 +136,39 @@ def split_jsonl_records(text: str) -> Optional[list[str]]:
     return lines
 
 
+def split_csv_records(text: str) -> "Optional[tuple[str, list[str]]]":
+    """Split a CSV table into ``(header_line, [data_row_lines])``, preserving each
+    row's ORIGINAL source line (no reserialization).
+
+    The header is returned separately so the chunker can emit it as its own node
+    (labeling the columns once for the whole table) rather than duplicating it into
+    every row group. Line framing is normalized (blank lines dropped, line endings
+    become ``\\n``), so this is line-preserving, NOT byte-preserving.
+
+    MULTILINE GUARD (codex #280 HIGH-1): a quoted CSV field containing an embedded
+    newline makes one logical row span >1 physical line. ``csv.reader`` counts
+    LOGICAL rows; when that differs from the non-blank physical line count a naive
+    line split would corrupt a record, so we return ``None`` and fall back to the
+    text chunker instead. Returns ``None`` unless there is a header + >=1 data row.
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return None
+    physical = [ln for ln in stripped.splitlines() if ln.strip()]
+    if len(physical) < _MIN_RECORDS:
+        return None
+    try:
+        logical = [r for r in _csv.reader(io.StringIO(stripped)) if any(c.strip() for c in r)]
+    except (_csv.Error, ValueError):
+        return None
+    if len(logical) != len(physical):
+        return None
+    header, data_rows = physical[0], physical[1:]
+    if not data_rows:
+        return None
+    return header, data_rows
+
+
 def group_records_by_size(records, max_tokens, count_tokens):
     """Greedily pack record strings into newline-joined chunks up to ``max_tokens``.
 

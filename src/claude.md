@@ -1211,6 +1211,7 @@ Structured-content detection + record splitting for the JSON/table
 | `def` | `detect_structured_content` |
 | `def` | `split_json_records` |
 | `def` | `split_jsonl_records` |
+| `def` | `split_csv_records` |
 | `def` | `group_records_by_size` |
 
 #### `structured_logging.py`

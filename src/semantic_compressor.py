@@ -529,13 +529,13 @@ class SemanticCompressor:
     def _prepare_raw_chunks(self, text: str, structured_kind, strategy: str = "auto") -> List[str]:
         """Choose raw chunks for ingest.
 
-        For a detected JSON array or JSONL document, chunk on RECORD boundaries
-        (records grouped by size become individually rankable nodes) so structured
-        data survives compression instead of collapsing to one hidden mega-node
-        (#190 + #279). Both split paths are non-destructive (``group_records_by_size``
-        keeps every record). All other content — including CSV, whose safe
-        record-chunking needs a quote-aware span scanner (deferred, #280) — uses
-        the semantic/fixed text chunker unchanged.
+        For a detected JSON array, JSONL, or CSV document, chunk on RECORD
+        boundaries (records grouped by size become individually rankable nodes) so
+        structured data survives compression instead of collapsing to one hidden
+        mega-node (#190 + #279 + #280). All split paths are non-destructive
+        (``group_records_by_size`` keeps every record; CSV bails to the text
+        chunker on any embedded-newline / multiline-quote quirk rather than
+        corrupt a row). All other content uses the semantic/fixed text chunker.
         """
         if structured_kind == "json_array":
             from .structured_content import group_records_by_size, split_json_records
@@ -549,6 +549,20 @@ class SemanticCompressor:
             records = split_jsonl_records(text)
             if records:
                 return group_records_by_size(records, 512, self._count_tokens)
+        elif structured_kind == "csv":
+            from .structured_content import group_records_by_size, split_csv_records
+
+            split = split_csv_records(text)
+            if split:
+                header, rows = split
+                # Header is its OWN node (NOT prepended to each group). This keeps
+                # every row-group strictly within the embedding window and never
+                # duplicates the header — closing both the wide-header/oversized
+                # budget blowout (codex #280 HIGH-2) and the false-positive header
+                # duplication (droid MED-4). The header node labels the columns
+                # once for the table; row values stay searchable in the row groups.
+                groups = group_records_by_size(rows, 512, self._count_tokens)
+                return [header, *groups]
         return self._chunk_text(text, strategy=strategy)
 
     def _chunk_text(
@@ -1078,14 +1092,14 @@ class SemanticCompressor:
             _structured_kind = (
                 detect_structured_content(text) if STRUCTURED_CHUNKING_ENABLED else None
             )
-            # json_array and jsonl have a record-level chunker path (#190 + #279):
-            # skip SemToken so it cannot merge "similar" records into one block
-            # before record-splitting runs. json_object and csv still fall through
-            # to _chunk_text (csv record-chunking is deferred to #280 pending a
-            # quote-aware span scanner + header-budget), so they must NOT skip it.
+            # json_array, jsonl, and csv have a record-level chunker path
+            # (#190 + #279 + #280): skip SemToken so it cannot merge "similar"
+            # records into one block before record-splitting runs. json_object
+            # still falls through to _chunk_text, so it must NOT skip SemToken.
             _skip_semtoken = _H2H3_COUNT >= 2 or _structured_kind in (
                 "json_array",
                 "jsonl",
+                "csv",
             )
             if (
                 total_tokens > 200 and not _skip_semtoken
@@ -1117,11 +1131,11 @@ class SemanticCompressor:
                 )
 
             # 2b. Optional intra-document deduplication (Phase 5: R-KV). Skipped for
-            # record-chunked structured data (json_array/jsonl — #190 + #279):
-            # identical or near-identical records (e.g. repeated log lines) must NOT
-            # be collapsed — that would silently drop records (codex P1 = data
-            # loss). csv is not record-chunked yet (#280) so it is not listed here.
-            if len(raw_chunks) > 2 and _structured_kind not in ("json_array", "jsonl"):
+            # record-chunked structured data (json_array/jsonl/csv — #190 + #279 +
+            # #280): identical or near-identical records (repeated log lines, CSV
+            # rows) must NOT be collapsed — that would silently drop records (codex
+            # P1 = data loss).
+            if len(raw_chunks) > 2 and _structured_kind not in ("json_array", "jsonl", "csv"):
                 try:
                     from .intra_doc_dedup import collapse_redundant_nodes
 

@@ -61,8 +61,21 @@ def test_jsonl_kind_but_unsplittable_falls_back():
     assert c._prepare_raw_chunks('{"a": 1}', "jsonl") == ["<TEXT_CHUNKER>"]
 
 
-def test_csv_kind_falls_through_to_text_chunker():
-    # csv record-chunking is deferred (#280) pending a quote-aware span scanner;
-    # a detected csv must fall through to the text chunker, not raise.
+def test_csv_uses_record_chunking_header_as_own_node():
     c = _bare_compressor()
-    assert c._prepare_raw_chunks("a,b\n1,2\n3,4", "csv") == ["<TEXT_CHUNKER>"]
+    rows = [f"{i},name{i},{i * 10}" for i in range(10)]
+    text = "id,name,score\n" + "\n".join(rows)
+    chunks = c._prepare_raw_chunks(text, "csv")
+    assert chunks != ["<TEXT_CHUNKER>"]  # the record path was taken
+    assert chunks[0] == "id,name,score"  # header is its own first node
+    assert chunks.count("id,name,score") == 1  # NOT duplicated per group (MED-4)
+    joined = "\n".join(chunks)
+    for row in rows:
+        assert row in joined  # no data loss
+
+
+def test_csv_multiline_quoted_falls_through():
+    # A multiline-quoted CSV bails from record-chunking (guard) -> text chunker.
+    c = _bare_compressor()
+    text = 'a,b\n1,"x\ny"\n3,4'
+    assert c._prepare_raw_chunks(text, "csv") == ["<TEXT_CHUNKER>"]
