@@ -1249,6 +1249,7 @@ Contract tests for enterprise package layout scaffolding.
 |------|------|
 | `def` | `test_estimate_ratio_stays_positive_for_high_skeleton_ratio` |
 | `def` | `test_estimate_designed_band_boost_preserved` |
+| `def` | `test_medium_doc_never_predicts_expansion` |
 
 #### `test_evidence_bundle.py`
 
@@ -2438,6 +2439,8 @@ Golden-ish regression tests for prompt version comparison output.
 | `def` | `test_opus_4_7_is_registered` |
 | `def` | `test_opus_4_7_aliases_resolve` |
 | `def` | `test_opus_4_6_still_resolves_with_hyphen_alias` |
+| `def` | `test_gpt_5_6_family_registered` |
+| `def` | `test_gpt_5_6_alias_resolves_to_sol` |
 
 #### `test_proxy_cli.py`
 

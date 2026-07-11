@@ -341,6 +341,59 @@ _PROFILES = {
         recommended_output_format="toon",
         notes="OpenAI GPT-5.5 flagship (2026-04-23). 1M-token context, $5/$30 per MTok input/output. Compression ROI is high given the expensive output rate.",
     ),
+    # GPT-5.6 family (GA 2026-07-09; Sol/Terra/Luna). Verified vs
+    # openai.com/index/gpt-5-6 + the API model guide 2026-07-11. Short-context
+    # standard rates below; above ~272K input OpenAI steps to a long-context
+    # tier (sol $10/$45, terra $5/$22.50, luna $2/$9). Cached-read is a flat
+    # 90% discount; cache writes cost 1.25x uncached input (30-min min cache).
+    "gpt-5.6-sol": ProviderProfile(
+        model="gpt-5.6-sol",
+        provider="openai",
+        input_cost_per_million=5.0,
+        output_cost_per_million=30.0,
+        cached_input_cost_per_million=0.50,
+        context_window=1_050_000,
+        cache_read_field="cached_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=128,
+        supports_prompt_cache_key=True,
+        cache_routing_strategy="Use a stable prompt_cache_key per workflow; GPT-5.6 cache writes cost 1.25x uncached input with a 30-min min cache life, so stable prefixes pay off at scale.",
+        prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
+        recommended_output_format="toon",
+        notes="OpenAI GPT-5.6 Sol flagship (GA 2026-07-09; alias gpt-5.6). OpenAI's self-described best coding model (Coding Agent Index 80). $5/$30 per MTok short-context ($10/$45 long-context above 272K), 1.05M ctx, 128K max output, cached-read $0.50 (90% off). Pricing verified vs openai.com/index/gpt-5-6 2026-07-11.",
+    ),
+    "gpt-5.6-terra": ProviderProfile(
+        model="gpt-5.6-terra",
+        provider="openai",
+        input_cost_per_million=2.5,
+        output_cost_per_million=15.0,
+        cached_input_cost_per_million=0.25,
+        context_window=1_050_000,
+        cache_read_field="cached_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=128,
+        supports_prompt_cache_key=True,
+        cache_routing_strategy="Use a stable prompt_cache_key per workflow; GPT-5.6 cache writes cost 1.25x uncached input, so a stable prefix pays off.",
+        prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
+        recommended_output_format="toon",
+        notes="OpenAI GPT-5.6 Terra (GA 2026-07-09), the balanced tier: $2.50/$15 per MTok short-context ($5/$22.50 long-context above 272K), 1.05M ctx, 128K max output. Pricing verified vs openai.com 2026-07-11.",
+    ),
+    "gpt-5.6-luna": ProviderProfile(
+        model="gpt-5.6-luna",
+        provider="openai",
+        input_cost_per_million=1.0,
+        output_cost_per_million=6.0,
+        cached_input_cost_per_million=0.10,
+        context_window=1_050_000,
+        cache_read_field="cached_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=128,
+        supports_prompt_cache_key=True,
+        cache_routing_strategy="Use a stable prompt_cache_key per workflow; GPT-5.6 cache writes cost 1.25x uncached input, so a stable prefix pays off.",
+        prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
+        recommended_output_format="toon",
+        notes="OpenAI GPT-5.6 Luna (GA 2026-07-09), the high-volume budget tier: $1/$6 per MTok short-context ($2/$9 long-context above 272K), 1.05M ctx, 128K max output. Pricing verified vs openai.com 2026-07-11.",
+    ),
 }
 
 _ALIASES = {
@@ -399,6 +452,13 @@ _ALIASES = {
     "gpt-4-mini": "gpt-4.1-mini",
     # GPT-5.5 hyphen alias (e.g. used as "gpt-5-5" in some clients)
     "gpt-5-5": "gpt-5.5",
+    # GPT-5.6 family (GA 2026-07-09). Unversioned "gpt-5.6" routes to Sol per
+    # OpenAI's own alias; hyphen variants for clients that dot-strip.
+    "gpt-5.6": "gpt-5.6-sol",
+    "gpt-5-6": "gpt-5.6-sol",
+    "gpt-5-6-sol": "gpt-5.6-sol",
+    "gpt-5-6-terra": "gpt-5.6-terra",
+    "gpt-5-6-luna": "gpt-5.6-luna",
 }
 
 

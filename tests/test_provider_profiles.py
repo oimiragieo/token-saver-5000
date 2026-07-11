@@ -135,3 +135,36 @@ def test_opus_4_6_still_resolves_with_hyphen_alias():
     """Pinned 4.6 users keep working."""
     assert get_provider_profile("claude-opus-4-6").model == "claude-opus-4.6"
     assert get_provider_profile("claude-opus-4.6").model == "claude-opus-4.6"
+
+
+# ---------------------------------------------------------------------------
+# GPT-5.6 family (Sol/Terra/Luna) — OpenAI GA 2026-07-09 (#278).
+# ---------------------------------------------------------------------------
+
+
+def test_gpt_5_6_family_registered():
+    sol = get_provider_profile("gpt-5.6-sol")
+    terra = get_provider_profile("gpt-5.6-terra")
+    luna = get_provider_profile("gpt-5.6-luna")
+    for p in (sol, terra, luna):
+        assert p.provider == "openai"
+        assert p.cache_read_field == "cached_tokens"
+        assert p.context_window == 1_050_000
+        assert p.supports_prompt_cache_key is True
+    # Verified short-context standard rates (openai.com 2026-07-11).
+    assert (sol.input_cost_per_million, sol.output_cost_per_million) == (5.0, 30.0)
+    assert (terra.input_cost_per_million, terra.output_cost_per_million) == (2.5, 15.0)
+    assert (luna.input_cost_per_million, luna.output_cost_per_million) == (1.0, 6.0)
+    # Tier ordering: Sol > Terra > Luna on both input and output price.
+    assert luna.input_cost_per_million < terra.input_cost_per_million < sol.input_cost_per_million
+    assert (
+        luna.output_cost_per_million < terra.output_cost_per_million < sol.output_cost_per_million
+    )
+
+
+def test_gpt_5_6_alias_resolves_to_sol():
+    # OpenAI's own alias: unversioned gpt-5.6 routes to Sol.
+    assert get_provider_profile("gpt-5.6").model == "gpt-5.6-sol"
+    assert get_provider_profile("gpt-5-6").model == "gpt-5.6-sol"
+    assert get_provider_profile("gpt-5-6-terra").model == "gpt-5.6-terra"
+    assert get_provider_profile("gpt-5-6-luna").model == "gpt-5.6-luna"
