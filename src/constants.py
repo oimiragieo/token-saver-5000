@@ -655,6 +655,16 @@ WHY: k=60 was empirically shown to be robust across diverse retrieval tasks in t
      a larger k (e.g. 100) makes the fusion softer. 60 is the safe starting point.
 """
 
+# --- Optional cross-encoder rerank (#187, WORLD-CLASS #1). Default-OFF. ---
+# When enabled, search_semantic_with_scores pulls RERANK_POOL_SIZE candidates and
+# a cross-encoder (reranker_gate.rerank_candidates + the ONNX CrossEncoderScorer)
+# reorders them before truncating to top_k. Enablement discipline: ships
+# default-OFF; the flip to prod is gated on the #266-corpus Pareto verification
+# (must not regress recall@5) + codex review. When OFF the retrieval path is
+# byte-identical to the pre-rerank behaviour.
+RERANK_ENABLED = os.getenv("GOTCONTEXT_RERANK_ENABLED", "0").strip() == "1"
+RERANK_POOL_SIZE = int(os.getenv("GOTCONTEXT_RERANK_POOL_SIZE", "50"))
+
 F11_RANKER_PATH = os.getenv("F11_RANKER_PATH", "a").lower().strip()
 """
 F11 ranker path selector.

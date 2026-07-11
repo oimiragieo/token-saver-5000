@@ -32,9 +32,12 @@ from .bm25_utils import (
 from .constants import (
     _RRF_K,
     F11_RANKER_PATH,
+    RERANK_ENABLED,
+    RERANK_POOL_SIZE,
     DEFAULT_TEXT_MODEL,
 )
 from .node_identity import extract_file_id_from_node
+from .reranker_gate import RerankConfig, rerank_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -2183,7 +2186,14 @@ class SemanticCompressor:
             dense_ranked.append((node_id, float(similarity)))
         dense_ranked.sort(key=lambda x: x[1], reverse=True)
 
-        # --- Path dispatch ---
+        # --- Retrieval depth: pull a larger candidate POOL only when the
+        # optional cross-encoder rerank is on (#187), so it has candidates to
+        # promote; otherwise exactly top_k -> byte-identical to the pre-rerank
+        # path (RERANK_ENABLED defaults OFF). ---
+        rerank_on = RERANK_ENABLED
+        pool_k = max(top_k, RERANK_POOL_SIZE) if rerank_on else top_k
+
+        # --- Path dispatch (produces `ranked` + `score_type`) ---
         if F11_RANKER_PATH == "c":
             # Path C: BM25 + RRF hybrid — unconditional fusion (HOLD as of
             # 2026-07-08; see docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md).
@@ -2191,22 +2201,62 @@ class SemanticCompressor:
             # candidate_nodes, never self.chunks globally (cross-document IDF
             # pollution prevention).
             bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
-            return self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k), "rrf"
-
-        if F11_RANKER_PATH == "g":
+            ranked = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=pool_k)
+            score_type = "rrf"
+        elif F11_RANKER_PATH == "g" and _gate_should_fuse_g(query):
             # Path G: gated fusion (design memo idea #1, EXPERIMENTAL) — fuse
-            # only when the query has provable lexical signal; otherwise
-            # degrade to Path A dense-only. See _gate_should_fuse_g docstring.
-            # The gate is query-shape only (#267) so it is checked BEFORE
-            # computing BM25 — a closed NL query never pays for, or can fail
-            # inside, BM25 scoring (codex 2026-07-10).
-            if _gate_should_fuse_g(query):
-                bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
-                return self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=top_k), "rrf"
-            return dense_ranked[:top_k], "cosine"
+            # only when the query has provable lexical signal; otherwise degrade
+            # to Path A dense-only. The gate is query-shape only (#267) so it is
+            # checked BEFORE computing BM25 — a closed NL query never pays for, or
+            # can fail inside, BM25 scoring (codex 2026-07-10).
+            bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
+            ranked = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=pool_k)
+            score_type = "rrf"
+        else:
+            # Path A (default), or Path G with the gate closed: dense-only.
+            ranked = dense_ranked[:pool_k]
+            score_type = "cosine"
 
-        # Path A (default): dense-only, backward compatible
-        return dense_ranked[:top_k], "cosine"
+        # --- Optional recall-gated cross-encoder rerank (#187, default-OFF) ---
+        # No-op unless RERANK_ENABLED; reorders the pool, then the top_k truncation
+        # below applies to either the reranked or the original order.
+        if rerank_on:
+            ranked = self._rerank_pool(query, ranked)
+
+        return ranked[:top_k], score_type
+
+    def _get_rerank_scorer(self):
+        """Lazily build + cache the ONNX cross-encoder scorer (#187, default-OFF)."""
+        scorer = getattr(self, "_rerank_scorer", None)
+        if scorer is None:
+            from .cross_encoder_scorer import CrossEncoderScorer
+
+            scorer = CrossEncoderScorer()
+            self._rerank_scorer = scorer
+        return scorer
+
+    def _rerank_pool(self, query: str, ranked: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Recall-gated cross-encoder reorder of the retrieved pool (#187).
+
+        Delegates the pure gate/reorder to ``reranker_gate.rerank_candidates`` with
+        the lazily-built ONNX cross-encoder scorer. ``text_of`` pulls each node's
+        chunk text; ``score_of`` is the first-stage retrieval score (for the
+        confidence-skip). FAIL-SAFE: any failure (model load, scoring) falls back
+        to the input retrieval order — reranking must never break retrieval.
+        """
+        try:
+            reordered, _did = rerank_candidates(
+                query,
+                ranked,
+                text_of=lambda pair: (self.chunks[pair[0]].text if pair[0] in self.chunks else ""),
+                score_of=lambda pair: pair[1],
+                scorer=self._get_rerank_scorer(),
+                config=RerankConfig(enabled=True, pool_size=RERANK_POOL_SIZE),
+            )
+            return reordered
+        except Exception:  # pragma: no cover — rerank must never break retrieval
+            logger.warning("rerank_pool failed; using retrieval order", exc_info=True)
+            return ranked
 
     def search_semantic_with_scores(
         self, query: str, file_id: Optional[str] = None, top_k: int = 5

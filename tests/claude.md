@@ -2559,6 +2559,18 @@ Comprehensive Tests for Reliability Infrastructure
 | `async def` | `test_timeout_with_retry_integration` |
 | `async def` | `test_circuit_breaker_with_retry_integration` |
 
+#### `test_rerank_wire.py`
+
+#187 rerank wire: the rerank stage reorders / fails safe (model-free).
+
+| Kind | Name |
+|------|------|
+| `class` | `_Chunk` |
+| `def` | `_bare` |
+| `def` | `test_rerank_pool_reorders_by_injected_scorer` |
+| `def` | `test_rerank_pool_is_fail_safe_on_scorer_error` |
+| `def` | `test_rerank_pool_single_candidate_is_noop` |
+
 #### `test_reranker_gate.py`
 
 Model-free unit tests for the recall-gated rerank stage (#187).
