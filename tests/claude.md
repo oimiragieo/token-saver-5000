@@ -3519,6 +3519,7 @@ World-Class Compression Sprint — Task 4: summary + entity quality (2026-07-02)
 |------|------|
 | `def` | `_bare_compressor` |
 | `class` | `TestEntityStopwordFilter` |
+| `class` | `TestEntityMarkdownLinkStrip` |
 | `class` | `TestSummaryMarkdownStrip` |
 
 ### Other files

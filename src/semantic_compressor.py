@@ -822,12 +822,30 @@ class SemanticCompressor:
                 "Because",
             }
         )
-        words = text.split()
+        # Strip well-formed markdown links so their URLs never leak into entities
+        # (dogfood 2026-07-11: "Apache-2.0)](https://github.com/oimiragieo/tensor-grep"
+        # surfaced as a "Key entity" from a `[text](url)` link). Mirrors
+        # _generate_summary's link strip; a token-level guard below additionally
+        # rejects any residual URL/path fragment (bare or split links the regex
+        # can't collapse).
+        cleaned_text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
+        words = cleaned_text.split()
         entities = []
         for i, word in enumerate(words):
             # Capitalized and NOT a sentence start (prev word didn't end a sentence).
             if word[0].isupper() and i > 0 and words[i - 1][-1] not in ".!?":
                 cleaned = word.strip(".,;:!?\"'()[]{}")
+                # An entity is a WORD, not a link. '://' catches URLs (codex
+                # 2026-07-11: a bare '/' wrongly dropped legit tech entities like
+                # TCP/IP, CI/CD, AC/DC); '](' catches a malformed/split markdown
+                # link the regex missed; an http(s) prefix catches a scheme-only
+                # residue.
+                if (
+                    "://" in cleaned
+                    or "](" in cleaned
+                    or cleaned.lower().startswith(("http:", "https:"))
+                ):
+                    continue
                 if len(cleaned) >= 2 and cleaned not in stopwords:
                     entities.append(cleaned)
 

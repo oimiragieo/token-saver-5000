@@ -41,6 +41,54 @@ class TestEntityStopwordFilter:
         assert "Redis" in ents and "Postgres" in ents, ents  # not "Redis," / "Postgres;"
 
 
+class TestEntityMarkdownLinkStrip:
+    """#286 (dogfood 2026-07-11): a `[text](url)` markdown link leaked its URL into
+    the Key entities line ("Apache-2.0)](https://github.com/oimiragieo/tensor-grep").
+    Entities must be words, not URLs / paths / markdown-link fragments."""
+
+    def _assert_no_url_fragments(self, ents):
+        for e in ents:
+            assert "/" not in e, f"URL/path fragment leaked as entity: {e!r} in {ents}"
+            assert "](" not in e, f"markdown-link fragment leaked as entity: {e!r} in {ents}"
+            assert not e.lower().startswith(("http:", "https:")), f"bare URL as entity: {e!r}"
+
+    def test_markdown_link_url_not_an_entity(self):
+        c = _bare_compressor()
+        text = (
+            "See our OSS project "
+            "[tensor-grep (open source, Apache-2.0)](https://github.com/oimiragieo/tensor-grep) "
+            "for Fast code search."
+        )
+        ents = c._extract_key_entities(text)
+        self._assert_no_url_fragments(ents)
+        # The link's visible text is still mined for real entities.
+        assert "Apache-2.0" in ents, ents
+
+    def test_bare_url_not_an_entity(self):
+        c = _bare_compressor()
+        # A capitalized-scheme URL must not survive as an entity.
+        ents = c._extract_key_entities("Docs live at Https://Example.com/Guide for reference.")
+        self._assert_no_url_fragments(ents)
+
+    def test_regression_exact_dogfood_fragment(self):
+        c = _bare_compressor()
+        # The exact llms.txt shape that produced the leak.
+        text = (
+            "GitHub (SDKs + plugin + benchmarks) - "
+            "[tensor-grep (open source, Apache-2.0)](https://github.com/oimiragieo/tensor-grep), Fast"
+        )
+        ents = c._extract_key_entities(text)
+        self._assert_no_url_fragments(ents)
+
+    def test_slash_entities_not_dropped(self):
+        """codex 2026-07-11: the URL guard must key on '://', not a bare '/', so
+        legitimate slash-bearing tech entities survive."""
+        c = _bare_compressor()
+        ents = c._extract_key_entities("Our stack speaks TCP/IP and runs CI/CD pipelines.")
+        assert "TCP/IP" in ents, ents
+        assert "CI/CD" in ents, ents
+
+
 class TestSummaryMarkdownStrip:
     def test_heading_marker_stripped(self):
         c = _bare_compressor()
