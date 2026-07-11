@@ -35,6 +35,27 @@ _SIMILARITY_BLOCK_SIZE: int = int(os.environ.get("SIMILARITY_BLOCK_SIZE", "256")
 _MAX_GRAPH_CHUNKS: int = int(os.environ.get("MAX_GRAPH_CHUNKS", "2500"))
 
 
+def _ast_qualname(node: ast.AST) -> str:
+    """Full dotted qualname from the ``_tsk_parent`` chain.
+
+    #195 qualified a node by its enclosing class only when the IMMEDIATE parent
+    was a ``ClassDef`` (``A.foo``), leaving a bare name otherwise. BUG-3 (droid
+    review 2026-07-11): a function nested in a FUNCTION (``def deco(): def
+    wrapper(): ...``) then fell through to the bare ``wrapper`` and collided
+    across decorators in the ``chunk_id``-keyed dict, silently dropping all but
+    the last. Walking the whole ClassDef/FunctionDef parent chain gives every
+    nesting site a distinct id (``deco.wrapper``, ``A.outer.inner``) while
+    preserving the existing shapes: a method stays ``A.foo`` and a top-level
+    def/class stays its bare name (its parent is the Module, not in the chain).
+    """
+    parts = [getattr(node, "name", "<anon>")]
+    parent = getattr(node, "_tsk_parent", None)
+    while isinstance(parent, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        parts.append(parent.name)
+        parent = getattr(parent, "_tsk_parent", None)
+    return ".".join(reversed(parts))
+
+
 class CodeLanguage(Enum):
     """Supported programming languages"""
 
@@ -199,13 +220,9 @@ class CodeSemanticCompressor:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Extract function (async def is a sibling type, not a subclass — #194)
                 func_code = ast.get_source_segment(code, node)
-                # #195: qualify methods by their enclosing class (A.foo vs B.foo).
-                _parent = getattr(node, "_tsk_parent", None)
-                _qualified_name = (
-                    f"{_parent.name}.{node.name}"
-                    if isinstance(_parent, ast.ClassDef)
-                    else node.name
-                )
+                # #195 + BUG-3: qualify by the FULL parent chain (A.foo vs B.foo,
+                # and deco.wrapper vs another_deco.wrapper for function-nested fns).
+                _qualified_name = _ast_qualname(node)
                 docstring = ast.get_docstring(node)
 
                 # Find dependencies (function calls)
@@ -241,12 +258,8 @@ class CodeSemanticCompressor:
                 # `class Meta` inside two different outer classes) both produced
                 # f"{file_id}::Meta" and the second silently OVERWROTE the first
                 # in the chunk_id-keyed dict — dropping it from the skeleton.
-                _class_parent = getattr(node, "_tsk_parent", None)
-                _qualified_class_name = (
-                    f"{_class_parent.name}.{node.name}"
-                    if isinstance(_class_parent, ast.ClassDef)
-                    else node.name
-                )
+                # #220 rank5 + BUG-3: full parent chain (A.Meta, deco.LocalClass).
+                _qualified_class_name = _ast_qualname(node)
 
                 # Get method names
                 methods = [

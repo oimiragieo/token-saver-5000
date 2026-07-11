@@ -270,6 +270,37 @@ class TestPythonCodeChunking:
         assert "test_file::A.foo" in method_ids
         assert "test_file::B.foo" in method_ids
 
+    def test_same_named_nested_functions_do_not_collide(self):
+        """BUG-3 (droid review 2026-07-11): two decorator wrappers both named
+        `wrapper` (def deco(): def wrapper(): ...) must get DISTINCT chunk_ids.
+        #195 qualified ONLY ClassDef-parented nodes, so a FUNCTION-nested
+        function fell through to the bare name and the second `wrapper`
+        silently OVERWROTE the first in the chunk_id-keyed dict — dropping it
+        from the code skeleton. Extremely common in decorator / functools.wraps
+        code. RED before the fix: both produce test_file::wrapper (1 distinct)."""
+        code = (
+            "def my_decorator(func):\n"
+            "    def wrapper(*args, **kwargs):\n"
+            "        return func(*args, **kwargs)\n"
+            "    return wrapper\n"
+            "\n\n"
+            "def another_decorator(func):\n"
+            "    def wrapper(*args, **kwargs):\n"
+            "        return func(*args, **kwargs)\n"
+            "    return wrapper\n"
+        )
+        chunks = self.compressor.chunk_python_code(code, "test_file")
+        wrapper_ids = [
+            c.chunk_id for c in chunks if c.chunk_type == "function" and c.name == "wrapper"
+        ]
+        assert len(wrapper_ids) == 2, (
+            "both nested `wrapper` functions must be chunked, not collision-"
+            f"dropped — got {wrapper_ids}"
+        )
+        assert len(set(wrapper_ids)) == 2, f"chunk_ids must be distinct — got {wrapper_ids}"
+        assert "test_file::my_decorator.wrapper" in wrapper_ids
+        assert "test_file::another_decorator.wrapper" in wrapper_ids
+
     def test_same_named_nested_classes_do_not_collide(self):
         """#220 rank 5: A.Meta and B.Meta must get DISTINCT chunk_ids.
 

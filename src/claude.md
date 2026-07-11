@@ -251,6 +251,7 @@ Code-Specific Semantic Compressor
 
 | Kind | Name |
 |------|------|
+| `def` | `_ast_qualname` |
 | `class` | `CodeLanguage` |
 | `class` | `CodeChunk` |
 | `class` | `CodeSemanticCompressor` |
