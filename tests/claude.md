@@ -2534,6 +2534,25 @@ Comprehensive Tests for Reliability Infrastructure
 | `async def` | `test_timeout_with_retry_integration` |
 | `async def` | `test_circuit_breaker_with_retry_integration` |
 
+#### `test_reranker_gate.py`
+
+Model-free unit tests for the recall-gated rerank stage (#187).
+
+| Kind | Name |
+|------|------|
+| `def` | `_run` |
+| `def` | `_ids` |
+| `def` | `test_disabled_is_noop` |
+| `def` | `test_fewer_than_two_candidates_is_noop` |
+| `def` | `test_empty_query_is_noop` |
+| `def` | `test_reorders_by_rerank_score` |
+| `def` | `test_pool_truncation_keeps_tail_in_place` |
+| `def` | `test_confidence_skip_fires_on_separated_top1` |
+| `def` | `test_confidence_skip_does_not_fire_on_close_scores` |
+| `def` | `test_scorer_wrong_length_fails_safe` |
+| `def` | `test_scorer_receives_query_and_texts` |
+| `def` | `test_ties_preserve_retrieval_order` |
+
 #### `test_resource_handlers.py`
 
 Comprehensive tests for resource_handlers.py

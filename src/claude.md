@@ -1001,6 +1001,16 @@ Reliability Infrastructure for Production MCP Server
 | `class` | `CircuitBreaker` |
 | `class` | `RetryPolicy` |
 
+#### `reranker_gate.py`
+
+Recall-gated cross-encoder rerank stage (#187, WORLD-CLASS #1).
+
+| Kind | Name |
+|------|------|
+| `class` | `RerankScorer` |
+| `class` | `RerankConfig` |
+| `def` | `rerank_candidates` |
+
 #### `resource_manager.py`
 
 Resource Management for Semantic Modulator
