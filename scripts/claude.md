@@ -147,6 +147,16 @@ Token Saver 5000 - Quickstart Script
 | `def` | `print_next_steps` |
 | `def` | `main` |
 
+#### `run_public_benchmark.py`
+
+Public, reproducible-by-anyone compression benchmark for token-saver-5000.
+
+| Kind | Name |
+|------|------|
+| `def` | `_measure` |
+| `def` | `build_parser` |
+| `def` | `main` |
+
 #### `test_simulation.py`
 
 Channel Pressure Test - Empirical Validation
