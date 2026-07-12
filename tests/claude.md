@@ -3413,6 +3413,14 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `class` | `TestPinRequest` |
 | `class` | `TestFetchUrlPinsConnection` |
 
+#### `test_url_fetcher_nonblocking.py`
+
+#219: DNS resolution in ``fetch_url`` must run OFF the event loop.
+
+| Kind | Name |
+|------|------|
+| `async def` | `test_dns_resolution_does_not_block_event_loop` |
+
 #### `test_url_fetcher_ssrf_fence_6b.py`
 
 Phase 2 Chunk 6B SSRF regression fence for token-saver url_fetcher.py.

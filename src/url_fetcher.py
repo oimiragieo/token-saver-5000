@@ -19,6 +19,7 @@ so importing from api/ at module-load time would fail.  Vendoring keeps this mod
 standalone for tests and in production (where both paths are on PYTHONPATH anyway).
 """
 
+import asyncio
 import ipaddress
 import socket
 from typing import Optional
@@ -294,7 +295,11 @@ async def fetch_url(
     skip_dns = _skip_dns if _skip_dns is not None else (_transport is not None)
     first_ips: Optional[set[str]] = None
     if not skip_dns:
-        first_ips = _resolve_and_check_host(host)
+        # socket.getaddrinfo blocks; run it off the event loop so a slow/hostile
+        # authoritative nameserver stalls only THIS request's thread, not the whole
+        # worker's event loop (#219: a handful of concurrent slow-DNS ingests would
+        # otherwise wedge the entire Fly machine's API).
+        first_ips = await asyncio.to_thread(_resolve_and_check_host, host)
 
     # --- Build client ---
     client_kwargs: dict = {
@@ -314,7 +319,8 @@ async def fetch_url(
         request_headers: Optional[dict[str, str]] = None
         request_extensions: Optional[dict[str, str]] = None
         if not skip_dns and first_ips is not None:
-            _check_dns_rebinding(host, first_ips)
+            # Second resolution (rebind check) — also off the event loop (#219).
+            await asyncio.to_thread(_check_dns_rebinding, host, first_ips)
             request_url, request_headers, request_extensions = _pin_request(url, host, first_ips)
 
         try:
