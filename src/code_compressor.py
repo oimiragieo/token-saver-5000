@@ -313,12 +313,26 @@ class CodeSemanticCompressor:
                 )
             )
 
-        # Extract functions (simplified)
-        func_pattern = r"(?:function|const|let|var)\s+(\w+)\s*=?\s*(?:\([^)]*\)|async\s*\([^)]*\))\s*(?:=>)?\s*\{([^}]*)\}"
-
-        for match in re.finditer(func_pattern, code, re.MULTILINE | re.DOTALL):
+        # Extract functions. Match only the SIGNATURE up to the opening brace, then scan
+        # for the matching close brace with a string/comment-aware depth counter. The old
+        # `\{([^}]*)\}` stopped at the first inner `}`, truncating every function with a
+        # nested block (if/for/object-literal/nested-fn) and SILENTLY dropping its tail
+        # from the chunk's `code` (#212b, backlog master-plan Wave 1, 2026-07-12).
+        sig_pattern = (
+            r"(?:function|const|let|var)\s+(\w+)\s*=?\s*"
+            r"(?:\([^)]*\)|async\s*\([^)]*\))\s*(?:=>)?\s*\{"
+        )
+        last_end = -1
+        for match in re.finditer(sig_pattern, code, re.MULTILINE | re.DOTALL):
+            if match.start() < last_end:
+                continue  # nested inside an already-captured function
+            open_idx = match.end() - 1  # index of the opening '{'
+            close_idx = self._find_matching_brace(code, open_idx)
+            if close_idx is None:
+                continue  # unbalanced / truncated source -> skip gracefully
             func_name = match.group(1)
-            match.group(2)
+            full = code[match.start() : close_idx + 1]
+            last_end = close_idx + 1
 
             # Extract docstring (JSDoc)
             jsdoc_pattern = r"/\*\*([^*]|\*(?!/))*\*/"
@@ -329,16 +343,121 @@ class CodeSemanticCompressor:
                 CodeChunk(
                     chunk_id=f"{file_id}::{func_name}",
                     chunk_type="function",
-                    code=match.group(0),
+                    code=full,
                     name=func_name,
                     docstring=docstring,
                     start_line=code[: match.start()].count("\n") + 1,
-                    end_line=code[: match.end()].count("\n") + 1,
+                    end_line=code[: close_idx + 1].count("\n") + 1,
                     dependencies=[],
                 )
             )
 
         return chunks
+
+    # Keywords after which a `/` begins a regex literal, not division (JS lexer rule).
+    _REGEX_PRECEDING_KEYWORDS = frozenset(
+        {
+            "return",
+            "typeof",
+            "instanceof",
+            "in",
+            "of",
+            "new",
+            "delete",
+            "void",
+            "do",
+            "else",
+            "yield",
+            "await",
+            "case",
+            "throw",
+        }
+    )
+
+    @staticmethod
+    def _find_matching_brace(code: str, open_idx: int):
+        """Index of the '}' matching ``code[open_idx] == '{'``, skipping braces inside JS
+        strings ('', "", ``), // and /* */ comments, AND regex literals (whose `{`/`}` and
+        `/*`-looking bytes must NOT be read as structural). Returns None if unbalanced.
+        Regex-vs-division is resolved with the standard heuristic (previous significant
+        token is not a value, or is a regex-preceding keyword). (#212b codex round 2.)
+
+        Known limitation (codex round-2, out of scope for this non-parser chunker): a
+        BARE regex in statement position after `)` -- e.g. ``if (x) /[}]/`` -- reads the
+        `)` as a value and treats the `/` as division, so a `}` inside such a regex could
+        still be miscounted. Fully resolving it needs a real JS tokenizer (see the
+        chunk_javascript_code docstring). This is rare code and NOT a regression: the
+        pre-fix regex truncated EVERY nested-brace function; this scanner fixes the common
+        cases (nested blocks, object literals, strings, comments, and regex literals in
+        expression/keyword position)."""
+        depth = 0
+        i = open_idx
+        n = len(code)
+        while i < n:
+            ch = code[i]
+            if ch in ('"', "'", "`"):
+                quote = ch
+                i += 1
+                while i < n:
+                    c = code[i]
+                    if c == "\\":
+                        i += 2
+                        continue
+                    if c == quote:
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "/" and i + 1 < n:
+                nxt = code[i + 1]
+                if nxt == "/":  # line comment (always)
+                    nl = code.find("\n", i)
+                    i = n if nl == -1 else nl
+                    continue
+                if nxt == "*":  # block comment (always)
+                    end = code.find("*/", i + 2)
+                    i = n if end == -1 else end + 2
+                    continue
+                # regex vs division: look back to the previous significant char.
+                j = i - 1
+                while j >= 0 and code[j] in " \t\r\n":
+                    j -= 1
+                prev = code[j] if j >= 0 else ""
+                is_value = prev.isalnum() or prev in ")]_$"
+                if is_value and prev.isalnum():
+                    k = j
+                    while k >= 0 and (code[k].isalnum() or code[k] in "_$"):
+                        k -= 1
+                    if code[k + 1 : j + 1] in CodeSemanticCompressor._REGEX_PRECEDING_KEYWORDS:
+                        is_value = False
+                if not is_value:  # regex literal -> skip to the unescaped closing '/'
+                    i += 1
+                    in_class = False
+                    while i < n:
+                        c = code[i]
+                        if c == "\\":
+                            i += 2
+                            continue
+                        if c == "[":
+                            in_class = True
+                        elif c == "]":
+                            in_class = False
+                        elif c == "/" and not in_class:
+                            i += 1
+                            break
+                        elif c == "\n":
+                            break  # unterminated regex -> bail
+                        i += 1
+                    continue
+                # else: division operator -> fall through and advance one char
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i
+            i += 1
+        return None
 
     def _chunk_by_lines(
         self, code: str, file_id: str, lines_per_chunk: int = 50

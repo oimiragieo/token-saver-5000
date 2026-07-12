@@ -1662,6 +1662,26 @@ Integration Workflow Tests for Token Saver 5000 v0.7.0
 | `class` | `TestBatchProcessingIntegration` |
 | `class` | `TestCrossFeatureIntegration` |
 
+#### `test_js_nested_brace_chunking.py`
+
+#212(b) (backlog master-plan Wave 1, 2026-07-12): the JS/TS chunker captured a
+
+| Kind | Name |
+|------|------|
+| `def` | `_cc` |
+| `def` | `_body` |
+| `def` | `test_nested_if_block_keeps_tail` |
+| `def` | `test_object_literal_braces_preserved` |
+| `def` | `test_brace_inside_string_does_not_close_early` |
+| `def` | `test_brace_inside_comment_does_not_close_early` |
+| `def` | `test_unbalanced_function_does_not_crash` |
+| `def` | `test_two_top_level_functions_both_captured_full` |
+| `def` | `test_simple_function_unchanged_regression` |
+| `def` | `test_regex_char_class_brace_not_structural` |
+| `def` | `test_regex_looking_like_block_comment_not_dropped` |
+| `def` | `test_return_regex_with_brace_not_truncated` |
+| `def` | `test_division_not_misread_as_regex` |
+
 #### `test_knowledge_compiler.py`
 
 Tests for knowledge compiler (src/knowledge_compiler.py).
