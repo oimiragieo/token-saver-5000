@@ -883,6 +883,13 @@ class SemanticCompressor:
         # BEFORE the split: the sentence splitter treats '!!!' as a sentence end, so a
         # leading admonition fragmented into a bare "!!!" summary (dogfood 2026-07-11).
         cleaned = _strip_admonition_markers(cleaned)
+        # Strip markdown heading markers at the START OF EVERY LINE (not just the
+        # candidate start): a chunk with multiple headings whose lines whitespace-
+        # collapse into one candidate — e.g. non-Latin text the '.!?' splitter can't
+        # segment on full-width '。' — otherwise leaks a mid-summary '##' (dogfood
+        # 2026-07-12: CJK `部署手册 ## 概述 ...`). `#` mid-word (C#, F#) is NOT a
+        # line-start heading, so it survives; only line-initial `#{1,6} ` is cut.
+        cleaned = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]+", "", cleaned)
         sentences = re.split(r"(?<=[.!?])\s+", cleaned)
         summary = ""
         for candidate in sentences:
@@ -923,6 +930,10 @@ class SemanticCompressor:
         cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
         cleaned = cleaned.replace("`", "")
         cleaned = _strip_admonition_markers(cleaned)
+        # Strip line-initial markdown heading markers (see _generate_summary): a
+        # mid-content '##' otherwise survives when multiple heading lines collapse
+        # into one candidate (dogfood 2026-07-12 CJK). 'C#'/'F#' are preserved.
+        cleaned = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]+", "", cleaned)
         kept: list[str] = []
         used = 0
         for candidate in re.split(r"(?<=[.!?])\s+", cleaned):

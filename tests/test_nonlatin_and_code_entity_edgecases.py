@@ -61,6 +61,28 @@ def test_extractive_anchor_keeps_nonlatin_sentence():
     assert "概述" in out and "#" not in out
 
 
+def test_mid_content_heading_marker_stripped_all_langs():
+    # dogfood 2026-07-12: a chunk with a MID-content heading (not just leading)
+    # must not leak the '##' — the line-initial multiline strip handles it for any
+    # language, incl. CJK where the '.!?' splitter can't segment on full-width '。'.
+    c = _c()
+    cjk = "# 部署手册\n\n## 概述\n服务运行在 Fly.io 上。数据库使用 Supabase。"
+    s = c._generate_summary(cjk, max_length=200)
+    assert "#" not in s, s
+    a = c._extractive_anchor_content(cjk, token_budget=120)
+    assert "#" not in a, a
+    # English mid-heading too.
+    en = c._generate_summary("# Title\n\n## Section\nReal body text here.", max_length=200)
+    assert "#" not in en, en
+
+
+def test_hash_not_at_line_start_preserved():
+    # 'C#'/'F#' are NOT line-start headings and must survive the strip.
+    c = _c()
+    s = c._generate_summary("We use the C# language and F# too.")
+    assert "C#" in s and "F#" in s
+
+
 def test_code_syntax_entity_recovers_clean_identifier():
     c = _c()
     ents = c._extract_key_entities(
