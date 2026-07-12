@@ -126,6 +126,16 @@ def _strip_admonition_markers(text: str) -> str:
     )
 
 
+# Sentence splitter for summary / anchor extraction. The ASCII branch
+# ``(?<=[.!?])\s+`` requires trailing whitespace so an internal dot ("Fly.io")
+# never splits; the CJK branch ``(?<=[。！？])`` splits immediately after a
+# full-width terminator because CJK/Japanese text has no inter-sentence space,
+# so a multi-sentence CJK paragraph would otherwise collapse into ONE candidate
+# and the summary would return the whole blob (dogfood 2026-07-12, #212). Latin
+# text has no ``。！？`` so its behavior is byte-identical.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|(?<=[。！？])")
+
+
 class FidelityLevel(Enum):
     """
     Semantic fidelity levels for adaptive transmission
@@ -890,7 +900,7 @@ class SemanticCompressor:
         # 2026-07-12: CJK `部署手册 ## 概述 ...`). `#` mid-word (C#, F#) is NOT a
         # line-start heading, so it survives; only line-initial `#{1,6} ` is cut.
         cleaned = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]+", "", cleaned)
-        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        sentences = _SENTENCE_SPLIT_RE.split(cleaned)
         summary = ""
         for candidate in sentences:
             # Drop leading heading / list markers from the candidate sentence.
@@ -936,7 +946,7 @@ class SemanticCompressor:
         cleaned = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]+", "", cleaned)
         kept: list[str] = []
         used = 0
-        for candidate in re.split(r"(?<=[.!?])\s+", cleaned):
+        for candidate in _SENTENCE_SPLIT_RE.split(cleaned):
             candidate = re.sub(r"^\s*#{1,6}\s+", "", candidate)
             candidate = re.sub(r"^\s*[-*+]\s+", "", candidate)
             candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)

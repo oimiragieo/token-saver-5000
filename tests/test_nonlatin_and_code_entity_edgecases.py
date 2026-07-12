@@ -109,3 +109,45 @@ def test_apostrophe_entity_not_truncated():
     c = _c()
     ents = c._extract_key_entities("The book was published by O'Reilly Media last year.")
     assert "O'Reilly" in ents
+
+
+def test_cjk_summary_selects_first_sentence_not_whole_paragraph():
+    # dogfood 2026-07-12 (#212 remainder): the '.!?' splitter can't segment on the
+    # full-width CJK terminator '。', so a multi-sentence CJK paragraph collapsed into
+    # ONE candidate and the summary returned the WHOLE blob. Split on '。！？' too so a
+    # CJK summary is the first CJK sentence -- matching the English "first sentence"
+    # contract. 'Fly.io' internal '.' has no trailing space so it still never splits.
+    c = _c()
+    s = c._generate_summary("服务运行在 Fly.io 上。数据库使用 Supabase。数据缓存用 Redis。")
+    assert s == "服务运行在 Fly.io 上。", s
+
+
+def test_japanese_summary_selects_first_sentence():
+    c = _c()
+    s = c._generate_summary("これはテストです。二番目の文はここにあります。")
+    assert s == "これはテストです。", s
+
+
+def test_fullwidth_question_exclamation_terminators_split():
+    # Full-width '！' and '？' terminate a CJK sentence too.
+    c = _c()
+    assert c._generate_summary("你好吗？我很好。") == "你好吗？"
+    assert c._generate_summary("太好了！下一句在这里。") == "太好了！"
+
+
+def test_cjk_split_does_not_regress_latin_first_sentence():
+    # Latin behavior must be byte-identical: '。！？' never appear in Latin text, so
+    # the ASCII '(?<=[.!?])\s+' path is unchanged.
+    c = _c()
+    assert c._generate_summary("First sentence here. Second one follows.") == "First sentence here."
+    # 'Fly.io' internal dot (no trailing space) must not split.
+    assert c._generate_summary("Deploy on Fly.io today. More text.") == "Deploy on Fly.io today."
+
+
+def test_extractive_anchor_respects_cjk_sentence_boundary():
+    # The anchor render keeps whole sentences up to budget; with CJK sentences now
+    # individually segmented, a budget-1 render lands the first sentence cleanly on
+    # '。' instead of spilling the whole blob.
+    c = _c()
+    out = c._extractive_anchor_content("第一句在这里。第二句在这里。第三句在这里。", token_budget=1)
+    assert out == "第一句在这里。", out

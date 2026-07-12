@@ -2077,6 +2077,11 @@ Dogfood 2026-07-12 (#212 non-English + code edge cases): two perceived-quality
 | `def` | `test_code_syntax_entity_recovers_clean_identifier` |
 | `def` | `test_legit_entities_with_dots_slashes_underscores_preserved` |
 | `def` | `test_apostrophe_entity_not_truncated` |
+| `def` | `test_cjk_summary_selects_first_sentence_not_whole_paragraph` |
+| `def` | `test_japanese_summary_selects_first_sentence` |
+| `def` | `test_fullwidth_question_exclamation_terminators_split` |
+| `def` | `test_cjk_split_does_not_regress_latin_first_sentence` |
+| `def` | `test_extractive_anchor_respects_cjk_sentence_boundary` |
 
 #### `test_observability.py`
 
