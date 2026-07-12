@@ -901,6 +901,11 @@ class SemanticCompressor:
         # Strip inline markdown so the summary reads as prose, not raw markup.
         cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
         cleaned = cleaned.replace("`", "")
+        # Strip paired markdown emphasis so bold/italic markers don't leak into the
+        # summary (dogfood 2026-07-12: `**token-bucket**` leaked verbatim). Asterisk
+        # emphasis only — underscores are left alone so snake_case identifiers survive.
+        cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned)  # **bold** -> bold
+        cleaned = re.sub(r"\*(.+?)\*", r"\1", cleaned)  # *italic* -> italic
         # Strip mkdocs/python-markdown admonition markers ('!!! note', '??? tip "Title"')
         # BEFORE the split: the sentence splitter treats '!!!' as a sentence end, so a
         # leading admonition fragmented into a bare "!!!" summary (dogfood 2026-07-11).
@@ -951,6 +956,10 @@ class SemanticCompressor:
             return ""
         cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # [text](url) -> text
         cleaned = cleaned.replace("`", "")
+        # Strip paired markdown emphasis (see _generate_summary): asterisk bold/italic
+        # otherwise leaks into a kept anchor's extractive render (dogfood 2026-07-12).
+        cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned)  # **bold** -> bold
+        cleaned = re.sub(r"\*(.+?)\*", r"\1", cleaned)  # *italic* -> italic
         cleaned = _strip_admonition_markers(cleaned)
         # Strip line-initial markdown heading markers (see _generate_summary): a
         # mid-content '##' otherwise survives when multiple heading lines collapse

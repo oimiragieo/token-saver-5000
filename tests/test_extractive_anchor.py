@@ -68,3 +68,19 @@ def test_deterministic_source_order_preserved():
     text = "One statement. Two statement. Three statement."
     out = svc._extractive_anchor_content(text, 100)
     assert out.index("One") < out.index("Two") < out.index("Three")
+
+
+def test_strips_bold_italic_emphasis():
+    """Dogfood 2026-07-12: `**token-bucket**` leaked its asterisks into a kept
+    anchor's extractive render. Strip paired `*`/`**` emphasis; keep the inner
+    words AND snake_case identifiers (underscore emphasis is left alone)."""
+    svc = _bare()
+    text = "The edge enforces a **token-bucket** rate limiter and an *async* queue."
+    out = svc._extractive_anchor_content(text, 100)
+    assert "**" not in out
+    assert "*" not in out
+    assert "token-bucket" in out  # inner text preserved
+    assert "async" in out
+    # snake_case identifiers must survive (underscores are not emphasis)
+    out2 = svc._extractive_anchor_content("The gc_kb_query tool is fast here.", 100)
+    assert "gc_kb_query" in out2

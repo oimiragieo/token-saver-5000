@@ -126,3 +126,20 @@ class TestSummaryMarkdownStrip:
         # Regression: plain prose must still yield the first sentence verbatim.
         s = c._generate_summary("First sentence is here. Second follows.")
         assert s == "First sentence is here.", s
+
+    def test_bold_italic_emphasis_stripped(self):
+        """Dogfood 2026-07-12: a live read_skeleton summary leaked `**` markers
+        (`enforces a **token-bucket** rate limiter`). Strip paired asterisk
+        emphasis; keep inner words AND snake_case identifiers intact."""
+        c = _bare_compressor()
+        s = c._generate_summary("The API enforces a **token-bucket** rate limiter here.")
+        assert "**" not in s, s
+        assert "*" not in s, s
+        assert "token-bucket" in s, s
+
+    def test_italic_emphasis_stripped_but_underscores_kept(self):
+        c = _bare_compressor()
+        s = c._generate_summary("The *async* gc_kb_query handler runs first here.")
+        assert "*" not in s, s
+        assert "async" in s, s
+        assert "gc_kb_query" in s, s  # snake_case survives (underscores untouched)

@@ -1361,6 +1361,7 @@ Model-free unit tests for `_extractive_anchor_content` (world-class audit #1).
 | `def` | `test_strips_markdown_noise` |
 | `def` | `test_budget_truncates_before_second_sentence` |
 | `def` | `test_deterministic_source_order_preserved` |
+| `def` | `test_strips_bold_italic_emphasis` |
 
 #### `test_extractive_baseline.py`
 
