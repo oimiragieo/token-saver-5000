@@ -622,9 +622,16 @@ class SemanticCompressor:
                 ]
                 semantic_units = paragraphs
                 if len(semantic_units) < 3:
+                    # #212 (edge-case hardening): use the CJK-aware splitter, not the
+                    # ASCII-only ``[.!?]`` regex -- a dense CJK document with no
+                    # paragraph breaks and no ASCII terminators would otherwise return
+                    # ONE "sentence" (the whole text), so semantic chunking could never
+                    # subdivide it. ``_SENTENCE_SPLIT_RE`` also splits on full-width
+                    # ``。！？`` and is byte-identical to the old regex for pure-ASCII
+                    # text (no behavior change for existing corpora).
                     semantic_units = [
                         sentence.strip()
-                        for sentence in re.split(r"(?<=[.!?])\s+", text)
+                        for sentence in _SENTENCE_SPLIT_RE.split(text)
                         if sentence.strip()
                     ]
 
@@ -716,9 +723,14 @@ class SemanticCompressor:
                 if current_chunk:
                     chunks.append(current_chunk)
 
-                # If single paragraph is too large, split by sentences
+                # If single paragraph is too large, split by sentences.
+                # #212 (edge-case hardening): CJK-aware splitter -- see the semantic-
+                # chunking branch above for why the ASCII-only ``[.!?]`` regex silently
+                # collapsed a dense, punctuation-free (or full-width-punctuated) CJK
+                # paragraph into ONE oversized "sentence"/mega-chunk instead of
+                # subdividing it.
                 if para_tokens > max_chunk_size:
-                    sentences = re.split(r"(?<=[.!?])\s+", para)
+                    sentences = _SENTENCE_SPLIT_RE.split(para)
                     current_chunk = ""
                     for sent in sentences:
                         if self._count_tokens(current_chunk + " " + sent) <= max_chunk_size:

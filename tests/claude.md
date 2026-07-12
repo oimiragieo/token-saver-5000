@@ -1172,6 +1172,26 @@ Comprehensive Edge Case and Error Handling Tests
 | `class` | `TestFileSyncEdgeCases` |
 | `class` | `TestVersionManagerEdgeCases` |
 
+#### `test_edgecase_hardening_212.py`
+
+Task #212 edge-case hardening (2026-07-12 gotcontext.ai engine audit).
+
+| Kind | Name |
+|------|------|
+| `def` | `_bare_semantic_compressor` |
+| `def` | `test_dense_cjk_oversized_paragraph_splits_into_multiple_chunks` |
+| `def` | `test_dense_cjk_semantic_strategy_also_splits` |
+| `def` | `test_ascii_oversized_paragraph_regression_unchanged` |
+| `def` | `test_find_intra_duplicates_respects_max_nodes_cap` |
+| `def` | `test_intra_dedup_bounded_time_on_large_near_duplicate_corpus` |
+| `def` | `test_minified_single_line_js_multiple_functions_bounded` |
+| `def` | `test_rust_generic_signature_never_bisected_mid_line` |
+| `def` | `test_go_generic_signature_never_bisected_mid_line` |
+| `def` | `test_split_json_records_preserves_ambiguous_leaf_types_byte_identical` |
+| `def` | `test_detect_structured_content_whitespace_variants_return_none` |
+| `def` | `manual_case6_needle_in_long_table_survives_at_any_position` |
+| `def` | `manual_case12_fact_at_midpoint_vs_boundary_recall_parity` |
+
 #### `test_embedding_quantizer.py`
 
 Tests for TurboQuant-inspired embedding quantizer.
