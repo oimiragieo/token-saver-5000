@@ -2061,6 +2061,21 @@ Unit tests for shared node identity parsing helpers.
 | `def` | `test_extract_file_id_ignores_non_index_n_segments` |
 | `def` | `test_collect_file_ids_supports_mixed_node_formats` |
 
+#### `test_nonlatin_and_code_entity_edgecases.py`
+
+Dogfood 2026-07-12 (#212 non-English + code edge cases): two perceived-quality
+
+| Kind | Name |
+|------|------|
+| `def` | `_c` |
+| `def` | `test_nonlatin_summary_strips_markdown_heading` |
+| `def` | `test_latin_summary_still_strips_heading_regression` |
+| `def` | `test_punctuation_only_fragment_still_skipped` |
+| `def` | `test_extractive_anchor_keeps_nonlatin_sentence` |
+| `def` | `test_code_syntax_entity_recovers_clean_identifier` |
+| `def` | `test_legit_entities_with_dots_slashes_underscores_preserved` |
+| `def` | `test_apostrophe_entity_not_truncated` |
+
 #### `test_observability.py`
 
 Tests for OpenTelemetry distributed tracing.

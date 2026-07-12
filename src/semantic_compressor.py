@@ -842,6 +842,15 @@ class SemanticCompressor:
                 # .strip() only touches the ends, so mid-word underscores
                 # (gc_kb_query) and slashes (TCP/IP) are preserved.
                 cleaned = word.strip(".,;:!?\"'()[]{}*")
+                # Truncate at the first EMBEDDED paren/double-quote: a code fragment
+                # like `SettlementError(f"failed` (dogfood 2026-07-12, fenced code)
+                # recovers to the clean identifier `SettlementError` instead of
+                # surfacing raw code syntax as an entity. `.strip()` only touches ends,
+                # so a mid-word '('/')'/'"' survives — this cuts it. The apostrophe is
+                # deliberately EXCLUDED (droid gate): a legit entity like O'Reilly must
+                # not truncate to "O". The '(' still catches the code case. Legit
+                # entities (Fly.io, TCP/IP, gc_kb_query) contain no parens/quotes.
+                cleaned = re.split(r'[()"]', cleaned, maxsplit=1)[0]
                 # An entity is a WORD, not a link. '://' catches URLs (codex
                 # 2026-07-11: a bare '/' wrongly dropped legit tech entities like
                 # TCP/IP, CI/CD, AC/DC); '](' catches a malformed/split markdown
@@ -883,7 +892,12 @@ class SemanticCompressor:
             candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
             candidate = re.sub(r"\s+", " ", candidate).strip()  # collapse internal whitespace
             # Require substantive content: skip punctuation-only fragments ('!!!', '---').
-            if candidate and re.search(r"[A-Za-z0-9]", candidate):
+            # `[^\W_]` = any Unicode letter or digit (no '_'), so a non-Latin sentence
+            # (CJK/Cyrillic/Arabic) IS substantive and gets the markdown-heading strip
+            # above — the old ASCII-only `[A-Za-z0-9]` treated every non-Latin line as
+            # non-substantive, so it fell to the `cleaned.strip()` fallback that retains
+            # the leading '#'/'-' markers (dogfood 2026-07-12: `Summary: "# 部署手册"`).
+            if candidate and re.search(r"[^\W_]", candidate):
                 summary = candidate
                 break
         if not summary:
@@ -917,7 +931,9 @@ class SemanticCompressor:
             candidate = re.sub(r"^\s*\d+\.\s+", "", candidate)
             candidate = re.sub(r"\s+", " ", candidate).strip()
             # Skip punctuation-only fragments ('!!!', '---') -- not substantive content.
-            if not candidate or not re.search(r"[A-Za-z0-9]", candidate):
+            # `[^\W_]` matches any Unicode letter/digit (no '_'), so a non-Latin
+            # sentence still counts as substantive (dogfood 2026-07-12: CJK/Cyrillic).
+            if not candidate or not re.search(r"[^\W_]", candidate):
                 continue
             t = self._count_tokens(candidate)
             if kept and used + t > token_budget:
