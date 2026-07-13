@@ -1,5 +1,16 @@
 # gotcontext.ai — Go-To-Market Plan
 
+> ⚠️ **ARCHIVED / SUPERSEDED (2026-07-13).** This is the original GTM vision doc and its
+> figures are historical — do NOT quote them as current. Stale here: "126 MCP tools" (now
+> **158 Pro / 23 Free**, parity-locked to `_PRO_TOOLS` by `api/tests/test_tool_count_parity.py`),
+> "$29 Pro" (live pricing is **Pro $49 / Team $199 / Business $199**), the "$8.2M / $30–50M"
+> revenue projections (aspirational, unvalidated), and the "five product lines" thesis. The
+> 2026-07-12 codebase+SaaS audit reframed the strategy to a **single focus — "compressed team
+> memory"** (compression = engine, knowledge continuity = product, security = trust) with
+> ruthless prioritization: finish the launch blockers (#118 backups, #211 pgvector) and prove
+> 3 paying design-partner teams before building more lines. Current source of truth: the root
+> `CLAUDE.md` roadmap table + `docs/BACKLOG.md`. Kept for history, not for planning.
+
 **Product**: gotcontext.ai — The context optimization and AI intelligence platform
 **Tagline**: "Every token your AI reads costs money. We make sure it only reads what matters."
 **Founder**: CEO (business), Claude Code (engineering)
