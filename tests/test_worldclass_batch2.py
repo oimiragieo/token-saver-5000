@@ -40,6 +40,19 @@ class TestEntityStopwordFilter:
         ents = c._extract_key_entities("We deploy on Redis, Postgres; plus Fly infra.")
         assert "Redis" in ents and "Postgres" in ents, ents  # not "Redis," / "Postgres;"
 
+    def test_python_literals_not_entities(self):
+        """#306 (dogfood 2026-07-13): code ingested as text surfaced `None` as a
+        Key entity (`last = None`). Python literals None/True/False are never
+        domain entities; a real class name (TokenBucket) is still kept."""
+        c = _bare_compressor()
+        ents = c._extract_key_entities("The bucket returns None when True or False here.")
+        assert "None" not in ents, ents
+        assert "True" not in ents, ents
+        assert "False" not in ents, ents
+        ents2 = c._extract_key_entities("We use the TokenBucket limiter and it returns None.")
+        assert "TokenBucket" in ents2, ents2  # real class name survives
+        assert "None" not in ents2, ents2
+
 
 class TestEntityMarkdownLinkStrip:
     """#286 (dogfood 2026-07-11): a `[text](url)` markdown link leaked its URL into

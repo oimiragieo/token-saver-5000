@@ -842,6 +842,14 @@ class SemanticCompressor:
                 "All",
                 "Both",
                 "Because",
+                # Python literals that surface capitalized when code is ingested as
+                # text (dogfood 2026-07-13: `Key entities: None, ...` on a pasted .py).
+                # Never a meaningful domain entity. `self`/`cls` are lowercase so the
+                # isupper() gate already excludes them; `Exception` is kept — a real
+                # class name, not a literal.
+                "None",
+                "True",
+                "False",
             }
         )
         # Strip well-formed markdown links so their URLs never leak into entities
