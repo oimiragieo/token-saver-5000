@@ -27,6 +27,7 @@ import numpy as np
 from .constants import DEFAULT_TEXT_MODEL
 from .semantic_compressor import SemanticCompressor, SemanticNode, FidelityLevel
 from .code_compressor import CodeSemanticCompressor, CodeChunk
+from .node_identity import extract_file_id_from_node
 
 logger = logging.getLogger(__name__)
 
@@ -249,8 +250,14 @@ class CodeCompressionAdapter:
         removed = 0
 
         # Text compressor
+        # SCOPE-SAFE match (codex#1 data-loss fix, 2026-07-13): bare
+        # k.startswith(file_id) also deleted PREFIX-SIBLING documents — deleting
+        # "foo" removed "foobar_n0", and deleting "foo_bar" removed
+        # "foo_bar_baz_n0". extract_file_id_from_node inverts BOTH node-id
+        # formats ("{file_id}_n{i}" and "{file_id}::{sym}") so only the exact
+        # document's chunks are removed.
         tc = self._text_compressor
-        chunk_keys = [k for k in tc.chunks if k.startswith(file_id)]
+        chunk_keys = [k for k in tc.chunks if extract_file_id_from_node(k) == file_id]
         for k in chunk_keys:
             del tc.chunks[k]
             removed += 1
@@ -264,7 +271,7 @@ class CodeCompressionAdapter:
         # Code compressor (if loaded)
         if self._code_compressor is not None:
             cc = self._code_compressor
-            code_chunk_keys = [k for k in cc.chunks if k.startswith(file_id)]
+            code_chunk_keys = [k for k in cc.chunks if extract_file_id_from_node(k) == file_id]
             for k in code_chunk_keys:
                 del cc.chunks[k]
                 removed += 1

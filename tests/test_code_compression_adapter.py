@@ -535,6 +535,54 @@ class TestDeleteDocumentFromMemoryPropertyCopy:
                 "doc1_n0" in mock_text.chunks
             ), "Property returned a reference, not a copy -- the contract changed!"
 
+    def test_delete_document_from_memory_spares_prefix_sibling_documents(self):
+        """codex#1 data-loss regression (2026-07-13): bare k.startswith(file_id)
+        also deleted PREFIX-SIBLING documents. Deleting 'foo' must NOT remove
+        'foobar_n0', and deleting 'foo_bar' must NOT remove 'foo_bar_baz_n0'
+        (file_ids legally contain underscores). extract_file_id_from_node
+        inverts the '{file_id}_n{i}' + '{file_id}::{sym}' formats so only the
+        exact document's chunks are removed."""
+        with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
+            mock_text = Mock()
+            # 'foo' owns foo_n0/foo_n1; 'foobar' + 'foo_bar_baz' are prefix siblings.
+            real_chunks = {
+                "foo_n0": Mock(),
+                "foo_n1": Mock(),
+                "foobar_n0": Mock(),
+                "foo_bar_baz_n0": Mock(),
+            }
+            mock_text.chunks = real_chunks
+            mock_text.graphs = {"foo": Mock(), "foobar": Mock()}
+            mock_text.file_metadata = {"foo": {"size": 1}, "foobar": {"size": 2}}
+            mock_text_cls.return_value = mock_text
+
+            # Code compressor path: 'foo::a' owned by 'foo'; 'foobar::b' is a sibling.
+            mock_code = Mock()
+            mock_code.chunks = {"foo::a": Mock(), "foobar::b": Mock()}
+            mock_code.graphs = {}
+            mock_code.file_metadata = {}
+
+            from src.code_compression_adapter import CodeCompressionAdapter
+
+            adapter = CodeCompressionAdapter()
+            adapter._code_compressor = mock_code
+
+            removed = adapter.delete_document_from_memory("foo")
+
+            # Only foo's own chunks removed: foo_n0, foo_n1 (text) + foo::a (code) = 3
+            assert removed == 3, f"Expected 3 removed (foo's own), got {removed}"
+            assert "foo_n0" not in mock_text.chunks
+            assert "foo_n1" not in mock_text.chunks
+            assert "foo::a" not in mock_code.chunks
+            # Prefix siblings MUST survive (the data-loss bug).
+            assert "foobar_n0" in mock_text.chunks, "PREFIX SIBLING foobar_n0 wrongly deleted"
+            assert (
+                "foo_bar_baz_n0" in mock_text.chunks
+            ), "PREFIX SIBLING foo_bar_baz_n0 wrongly deleted"
+            assert "foobar::b" in mock_code.chunks, "PREFIX SIBLING foobar::b wrongly deleted"
+            assert "foobar" in mock_text.graphs
+            assert "foobar" in mock_text.file_metadata
+
     def test_delete_document_from_memory_mutates_real_underlying_dict(self):
         """Regression lock: delete_document_from_memory must remove from real dict."""
         with patch("src.code_compression_adapter.SemanticCompressor") as mock_text_cls:
