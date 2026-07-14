@@ -43,6 +43,28 @@ def test_latin_summary_still_strips_heading_regression():
     assert c._generate_summary("## Section: overview here.") == "Section: overview here."
 
 
+def test_summary_strips_blockquote_markers():
+    # Dogfood 2026-07-14 (our OWN llms.txt): a multi-line markdown blockquote
+    # (`> line one\n> line two`) whitespace-collapsed into one candidate and leaked
+    # the '>' markers mid-summary ("... graph-based > PageRank-ranked ...").
+    c = _c()
+    out = c._generate_summary(
+        "# gotcontext.ai\n\n> Semantic compression API cuts token usage\n> via PageRank ranking."
+    )
+    assert ">" not in out, f"blockquote marker leaked into summary: {out!r}"
+    assert "Semantic compression API" in out
+    # Nested blockquote markers ('>> ') are stripped too.
+    assert ">" not in c._generate_summary(">> nested quoted line of prose here.")
+
+
+def test_summary_keeps_midline_greater_than_comparison():
+    # A mid-line '>' (comparison / HTML) is NOT a line-initial blockquote marker,
+    # so it must survive the strip (only line-initial '>' is cut).
+    c = _c()
+    out = c._generate_summary("peak RSS must stay O(input) where a > b holds for all inputs.")
+    assert ">" in out
+
+
 def test_punctuation_only_fragment_still_skipped():
     c = _c()
     # A pure-punctuation first fragment must be skipped in favour of the real sentence

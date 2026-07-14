@@ -925,6 +925,13 @@ class SemanticCompressor:
         # 2026-07-12: CJK `部署手册 ## 概述 ...`). `#` mid-word (C#, F#) is NOT a
         # line-start heading, so it survives; only line-initial `#{1,6} ` is cut.
         cleaned = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]+", "", cleaned)
+        # Strip markdown blockquote markers at the START OF EVERY LINE: a multi-line
+        # blockquote (`> line one\n> line two`) whitespace-collapses into one candidate
+        # and otherwise leaks the `>` markers mid-summary (dogfood 2026-07-14: our own
+        # llms.txt `> Semantic compression API ... > PageRank-ranked ...`). Nested
+        # blockquotes (`>> `) are stripped too. A `>` mid-line (e.g. `a > b`) is NOT
+        # line-initial, so comparisons / HTML survive.
+        cleaned = re.sub(r"(?m)^[ \t]*(?:>[ \t]?)+", "", cleaned)
         sentences = _SENTENCE_SPLIT_RE.split(cleaned)
         summary = ""
         for candidate in sentences:

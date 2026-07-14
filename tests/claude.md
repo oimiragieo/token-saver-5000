@@ -2111,6 +2111,8 @@ Dogfood 2026-07-12 (#212 non-English + code edge cases): two perceived-quality
 | `def` | `_c` |
 | `def` | `test_nonlatin_summary_strips_markdown_heading` |
 | `def` | `test_latin_summary_still_strips_heading_regression` |
+| `def` | `test_summary_strips_blockquote_markers` |
+| `def` | `test_summary_keeps_midline_greater_than_comparison` |
 | `def` | `test_punctuation_only_fragment_still_skipped` |
 | `def` | `test_extractive_anchor_keeps_nonlatin_sentence` |
 | `def` | `test_mid_content_heading_marker_stripped_all_langs` |
