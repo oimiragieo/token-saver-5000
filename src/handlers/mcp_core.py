@@ -125,9 +125,11 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
             name="gc_read_doc",
             description=(
                 "Read a gotcontext product/API documentation page as markdown. "
-                "Pass a full URL (e.g. 'https://gotcontext.ai/docs#authentication') "
-                "returned by gc_search_docs, or a known slug such as 'authentication' "
-                "or 'mcp-server' (slug auto-resolves to the matching docs anchor). "
+                "Recommended: pass a full docs URL returned by gc_search_docs "
+                "(e.g. 'https://gotcontext.ai/docs' or 'https://gotcontext.ai/docs/security-scanning'). "
+                "A bare slug is resolved best-effort against indexed docs; if it names a "
+                "section anchor rather than a standalone doc, the call returns ranked "
+                "gc_search_docs suggestions instead of the page. "
                 "Returns JSON with markdown, source_url, and length_tokens."
             ),
             inputSchema={
@@ -136,8 +138,10 @@ def setup_mcp_tools(profile: str = "full") -> List[Tool]:
                     "url_or_slug": {
                         "type": "string",
                         "description": (
-                            "A full docs URL returned by gc_search_docs, or a known "
-                            "docs slug such as 'authentication' or 'mcp-server'."
+                            "A full docs URL returned by gc_search_docs (recommended), "
+                            "or a docs slug. A slug that names a section anchor rather "
+                            "than a standalone doc returns gc_search_docs suggestions — "
+                            "call gc_search_docs first to get the exact URL."
                         ),
                     },
                     **SCOPE_PROPERTIES,
