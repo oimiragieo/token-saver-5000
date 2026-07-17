@@ -53,6 +53,33 @@ class TestEntityStopwordFilter:
         assert "TokenBucket" in ents2, ents2  # real class name survives
         assert "None" not in ents2, ents2
 
+    def test_section_heading_words_not_entities(self):
+        """#360 (dogfood 2026-07-16): generic section-heading words (Overview,
+        Design) leaked into Key entities from markdown `## Overview` / `## Design`
+        blocks. A bare structural heading is never a useful domain entity; real
+        entities (Redis) still survive."""
+        c = _bare_compressor()
+        ents = c._extract_key_entities("Read the Overview and Design sections for Redis details.")
+        assert "Overview" not in ents, ents
+        assert "Design" not in ents, ents
+        assert "Redis" in ents, ents  # real entity survives
+
+    def test_common_adverbs_and_allcaps_emphasis_not_entities(self):
+        """#360 (dogfood 2026-07-16): common adverbs capitalized mid-sentence
+        (Only) and all-caps emphasis of function words (NOT — the exact-match
+        stopword check missed it because only title-case "Not" was listed) leaked
+        as Key entities. A real acronym (IT = Information Technology) must NOT be
+        dropped by the all-caps additions."""
+        c = _bare_compressor()
+        ents = c._extract_key_entities("You must NOT deploy Only to Postgres.")
+        assert "NOT" not in ents, ents
+        assert "Only" not in ents, ents
+        assert "Postgres" in ents, ents  # real entity survives
+        # Guard against over-filtering: a genuine all-caps acronym still surfaces.
+        ents2 = c._extract_key_entities("The IT department runs Kubernetes.")
+        assert "IT" in ents2, ents2
+        assert "Kubernetes" in ents2, ents2
+
 
 class TestEntityMarkdownLinkStrip:
     """#286 (dogfood 2026-07-11): a `[text](url)` markdown link leaked its URL into

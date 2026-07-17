@@ -850,6 +850,62 @@ class SemanticCompressor:
                 "None",
                 "True",
                 "False",
+                # Generic markdown section-heading / structural words (#360, dogfood
+                # 2026-07-16: `## Overview` / `## Design` leaked "Overview"/"Design"
+                # as Key entities). Unlike _generate_summary, this path does NOT strip
+                # `#` heading markers, so a heading word survives the isupper() gate.
+                # A bare structural heading is never a useful domain entity.
+                "Overview",
+                "Summary",
+                "Introduction",
+                "Conclusion",
+                "Background",
+                "Motivation",
+                "Abstract",
+                "Appendix",
+                "Contents",
+                "Prerequisites",
+                "Requirements",
+                "Installation",
+                "Notes",
+                "Example",
+                "Examples",
+                "References",
+                # "Design" kept per CEO #360 (explicitly named). codex flagged
+                # Architecture/Configuration/Reference/Well/Note/Usage as words that
+                # CAN be legit single-word domain entities (the stoplist can't tell a
+                # heading from mid-sentence use) — those were dropped from the list.
+                "Design",
+                # Common adverbs / connectives capitalized mid-sentence (#360:
+                # "Only" leaked). Never domain entities.
+                "Only",
+                "Just",
+                "Even",
+                "Once",
+                "Still",
+                "Yet",
+                "Again",
+                "Perhaps",
+                "Instead",
+                "Otherwise",
+                "Meanwhile",
+                "Therefore",
+                "Thus",
+                "Hence",
+                "Rather",
+                "Furthermore",
+                "Moreover",
+                "Additionally",
+                # ALL-CAPS emphasis of pure function words (#360: `must NOT fail`
+                # leaked "NOT"). The exact-match check above only listed title-case
+                # ("Not"), so the SHOUTED form slipped through. Kept TIGHT to
+                # unambiguous connectives/negations — deliberately NOT adding 2-letter
+                # forms like IT/US/OR whose upper-case IS a legit acronym
+                # (Information Technology / United States) that must still surface.
+                "NOT",
+                "AND",
+                "BUT",
+                "NOR",
             }
         )
         # Strip well-formed markdown links so their URLs never leak into entities
