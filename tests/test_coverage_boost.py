@@ -1,14 +1,14 @@
 """
 Coverage boost tests for uncovered code paths.
 
-Covers: visualization_handlers, graceful_degradation, experimental_handlers,
+Covers: visualization_handlers, experimental_handlers,
 graph_visualizer, experience_synthesis, compression_presets, validation_hooks.
 
 All tests use mocks to avoid heavy dependencies (ChromaDB, ONNX, PyTorch, etc.).
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -218,131 +218,9 @@ class TestHandleExplainCompressionDecision:
 # =============================================================================
 
 
-class TestGracefulDegradationEmbedAllFail:
-    """Test error logging when all embedding tiers fail."""
-
-    @pytest.mark.asyncio
-    async def test_all_tiers_fail_raises_last_exception(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.encode.side_effect = RuntimeError("model unavailable")
-        with pytest.raises(RuntimeError, match="model unavailable"):
-            await GracefulDegradation.embed_with_fallback(["hello"], mgr)
-
-    @pytest.mark.asyncio
-    async def test_fallback_to_later_tier(self):
-        from src.graceful_degradation import GracefulDegradation
-        import numpy as np
-
-        mgr = AsyncMock()
-        calls = []
-
-        async def encode_side(texts, tier=None):
-            calls.append(tier)
-            if tier in ("STANDARD", "ONNX"):
-                raise RuntimeError("fail")
-            return np.array([[1.0, 2.0]])
-
-        mgr.encode.side_effect = encode_side
-        result = await GracefulDegradation.embed_with_fallback(["hi"], mgr)
-        assert result.shape == (1, 2)
-        assert "TFIDF" in calls
-
-
-class TestGracefulDegradationPersist:
-    """Test persist_with_fallback success path."""
-
-    @pytest.mark.asyncio
-    async def test_save_to_disk_success(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.save_document.return_value = True
-        result = await GracefulDegradation.persist_with_fallback("d1", {"k": "v"}, mgr)
-        assert result["success"] is True
-        assert result["mode"] == "disk"
-
-    @pytest.mark.asyncio
-    async def test_save_returns_false(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.save_document.return_value = False
-        result = await GracefulDegradation.persist_with_fallback("d1", {}, mgr)
-        assert result["success"] is False
-        assert result["mode"] == "memory"
-
-    @pytest.mark.asyncio
-    async def test_save_raises_exception(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.save_document.side_effect = IOError("disk full")
-        result = await GracefulDegradation.persist_with_fallback("d1", {}, mgr)
-        assert result["success"] is False
-        assert "error" in result
-
-
-class TestGracefulDegradationFileSync:
-    """Test file_sync_with_fallback success path."""
-
-    @pytest.mark.asyncio
-    async def test_full_validation_success(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.check_staleness.return_value = True
-        result = await GracefulDegradation.file_sync_with_fallback("/path/file.py", mgr)
-        assert result["is_stale"] is True
-        assert result["mode"] == "full_validation"
-
-    @pytest.mark.asyncio
-    async def test_os_error_fallback(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.check_staleness.side_effect = OSError("permission denied")
-        result = await GracefulDegradation.file_sync_with_fallback("/path", mgr)
-        assert result["is_stale"] is False
-        assert result["mode"] == "cached_metadata"
-        assert "warning" in result
-
-
-class TestGracefulDegradationVersionHistory:
-    """Test version_history_with_fallback."""
-
-    @pytest.mark.asyncio
-    async def test_full_diff_success(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.add_version.return_value = "v42"
-        result = await GracefulDegradation.version_history_with_fallback(
-            "d1", {"timestamp": 123, "version": 1}, mgr
-        )
-        assert result["success"] is True
-        assert result["mode"] == "full_diff"
-        assert result["version_id"] == "v42"
-
-    @pytest.mark.asyncio
-    async def test_fallback_to_metadata_only(self):
-        from src.graceful_degradation import GracefulDegradation
-
-        mgr = AsyncMock()
-        mgr.add_version.side_effect = RuntimeError("diff failed")
-        result = await GracefulDegradation.version_history_with_fallback(
-            "d1", {"timestamp": 123, "version": 2}, mgr
-        )
-        assert result["success"] is False
-        assert result["mode"] == "metadata_only"
-        assert result["metadata"]["diff"] is None
-        assert result["metadata"]["file_id"] == "d1"
-
-
-# =============================================================================
-# 3. Experimental Handlers (lines 540-783)
-# =============================================================================
+# NOTE (2026-07-17 cleanup, B4): the four TestGracefulDegradation* classes
+# were removed with the dead src/graceful_degradation.py module (zero
+# production importers).
 
 
 class TestHandleVerifyCompression:

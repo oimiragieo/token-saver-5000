@@ -72,18 +72,6 @@ Attention-guided pruning for context compression.
 | `def` | `score_nodes_by_relevance` |
 | `def` | `prune_by_relevance` |
 
-#### `audited_graph.py`
-
-Audited Semantic Graph with Provenance Tracking
-
-| Kind | Name |
-|------|------|
-| `class` | `NodeProvenance` |
-| `class` | `QualityHistory` |
-| `class` | `AuditedSemanticNode` |
-| `class` | `CompositionEdge` |
-| `class` | `AuditedSemanticGraph` |
-
 #### `batch_manager.py`
 
 Batch Compression Manager for Token Saver 5000
@@ -426,15 +414,6 @@ LRU Embedding Cache for Token Saver 5000 (v0.6.0)
 | `class` | `LRUEmbeddingCache` |
 | `def` | `get_embedding_cache` |
 
-#### `embedding_quantizer.py`
-
-TurboQuant-inspired embedding quantization for semantic compression.
-
-| Kind | Name |
-|------|------|
-| `class` | `QuantizedEmbedding` |
-| `class` | `EmbeddingQuantizer` |
-
 #### `embeddings.py`
 
 Centralized Embedding Management for Semantic Modulator (v0.6.0)
@@ -582,14 +561,6 @@ Generative rewrite prompt template generator.
 | `def` | `_estimate_tokens` |
 | `def` | `generate_rewrite_prompt` |
 
-#### `graceful_degradation.py`
-
-Graceful Degradation Strategies for Production Resilience
-
-| Kind | Name |
-|------|------|
-| `class` | `GracefulDegradation` |
-
 #### `graph_visualizer.py`
 
 Graph Visualization Module for Token Saver 5000
@@ -668,14 +639,6 @@ Intra-document redundancy detection and collapse.
 |------|------|
 | `def` | `find_intra_duplicates` |
 | `def` | `collapse_redundant_nodes` |
-
-#### `keyword_anchoring.py`
-
-Keyword anchoring for compression.
-
-| Kind | Name |
-|------|------|
-| `def` | `apply_keyword_anchoring` |
 
 #### `knowledge_compiler.py`
 
@@ -1136,15 +1099,6 @@ Fidelity-Preserving Semantic Compressor
 | `class` | `DiffReingestionResult` |
 | `def` | `compute_adaptive_ratio` |
 | `class` | `SemanticCompressor` |
-
-#### `semantic_ssim.py`
-
-Semantic SSIM (Structural Similarity Index for Semantic Content)
-
-| Kind | Name |
-|------|------|
-| `class` | `SemanticSSIM` |
-| `def` | `interpret_ssim_score` |
 
 #### `server.py`
 

@@ -273,20 +273,6 @@ Audit follow-up #134 regression locks (2026-06-24).
 | `def` | `test_max_dense_cosine_nan_query_returns_zero` |
 | `def` | `test_select_skeleton_ordered_nan_query_falls_back_to_importance` |
 
-#### `test_audited_graph.py`
-
-Tests for Audited Semantic Graph
-
-| Kind | Name |
-|------|------|
-| `class` | `TestNodeProvenance` |
-| `class` | `TestQualityHistory` |
-| `class` | `TestAuditedSemanticNode` |
-| `class` | `TestCompositionEdge` |
-| `class` | `TestAuditedSemanticGraph` |
-| `class` | `TestGraphWithConstraints` |
-| `class` | `TestEdgeCases` |
-
 #### `test_batch_processing.py`
 
 Tests for batch processing functionality (v0.6.0)
@@ -876,10 +862,6 @@ Coverage boost tests for uncovered code paths.
 | `class` | `TestHandleVisualizeGraphHtml` |
 | `class` | `TestHandleExportGraphGraphml` |
 | `class` | `TestHandleExplainCompressionDecision` |
-| `class` | `TestGracefulDegradationEmbedAllFail` |
-| `class` | `TestGracefulDegradationPersist` |
-| `class` | `TestGracefulDegradationFileSync` |
-| `class` | `TestGracefulDegradationVersionHistory` |
 | `class` | `TestHandleVerifyCompression` |
 | `class` | `TestHandleCalculateReward` |
 | `class` | `TestHandleGenerateSyntheticTests` |
@@ -1191,39 +1173,6 @@ Task #212 edge-case hardening (2026-07-12 gotcontext.ai engine audit).
 | `def` | `test_detect_structured_content_whitespace_variants_return_none` |
 | `def` | `manual_case6_needle_in_long_table_survives_at_any_position` |
 | `def` | `manual_case12_fact_at_midpoint_vs_boundary_recall_parity` |
-
-#### `test_embedding_quantizer.py`
-
-Tests for TurboQuant-inspired embedding quantizer.
-
-| Kind | Name |
-|------|------|
-| `def` | `quantizer` |
-| `def` | `rng` |
-| `def` | `random_embedding` |
-| `def` | `unit_embedding` |
-| `def` | `test_quantize_reduces_dim` |
-| `def` | `test_quantize_values_are_int8` |
-| `def` | `test_quantize_values_in_range` |
-| `def` | `test_quantize_scale_positive` |
-| `def` | `test_quantize_residual_bits_size` |
-| `def` | `test_dequantize_returns_input_dim` |
-| `def` | `test_dequantize_roundtrip_cosine_gt_090` |
-| `def` | `test_dequantize_roundtrip_cosine_on_real_like_data` |
-| `def` | `test_memory_per_embedding_under_120_bytes` |
-| `def` | `test_memory_reduction_ratio` |
-| `def` | `test_batch_quantize_length` |
-| `def` | `test_batch_quantize_matches_individual` |
-| `def` | `test_batch_quantize_single_vector` |
-| `def` | `test_similarity_self` |
-| `def` | `test_similarity_orthogonal` |
-| `def` | `test_similarity_ordering_preserved` |
-| `def` | `test_deterministic_rotation_matrix` |
-| `def` | `test_different_seed_different_rotation` |
-| `def` | `test_quantize_constant_vector` |
-| `def` | `test_quantize_zero_vector` |
-| `def` | `test_wrong_dim_raises` |
-| `def` | `test_residual_correction_improves_fidelity` |
 
 #### `test_embeddings_hf_import.py`
 
@@ -2346,7 +2295,6 @@ Tests for Phase 5 features - 11 new capabilities based on 2025 research papers.
 | `class` | `TestMultiLevelSkeleton` |
 | `class` | `TestQueryAdaptiveCompression` |
 | `class` | `TestContextAdvisor` |
-| `class` | `TestKeywordAnchoring` |
 | `class` | `TestCompressionReplay` |
 | `class` | `TestGenerativeRewrite` |
 | `class` | `TestPhase5MCPWiring` |
@@ -2646,9 +2594,6 @@ Comprehensive Tests for Reliability Infrastructure
 | `def` | `test_get_rate_limiter` |
 | `def` | `test_get_rate_limiter_not_configured` |
 | `def` | `test_configure_rate_limiter` |
-| `async def` | `test_graceful_degradation_embedding_fallback` |
-| `async def` | `test_graceful_degradation_persistence_fallback` |
-| `async def` | `test_graceful_degradation_file_sync_fallback` |
 | `async def` | `test_timeout_with_retry_integration` |
 | `async def` | `test_circuit_breaker_with_retry_integration` |
 
@@ -2914,15 +2859,13 @@ Unit Tests for SemanticCompressor
 
 #### `test_semantic_fidelity.py`
 
-Semantic Fidelity Benchmark Tests (v1.0.0 - Phase 1)
+Compression Validation Tests (formerly "Semantic Fidelity Benchmark Tests").
 
 | Kind | Name |
 |------|------|
 | `def` | `sample_document` |
-| `def` | `semantic_ssim_calculator` |
 | `def` | `compressor` |
 | `def` | `count_tokens` |
-| `class` | `TestSSIMQuality` |
 | `class` | `TestCompressionValidation` |
 
 #### `test_server_aliases.py`

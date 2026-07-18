@@ -15,7 +15,6 @@ Total: 30+ comprehensive reliability tests
 
 import asyncio
 import time
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -25,7 +24,6 @@ from src.error_types import (
     RateLimitExceededError,
     RetryExhaustedError,
 )
-from src.graceful_degradation import GracefulDegradation
 from src.rate_limiter import RateLimiter, configure_rate_limiter, get_rate_limiter
 from src.reliability import CircuitBreaker, RetryPolicy, TimeoutManager
 
@@ -473,78 +471,9 @@ def test_configure_rate_limiter():
 
 
 # =============================================================================
-# Graceful Degradation Tests
+# Graceful Degradation Tests — REMOVED (2026-07-17 cleanup, B4) with the dead
+# src/graceful_degradation.py module (zero production importers).
 # =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_graceful_degradation_embedding_fallback():
-    """Test GracefulDegradation.embed_with_fallback() falls back on failure."""
-
-    # Mock embeddings manager with tier fallback
-    embeddings_manager = AsyncMock()
-
-    call_count = {"STANDARD": 0, "ONNX": 0, "TFIDF": 0}
-
-    async def mock_encode(texts, tier):
-        call_count[tier] += 1
-        if tier == "STANDARD":
-            raise RuntimeError("STANDARD tier failed")
-        elif tier == "ONNX":
-            raise RuntimeError("ONNX tier failed")
-        else:  # TFIDF
-            return [[0.1, 0.2, 0.3]]  # Success
-
-    embeddings_manager.encode = mock_encode
-
-    result = await GracefulDegradation.embed_with_fallback(
-        ["test text"],
-        embeddings_manager,
-        preferred_tier="STANDARD",
-    )
-
-    # Should try STANDARD, ONNX, then succeed with TFIDF
-    assert call_count["STANDARD"] == 1
-    assert call_count["ONNX"] == 1
-    assert call_count["TFIDF"] == 1
-    assert result == [[0.1, 0.2, 0.3]]
-
-
-@pytest.mark.asyncio
-async def test_graceful_degradation_persistence_fallback():
-    """Test GracefulDegradation.persist_with_fallback() falls back to memory."""
-
-    # Mock persistence manager that fails
-    persistence_manager = AsyncMock()
-    persistence_manager.save_document.side_effect = OSError("Disk full")
-
-    result = await GracefulDegradation.persist_with_fallback(
-        "doc_id",
-        {"data": "test"},
-        persistence_manager,
-    )
-
-    assert result["success"] is False
-    assert result["mode"] == "memory"
-    assert "warning" in result
-
-
-@pytest.mark.asyncio
-async def test_graceful_degradation_file_sync_fallback():
-    """Test GracefulDegradation.file_sync_with_fallback() uses cached metadata."""
-
-    # Mock file sync manager that fails stat check
-    file_sync_manager = AsyncMock()
-    file_sync_manager.check_staleness.side_effect = OSError("Network unreachable")
-
-    result = await GracefulDegradation.file_sync_with_fallback(
-        "/path/to/file.txt",
-        file_sync_manager,
-    )
-
-    assert result["is_stale"] is False  # Assumes not stale if can't check
-    assert result["mode"] == "cached_metadata"
-    assert "warning" in result
 
 
 # =============================================================================

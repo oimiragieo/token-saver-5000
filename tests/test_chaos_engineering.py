@@ -27,7 +27,6 @@ from src.error_types import (
     CircuitBreakerOpenError,
 )
 from src.reliability import CircuitBreaker, RetryPolicy
-from src.graceful_degradation import GracefulDegradation
 from src.handlers import compression_handlers
 
 # ===========================
@@ -355,29 +354,8 @@ class TestModelCrashes:
 class TestNetworkIssues:
     """Test system resilience to network failures."""
 
-    @pytest.mark.asyncio
-    async def test_network_partition_file_sync(self, handler_context, temp_file):
-        """Test file sync fallback during network partition.
-
-        Expected behavior:
-        - File stat fails with OSError (network partition)
-        - System uses cached metadata
-        - Assumes file not stale (safe default)
-        """
-        from unittest.mock import AsyncMock
-
-        # Create a mock sync_manager with check_staleness that raises OSError
-        mock_sync_manager = type("MockSyncManager", (), {})()
-        mock_sync_manager.check_staleness = AsyncMock(side_effect=OSError(113, "No route to host"))
-
-        # Attempt to check file staleness with mocked sync_manager
-        result = await GracefulDegradation.file_sync_with_fallback(
-            str(temp_file), mock_sync_manager
-        )
-
-        assert result["mode"] == "cached_metadata"
-        assert result["is_stale"] is False  # Safe default
-        assert "warning" in result
+    # NOTE (2026-07-17 cleanup, B4): test_network_partition_file_sync was
+    # removed with the dead src/graceful_degradation.py module.
 
     @pytest.mark.asyncio
     async def test_network_timeout_external_api(self):

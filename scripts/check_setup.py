@@ -89,7 +89,6 @@ def check_imports():
         "src.scar_compressor",
         "src.adaptive_rate_allocator",
         "src.blind_spot_detector",
-        "src.semantic_ssim",
         "src.training_utils",
         "src.server",
     ]

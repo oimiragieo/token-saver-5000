@@ -1,24 +1,20 @@
 """
-Semantic Fidelity Benchmark Tests (v1.0.0 - Phase 1)
+Compression Validation Tests (formerly "Semantic Fidelity Benchmark Tests").
 
-Tests to validate the core claim: **High compression maintains semantic quality**.
-
-This test suite proves that Token Saver 5000 achieves compression while
-preserving semantic fidelity through SSIM structural similarity metrics.
+NOTE (2026-07-17 cleanup, B4): the SSIM half of this suite (TestSSIMQuality +
+the SemanticSSIM fixtures) was removed together with the dead
+``src/semantic_ssim.py`` module — no production caller imported it. The
+compressor-validation tests below exercise the LIVE SemanticCompressor and
+stay.
 
 Test Categories:
-- SSIM Quality Tests (4 tests)
 - Compression Validation Tests (3 tests)
-
-Total: 7 focused semantic fidelity benchmarks
 """
 
-import numpy as np
 import pytest
 import tiktoken
 
 from src.semantic_compressor import SemanticCompressor
-from src.semantic_ssim import SemanticSSIM, interpret_ssim_score
 
 # ===========================
 # Fixtures
@@ -62,12 +58,6 @@ Error correction is complex because measurements collapse quantum states.
 
 
 @pytest.fixture
-def semantic_ssim_calculator():
-    """Create SemanticSSIM calculator instance."""
-    return SemanticSSIM(alpha=0.33, beta=0.33, gamma=0.34)
-
-
-@pytest.fixture
 def compressor():
     """Create SemanticCompressor instance."""
     return SemanticCompressor(
@@ -86,89 +76,6 @@ def count_tokens(text: str) -> int:
     """Count tokens using tiktoken (GPT-4 tokenizer)."""
     encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text))
-
-
-# ===========================
-# SSIM Quality Tests
-# ===========================
-
-
-class TestSSIMQuality:
-    """Test structural similarity (SSIM) quality metrics."""
-
-    def test_ssim_baseline_threshold(self, compressor, sample_document, semantic_ssim_calculator):
-        """Test that SSIM is reasonable (>0.3) for compressed content."""
-        file_id = "ssim_test"
-        compressor.ingest_file(sample_document, file_id)
-
-        # Get graph and nodes
-        graph = compressor.graphs[file_id]
-        all_nodes = list(graph.nodes())
-
-        # Get skeleton nodes (nodes retained in compressor after ingestion)
-        skeleton_node_ids = [nid for nid in compressor.chunks.keys() if nid.startswith(file_id)]
-        skeleton_nodes = [nid for nid in skeleton_node_ids if nid in graph.nodes()]
-
-        if not skeleton_nodes:
-            pytest.skip("No skeleton nodes found in graph")
-
-        # Calculate SSIM
-        ssim, components = semantic_ssim_calculator.calculate_ssim(graph, all_nodes, skeleton_nodes)
-
-        # SSIM threshold: > 0.3 acceptable
-        assert ssim >= 0.3, f"SSIM {ssim:.3f} below minimum threshold (0.3)"
-
-        print("\n✅ SSIM Quality Test:")
-        print(f"   Luminance: {components['luminance']:.3f}")
-        print(f"   Contrast:  {components['contrast']:.3f}")
-        print(f"   Structure: {components['structure']:.3f}")
-        print(f"   SSIM:      {ssim:.3f} - {interpret_ssim_score(ssim)}")
-
-    def test_ssim_components(self, compressor, sample_document, semantic_ssim_calculator):
-        """Test individual SSIM components are reasonable."""
-        file_id = "components_test"
-        compressor.ingest_file(sample_document, file_id)
-
-        graph = compressor.graphs[file_id]
-        all_nodes = list(graph.nodes())
-        skeleton_nodes = [
-            nid
-            for nid in compressor.chunks.keys()
-            if nid.startswith(file_id) and nid in graph.nodes()
-        ]
-
-        if not skeleton_nodes:
-            pytest.skip("No skeleton nodes")
-
-        ssim, components = semantic_ssim_calculator.calculate_ssim(graph, all_nodes, skeleton_nodes)
-
-        # Each component should be > 0.2
-        assert components["luminance"] >= 0.2, f"Luminance {components['luminance']:.3f} too low"
-        assert components["contrast"] >= 0.2, f"Contrast {components['contrast']:.3f} too low"
-        assert components["structure"] >= 0.1, f"Structure {components['structure']:.3f} too low"
-
-    def test_ssim_interpretation(self, semantic_ssim_calculator):
-        """Test SSIM interpretation function."""
-        assert "Excellent" in interpret_ssim_score(0.95)
-        assert "Good" in interpret_ssim_score(0.8)
-        assert "Acceptable" in interpret_ssim_score(0.6)
-        assert "Poor" in interpret_ssim_score(0.4)
-
-    def test_embedding_ssim_calculation(self, semantic_ssim_calculator):
-        """Test embedding-based SSIM calculation."""
-        # Create dummy embeddings
-        original_embeddings = np.random.rand(10, 384)
-        compressed_embeddings = original_embeddings[::2]  # Keep every 2nd
-
-        ssim, components = semantic_ssim_calculator.calculate_embedding_ssim(
-            original_embeddings, compressed_embeddings
-        )
-
-        # Should return valid SSIM
-        assert 0.0 <= ssim <= 1.0
-        assert "luminance" in components
-        assert "contrast" in components
-        assert "structure" in components
 
 
 # ===========================

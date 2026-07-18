@@ -581,62 +581,11 @@ class TestContextAdvisor:
 
 
 # =============================================================================
-# 9. Keyword Anchoring
+# 9. Keyword Anchoring — REMOVED (2026-07-17 cleanup, B4). The dead
+# src/keyword_anchoring.py module was deleted; the MCP anchored_keywords
+# feature is served by the separate inline implementation in
+# compression_handlers.py (unaffected).
 # =============================================================================
-
-
-class TestKeywordAnchoring:
-    """Tests for must-retain keyword preservation during compression."""
-
-    def test_anchor_keywords_preserved(self):
-        """Anchored keywords must appear in output."""
-        from src.keyword_anchoring import apply_keyword_anchoring
-
-        nodes = [
-            {"node_id": "n0", "text": "The API_KEY is used for auth.", "importance": 0.2},
-            {"node_id": "n1", "text": "Weather is nice today.", "importance": 0.9},
-            {"node_id": "n2", "text": "The SECRET_TOKEN validates requests.", "importance": 0.1},
-        ]
-        anchored_keywords = ["API_KEY", "SECRET_TOKEN"]
-
-        kept = apply_keyword_anchoring(nodes, anchored_keywords, keep_ratio=0.3)
-
-        kept_texts = " ".join(n["text"] for n in kept)
-        assert "API_KEY" in kept_texts
-        assert "SECRET_TOKEN" in kept_texts
-
-    def test_no_anchors_normal_pruning(self):
-        """Without anchors, normal importance-based pruning."""
-        from src.keyword_anchoring import apply_keyword_anchoring
-
-        nodes = [
-            {"node_id": "n0", "text": "Important.", "importance": 0.9},
-            {"node_id": "n1", "text": "Less important.", "importance": 0.1},
-        ]
-
-        kept = apply_keyword_anchoring(nodes, anchored_keywords=[], keep_ratio=0.5)
-        assert len(kept) == 1
-        assert kept[0]["node_id"] == "n0"
-
-    def test_case_insensitive_anchoring(self):
-        """Keyword matching should be case-insensitive."""
-        from src.keyword_anchoring import apply_keyword_anchoring
-
-        nodes = [
-            {"node_id": "n0", "text": "The apikey is here.", "importance": 0.1},
-            {"node_id": "n1", "text": "Other stuff.", "importance": 0.9},
-        ]
-
-        kept = apply_keyword_anchoring(nodes, ["APIKEY"], keep_ratio=0.5)
-        kept_ids = [n["node_id"] for n in kept]
-        assert "n0" in kept_ids
-
-    def test_empty_nodes(self):
-        """Empty nodes returns empty."""
-        from src.keyword_anchoring import apply_keyword_anchoring
-
-        result = apply_keyword_anchoring([], ["keyword"], keep_ratio=0.5)
-        assert result == []
 
 
 # =============================================================================

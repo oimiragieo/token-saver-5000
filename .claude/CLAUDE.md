@@ -44,7 +44,7 @@ src/                              # 75 modules, ~26,000 lines
 ├── Persistence (1 module)        # ChromaDB + JSON fallback
 ├── Observability (4 modules)     # logging, metrics, tracing, health
 ├── Reliability (3 modules)       # timeout, circuit breaker, retry
-├── Security (2 modules)          # path_validator, graceful_degradation
+├── Security (1 module)           # path_validator (graceful_degradation removed 2026-07-17, B4 cleanup)
 ├── Token Optimization (4 modules) # token_estimation, response_formatter, client_config, compression_profiles
 ├── Token Economy (4 modules)     # savings_tracker, savings_dashboard, budget_monitor, team_export
 ├── CLI Filtering (3 modules)     # cli_output_optimizer, filter_rules, tee_recovery
