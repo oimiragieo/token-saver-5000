@@ -16,7 +16,13 @@ Supported strategies:
     progress_output → removes %, spinner, and ellipsis lines
     tree_output     → collapses common path prefixes
     log_output      → deduplicates consecutive identical lines
-    unknown         → passthrough (no change)
+    generic         → conservative fallback for unclassified verbose output
+                      (CR-resolve, progress-strip, consecutive exact/masked
+                      dedup, stack-frame elision, blank-run + timestamp-only
+                      line collapse); only applied when detection lands
+                      "unknown" AND the caller opts in via
+                      ``filter(..., fallback_strategy="generic")``
+    unknown         → passthrough (no change) unless ``fallback_strategy`` opts in
 
 RTK fallback: if ``shutil.which("rtk")`` finds a binary and the text exceeds
 500 characters, the optimizer tries ``rtk --json`` via subprocess first.
@@ -91,6 +97,7 @@ STRATEGY_MAP: dict[str, str] = {
     "tree_output": "_tree_compress",
     "log_output": "_log_dedup",
     "docker_output": "_docker_compact",
+    "generic": "_generic_conservative",
 }
 
 # ANSI escape-code regex (includes all terminating letters)
@@ -98,6 +105,327 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 # Spinner characters used by many CLI progress bars
 _SPINNER_CHARS = set("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
+# ---------------------------------------------------------------------------
+# #137 — generic conservative fallback (unclassified "unknown" output).
+#
+# Every rule below is CONSECUTIVE-RUN-SCOPED and always annotates what it
+# removed. This is deliberately more cautious than the type-specific
+# strategies above: no global/non-adjacent dedup (that eats distinct data
+# rows — measured 99.1% loss on unique prose during the design audit), no
+# silent timestamp-prefix stripping on message-bearing lines, no frame
+# elision on short (<=8) blocks, no blank-line collapse to zero.
+# ---------------------------------------------------------------------------
+
+# Only lines with this many stripped chars (and at least one alnum char) are
+# eligible for dedup/collapse — protects short structural syntax lines (a
+# JSON "}," or a YAML "- name:") from being treated as repeated noise even
+# when they repeat exactly or near-identically.
+_MIN_COLLAPSIBLE_CONTENT_CHARS = 8
+
+# Masked near-duplicate runs need at least this many CONSECUTIVE lines
+# sharing a mask before they are eligible for first+last+elision collapse.
+_MASKED_RUN_MIN_LEN = 5
+
+# Stack-frame block elision never fires on a block this size or smaller.
+_STACK_FRAME_BLOCK_MIN_LEN = 8
+_STACK_FRAME_KEEP_TOP = 5
+_STACK_FRAME_KEEP_BOTTOM = 2
+
+# Timestamp-shape regex reused by both the near-dup masker and the
+# timestamp-only-line dropper: ISO-8601-ish ("2026-07-21T10:00:00.123Z" /
+# "...+02:00") or a bare "HH:MM:SS(.ms)" clock reading.
+_TIMESTAMP_SHAPE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
+    r"|\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
+)
+# Hex-looking blobs (request IDs, short hashes) — 8+ contiguous hex chars,
+# or an explicit 0x-prefixed run.
+_MASK_HEX_RE = re.compile(r"\b0x[0-9a-fA-F]+\b|\b[0-9a-fA-F]{8,}\b")
+# Standalone numeric runs (retry counters, ports, ids).
+_MASK_NUMBER_RE = re.compile(r"\b\d+\b")
+
+# "Distinct identifier" detectors used ONLY to EXEMPT a masked near-dup run
+# from collapse — a run containing one of these looks like distinct DATA,
+# not repeated noisy log lines, even if the surrounding text lines up.
+_DISTINCT_URL_RE = re.compile(r"https?://\S+")
+_DISTINCT_UUID_RE = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE
+)
+# Mirrors identifier_preservation.py's ReDoS-hardened file_path_loc shape
+# (bounded {1,20}/{1,8} quantifiers — no unbounded nested repetition).
+_DISTINCT_FILE_PATH_RE = re.compile(r"(?:[\w.\-]+/){1,20}[\w\-]+\.\w{1,8}(?::\d+(?::\d+)?)?")
+# ALL-CAPS runs of 3+ chars (letters/digits/underscore after the first
+# letter) — matches genuine error codes (ECONNREFUSED, TS2724, E501) as well
+# as common log-level tags (WARN, ERROR, INFO); the latter are excluded via
+# _LOG_LEVEL_WORDS below so a repetitive log storm's level tag never forces
+# a false exemption.
+_DISTINCT_ERROR_CODE_RE = re.compile(r"\b[A-Z][A-Z_0-9]{2,}(?:Error|Exception|Warning)?\b")
+_LOG_LEVEL_WORDS = frozenset(
+    {"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL", "TRACE", "FATAL", "NOTICE"}
+)
+
+# Stack-frame header shapes: Python's "File "x.py", line N, in func" and the
+# JS/Java/Node "at name (file:line:col)" / "at file:line:col" single-line form.
+_PY_TRACEBACK_FRAME_RE = re.compile(r'^\s*File\s+"[^"]+",\s+line\s+\d+')
+_JS_JAVA_FRAME_RE = re.compile(r"^\s*at\s+\S.*:\d+(?::\d+)?\)?\s*$")
+# These always start a NEW block — never merged with frames on either side.
+_BLOCK_BOUNDARY_RE = re.compile(r"^\s*(?:Caused by:|During handling of the above exception)")
+
+# A full line that is ENTIRELY a timestamp + log level with no message —
+# never matches a message-bearing line (the trailing "$" requires nothing
+# else on the line), so a timestamp PREFIX on a real message is never
+# stripped, only whole timestamp+level-only lines are dropped.
+_TIMESTAMP_LEVEL_ONLY_RE = re.compile(
+    r"^\s*(?:" + _TIMESTAMP_SHAPE_RE.pattern + r")"
+    r"\s*[\[\(]?\s*(?:DEBUG|INFO|WARN(?:ING)?|ERROR|CRITICAL|TRACE|FATAL|NOTICE)\s*[\]\)]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_collapsible_content_line(line: str) -> bool:
+    """Only lines with >= `_MIN_COLLAPSIBLE_CONTENT_CHARS` stripped chars AND
+    at least one alnum char are eligible for dedup/collapse."""
+    stripped = line.strip()
+    if len(stripped) < _MIN_COLLAPSIBLE_CONTENT_CHARS:
+        return False
+    return any(c.isalnum() for c in stripped)
+
+
+def _cr_resolve_lines(text: str) -> list[str]:
+    """Resolve carriage-return overwrites to the terminal's final rendered
+    state per physical line, then split on newlines.
+
+    CRLF ("\\r\\n") is normalized to a plain newline first so it is never
+    mistaken for an in-place progress overwrite. Any remaining lone "\\r"
+    inside a line is an in-place terminal overwrite (progress bars,
+    spinners) — only the segment AFTER the last "\\r" is kept (the final
+    rendered content); the whole line is never dropped.
+    """
+    normalized = text.replace("\r\n", "\n")
+    resolved: list[str] = []
+    for raw_line in normalized.split("\n"):
+        if "\r" in raw_line:
+            raw_line = raw_line.rsplit("\r", 1)[-1]
+        resolved.append(raw_line)
+    return resolved
+
+
+def _strip_progress_noise_lines(lines: list[str]) -> list[str]:
+    """Drop spinner-only, bare-percentage, and dots-only progress noise.
+
+    Reuses the same pattern rules as :meth:`CLIOutputOptimizer._progress_strip`
+    (bare "N%", spinner-char-only, spinner+short-label, dots/ellipsis-only).
+    The CR-based skip in `_progress_strip` does not apply here — CR
+    overwrites were already resolved to their final line by
+    `_cr_resolve_lines`.
+    """
+    kept: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r"^\s*\d+%\s*$", line):
+            continue
+        if stripped and all(c in _SPINNER_CHARS or c.isspace() for c in stripped):
+            continue
+        if stripped and stripped[0] in _SPINNER_CHARS:
+            continue
+        if re.match(r"^\s*[.·]+\s*$", line):
+            continue
+        kept.append(line)
+    return kept
+
+
+def _flush_dup_run(line: str, run: int) -> list[str]:
+    """Render one exact-duplicate run: collapse to "<line> (repeated N
+    times)" only when the line is eligible for collapse (see
+    `_is_collapsible_content_line`) — short structural lines (JSON "},",
+    YAML "- name:") are kept verbatim, every occurrence, even when they
+    repeat exactly."""
+    if run <= 1:
+        return [line]
+    if _is_collapsible_content_line(line):
+        return [f"{line} (repeated {run} times)"]
+    return [line] * run
+
+
+def _collapse_exact_dup_runs(lines: list[str]) -> list[str]:
+    """Collapse CONSECUTIVE exact-duplicate line runs — mirrors
+    :meth:`CLIOutputOptimizer._log_dedup`'s algorithm, scoped by the
+    collapsibility guard above."""
+    if not lines:
+        return lines
+    output: list[str] = []
+    current = lines[0]
+    run = 1
+    for line in lines[1:]:
+        if line == current:
+            run += 1
+            continue
+        output.extend(_flush_dup_run(current, run))
+        current = line
+        run = 1
+    output.extend(_flush_dup_run(current, run))
+    return output
+
+
+def _mask_line(line: str) -> str:
+    """Normalize timestamps, hex blobs, and standalone numbers to shared
+    placeholders so structurally-identical log lines that differ only in
+    those volatile fields hash to the same mask. Never mutates the actual
+    output — used purely as a grouping signal."""
+    masked = _TIMESTAMP_SHAPE_RE.sub("\x00TS\x00", line)
+    masked = _MASK_HEX_RE.sub("\x00HEX\x00", masked)
+    masked = _MASK_NUMBER_RE.sub("\x00NUM\x00", masked)
+    return masked
+
+
+def _has_distinct_identifier(line: str) -> bool:
+    """True when *line* contains a URL, UUID, file path, or a genuine
+    error-code-shaped token — marking it as likely-distinct DATA rather than
+    repeated noise. Common log-level tags (WARN/ERROR/...) are excluded so a
+    repetitive log storm's level tag never forces a false exemption."""
+    if _DISTINCT_URL_RE.search(line) or _DISTINCT_UUID_RE.search(line):
+        return True
+    if _DISTINCT_FILE_PATH_RE.search(line):
+        return True
+    for match in _DISTINCT_ERROR_CODE_RE.finditer(line):
+        if match.group(0) not in _LOG_LEVEL_WORDS:
+            return True
+    return False
+
+
+def _flush_masked_run(run_lines: list[str]) -> list[str]:
+    """Render one masked-near-dup run: collapse to first+elision+last only
+    when the run is long enough, every line is collapse-eligible, and no
+    line carries a distinct identifier (URL/UUID/path/error-code)."""
+    if len(run_lines) < _MASKED_RUN_MIN_LEN:
+        return run_lines
+    if not all(_is_collapsible_content_line(ln) for ln in run_lines):
+        return run_lines
+    if any(_has_distinct_identifier(ln) for ln in run_lines):
+        return run_lines
+    elided = len(run_lines) - 2
+    return [run_lines[0], f"... ({elided} similar lines elided) ...", run_lines[-1]]
+
+
+def _collapse_masked_near_dup_runs(lines: list[str]) -> list[str]:
+    """Collapse CONSECUTIVE runs of masked near-duplicate lines (see
+    `_mask_line` / `_flush_masked_run`)."""
+    if not lines:
+        return lines
+    output: list[str] = []
+    run: list[str] = [lines[0]]
+    run_mask = _mask_line(lines[0])
+    for line in lines[1:]:
+        mask = _mask_line(line)
+        if mask == run_mask:
+            run.append(line)
+            continue
+        output.extend(_flush_masked_run(run))
+        run = [line]
+        run_mask = mask
+    output.extend(_flush_masked_run(run))
+    return output
+
+
+def _classify_line_kind(line: str) -> str:
+    """Classify a line for stack-frame block grouping: "boundary" (Caused
+    by / During handling — always starts a new block), "header" (a Python
+    File-line or JS/Java "at ..." frame), or "other"."""
+    if _BLOCK_BOUNDARY_RE.match(line):
+        return "boundary"
+    if _PY_TRACEBACK_FRAME_RE.match(line) or _JS_JAVA_FRAME_RE.match(line):
+        return "header"
+    return "other"
+
+
+def _group_frame_units(lines: list[str]) -> list[tuple[str, list[str]]]:
+    """Group raw lines into (kind, unit_lines) tuples, where a "frame" unit
+    is a header line plus at most one following non-header/non-boundary
+    context line (Python's "    do_something()" source-context line under a
+    "File ..." header) — so a header+context pair is elided or kept
+    together as one frame."""
+    units: list[tuple[str, list[str]]] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        kind = _classify_line_kind(lines[i])
+        if kind == "header":
+            unit_lines = [lines[i]]
+            i += 1
+            if i < n and _classify_line_kind(lines[i]) == "other" and lines[i].strip() != "":
+                unit_lines.append(lines[i])
+                i += 1
+            units.append(("frame", unit_lines))
+        else:
+            units.append((kind, [lines[i]]))
+            i += 1
+    return units
+
+
+def _elide_stack_frame_blocks(lines: list[str]) -> list[str]:
+    """Elide the middle of long contiguous stack-frame blocks, keeping the
+    top `_STACK_FRAME_KEEP_TOP` + bottom `_STACK_FRAME_KEEP_BOTTOM` frames.
+    NEVER fires on a block of `_STACK_FRAME_BLOCK_MIN_LEN` or fewer frames.
+    A "Caused by:" / "During handling of the above exception" line is never
+    itself a frame, so it naturally starts a new block boundary — two frame
+    groups separated by one of these lines are never merged."""
+    if not lines:
+        return lines
+    units = _group_frame_units(lines)
+    output: list[str] = []
+    block: list[list[str]] = []
+
+    def _flush_block() -> None:
+        if len(block) > _STACK_FRAME_BLOCK_MIN_LEN:
+            elided = len(block) - _STACK_FRAME_KEEP_TOP - _STACK_FRAME_KEEP_BOTTOM
+            for unit_lines in block[:_STACK_FRAME_KEEP_TOP]:
+                output.extend(unit_lines)
+            output.append(f"... ({elided} frames elided) ...")
+            for unit_lines in block[-_STACK_FRAME_KEEP_BOTTOM:]:
+                output.extend(unit_lines)
+        else:
+            for unit_lines in block:
+                output.extend(unit_lines)
+        block.clear()
+
+    for kind, unit_lines in units:
+        if kind == "frame":
+            block.append(unit_lines)
+            continue
+        if block:
+            _flush_block()
+        output.extend(unit_lines)
+    if block:
+        _flush_block()
+    return output
+
+
+def _collapse_blank_runs(lines: list[str]) -> list[str]:
+    """Collapse runs of 3+ consecutive blank lines down to exactly 1 blank
+    line — NEVER 0 (a single blank line is preserved as a paragraph break)."""
+    if not lines:
+        return lines
+    output: list[str] = []
+    blank_run = 0
+    for line in lines:
+        if line.strip() == "":
+            blank_run += 1
+            continue
+        if blank_run:
+            output.extend([""] * (1 if blank_run >= 3 else blank_run))
+            blank_run = 0
+        output.append(line)
+    if blank_run:
+        output.extend([""] * (1 if blank_run >= 3 else blank_run))
+    return output
+
+
+def _drop_timestamp_only_lines(lines: list[str]) -> list[str]:
+    """Drop lines that are ENTIRELY a timestamp + log level with no message
+    content. Never strips a timestamp PREFIX off a message-bearing line —
+    only whole lines matching (nothing else on the line) are dropped."""
+    return [ln for ln in lines if not _TIMESTAMP_LEVEL_ONLY_RE.match(ln)]
 
 
 class CLIOutputOptimizer:
@@ -131,13 +459,30 @@ class CLIOutputOptimizer:
     # Public API
     # ------------------------------------------------------------------
 
-    def filter(self, text: str, command_hint: Optional[str] = None) -> FilterResult:
+    def filter(
+        self,
+        text: str,
+        command_hint: Optional[str] = None,
+        fallback_strategy: Optional[str] = None,
+    ) -> FilterResult:
         """Filter *text* by auto-detecting command type and applying a strategy.
 
         Args:
             text:         Raw CLI output to filter.
             command_hint: Optional override for the detected command type.
                           Must be a key in :data:`STRATEGY_MAP` (or ``"unknown"``).
+            fallback_strategy: Optional :data:`STRATEGY_MAP` key applied ONLY
+                          when the resolved command type is ``"unknown"``
+                          (whether from auto-detection or an unrecognized
+                          hint). ``command_detected`` stays ``"unknown"``
+                          (truthful — detection genuinely found no pattern
+                          match); ``strategy_applied`` reflects whichever
+                          fallback strategy ran. :meth:`filter` is shared by
+                          the ``filter_cli_output`` MCP tool, ``/v1/filter-cli``,
+                          and the ``gotcontext wrap`` proxy — leave ``None``
+                          (unchanged passthrough-on-unknown default) unless
+                          the caller has explicitly opted in (e.g. the
+                          tool-output endpoint passing ``"generic"``).
 
         Returns:
             A :class:`FilterResult` with the filtered text and metadata.
@@ -205,6 +550,11 @@ class CLIOutputOptimizer:
 
         # --- Dispatch to content strategy ---
         strategy_name = STRATEGY_MAP.get(command_type)
+        # #137: unclassified output gets a conservative fallback strategy
+        # ONLY when the caller opts in — command_detected stays "unknown"
+        # (truthful; detection still found no real pattern match).
+        if command_type == "unknown" and fallback_strategy and fallback_strategy in STRATEGY_MAP:
+            strategy_name = STRATEGY_MAP[fallback_strategy]
         if strategy_name and strategy_name != "_strip_ansi":
             strategy_fn = getattr(self, strategy_name)
             filtered_text = strategy_fn(working_text)
@@ -784,6 +1134,43 @@ class CLIOutputOptimizer:
             result_lines.append(line)
 
         return "\n".join(result_lines)
+
+    def _generic_conservative(self, text: str) -> str:
+        """Conservative fallback strategy for unclassified verbose tool
+        output (#137). Applied ONLY when auto-detection lands ``"unknown"``
+        AND the caller opts in via ``filter(..., fallback_strategy="generic")``.
+
+        Deliberately more cautious than the type-specific strategies above:
+        every collapse rule is scoped to CONSECUTIVE runs (never a global or
+        non-adjacent dedup, which would silently eat distinct data rows) and
+        always annotates what was removed. Pipeline (order matters):
+
+            1. CR-resolve: each line collapses to its final rendered segment
+               (the text after the last ``\\r``), preserving in-place
+               progress-bar output instead of dropping the whole line.
+            2. Drop spinner/percentage/dots-only progress noise.
+            3. Collapse consecutive EXACT-duplicate line runs.
+            4. Collapse consecutive MASKED near-duplicate runs (>=5 lines
+               sharing a timestamp/hex/number-normalized shape) to
+               first+last+an elision annotation, unless the run contains a
+               distinct file path / URL / UUID / error code.
+            5. Elide the middle of long (>8) contiguous stack-frame blocks,
+               keeping the top 5 + bottom 2 frames per block.
+            6. Collapse blank-line runs of 3+ down to exactly 1.
+            7. Drop lines that are ENTIRELY a timestamp + log level with no
+               message content (never strips a timestamp prefix off a
+               message-bearing line).
+        """
+        lines = _cr_resolve_lines(text)
+        if not lines:
+            return text
+        lines = _strip_progress_noise_lines(lines)
+        lines = _collapse_exact_dup_runs(lines)
+        lines = _collapse_masked_near_dup_runs(lines)
+        lines = _elide_stack_frame_blocks(lines)
+        lines = _collapse_blank_runs(lines)
+        lines = _drop_timestamp_only_lines(lines)
+        return "\n".join(lines)
 
     # ------------------------------------------------------------------
     # RTK fallback (optional external binary)

@@ -140,3 +140,40 @@ class TestHardeningBounds:
         # Footer bounded well under a multi-MB blowup; count cap not reached.
         assert len(final) < 6000
         assert len(reinjected) < 200
+
+
+class TestNumericLiteralOrderingFix:
+    """#137 (2026-07-21): `numeric_literal` was ordered AFTER `symbol` in
+    `_IDENTIFIER_PATTERNS`. Since pattern-list order determines the order
+    tokens are appended to the extracted list — which in turn determines
+    reinjection priority under `_MAX_REINJECT`(200)/`_MAX_FOOTER_CHARS`(4000)
+    — a prose-heavy blob with 200+ generic words crowded a real version/
+    currency literal out of the reinjection footer entirely (the `symbol`
+    pattern matches ~any word, so it dominated the token list on
+    word-dense docs). Reordering `numeric_literal` ABOVE `symbol` guarantees
+    it survives regardless of how many generic-word matches follow."""
+
+    def test_numeric_literal_appears_before_symbol_matches_in_extraction_order(self):
+        text = "engine v1.58.7 processed wordAlpha and wordBeta successfully"
+        tokens = extract_critical_identifiers(text)
+        assert "1.58.7" in tokens
+        assert "wordAlpha" in tokens
+        assert tokens.index("1.58.7") < tokens.index("wordAlpha")
+
+    def test_numeric_literal_survives_reinject_cap_despite_many_symbol_matches(self):
+        # 205 distinct generic "symbol"-shaped words + one dotted-version
+        # numeric literal. All are absent from the (empty-ish) compressed
+        # output, so every extracted token is "missing" and competes for
+        # the same _MAX_REINJECT=200 / _MAX_FOOTER_CHARS=4000 budget.
+        words = " ".join(f"word{i}" for i in range(205))
+        text = f"engine v1.58.7 processed the following symbols: {words}"
+
+        tokens = extract_critical_identifiers(text)
+        assert "1.58.7" in tokens
+
+        compressed, reinjected = apply_identifier_guard("compressed body", tokens)
+        assert "1.58.7" in compressed, (
+            "numeric_literal was crowded out of the reinjection footer by "
+            "symbol matches — _IDENTIFIER_PATTERNS ordering regression"
+        )
+        assert "1.58.7" in reinjected

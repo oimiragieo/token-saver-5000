@@ -42,15 +42,21 @@ _IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("uuid", re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")),
     # Env var names: UPPERCASE_WITH_UNDERSCORES
     ("env_var", re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")),
-    # Python/TS/Go identifiers in error contexts (camelCase or snake_case symbols)
-    ("symbol", re.compile(r"\b(?:[a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]*)\b")),
-    # #284 (2026-07-11) — NOTABLE numeric literals an agent's tool output hinges
+    # #137 (2026-07-21) — NOTABLE numeric literals an agent's tool output hinges
     # on: currency ($1,234.50), scientific (1e-07), percentage (-0.001%),
     # decimal (3.14), dotted version (1.58.7). Bare integers are deliberately
     # NOT force-kept (they'd bloat the byte-capped footer on number-dense docs;
     # `http_status` already covers 3-digit codes). EVERY quantifier is BOUNDED
     # ({1,20}/{0,10}/{1,6}) so a long digit/comma blob cannot cause O(n^2)
     # backtracking — the module's ReDoS-hardening contract (see TestHardeningBounds).
+    #
+    # ORDERED ABOVE `symbol` (moved 2026-07-21, #137): `symbol` matches ~any
+    # word and — since extraction order determines footer-reinjection order
+    # under the 4000-char `_MAX_FOOTER_CHARS` cap — running `symbol` first
+    # crowded high-value version/currency/scientific literals out of the
+    # footer on prose-heavy tool output. Extracting numeric_literal earlier
+    # guarantees it reaches the footer before the flood of generic word
+    # matches does.
     (
         "numeric_literal",
         re.compile(
@@ -63,6 +69,8 @@ _IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
             r")"
         ),
     ),
+    # Python/TS/Go identifiers in error contexts (camelCase or snake_case symbols)
+    ("symbol", re.compile(r"\b(?:[a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]*)\b")),
 ]
 
 # Minimum token length to preserve: we don't force-keep single chars.
