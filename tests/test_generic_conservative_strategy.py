@@ -213,6 +213,171 @@ class TestStrategyMapAndFilterWiring:
 
 
 # ---------------------------------------------------------------------------
+# #137c — log_output falls back to the generic pipeline when _log_dedup
+# (consecutive-EXACT-only) barely compresses. The classifier routes nearly
+# all structured multi-line output to `log_output`, so stack traces and
+# timestamp-cycling logs (the two highest-value shapes) get ~0% from
+# _log_dedup; the generic pipeline's frame-elision + timestamp-mask fixes
+# them. Scoped to log_output + fallback_strategy="generic" opt-in ONLY.
+# ---------------------------------------------------------------------------
+
+
+def _py_traceback(n_frames: int) -> str:
+    """A Python traceback with exactly *n_frames* File/context frame units."""
+    lines = ["Traceback (most recent call last):"]
+    for i in range(n_frames):
+        lines.append(f'  File "module_{i}.py", line {i + 1}, in func_{i}')
+        lines.append(f"    result = step_{i}(payload)")
+    lines.append("ValueError: pipeline failed at the final step")
+    return "\n".join(lines)
+
+
+# A >8-frame traceback repeated twice: classifies log_output (duplicated ->
+# <70% unique), _log_dedup gets 0% (no consecutive-identical lines), the
+# generic pipeline elides each >8-frame block.
+_TB10 = _py_traceback(10)
+_REPEATED_TRACEBACK = _TB10 + "\n" + _TB10
+
+# Cycling timestamps (4 distinct, x3): classifies log_output (33% unique),
+# _log_dedup gets 0% (dups non-consecutive), every line masks to the same
+# shape -> generic masked-run collapse fires.
+_TS_CYCLE = "\n".join(
+    f"2026-01-01T00:00:0{s}.000Z [WARN] connection retry to primary"
+    for _ in range(3)
+    for s in range(1, 5)
+)
+
+
+class TestLogOutputGenericFallback137c:
+    def setup_method(self):
+        self.opt = CLIOutputOptimizer()
+
+    @staticmethod
+    def _char_savings_pct(before: str, after: str) -> float:
+        return (1.0 - len(after) / len(before)) * 100.0 if before else 0.0
+
+    def test_log_output_repeated_long_traceback_falls_back_and_elides(self):
+        # Precondition: this classifies log_output and _log_dedup no-ops.
+        assert self.opt.detect_command(_REPEATED_TRACEBACK) == "log_output"
+        dedup_only = self.opt._log_dedup(_REPEATED_TRACEBACK)
+        assert self._char_savings_pct(_REPEATED_TRACEBACK, dedup_only) < 5.0
+
+        result = self.opt.filter(_REPEATED_TRACEBACK, fallback_strategy="generic")
+        assert result.command_detected == "log_output"
+        assert "generic" in result.strategy_applied  # truthful fallback surfaced
+        assert "frames elided" in result.filtered_text
+        assert self._char_savings_pct(_REPEATED_TRACEBACK, result.filtered_text) > 20.0
+        # The kept top/bottom frames survive verbatim (execution-critical).
+        assert 'File "module_0.py"' in result.filtered_text
+        assert "ValueError: pipeline failed at the final step" in result.filtered_text
+
+    def test_log_output_timestamp_cycle_falls_back_and_collapses(self):
+        assert self.opt.detect_command(_TS_CYCLE) == "log_output"
+        dedup_only = self.opt._log_dedup(_TS_CYCLE)
+        assert self._char_savings_pct(_TS_CYCLE, dedup_only) < 5.0
+
+        result = self.opt.filter(_TS_CYCLE, fallback_strategy="generic")
+        assert result.command_detected == "log_output"
+        assert "generic" in result.strategy_applied
+        assert "similar lines elided" in result.filtered_text
+        assert self._char_savings_pct(_TS_CYCLE, result.filtered_text) > 20.0
+
+    def test_log_output_exact_dup_storm_keeps_log_dedup(self):
+        # 80 consecutive identical lines: _log_dedup nails it (~98%). The
+        # fallback MUST NOT fire (generic is not a superset for short/oversized
+        # /structured lines — only trigger it when _log_dedup under-compresses).
+        blob = "\n".join(["checkpoint saved for shard, continuing"] * 80)
+        assert self.opt.detect_command(blob) == "log_output"
+        result = self.opt.filter(blob, fallback_strategy="generic")
+        assert result.strategy_applied == "_log_dedup"
+        assert "(repeated 80 times)" in result.filtered_text
+        assert self._char_savings_pct(blob, result.filtered_text) >= 95.0
+
+    def test_fallback_only_applies_to_log_output_not_other_known_types(self):
+        # git_diff and test_output keep their dedicated strategy even with the
+        # opt-in — #137c makes log_output the SINGLE exception.
+        git_diff = (
+            "diff --git a/src/main.py b/src/main.py\n"
+            "index abc1234..def5678 100644\n"
+            "--- a/src/main.py\n"
+            "+++ b/src/main.py\n"
+            "@@ -10,6 +10,8 @@ def main():\n"
+            '     print("hello")\n'
+            '+    print("world")\n'
+        )
+        r1 = self.opt.filter(git_diff, fallback_strategy="generic")
+        assert r1.command_detected == "git_diff"
+        assert r1.strategy_applied == "_git_diff_stats"
+
+        test_out = "\n".join(
+            [
+                "============ test session starts ============",
+                "tests/test_a.py::test_one PASSED",
+                "tests/test_b.py::test_two PASSED",
+                "tests/test_c.py::test_three FAILED",
+                "tests/test_d.py::test_four PASSED",
+                "============ 1 failed, 3 passed ============",
+            ]
+        )
+        r2 = self.opt.filter(test_out, fallback_strategy="generic")
+        assert r2.command_detected == "test_output"
+        assert r2.strategy_applied == "_test_failure_focus"
+
+    def test_log_output_without_optin_stays_log_dedup(self):
+        # Same repeated-traceback blob, NO fallback_strategy -> unchanged
+        # behavior for the shared filter() callers (MCP / /v1/filter-cli / wrap).
+        result = self.opt.filter(_REPEATED_TRACEBACK)
+        assert result.command_detected == "log_output"
+        assert result.strategy_applied == "_log_dedup"
+        assert result.filtered_text == self.opt._log_dedup(_REPEATED_TRACEBACK)
+
+    def test_log_output_distinct_lines_not_corrupted_after_fallback(self):
+        # A collapsible cycling block + 3 DISTINCT error lines. The fallback
+        # runs (cycling collapses), but every distinct error line survives
+        # verbatim (distinct masks + the error-code exemption).
+        blob = (
+            _TS_CYCLE
+            + "\n"
+            + "\n".join(
+                [
+                    "ERROR disk full on volume /data/alpha code E1001",
+                    "ERROR disk full on volume /data/beta code E1002",
+                    "ERROR disk full on volume /data/gamma code E1003",
+                ]
+            )
+        )
+        assert self.opt.detect_command(blob) == "log_output"
+        result = self.opt.filter(blob, fallback_strategy="generic")
+        assert "generic" in result.strategy_applied
+        for token in ("alpha", "beta", "gamma", "E1001", "E1002", "E1003"):
+            assert token in result.filtered_text, f"distinct token {token!r} was lost"
+
+    def test_log_output_masked_collapse_preserves_temporal_envelope(self):
+        # #137c codex adversarial-gate (2026-07-22, gpt-5.6-sol): flagged that
+        # masking timestamps + collapsing a cycling run erases mid-run reset
+        # boundaries that _log_dedup preserved. Resolution: OVERRIDE the
+        # suggested reset-boundary DETECTION (fragile timestamp-parsing
+        # special-casing the #137-round-4 convergence guardrail forbids) and
+        # instead LOCK the actual safety property the concern rests on -- the
+        # masked-run collapse preserves the FIRST and LAST line of the run
+        # VERBATIM plus a "similar" (not "repeated") count annotation, so the
+        # temporal ENVELOPE (start ts .. end ts, N events, near-dup not exact)
+        # is never silently erased. Scope note: this is LLM-context
+        # compression, not log forensics; the same masked-collapse ships on the
+        # #137 `unknown` path (4 codex rounds). If a future change drops the
+        # first/last-line preservation, this test fails.
+        first = "2026-01-01T00:00:01.000Z [WARN] connection retry to primary"
+        last = "2026-01-01T00:00:04.000Z [WARN] connection retry to primary"
+        result = self.opt.filter(_TS_CYCLE, fallback_strategy="generic")
+        out_lines = result.filtered_text.splitlines()
+        assert out_lines[0] == first, "start of the temporal envelope must survive verbatim"
+        assert out_lines[-1] == last, "end of the temporal envelope must survive verbatim"
+        # near-dup marker ("similar"), NOT the exact-dup marker ("repeated"):
+        # signals the elided lines were not byte-identical.
+        assert "similar lines elided" in result.filtered_text
+
+
+# ---------------------------------------------------------------------------
 # (a) CR-resolve
 # ---------------------------------------------------------------------------
 

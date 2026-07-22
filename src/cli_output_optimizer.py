@@ -132,6 +132,22 @@ _STACK_FRAME_BLOCK_MIN_LEN = 8
 _STACK_FRAME_KEEP_TOP = 5
 _STACK_FRAME_KEEP_BOTTOM = 2
 
+# #137c — when the caller opted in (fallback_strategy="generic") and the
+# log_output strategy (_log_dedup, consecutive-EXACT-only) yields LESS than
+# this CHAR-savings %, ALSO run the generic pipeline (frame-elision +
+# timestamp-mask) and keep whichever output is smaller. _log_dedup returns
+# ~98% when it works vs ~0% when it fails (a stack trace / timestamp-cycling
+# log), so 5% cleanly separates the "fell flat, try generic" case.
+_LOG_FALLBACK_MAX_SAVINGS_PCT = 5.0
+
+
+def _char_savings_pct(before: str, after: str) -> float:
+    """Char-based savings %. Distinct from ``FilterResult.compression_pct``
+    (line-based): a single collapse annotation can shrink the line count while
+    chars barely move, so the #137c fallback trigger must measure CHARS."""
+    return (1.0 - len(after) / len(before)) * 100.0 if before else 0.0
+
+
 # Timestamp-shape regex reused by both the near-dup masker and the
 # timestamp-only-line dropper: ISO-8601-ish ("2026-07-21T10:00:00.123Z" /
 # "...+02:00") or a bare "HH:MM:SS(.ms)" clock reading.
@@ -604,18 +620,27 @@ class CLIOutputOptimizer:
             text:         Raw CLI output to filter.
             command_hint: Optional override for the detected command type.
                           Must be a key in :data:`STRATEGY_MAP` (or ``"unknown"``).
-            fallback_strategy: Optional :data:`STRATEGY_MAP` key applied ONLY
-                          when the resolved command type is ``"unknown"``
-                          (whether from auto-detection or an unrecognized
-                          hint). ``command_detected`` stays ``"unknown"``
+            fallback_strategy: Optional :data:`STRATEGY_MAP` key. Applied when
+                          the resolved command type is ``"unknown"`` (whether
+                          from auto-detection or an unrecognized hint), in
+                          which case ``command_detected`` stays ``"unknown"``
                           (truthful — detection genuinely found no pattern
-                          match); ``strategy_applied`` reflects whichever
-                          fallback strategy ran. :meth:`filter` is shared by
-                          the ``filter_cli_output`` MCP tool, ``/v1/filter-cli``,
-                          and the ``gotcontext wrap`` proxy — leave ``None``
-                          (unchanged passthrough-on-unknown default) unless
-                          the caller has explicitly opted in (e.g. the
-                          tool-output endpoint passing ``"generic"``).
+                          match) and ``strategy_applied`` reflects the fallback
+                          strategy that ran. **#137c exception:** when the type
+                          is ``"log_output"`` AND ``fallback_strategy ==
+                          "generic"``, the ``_log_dedup`` result is compared to
+                          the generic pipeline and the smaller is kept IFF
+                          ``_log_dedup`` under-compressed (< ``5%`` chars) —
+                          stack traces and timestamp-cycling logs classify
+                          ``log_output`` but ``_log_dedup`` (consecutive-exact-
+                          only) no-ops on them. Every OTHER known type keeps its
+                          dedicated strategy unconditionally. :meth:`filter` is
+                          shared by the ``filter_cli_output`` MCP tool,
+                          ``/v1/filter-cli``, and the ``gotcontext wrap`` proxy
+                          — leave ``None`` (unchanged passthrough-on-unknown,
+                          no log_output fallback) unless the caller has
+                          explicitly opted in (e.g. the tool-output endpoint
+                          passing ``"generic"``).
 
         Returns:
             A :class:`FilterResult` with the filtered text and metadata.
@@ -692,6 +717,36 @@ class CLIOutputOptimizer:
             strategy_fn = getattr(self, strategy_name)
             filtered_text = strategy_fn(working_text)
             applied = strategy_name
+            # #137c: log_output's _log_dedup collapses only CONSECUTIVE exact
+            # dups, so it returns ~0% on stack traces + timestamp-cycling logs
+            # (the two most common verbose shapes an agent pastes). When the
+            # caller opted in (fallback_strategy="generic") AND _log_dedup
+            # barely compressed, ALSO run the generic pipeline (frame-elision +
+            # timestamp-mask) on the SAME ANSI-stripped text and keep whichever
+            # output is smaller. Scoped to log_output ONLY — every other known
+            # type keeps its dedicated strategy unconditionally (locked by
+            # test_fallback_only_applies_to_log_output_not_other_known_types).
+            if (
+                command_type == "log_output"
+                and fallback_strategy == "generic"
+                and _char_savings_pct(working_text, filtered_text) < _LOG_FALLBACK_MAX_SAVINGS_PCT
+            ):
+                generic_text = self._generic_conservative(working_text)
+                if len(generic_text) < len(filtered_text):
+                    # codex adversarial-gate (2026-07-22): a timestamp-cycling
+                    # run collapses under generic's masking, losing mid-run
+                    # reset boundaries _log_dedup kept. OVERRIDE (not a fix):
+                    # this is the shipped #137 masked-collapse contract (also on
+                    # the `unknown` path), the temporal ENVELOPE survives (first
+                    # + last line verbatim + a "similar" count annotation --
+                    # locked by test_log_output_masked_collapse_preserves_
+                    # temporal_envelope), and reset-boundary detection is the
+                    # fragile timestamp-parsing special-casing the #137-round-4
+                    # convergence guardrail forbids. This is LLM-context
+                    # compression, not log forensics; the fallback only fires
+                    # when _log_dedup already delivered <5% (near-zero).
+                    filtered_text = generic_text
+                    applied = "_log_dedup+_generic_conservative"
         else:
             filtered_text = working_text
             applied = "passthrough"
