@@ -139,20 +139,33 @@ _TIMESTAMP_SHAPE_RE = re.compile(
     r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
     r"|\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
 )
-# Hex-looking blobs (request IDs, short hashes) — 8+ contiguous hex chars,
-# or an explicit 0x-prefixed run.
-_MASK_HEX_RE = re.compile(r"\b0x[0-9a-fA-F]+\b|\b[0-9a-fA-F]{8,}\b")
-# Full UUIDs (a UUID's 4/4/4-char middle segments are individually too
-# short for _MASK_HEX_RE's 8-char threshold, so a whole-UUID pattern is
-# needed to mask a per-line-unique UUID as ONE volatile unit).
+# Full UUIDs — a distinctive NON-pure-digit shape (8-4-4-4-12 hex groups
+# joined by hyphens; hyphens can never appear in a plain integer/hash).
 _MASK_UUID_RE = re.compile(
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE
 )
-# codex adversarial-gate finding 1 (2026-07-21): plain integers/decimals are
-# DELIBERATELY NOT masked — see `_mask_line` docstring. The old
-# `_MASK_NUMBER_RE = re.compile(r"\b\d+\b")` masked EVERY standalone number,
-# which silently collapsed distinct numeric data (`processed batch 1..50`,
-# dollar amounts, ports, ids) into first+last — worse than 0% savings.
+# codex adversarial-gate finding 1, round 2 (2026-07-21): plain integers/
+# decimals are DELIBERATELY NOT masked — see `_mask_line` docstring. The
+# old `_MASK_NUMBER_RE = re.compile(r"\b\d+\b")` masked EVERY standalone
+# number, which silently collapsed distinct numeric data (`processed batch
+# 1..50`, dollar amounts, ports, ids) into first+last — worse than 0%
+# savings.
+#
+# codex adversarial-gate finding 1, round 3 (2026-07-22): hex-masking was
+# ALSO removed entirely (the prior `_MASK_HEX_RE = re.compile(r"\b0x[0-9a-
+# fA-F]+\b|\b[0-9a-f]{8,}\b")`). Digits 0-9 are ALL valid hex characters, so
+# an 8+ digit run like a batch id ("batch 12345678") matched that pattern
+# just as readily as a real hex hash — `batch 12345678` and `batch
+# 12345679` masked IDENTICALLY and could collapse as if they were the same
+# noisy line, even though they are genuinely distinct numeric data. A hash
+# that VARIES per line is exactly this kind of distinct data and must
+# never collapse; a hash that REPEATS IDENTICALLY is already handled by
+# exact-dup collapse (no masking needed there at all). So hex-masking only
+# added collision risk with zero compensating value — dropped. Only
+# TIMESTAMP-shaped and UUID-shaped tokens are masked now: both have
+# distinctive NON-pure-digit shapes (a timestamp carries "-"/":"/"T"/"Z";
+# a UUID is 8-4-4-4-12 hex groups joined by hyphens) that a plain integer
+# can never coincidentally match.
 
 # "Distinct identifier" detectors used ONLY to EXEMPT a masked near-dup run
 # from collapse — a run containing one of these looks like distinct DATA,
@@ -193,7 +206,8 @@ _TIMESTAMP_LEVEL_ONLY_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# codex adversarial-gate finding 2 (2026-07-21): structured-content bypass.
+# codex adversarial-gate finding 2 (2026-07-21, narrowed 2026-07-22):
+# structured-content bypass.
 #
 # The >=8-char collapsibility guard does NOT protect JSON/YAML record lines
 # (a JSON object or YAML list item is easily >=8 chars). Collapsing repeated
@@ -201,18 +215,49 @@ _TIMESTAMP_LEVEL_ONLY_RE = re.compile(
 # AND silently deletes array/list cardinality — a real 50-element JSONL
 # block would misreport as fewer records. A structured line BYPASSES
 # generic dedup/collapse entirely (verbatim), regardless of length.
+#
+# codex adversarial-gate finding 2, round 3 (2026-07-22): the original
+# `json.loads` fallback was capped at `_STRUCTURED_LINE_MAX_CHARS` (2000)
+# for performance/ReDoS-adjacent caution — but that meant a long JSONL
+# record or array element (a big single-line object with many fields, or
+# a large embedded string) LOST its structured-content protection past
+# that length. Fixed with an O(1) SHAPE check (`_looks_like_json_value_shape`
+# — just the first/last character after stripping an optional trailing
+# comma, never a full parse) that fires regardless of length, so a
+# multi-kilobyte JSON object/array/string line is still recognized and
+# protected without paying (or risking) a full `json.loads` on it.
 # ---------------------------------------------------------------------------
 _JSON_STRUCTURAL_ONLY_RE = re.compile(r"^[\{\}\[\],]+,?$")
 _JSON_KEY_VALUE_RE = re.compile(r'^"[^"]*"\s*:\s*.+?,?$')
 _YAML_LIST_ITEM_RE = re.compile(r"^-\s+\S")
+# Only used to bound the (optional, short-value-only) full `json.loads`
+# fallback below — NOT used to gate the shape check, which is length-free.
 _STRUCTURED_LINE_MAX_CHARS = 2000
+
+
+def _looks_like_json_value_shape(stripped: str) -> bool:
+    """Cheap O(1) shape check (first/last character only, no full JSON
+    parse) for a JSON object/array/string value spanning the WHOLE line —
+    works regardless of length, so a long JSONL record or array element
+    stays protected without needing (or risking) `json.loads` on it."""
+    body = stripped[:-1] if stripped.endswith(",") else stripped
+    if len(body) < 2:
+        return False
+    first, last = body[0], body[-1]
+    if first == "{" and last == "}":
+        return True
+    if first == "[" and last == "]":
+        return True
+    if first == '"' and last == '"':
+        return True
+    return False
 
 
 def _is_structured_line(line: str) -> bool:
     """True when *line* is a JSON object/array-element/structural-bracket
     line, a JSONL record, or a YAML list item — these BYPASS generic
     dedup/collapse entirely (verbatim), never treated as noise even when
-    they repeat exactly or near-identically."""
+    they repeat exactly or near-identically, and REGARDLESS OF LENGTH."""
     stripped = line.strip()
     if not stripped:
         return False
@@ -222,12 +267,14 @@ def _is_structured_line(line: str) -> bool:
         return True
     if _JSON_KEY_VALUE_RE.match(stripped):
         return True
+    if _looks_like_json_value_shape(stripped):
+        return True
     if len(stripped) > _STRUCTURED_LINE_MAX_CHARS:
         return False
-    # A full JSON value on its own line (JSONL record, or a single array
-    # element like `"foo",` / `{"id": 1},`) — strip one trailing comma
-    # before attempting to parse (multi-line JSON/JSONL commonly trails a
-    # comma per element).
+    # Short-value fallback (bare number/true/false/null array elements,
+    # or anything the shape check didn't recognize) — a full JSON value on
+    # its own line. Strip one trailing comma before attempting to parse
+    # (multi-line JSON/JSONL commonly trails a comma per element).
     candidate = stripped[:-1] if stripped.endswith(",") else stripped
     try:
         json.loads(candidate)
@@ -249,38 +296,69 @@ def _is_collapsible_content_line(line: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# codex adversarial-gate finding 3 (2026-07-21): CR-resolution DATA LOSS.
+# codex adversarial-gate finding 3 (2026-07-21, narrowed 2026-07-22):
+# CR-resolution DATA LOSS.
 #
 # The old `_cr_resolve_lines` fired on EVERY lone "\r", so an old-Mac-style
 # record (`\r` as the ONLY line terminator) or a `\r`-delimited data payload
-# lost every field except the last. Only resolve to the final segment when
-# the `\r`-delimited chunks actually look like a terminal overwrite
-# (progress bar / spinner / percentage) — a `\r` inside plain data is left
-# fully intact.
+# lost every field except the last. Round 2 narrowed this to require a
+# percentage/spinner/dots SIGNAL somewhere among the "\r"-delimited chunks
+# — but round 3 found that check STILL too broad: `re.search(r"\d+%", ...)`
+# fires on any segment that merely CONTAINS a "%" ANYWHERE, so
+# "discount 95%\rprice=10" (a single "\r", real substantive data on BOTH
+# sides) got wrongly truncated to just "price=10", losing "discount 95%".
+#
+# Genuine overwrite shape now requires EITHER:
+#   (a) MULTIPLE "\r"s (>=3 segments total) — a repeated-overwrite
+#       sequence is itself strong evidence of a real progress bar, even
+#       when individual frames aren't perfectly "pure" on their own (e.g.
+#       "Downloading 45%\rDownloading 46%\rDone" resolves to "Done" even
+#       though "Downloading 45%" carries a label prefix, not just a bare
+#       percentage) — a genuine `\r`-delimited flat-data format with 3+
+#       fields per line is presumed rare enough in CLI/tool-output content
+#       that this is an accepted, EXPLICIT trade-off, not a silent one; OR
+#   (b) for a SINGLE "\r" (exactly 2 segments), the ONE pre-final segment
+#       must be ENTIRELY progress noise on its own (see
+#       `_is_pure_progress_segment`) — real data that merely CONTAINS a
+#       "%" or starts with a spinner-like glyph is never enough by itself.
 # ---------------------------------------------------------------------------
+
+
+def _is_pure_progress_segment(stripped: str) -> bool:
+    """True when *stripped* segment text is ENTIRELY progress noise (bare
+    percentage / spinner-only / spinner-led with only a bare-percentage or
+    dots remainder / dots-only) — no other substantive tokens. Used ONLY
+    to judge whether a "\\r"-delimited pre-final segment is genuine
+    overwrite noise (see `_looks_like_progress_overwrite`) — kept
+    independent of `_strip_progress_noise_lines` (finding 4, confirmed
+    fixed) so this narrower check can never regress that one."""
+    if not stripped:
+        return True
+    if _BARE_PERCENTAGE_RE.match(stripped):
+        return True
+    if _DOTS_ONLY_RE.match(stripped):
+        return True
+    if all(c in _SPINNER_CHARS or c.isspace() for c in stripped):
+        return True
+    if stripped[0] in _SPINNER_CHARS:
+        remainder = stripped.lstrip("".join(_SPINNER_CHARS)).strip()
+        if not remainder or _BARE_PERCENTAGE_RE.match(remainder) or _DOTS_ONLY_RE.match(remainder):
+            return True
+    return False
 
 
 def _looks_like_progress_overwrite(raw_line: str) -> bool:
     """True when a "\\r"-containing line shows genuine terminal
-    overwrite/progress-bar shape — a percentage, spinner char, or
-    dots-only segment appears among the "\\r"-delimited chunks — rather
-    than being a plain-data line that happens to use "\\r" as a field or
-    record separator (old-Mac line endings, "\\r"-separated payload
-    fields). Those must stay intact, never truncated to the last segment.
+    overwrite/progress-bar shape (see the finding-3-round-3 module comment
+    above for the exact (a)/(b) rule) — rather than being a plain-data
+    line that happens to use "\\r" as a field or record separator
+    (old-Mac line endings, "\\r"-separated payload fields). Those must
+    stay intact, never truncated to the last segment.
     """
-    for seg in raw_line.split("\r"):
-        stripped = seg.strip()
-        if not stripped:
-            continue
-        if re.search(r"\d+%", stripped):
-            return True
-        if all(c in _SPINNER_CHARS or c.isspace() for c in stripped):
-            return True
-        if stripped[0] in _SPINNER_CHARS:
-            return True
-        if re.match(r"^[.·]+$", stripped):
-            return True
-    return False
+    segments = raw_line.split("\r")
+    if len(segments) > 2:
+        return True
+    return _is_pure_progress_segment(segments[0].strip())
 
 
 def _cr_resolve_lines(text: str) -> list[str]:
@@ -386,23 +464,29 @@ def _collapse_exact_dup_runs(lines: list[str]) -> list[str]:
 
 
 def _mask_line(line: str) -> str:
-    """Normalize ONLY provably-volatile fields — timestamps, UUIDs, and
-    long (>=8 char) hex blobs — to shared placeholders so structurally-
-    identical log lines that differ ONLY in those fields hash to the same
-    mask.
+    """Normalize ONLY provably-volatile fields — timestamps and UUIDs — to
+    shared placeholders so structurally-identical log lines that differ
+    ONLY in those fields hash to the same mask.
 
-    codex adversarial-gate finding 1 (2026-07-21): plain integers/decimals
-    are DELIBERATELY left untouched. An arbitrary number is not provably
-    noise — it might be a batch counter, a dollar amount, a port, or any
-    other MEANINGFUL distinct value, and masking it away would silently
-    collapse genuinely DISTINCT data rows to first+last (a filter that
-    silently drops signal is worse than 0% savings). A run that still
-    differs after this masking — by a plain number or by any other text —
-    is DISTINCT DATA and is never grouped for collapse. Never mutates the
-    actual output — used purely as a grouping signal."""
+    codex adversarial-gate finding 1, round 2 (2026-07-21): plain integers/
+    decimals are DELIBERATELY left untouched. An arbitrary number is not
+    provably noise — it might be a batch counter, a dollar amount, a port,
+    or any other MEANINGFUL distinct value, and masking it away would
+    silently collapse genuinely DISTINCT data rows to first+last (a filter
+    that silently drops signal is worse than 0% savings).
+
+    codex adversarial-gate finding 1, round 3 (2026-07-22): hex-masking is
+    ALSO removed — digits are valid hex characters, so an 8+ digit run
+    (a plain numeric id/counter) matched the old hex-blob pattern just as
+    readily as a real hash, causing the SAME collision. Only timestamp and
+    UUID shapes survive masking: both carry non-digit punctuation
+    (`-`/`:`/`T`/`Z`) that a bare integer can never coincidentally produce.
+    A run that still differs after this masking — by a plain number, a
+    hex-looking id, or any other text — is DISTINCT DATA and is never
+    grouped for collapse. Never mutates the actual output — used purely as
+    a grouping signal."""
     masked = _TIMESTAMP_SHAPE_RE.sub("\x00TS\x00", line)
     masked = _MASK_UUID_RE.sub("\x00UUID\x00", masked)
-    masked = _MASK_HEX_RE.sub("\x00HEX\x00", masked)
     return masked
 
 

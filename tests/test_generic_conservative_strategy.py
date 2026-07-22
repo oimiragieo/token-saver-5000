@@ -16,7 +16,7 @@ Covers:
   never collapse to zero, a distinct URL/UUID/error-code in a run exempts it
 
 codex adversarial-gate round 2 (2026-07-21) findings, all covered below:
-  1. `_mask_line` masks ONLY provable volatility (timestamps/UUIDs/hex) —
+  1. `_mask_line` masks ONLY provable volatility (timestamps/UUIDs) —
      NEVER plain integers/decimals — so a run of DISTINCT numeric data
      (`processed batch 1..50`) never collapses (`TestDistinctNumericData`).
   2. Structured JSON/YAML lines bypass generic dedup/collapse entirely,
@@ -28,6 +28,20 @@ codex adversarial-gate round 2 (2026-07-21) findings, all covered below:
   5. `extract_critical_identifiers` round-robins across pattern classes so
      neither `numeric_literal` nor `symbol` can crowd the other out of the
      reinjection footer (`test_identifier_preservation.py`).
+
+codex adversarial-gate round 3 (2026-07-22) findings, narrowing round 2:
+  1. Hex-masking DROPPED entirely from `_mask_line` (digits are valid hex
+     chars, so an 8+ digit id/counter collided with the hex-blob pattern
+     just like round 2's bare-number bug) — only timestamp/UUID shapes
+     (non-pure-digit) survive masking (`TestDistinctNumericData`).
+  2. `_is_structured_line` now detects JSON object/array/string SHAPE
+     (first/last char, O(1)) regardless of length, closing the >2000-char
+     gap that let long JSONL records lose protection (`TestStructuredContentBypass`).
+  3. CR-resolution narrowed further: a single `\\r` needs its ONE
+     pre-final segment to be entirely progress noise on its own; a
+     substantive segment that merely CONTAINS "%" (`discount 95%\\rprice=10`)
+     is no longer enough. Multiple `\\r`'s (>=3 segments) remains
+     sufficient signal on its own (`TestCrResolve`).
 """
 
 from __future__ import annotations
@@ -216,19 +230,46 @@ class TestCrResolve:
         assert "line three" in result
 
     def test_cr_data_line_without_progress_shape_survives_whole(self):
-        """codex finding 3: a `\\r`-separated DATA line (old-Mac record
-        separator / `\\r`-delimited payload fields) must NOT be truncated
-        to its last segment -- there is no %/spinner/dots signal proving
-        this is a progress overwrite, so it stays fully intact."""
-        text = "field_one\rfield_two\rfield_three"
+        """codex finding 3, round 3 (narrowed): a SINGLE `\\r`-separated
+        DATA line (old-Mac record separator / `\\r`-delimited payload
+        fields) must NOT be truncated to its last segment -- the ONE
+        pre-final segment is real, substantive data, not pure progress
+        noise, so the whole line (both fields, `\\r` intact) survives.
+        (A 3+-segment `\\r` line is now an INTENTIONAL exception -- see
+        `test_cr_multi_segment_percentage_sequence_resolves_to_last` --
+        this test is deliberately scoped to exactly ONE `\\r`.)"""
+        text = "field_one\rfield_two"
         result = self.opt._generic_conservative(text)
         assert result == text
         assert "\r" in result
 
     def test_cr_old_mac_style_record_survives_whole(self):
-        text = "record_one_data\rrecord_two_data\rrecord_three_data"
+        text = "record_one_data\rrecord_two_data"
         result = self.opt._generic_conservative(text)
         assert result == text
+
+    def test_cr_single_overwrite_with_real_pre_segment_survives_whole(self):
+        """codex finding 3, round 3 (the exact reported bug): a single
+        `\\r` whose PRE-segment is real, substantive data that merely
+        CONTAINS a percentage ("discount 95%") is NOT progress -- the
+        whole line, including the `\\r`, survives intact. The old
+        unanchored `re.search(r"\\d+%", ...)` matched this and wrongly
+        truncated to just "price=10", losing "discount 95%"."""
+        text = "discount 95%\rprice=10"
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "discount 95%" in result
+        assert "price=10" in result
+
+    def test_cr_multi_segment_percentage_sequence_resolves_to_last(self):
+        """A genuine multi-frame progress sequence (>=2 `\\r`'s / >=3
+        segments) resolves to the final rendered state even when
+        individual frames aren't perfectly bare (e.g. "Downloading 45%"
+        carries a label prefix, not just a bare percentage) -- multiple
+        overwrites is itself strong evidence of real progress-bar shape."""
+        text = "Downloading 45%\rDownloading 46%\rDone"
+        result = self.opt._generic_conservative(text)
+        assert result == "Done"
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +521,29 @@ class TestDistinctNumericData:
         assert counter_result == "\n".join(counter_varying)
         assert "similar lines elided" not in counter_result
 
+    def test_distinct_8_digit_ids_survive_uncollapsed(self):
+        """codex round 3 finding 1: digits are valid hex characters, so the
+        round-2 hex-blob mask (`\\b[0-9a-fA-F]{8,}\\b`) matched an 8+ digit
+        plain id/counter just as readily as a real hash -- "batch
+        12345678" and "batch 12345679" masked IDENTICALLY and could
+        collapse as if they were the same noisy line. Hex-masking is now
+        dropped entirely; a run of distinct 8-digit ids must survive."""
+        lines = [f"batch {12345678 + i}: processing" for i in range(10)]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "similar lines elided" not in result
+
+    def test_mask_line_no_longer_collapses_distinct_hex_looking_digit_runs(self):
+        """Direct unit check on `_mask_line`: two DIFFERENT 8-digit runs
+        (each individually valid hex) must mask DIFFERENTLY now -- the old
+        hex-blob rule made them mask identically."""
+        from src.cli_output_optimizer import _mask_line
+
+        a = _mask_line("batch 12345678: processing")
+        b = _mask_line("batch 12345679: processing")
+        assert a != b
+
 
 # ---------------------------------------------------------------------------
 # codex adversarial-gate finding 2: JSON/YAML structured content bypass
@@ -535,6 +599,49 @@ class TestStructuredContentBypass:
         assert _is_structured_line('"key": "value",')
         assert not _is_structured_line("npm warn deprecated inflight@1.0.6 unsupported package")
         assert not _is_structured_line("2026-07-21T10:00:00.000Z [WARN] retry failed")
+
+    def test_oversized_json_object_line_not_collapsed_when_repeated(self):
+        """codex round 3 finding 2: the old length cap made a JSON record
+        line LOSE structured-content protection past 2000 chars, so
+        repeated (or near-dup) oversized JSONL records could collapse,
+        corrupting syntax and deleting cardinality. A >2000-char IDENTICAL
+        JSON object line must still be protected from exact-dup collapse."""
+        long_line = '{"event": "heartbeat", "payload": "' + ("x" * 2100) + '"}'
+        assert len(long_line) > 2000
+        lines = [long_line] * 8
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "repeated" not in result
+
+    def test_oversized_json_array_element_line_not_collapsed(self):
+        long_line = "[" + ", ".join(str(i) for i in range(500)) + "],"
+        assert len(long_line) > 2000
+        lines = [long_line] * 6
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+
+    def test_is_structured_line_detects_oversized_json_regardless_of_length(self):
+        """Direct unit check: the shape-based detector fires on a
+        >2000-char JSON object without needing (or risking) a full
+        `json.loads` parse of the whole line."""
+        from src.cli_output_optimizer import _is_structured_line
+
+        long_obj = '{"id": 1, "payload": "' + ("x" * 2100) + '"}'
+        assert len(long_obj) > 2000
+        assert _is_structured_line(long_obj)
+        assert _is_structured_line(long_obj + ",")
+
+        long_array = "[" + ", ".join(str(i) for i in range(500)) + "]"
+        assert len(long_array) > 2000
+        assert _is_structured_line(long_array)
+        assert _is_structured_line(long_array + ",")
+
+        long_string = '"' + ("y" * 2100) + '"'
+        assert len(long_string) > 2000
+        assert _is_structured_line(long_string)
+        assert _is_structured_line(long_string + ",")
 
 
 # ---------------------------------------------------------------------------
