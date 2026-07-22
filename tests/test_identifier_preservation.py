@@ -177,3 +177,45 @@ class TestNumericLiteralOrderingFix:
             "symbol matches — _IDENTIFIER_PATTERNS ordering regression"
         )
         assert "1.58.7" in reinjected
+
+    def test_symbol_survives_reinject_cap_despite_many_numeric_literals(self):
+        """codex adversarial-gate finding 5 (2026-07-21): the MIRROR-IMAGE
+        regression the numeric_literal-above-symbol reorder itself risked
+        introducing — a document dense in numeric literals must not crowd
+        a real, removed SYMBOL out of the reinjection footer either.
+        Fixed via round-robin interleaving across pattern classes in
+        `extract_critical_identifiers` (order-of-discovery-independent),
+        not by depending on which pattern happens to run first."""
+        # 205 distinct currency-shaped numeric literals + one meaningful
+        # symbol that appears exactly once, at the front of the text.
+        amounts = " ".join(f"${1000 + i}.50" for i in range(205))
+        text = f"processedTransactionBatch handled the following amounts: {amounts}"
+
+        tokens = extract_critical_identifiers(text)
+        assert "processedTransactionBatch" in tokens
+
+        compressed, reinjected = apply_identifier_guard("compressed body", tokens)
+        assert "processedTransactionBatch" in compressed, (
+            "symbol was crowded out of the reinjection footer by "
+            "numeric_literal matches — round-robin fairness regression"
+        )
+        assert "processedTransactionBatch" in reinjected
+
+    def test_round_robin_interleaves_across_pattern_classes(self):
+        """Direct check that a class with FEWER matches still lands EARLY
+        in the extraction order, regardless of how many matches a
+        different class has — the mechanism behind both crowding fixes."""
+        # 1 uuid + 300 generic words -- the uuid must appear near the
+        # front of the returned list, not after all 300 words.
+        words = " ".join(f"word{i}" for i in range(300))
+        uuid = "550e8400-e29b-41d4-a716-446655440000"
+        text = f"{words} request_id={uuid}"
+
+        tokens = extract_critical_identifiers(text)
+        assert uuid in tokens
+        # Round-robin places the single uuid within the first ~10 tokens
+        # (one per pattern class per round), never buried after 300 words.
+        assert tokens.index(uuid) < 10, (
+            f"uuid landed at index {tokens.index(uuid)} -- round-robin "
+            "fairness broken, extraction order regressed to flat pattern order"
+        )

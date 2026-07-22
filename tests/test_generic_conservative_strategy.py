@@ -14,6 +14,20 @@ Covers:
 - The MUST-NOT guardrails: no global dedup, JSON/YAML structural lines
   protected, frame elision never fires on <=8-frame blocks, blank runs
   never collapse to zero, a distinct URL/UUID/error-code in a run exempts it
+
+codex adversarial-gate round 2 (2026-07-21) findings, all covered below:
+  1. `_mask_line` masks ONLY provable volatility (timestamps/UUIDs/hex) —
+     NEVER plain integers/decimals — so a run of DISTINCT numeric data
+     (`processed batch 1..50`) never collapses (`TestDistinctNumericData`).
+  2. Structured JSON/YAML lines bypass generic dedup/collapse entirely,
+     regardless of length (`TestStructuredContentBypass`).
+  3. CR-resolution only fires on genuine progress/overwrite shape; a
+     `\\r`-separated DATA line survives whole (`TestCrResolve`).
+  4. Progress-noise drop never eats a spinner/percentage line that carries
+     real content — only the leading glyph is stripped (`TestProgressNoiseDrop`).
+  5. `extract_critical_identifiers` round-robins across pattern classes so
+     neither `numeric_literal` nor `symbol` can crowd the other out of the
+     reinjection footer (`test_identifier_preservation.py`).
 """
 
 from __future__ import annotations
@@ -27,15 +41,31 @@ from src.identifier_preservation import apply_identifier_guard, extract_critical
 
 
 def _retry_storm_lines(n: int = 300) -> list[str]:
-    """`n` timestamped retry-log lines that mask to the IDENTICAL shape
-    (only the timestamp + retry counter + dotted IP/port vary — all
-    numeric, all masked away)."""
+    """`n` timestamped retry-log lines that mask to the IDENTICAL shape.
+
+    codex adversarial-gate finding 1 (2026-07-21): the ONLY thing that
+    varies line-to-line is the TIMESTAMP — a provably-volatile field that
+    is safe to mask. Earlier drafts embedded a plain incrementing "attempt
+    {i}" counter in the message text; since #137's fix deliberately never
+    masks plain integers (a counter might be MEANINGFUL, distinct data),
+    that shape no longer collapses — which is the correct, signal-safe
+    behavior, not a bug. This fixture represents the (very common)
+    real-world case of a service logging the IDENTICAL message repeatedly
+    with nothing but a new timestamp each time.
+    """
     lines = []
     for i in range(n):
         minute, second = divmod(i, 60)
         ts = f"2026-07-21T10:{minute:02d}:{second:02d}.123Z"
-        lines.append(f"{ts} [WARN] retry attempt {i} failed: connection refused to 10.0.0.5:5432")
+        lines.append(f"{ts} [WARN] retry failed: connection refused to db.internal:5432")
     return lines
+
+
+def _distinct_batch_lines(n: int = 20) -> list[str]:
+    """`n` lines that are STRUCTURALLY similar but carry genuinely DISTINCT
+    numeric/text data per line (codex finding 1's canonical example) — must
+    NEVER collapse, since the varying content is meaningful, not noise."""
+    return [f"processed batch {i}: {i * 137} records, ${i * 42}.50 total" for i in range(n)]
 
 
 def _python_traceback_lines(n_frames: int = 38) -> list[str]:
@@ -128,7 +158,7 @@ class TestStrategyMapAndFilterWiring:
         assert result.strategy_applied == "passthrough"
 
     def test_unknown_with_fallback_generic_applies_strategy(self):
-        text = "\n".join(f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry {i} to db" for i in range(6))
+        text = "\n".join(f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry to db" for i in range(6))
         result = self.opt.filter(text, fallback_strategy="generic")
         assert result.command_detected == "unknown"  # truthful — still don't know the TYPE
         assert result.strategy_applied == "_generic_conservative"
@@ -163,12 +193,20 @@ class TestCrResolve:
     def setup_method(self):
         self.opt = CLIOutputOptimizer()
 
-    def test_cr_resolve_keeps_final_rendered_state(self):
-        text = "Downloading\rDownloading.\rDownloading..\rDownloading... done\nNext line"
+    def test_cr_resolve_keeps_final_rendered_state_with_percentage(self):
+        text = "Downloading 10%\rDownloading 50%\rDownloading 100%\nNext line"
         result = self.opt._generic_conservative(text)
-        assert "Downloading... done" in result
         assert "\r" not in result
         assert "Next line" in result
+        # The percentage overwrite frames are themselves bare-percentage-
+        # shaped progress lines once split -- dropped by rule (b), not
+        # asserted verbatim here (see TestProgressNoiseDrop for that rule).
+
+    def test_cr_resolve_keeps_final_rendered_state_with_spinner(self):
+        text = "⠋ loading\r⠙ loading\r⠹ loading\nDone"
+        result = self.opt._generic_conservative(text)
+        assert "\r" not in result
+        assert "Done" in result
 
     def test_crlf_is_not_mistaken_for_an_overwrite(self):
         text = "line one\r\nline two\r\nline three"
@@ -176,6 +214,21 @@ class TestCrResolve:
         assert "line one" in result
         assert "line two" in result
         assert "line three" in result
+
+    def test_cr_data_line_without_progress_shape_survives_whole(self):
+        """codex finding 3: a `\\r`-separated DATA line (old-Mac record
+        separator / `\\r`-delimited payload fields) must NOT be truncated
+        to its last segment -- there is no %/spinner/dots signal proving
+        this is a progress overwrite, so it stays fully intact."""
+        text = "field_one\rfield_two\rfield_three"
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "\r" in result
+
+    def test_cr_old_mac_style_record_survives_whole(self):
+        text = "record_one_data\rrecord_two_data\rrecord_three_data"
+        result = self.opt._generic_conservative(text)
+        assert result == text
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +259,32 @@ class TestProgressNoiseDrop:
         text = "Working\n...\n....\nDone"
         result = self.opt._generic_conservative(text)
         assert result == "Working\nDone"
+
+    def test_spinner_with_real_content_keeps_message(self):
+        """codex finding 4: a spinner-LED line with real content must NOT
+        be dropped wholesale — only the leading glyph is stripped, the
+        message survives."""
+        text = "⠋ candidate accepted\nDone"
+        result = self.opt._generic_conservative(text)
+        assert "candidate accepted" in result
+        assert "⠋" not in result
+
+    def test_spinner_with_bare_percentage_still_drops(self):
+        """A spinner immediately followed by JUST a percentage (no other
+        substantive tokens) is still ENTIRELY progress -- drops."""
+        text = "Downloading\n⠋ 45%\nDone"
+        result = self.opt._generic_conservative(text)
+        assert "45%" not in result
+        assert "⠋" not in result
+        assert "Downloading" in result
+        assert "Done" in result
+
+    def test_multiple_leading_spinner_chars_with_message_kept(self):
+        text = "⠋⠙ processing request\nDone"
+        result = self.opt._generic_conservative(text)
+        assert "processing request" in result
+        assert "⠋" not in result
+        assert "⠙" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -252,10 +331,11 @@ class TestMaskedNearDupCollapse:
         self.opt = CLIOutputOptimizer()
 
     def test_masked_near_dup_run_collapses_to_first_and_last(self):
-        lines = [
-            f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry attempt {i} connecting to db"
-            for i in range(8)
-        ]
+        # Varies ONLY by timestamp (a provably-volatile field) -- the
+        # message is byte-identical across all 8 lines, so they group and
+        # collapse. (Varying by a plain counter is covered separately by
+        # TestDistinctNumericData -- that must NEVER collapse.)
+        lines = [f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry connecting to db" for i in range(8)]
         result = self.opt._generic_conservative("\n".join(lines))
         assert lines[0] in result
         assert lines[-1] in result
@@ -264,16 +344,19 @@ class TestMaskedNearDupCollapse:
             assert middle not in result
 
     def test_masked_run_below_min_length_not_collapsed(self):
-        lines = [f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry {i}" for i in range(4)]
+        lines = [f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry" for i in range(4)]
         result = self.opt._generic_conservative("\n".join(lines))
         for line in lines:
             assert line in result
         assert "elided" not in result
 
     def test_masked_run_containing_url_is_not_collapsed(self):
+        # The SAME URL on every line (only the timestamp varies -- masked,
+        # so this run WOULD group) -- the embedded URL must still exempt
+        # it from collapse.
         lines = [
             f"2026-07-21T10:00:{i:02d}.000Z [WARN] health check failed for "
-            f"https://svc.internal/api/v2/health (attempt {i})"
+            f"https://svc.internal/api/v2/health"
             for i in range(10)
         ]
         result = self.opt._generic_conservative("\n".join(lines))
@@ -316,19 +399,142 @@ class TestMaskedNearDupCollapse:
     def test_common_log_level_word_alone_does_not_exempt_the_run(self):
         # WARN/ERROR/INFO are common log-level tags, not distinct error
         # codes — a run of otherwise-identical lines must still collapse.
-        lines = [f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry attempt {i} to db" for i in range(8)]
+        lines = [f"2026-07-21T10:00:{i:02d}.000Z [WARN] retry to db" for i in range(8)]
         result = self.opt._generic_conservative("\n".join(lines))
         assert "similar lines elided" in result
 
     def test_masking_never_mutates_kept_line_content(self):
-        lines = [f"2026-07-21T10:00:{i:02d}.000Z [INFO] job {i} status ok" for i in range(3)]
+        lines = [f"2026-07-21T10:00:{i:02d}.000Z [INFO] job status ok" for i in range(3)]
         result = self.opt._generic_conservative("\n".join(lines))
-        # Below the 5-line minimum -- every original timestamp+number
-        # survives byte-identical (no placeholder text leaks into output).
+        # Below the 5-line minimum -- every original timestamp survives
+        # byte-identical (no placeholder text leaks into output).
         for line in lines:
             assert line in result
         assert "\x00" not in result
         assert "TS\x00" not in result
+
+    def test_uuid_masked_as_one_unit_by_mask_line(self):
+        """Direct unit check on `_mask_line`: a full UUID masks to ONE
+        placeholder (not partially, via the 8-char hex rule alone)."""
+        from src.cli_output_optimizer import _mask_line
+
+        a = _mask_line("request 550e8400-e29b-41d4-a716-446655440000 done")
+        b = _mask_line("request 6ba7b810-9dad-11d1-80b4-00c04fd430c8 done")
+        assert a == b
+        assert "\x00UUID\x00" in a
+
+    def test_plain_numbers_never_masked_by_mask_line(self):
+        """Direct unit check: `_mask_line` leaves plain integers/decimals
+        untouched -- only timestamps/UUIDs/long hex blobs are masked."""
+        from src.cli_output_optimizer import _mask_line
+
+        assert _mask_line("processed batch 1: 137 records") != _mask_line(
+            "processed batch 2: 274 records"
+        )
+
+
+# ---------------------------------------------------------------------------
+# codex adversarial-gate finding 1: distinct numeric data must NEVER collapse
+# ---------------------------------------------------------------------------
+
+
+class TestDistinctNumericData:
+    def setup_method(self):
+        self.opt = CLIOutputOptimizer()
+
+    def test_distinct_batch_lines_survive_uncollapsed(self):
+        """The canonical codex example: 20 `processed batch N: <distinct>`
+        lines, each carrying genuinely different record counts and dollar
+        amounts, must survive byte-identical -- a plain incrementing
+        number is never provable noise."""
+        lines = _distinct_batch_lines(20)
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "similar lines elided" not in result
+        assert "repeated" not in result
+
+    def test_distinct_dollar_amounts_survive_uncollapsed(self):
+        lines = [
+            f"charged customer_{i}: ${100 + i * 7}.50 for plan tier {i % 3}" for i in range(20)
+        ]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+
+    def test_distinct_port_numbers_survive_uncollapsed(self):
+        lines = [f"listening on port {8000 + i} for worker" for i in range(15)]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+
+    def test_timestamp_only_varying_run_collapses_but_counter_varying_does_not(self):
+        """The codex-mandated pairing test: 20 lines varying ONLY by
+        timestamp collapse; 20 lines varying by a distinct counter do not."""
+        ts_only = [f"2026-07-21T10:00:{i:02d}.000Z [INFO] heartbeat ok" for i in range(20)]
+        ts_result = self.opt._generic_conservative("\n".join(ts_only))
+        assert "similar lines elided" in ts_result
+
+        counter_varying = _distinct_batch_lines(20)
+        counter_result = self.opt._generic_conservative("\n".join(counter_varying))
+        assert counter_result == "\n".join(counter_varying)
+        assert "similar lines elided" not in counter_result
+
+
+# ---------------------------------------------------------------------------
+# codex adversarial-gate finding 2: JSON/YAML structured content bypass
+# ---------------------------------------------------------------------------
+
+
+class TestStructuredContentBypass:
+    def setup_method(self):
+        self.opt = CLIOutputOptimizer()
+
+    def test_jsonl_block_with_varying_ids_passes_through_unchanged(self):
+        lines = [f'{{"id": {i}, "name": "user_{i}", "status": "active"}}' for i in range(20)]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text  # every JSONL record survives byte-identical
+
+    def test_jsonl_exact_duplicate_records_not_collapsed(self):
+        """Repeated IDENTICAL JSON records (e.g. heartbeat events) must not
+        be collapsed to "(repeated N times)" -- that is no longer valid
+        JSONL and silently deletes the array's true record count."""
+        lines = ['{"event": "heartbeat", "status": "ok"}'] * 10
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "repeated" not in result
+
+    def test_yaml_flat_list_with_varying_ids_passes_through_unchanged(self):
+        lines = [f"- id: {i}, name: user_{i}, active: true" for i in range(20)]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+
+    def test_yaml_exact_duplicate_list_items_not_collapsed(self):
+        lines = ["- status: ok, checked: true"] * 8
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "repeated" not in result
+
+    def test_json_structural_bracket_only_lines_survive(self):
+        lines = ["{", '  "id": 1,', "},", "{", '  "id": 2,', "},"]
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+
+    def test_is_structured_line_detector_directly(self):
+        from src.cli_output_optimizer import _is_structured_line
+
+        assert _is_structured_line('{"id": 1, "name": "alice"}')
+        assert _is_structured_line('{"id": 1, "name": "alice"},')
+        assert _is_structured_line("},")
+        assert _is_structured_line("- name: alice")
+        assert _is_structured_line('"key": "value",')
+        assert not _is_structured_line("npm warn deprecated inflight@1.0.6 unsupported package")
+        assert not _is_structured_line("2026-07-21T10:00:00.000Z [WARN] retry failed")
 
 
 # ---------------------------------------------------------------------------

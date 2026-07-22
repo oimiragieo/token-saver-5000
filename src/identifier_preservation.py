@@ -96,19 +96,47 @@ _MAX_FOOTER_CHARS = 4000
 def extract_critical_identifiers(text: str) -> list[str]:
     """Extract all execution-critical identifier tokens from *text*.
 
-    Returns a deduplicated list of tokens in first-seen order. These tokens
-    MUST survive compression. Only the first ``_MAX_EXTRACT_CHARS`` are scanned
-    and tokens outside ``[_MIN_PRESERVE_TOKEN_LEN, _MAX_TOKEN_LEN]`` are skipped.
+    Returns a deduplicated list of tokens. These tokens MUST survive
+    compression. Only the first ``_MAX_EXTRACT_CHARS`` are scanned and
+    tokens outside ``[_MIN_PRESERVE_TOKEN_LEN, _MAX_TOKEN_LEN]`` are
+    skipped.
+
+    codex adversarial-gate finding 5 (2026-07-21): the returned list order
+    determines reinjection PRIORITY in :func:`apply_identifier_guard` under
+    the ``_MAX_REINJECT``/``_MAX_FOOTER_CHARS`` caps — a document dense in
+    ANY single pattern class (a flood of generic ``symbol`` matches, OR a
+    flood of ``numeric_literal`` matches) must never be able to crowd every
+    OTHER class out of the footer. Tokens are collected per-pattern-class
+    first (each its own first-seen-order, deduped bucket), then
+    ROUND-ROBIN interleaved across classes — one token per class per round
+    — so every class gets an order-of-discovery-independent, fair shot at
+    the reinjection budget before any single class can monopolize it. A
+    reorder of ``_IDENTIFIER_PATTERNS`` (e.g. #137's numeric_literal-above-
+    symbol fix) can no longer create a new class-starvation regression.
     """
     scan = text[:_MAX_EXTRACT_CHARS]
     seen: set[str] = set()
-    tokens: list[str] = []
+    per_pattern: list[list[str]] = []
     for _pname, pat in _IDENTIFIER_PATTERNS:
+        bucket: list[str] = []
         for m in pat.finditer(scan):
             tok = m.group(0).strip()
             if _MIN_PRESERVE_TOKEN_LEN <= len(tok) <= _MAX_TOKEN_LEN and tok not in seen:
                 seen.add(tok)
-                tokens.append(tok)
+                bucket.append(tok)
+        per_pattern.append(bucket)
+
+    tokens: list[str] = []
+    round_index = 0
+    while True:
+        added_any = False
+        for bucket in per_pattern:
+            if round_index < len(bucket):
+                tokens.append(bucket[round_index])
+                added_any = True
+        if not added_any:
+            break
+        round_index += 1
     return tokens
 
 
