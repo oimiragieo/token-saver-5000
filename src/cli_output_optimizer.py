@@ -17,11 +17,11 @@ Supported strategies:
     tree_output     → collapses common path prefixes
     log_output      → deduplicates consecutive identical lines
     generic         → conservative fallback for unclassified verbose output
-                      (CR-resolve, progress-strip, consecutive exact/masked
-                      dedup, stack-frame elision, blank-run + timestamp-only
-                      line collapse); only applied when detection lands
-                      "unknown" AND the caller opts in via
-                      ``filter(..., fallback_strategy="generic")``
+                      (progress-strip, consecutive exact/masked dedup below
+                      a 2000-char length ceiling, stack-frame elision,
+                      blank-run + timestamp-only line collapse); only
+                      applied when detection lands "unknown" AND the caller
+                      opts in via ``filter(..., fallback_strategy="generic")``
     unknown         → passthrough (no change) unless ``fallback_strategy`` opts in
 
 RTK fallback: if ``shutil.which("rtk")`` finds a binary and the text exceeds
@@ -283,106 +283,28 @@ def _is_structured_line(line: str) -> bool:
         return False
 
 
+# Blanket length ceiling (codex adversarial-gate round 4, 2026-07-22): NO
+# line longer than this is ever collapsed or masked, by ANY rule (exact-dup
+# or masked-near-dup) — long lines are data/structured content, not
+# repetitive short-log noise. This supersedes the need to keep perfecting
+# a JSON-primitive shape detector for arbitrarily large values: a >2000-char
+# line is simply never a collapse candidate in the first place, full stop.
+_MAX_COLLAPSE_LINE_CHARS = 2000
+
+
 def _is_collapsible_content_line(line: str) -> bool:
-    """Only lines with >= `_MIN_COLLAPSIBLE_CONTENT_CHARS` stripped chars,
-    at least one alnum char, AND that are NOT structured JSON/YAML content
-    are eligible for dedup/collapse."""
+    """Only lines with >= `_MIN_COLLAPSIBLE_CONTENT_CHARS` and
+    <= `_MAX_COLLAPSE_LINE_CHARS` stripped chars, at least one alnum char,
+    AND that are NOT structured JSON/YAML content are eligible for
+    dedup/collapse."""
     stripped = line.strip()
     if len(stripped) < _MIN_COLLAPSIBLE_CONTENT_CHARS:
+        return False
+    if len(stripped) > _MAX_COLLAPSE_LINE_CHARS:
         return False
     if _is_structured_line(line):
         return False
     return any(c.isalnum() for c in stripped)
-
-
-# ---------------------------------------------------------------------------
-# codex adversarial-gate finding 3 (2026-07-21, narrowed 2026-07-22):
-# CR-resolution DATA LOSS.
-#
-# The old `_cr_resolve_lines` fired on EVERY lone "\r", so an old-Mac-style
-# record (`\r` as the ONLY line terminator) or a `\r`-delimited data payload
-# lost every field except the last. Round 2 narrowed this to require a
-# percentage/spinner/dots SIGNAL somewhere among the "\r"-delimited chunks
-# — but round 3 found that check STILL too broad: `re.search(r"\d+%", ...)`
-# fires on any segment that merely CONTAINS a "%" ANYWHERE, so
-# "discount 95%\rprice=10" (a single "\r", real substantive data on BOTH
-# sides) got wrongly truncated to just "price=10", losing "discount 95%".
-#
-# Genuine overwrite shape now requires EITHER:
-#   (a) MULTIPLE "\r"s (>=3 segments total) — a repeated-overwrite
-#       sequence is itself strong evidence of a real progress bar, even
-#       when individual frames aren't perfectly "pure" on their own (e.g.
-#       "Downloading 45%\rDownloading 46%\rDone" resolves to "Done" even
-#       though "Downloading 45%" carries a label prefix, not just a bare
-#       percentage) — a genuine `\r`-delimited flat-data format with 3+
-#       fields per line is presumed rare enough in CLI/tool-output content
-#       that this is an accepted, EXPLICIT trade-off, not a silent one; OR
-#   (b) for a SINGLE "\r" (exactly 2 segments), the ONE pre-final segment
-#       must be ENTIRELY progress noise on its own (see
-#       `_is_pure_progress_segment`) — real data that merely CONTAINS a
-#       "%" or starts with a spinner-like glyph is never enough by itself.
-# ---------------------------------------------------------------------------
-
-
-def _is_pure_progress_segment(stripped: str) -> bool:
-    """True when *stripped* segment text is ENTIRELY progress noise (bare
-    percentage / spinner-only / spinner-led with only a bare-percentage or
-    dots remainder / dots-only) — no other substantive tokens. Used ONLY
-    to judge whether a "\\r"-delimited pre-final segment is genuine
-    overwrite noise (see `_looks_like_progress_overwrite`) — kept
-    independent of `_strip_progress_noise_lines` (finding 4, confirmed
-    fixed) so this narrower check can never regress that one."""
-    if not stripped:
-        return True
-    if _BARE_PERCENTAGE_RE.match(stripped):
-        return True
-    if _DOTS_ONLY_RE.match(stripped):
-        return True
-    if all(c in _SPINNER_CHARS or c.isspace() for c in stripped):
-        return True
-    if stripped[0] in _SPINNER_CHARS:
-        remainder = stripped.lstrip("".join(_SPINNER_CHARS)).strip()
-        if not remainder or _BARE_PERCENTAGE_RE.match(remainder) or _DOTS_ONLY_RE.match(remainder):
-            return True
-    return False
-
-
-def _looks_like_progress_overwrite(raw_line: str) -> bool:
-    """True when a "\\r"-containing line shows genuine terminal
-    overwrite/progress-bar shape (see the finding-3-round-3 module comment
-    above for the exact (a)/(b) rule) — rather than being a plain-data
-    line that happens to use "\\r" as a field or record separator
-    (old-Mac line endings, "\\r"-separated payload fields). Those must
-    stay intact, never truncated to the last segment.
-    """
-    segments = raw_line.split("\r")
-    if len(segments) > 2:
-        return True
-    return _is_pure_progress_segment(segments[0].strip())
-
-
-def _cr_resolve_lines(text: str) -> list[str]:
-    """Resolve carriage-return overwrites to the terminal's final rendered
-    state per physical line, then split on newlines — but ONLY when the
-    line actually shows progress/overwrite shape (see
-    `_looks_like_progress_overwrite`).
-
-    CRLF ("\\r\\n") is normalized to a plain newline first so it is never
-    mistaken for an in-place progress overwrite. A remaining lone "\\r"
-    that looks like a genuine terminal overwrite (progress bars, spinners)
-    is resolved to the segment AFTER the last "\\r" (the final rendered
-    content). A "\\r" with no progress/overwrite signal is left FULLY
-    INTACT — it may be an old-Mac-style record separator or a
-    "\\r"-delimited data payload, and truncating it would be silent data
-    loss, not compression.
-    """
-    normalized = text.replace("\r\n", "\n")
-    resolved: list[str] = []
-    for raw_line in normalized.split("\n"):
-        if "\r" in raw_line and _looks_like_progress_overwrite(raw_line):
-            raw_line = raw_line.rsplit("\r", 1)[-1]
-        resolved.append(raw_line)
-    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -1353,26 +1275,40 @@ class CLIOutputOptimizer:
 
         Deliberately more cautious than the type-specific strategies above:
         every collapse rule is scoped to CONSECUTIVE runs (never a global or
-        non-adjacent dedup, which would silently eat distinct data rows) and
+        non-adjacent dedup, which would silently eat distinct data rows),
+        NEVER touches a line longer than ``_MAX_COLLAPSE_LINE_CHARS``, and
         always annotates what was removed. Pipeline (order matters):
 
-            1. CR-resolve: each line collapses to its final rendered segment
-               (the text after the last ``\\r``), preserving in-place
-               progress-bar output instead of dropping the whole line.
-            2. Drop spinner/percentage/dots-only progress noise.
-            3. Collapse consecutive EXACT-duplicate line runs.
-            4. Collapse consecutive MASKED near-duplicate runs (>=5 lines
-               sharing a timestamp/hex/number-normalized shape) to
-               first+last+an elision annotation, unless the run contains a
-               distinct file path / URL / UUID / error code.
-            5. Elide the middle of long (>8) contiguous stack-frame blocks,
+            1. Drop spinner/percentage/dots-only progress noise.
+            2. Collapse consecutive EXACT-duplicate line runs.
+            3. Collapse consecutive MASKED near-duplicate runs (>=5 lines
+               sharing a timestamp/UUID-normalized shape) to first+last+an
+               elision annotation, unless the run contains a distinct file
+               path / URL / UUID / error code.
+            4. Elide the middle of long (>8) contiguous stack-frame blocks,
                keeping the top 5 + bottom 2 frames per block.
-            6. Collapse blank-line runs of 3+ down to exactly 1.
-            7. Drop lines that are ENTIRELY a timestamp + log level with no
+            5. Collapse blank-line runs of 3+ down to exactly 1.
+            6. Drop lines that are ENTIRELY a timestamp + log level with no
                message content (never strips a timestamp prefix off a
                message-bearing line).
+
+        codex adversarial-gate round 4 (2026-07-22): CR-resolution (the
+        former step 1 — collapsing a line to its final rendered segment
+        after the last ``\\r``) was REMOVED entirely, not just narrowed
+        further. It contributed ~0 measured savings (the retry-storm
+        fixture's 90% comes from timestamp-collapse + frame-elision +
+        exact-dup + progress-drop, never from CR overwrite resolution) and
+        was a signal-loss source in every prior round (r1: any lone ``\\r``
+        truncated; r2: a bare ``%``/spinner ANYWHERE in a segment
+        truncated; r3: a single real-data segment merely containing a
+        ``%`` still truncated). Per the convergence guardrail, the whole
+        heuristic CLASS is removed rather than further special-cased: a
+        line containing ``\\r`` now passes through completely unmodified
+        (only universal ``\\r\\n`` -> ``\\n`` normalization still applies,
+        since that is a deterministic encoding fix, never a heuristic
+        guess) — ``field1\\rfield2\\rfield3`` can no longer lose a field.
         """
-        lines = _cr_resolve_lines(text)
+        lines = text.replace("\r\n", "\n").split("\n")
         if not lines:
             return text
         lines = _strip_progress_noise_lines(lines)

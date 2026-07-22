@@ -42,6 +42,20 @@ codex adversarial-gate round 3 (2026-07-22) findings, narrowing round 2:
      substantive segment that merely CONTAINS "%" (`discount 95%\\rprice=10`)
      is no longer enough. Multiple `\\r`'s (>=3 segments) remains
      sufficient signal on its own (`TestCrResolve`).
+
+codex adversarial-gate round 4 (2026-07-22, FINAL — convergence guardrail:
+simplify rather than keep special-casing two narrow-edge heuristics):
+  A. CR-resolution REMOVED ENTIRELY from the pipeline (not narrowed
+     further) — it contributed ~0 measured savings and was a signal-loss
+     source in every round (r1/r2/r3). A line containing `\\r` now passes
+     through completely unmodified except universal `\\r\\n` -> `\\n`
+     normalization (a deterministic encoding fix, never a heuristic
+     guess) (`TestCrResolve`, rewritten).
+  B. A blanket `_MAX_COLLAPSE_LINE_CHARS = 2000` length ceiling: no line
+     longer than this is EVER collapsed or masked, by exact-dup OR
+     masked-near-dup, superseding the need to keep perfecting a
+     JSON-primitive shape detector for arbitrarily large values
+     (`TestLengthCeiling`).
 """
 
 from __future__ import annotations
@@ -204,72 +218,73 @@ class TestStrategyMapAndFilterWiring:
 
 
 class TestCrResolve:
+    """codex adversarial-gate round 4 (2026-07-22): CR-resolution was
+    REMOVED entirely from the pipeline (not just narrowed further). It
+    contributed ~0 measured savings and was a signal-loss source in every
+    prior round. A line containing `\\r` now passes through completely
+    unmodified -- only universal `\\r\\n` -> `\\n` normalization still
+    applies (a deterministic encoding fix, never a heuristic guess)."""
+
     def setup_method(self):
         self.opt = CLIOutputOptimizer()
 
-    def test_cr_resolve_keeps_final_rendered_state_with_percentage(self):
-        text = "Downloading 10%\rDownloading 50%\rDownloading 100%\nNext line"
-        result = self.opt._generic_conservative(text)
-        assert "\r" not in result
-        assert "Next line" in result
-        # The percentage overwrite frames are themselves bare-percentage-
-        # shaped progress lines once split -- dropped by rule (b), not
-        # asserted verbatim here (see TestProgressNoiseDrop for that rule).
-
-    def test_cr_resolve_keeps_final_rendered_state_with_spinner(self):
-        text = "⠋ loading\r⠙ loading\r⠹ loading\nDone"
-        result = self.opt._generic_conservative(text)
-        assert "\r" not in result
-        assert "Done" in result
-
-    def test_crlf_is_not_mistaken_for_an_overwrite(self):
+    def test_crlf_is_normalized_to_plain_newline(self):
         text = "line one\r\nline two\r\nline three"
         result = self.opt._generic_conservative(text)
         assert "line one" in result
         assert "line two" in result
         assert "line three" in result
+        assert "\r" not in result  # CRLF normalized away, not a lone \r
 
-    def test_cr_data_line_without_progress_shape_survives_whole(self):
-        """codex finding 3, round 3 (narrowed): a SINGLE `\\r`-separated
-        DATA line (old-Mac record separator / `\\r`-delimited payload
-        fields) must NOT be truncated to its last segment -- the ONE
-        pre-final segment is real, substantive data, not pure progress
-        noise, so the whole line (both fields, `\\r` intact) survives.
-        (A 3+-segment `\\r` line is now an INTENTIONAL exception -- see
-        `test_cr_multi_segment_percentage_sequence_resolves_to_last` --
-        this test is deliberately scoped to exactly ONE `\\r`.)"""
-        text = "field_one\rfield_two"
+    def test_lone_cr_data_line_passes_through_verbatim(self):
+        """The exact regression this round closes: a `\\r`-separated DATA
+        line must NEVER lose a field, regardless of segment count or
+        content shape -- CR is no longer interpreted as an overwrite
+        signal AT ALL."""
+        text = "field1\rfield2\rfield3"
         result = self.opt._generic_conservative(text)
         assert result == text
-        assert "\r" in result
+        assert "field1" in result
+        assert "field2" in result
+        assert "field3" in result
 
-    def test_cr_old_mac_style_record_survives_whole(self):
-        text = "record_one_data\rrecord_two_data"
+    def test_cr_percentage_sequence_no_longer_resolved(self):
+        """A genuine multi-frame progress sequence is NO LONGER collapsed
+        to its final frame -- the whole heuristic class was removed, so
+        this now passes through unmodified too (an intentional, documented
+        trade-off: CR-resolution added negligible savings but was a
+        repeated signal-loss source)."""
+        text = "Downloading 10%\rDownloading 50%\rDownloading 100%\nNext line"
         result = self.opt._generic_conservative(text)
         assert result == text
 
     def test_cr_single_overwrite_with_real_pre_segment_survives_whole(self):
-        """codex finding 3, round 3 (the exact reported bug): a single
-        `\\r` whose PRE-segment is real, substantive data that merely
-        CONTAINS a percentage ("discount 95%") is NOT progress -- the
-        whole line, including the `\\r`, survives intact. The old
-        unanchored `re.search(r"\\d+%", ...)` matched this and wrongly
-        truncated to just "price=10", losing "discount 95%"."""
+        """The exact codex-reported bug from round 3, now trivially true
+        under blanket removal: a single `\\r` whose pre-segment is real
+        data ("discount 95%") survives fully intact."""
         text = "discount 95%\rprice=10"
         result = self.opt._generic_conservative(text)
         assert result == text
         assert "discount 95%" in result
         assert "price=10" in result
 
-    def test_cr_multi_segment_percentage_sequence_resolves_to_last(self):
-        """A genuine multi-frame progress sequence (>=2 `\\r`'s / >=3
-        segments) resolves to the final rendered state even when
-        individual frames aren't perfectly bare (e.g. "Downloading 45%"
-        carries a label prefix, not just a bare percentage) -- multiple
-        overwrites is itself strong evidence of real progress-bar shape."""
-        text = "Downloading 45%\rDownloading 46%\rDone"
+    def test_cr_old_mac_style_record_survives_whole(self):
+        text = "record_one_data\rrecord_two_data\rrecord_three_data"
         result = self.opt._generic_conservative(text)
-        assert result == "Done"
+        assert result == text
+
+    def test_spinner_sequence_with_lone_cr_passes_through(self):
+        """The embedded `\\r`s survive intact (finding 3 removed) -- the
+        LEADING spinner glyph on the whole "line" is separately stripped
+        by the unrelated, already-confirmed-fixed finding-4 rule, which
+        keeps everything after the glyph (including the internal `\\r`s)
+        verbatim."""
+        text = "⠋ loading\r⠙ loading\r⠹ loading\nDone"
+        result = self.opt._generic_conservative(text)
+        assert "\r" in result
+        assert result.count("\r") == 2
+        assert "loading" in result
+        assert "Done" in result
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +657,62 @@ class TestStructuredContentBypass:
         assert len(long_string) > 2000
         assert _is_structured_line(long_string)
         assert _is_structured_line(long_string + ",")
+
+
+# ---------------------------------------------------------------------------
+# codex adversarial-gate round 4, item B: blanket length ceiling
+# ---------------------------------------------------------------------------
+
+
+class TestLengthCeiling:
+    """A line longer than `_MAX_COLLAPSE_LINE_CHARS` (2000) is NEVER
+    collapsed or masked, by exact-dup OR masked-near-dup -- a blanket
+    conservative guard that supersedes the need to perfect a JSON-
+    primitive shape detector for arbitrarily large, non-JSON-shaped
+    values too (e.g. a long plain-text line, not just JSON)."""
+
+    def setup_method(self):
+        self.opt = CLIOutputOptimizer()
+
+    def test_oversized_plain_text_line_repeated_not_collapsed(self):
+        """A >2000-char line that is NOT JSON/YAML-shaped (so it would
+        have relied purely on the length ceiling, not the structured-
+        content bypass) must still never be exact-dup collapsed."""
+        long_line = "processing record with payload=" + ("z" * 2000)
+        assert len(long_line) > 2000
+        lines = [long_line] * 6
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "repeated" not in result
+
+    def test_oversized_masked_near_dup_run_not_collapsed(self):
+        """A >2000-char line that would otherwise mask-group (timestamp-
+        only-varying) must still never be collapsed once past the
+        length ceiling."""
+        long_suffix = "z" * 2000
+        lines = [f"2026-07-22T10:00:{i:02d}.000Z [INFO] payload={long_suffix}" for i in range(8)]
+        assert all(len(ln) > 2000 for ln in lines)
+        text = "\n".join(lines)
+        result = self.opt._generic_conservative(text)
+        assert result == text
+        assert "similar lines elided" not in result
+
+    def test_is_collapsible_content_line_rejects_oversized_lines_directly(self):
+        from src.cli_output_optimizer import _is_collapsible_content_line
+
+        short_line = "a normal log line with plenty of content here"
+        long_line = "a normal log line with plenty of content here " + ("x" * 2000)
+        assert _is_collapsible_content_line(short_line)
+        assert not _is_collapsible_content_line(long_line)
+
+    def test_line_at_exactly_the_ceiling_is_still_collapsible(self):
+        from src.cli_output_optimizer import _MAX_COLLAPSE_LINE_CHARS, _is_collapsible_content_line
+
+        exactly_at_ceiling = "x" * _MAX_COLLAPSE_LINE_CHARS
+        one_over_ceiling = "x" * (_MAX_COLLAPSE_LINE_CHARS + 1)
+        assert _is_collapsible_content_line(exactly_at_ceiling)
+        assert not _is_collapsible_content_line(one_over_ceiling)
 
 
 # ---------------------------------------------------------------------------
