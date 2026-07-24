@@ -27,6 +27,18 @@ class ProviderProfile:
         return asdict(self)
 
 
+# `minimum_cacheable_tokens` re-verified 2026-07-24 against each provider's
+# LIVE docs (this table + api/app/services/cache_policy.py's `_MIN_TOKENS`
+# were found stale and mutually inconsistent — most entries here carried a
+# flat 1024 regardless of the real per-model minimum). Sources: Anthropic
+# platform.claude.com/docs, OpenAI developers.openai.com/api/docs/guides/
+# prompt-caching, Google ai.google.dev/gemini-api/docs/caching. Anthropic:
+# Opus 4.8=1024, Opus 4.7=2048, Opus 4.6=4096, Sonnet 5/4.6=1024,
+# Haiku 4.5=4096, Fable 5=512 (Mythos 5 has no independently-verified figure
+# — left at 1024 pending its own check, see notes on that entry). OpenAI: a
+# flat 1024 across every model including GPT-5.6/mini tiers — unchanged.
+# Gemini: 3.1 Pro Preview=4096, 3.5 Flash=4096, 2.5 Flash/Pro=2048 (NOT the
+# flat 1024 previously coded).
 _PROFILES = {
     "claude-fable-5": ProviderProfile(
         model="claude-fable-5",
@@ -36,13 +48,13 @@ _PROFILES = {
         cached_input_cost_per_million=1.0,
         context_window=1_000_000,
         cache_read_field="cache_read_input_tokens",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=512,
         cache_token_increment=256,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
         prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
         recommended_output_format="toon",
-        notes="Anthropic's Mythos-class flagship (released 2026-06-09): $10/$50 per 1M, $1 cached input (standard 90% discount), 1M-token context, 128K max output. ~2x Opus 4.8 pricing — compression ROI is the highest in the Anthropic lineup. Pricing verified vs anthropic.com + OpenRouter 2026-06-12.",
+        notes="Anthropic's Mythos-class flagship (released 2026-06-09): $10/$50 per 1M, $1 cached input (standard 90% discount), 1M-token context, 128K max output. ~2x Opus 4.8 pricing — compression ROI is the highest in the Anthropic lineup. Pricing verified vs anthropic.com + OpenRouter 2026-06-12. minimum_cacheable_tokens=512 verified vs platform.claude.com/docs 2026-07-24 (was incorrectly 1024).",
     ),
     "claude-mythos-5": ProviderProfile(
         model="claude-mythos-5",
@@ -58,7 +70,7 @@ _PROFILES = {
         cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
         prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
         recommended_output_format="toon",
-        notes="Same underlying model as Fable 5 without the dual-use safety measures; LIMITED PREVIEW (approved orgs only). Same $10/$50 per 1M + $1 cached input. Pricing verified vs OpenRouter 2026-06-12.",
+        notes="Same underlying model as Fable 5 without the dual-use safety measures; LIMITED PREVIEW (approved orgs only). Same $10/$50 per 1M + $1 cached input. Pricing verified vs OpenRouter 2026-06-12. minimum_cacheable_tokens NOT independently verified as of 2026-07-24 (no public Mythos-5 cache doc found) — left at 1024 pending its own check; do not assume it matches Fable 5's 512.",
     ),
     "claude-opus-4.8": ProviderProfile(
         model="claude-opus-4.8",
@@ -84,13 +96,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.5,
         context_window=1_000_000,
         cache_read_field="cache_read_input_tokens",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=2048,
         cache_token_increment=256,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
         prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail. 1M-context mode benefits from stable-prefix discipline at larger document sizes.",
         recommended_output_format="toon",
-        notes="Flagship Anthropic model. Same per-1M pricing as Opus 4.6 but with 1M-token context window — compression still pays off because output tokens dominate the bill.",
+        notes="Flagship Anthropic model. Same per-1M pricing as Opus 4.6 but with 1M-token context window — compression still pays off because output tokens dominate the bill. minimum_cacheable_tokens=2048 verified vs platform.claude.com/docs 2026-07-24 (was incorrectly 1024).",
     ),
     "claude-opus-4.6": ProviderProfile(
         model="claude-opus-4.6",
@@ -100,13 +112,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.5,
         context_window=200_000,
         cache_read_field="cache_read_input_tokens",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=4096,
         cache_token_increment=256,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Keep requests on the same workflow shape; Anthropic cache reuse depends primarily on exact stable-prefix identity.",
         prompt_prefix_strategy="Keep tool definitions, system instructions, and large docs fixed at the front; move volatile query material to the tail.",
         recommended_output_format="toon",
-        notes="Premium-cost model: optimize aggressively for cache stability and compact structured outputs.",
+        notes="Premium-cost model: optimize aggressively for cache stability and compact structured outputs. minimum_cacheable_tokens=4096 verified vs platform.claude.com/docs 2026-07-24 (was incorrectly 1024).",
     ),
     "claude-sonnet-4.6": ProviderProfile(
         model="claude-sonnet-4.6",
@@ -160,13 +172,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.10,
         context_window=200_000,
         cache_read_field="cache_read_input_tokens",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=4096,
         cache_token_increment=256,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Keep lightweight prefixes stable; routing hints are less important than exact prefix reuse.",
         prompt_prefix_strategy="Keep prompts compact and stable; prefer lower-fidelity retrieval by default.",
         recommended_output_format="toon",
-        notes="Low-cost model; useful for lightweight routing and summary tasks.",
+        notes="Low-cost model; useful for lightweight routing and summary tasks. minimum_cacheable_tokens=4096 verified vs platform.claude.com/docs 2026-07-24 (was incorrectly 1024).",
     ),
     "gpt-5.4": ProviderProfile(
         model="gpt-5.4",
@@ -218,13 +230,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.20,
         context_window=1_000_000,
         cache_read_field="cachedContentTokenCount",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=4096,
         cache_token_increment=1024,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Gemini cache performance depends on keeping a large common prefix first; route stickiness is less configurable than OpenAI-style prompt_cache_key flows.",
         prompt_prefix_strategy="Large contexts are available, but stable prefix ordering still determines cache reuse.",
         recommended_output_format="json",
-        notes="Gemini 3.1 Pro flagship: $2/$12 per MTok (<=200K), 2x in / 1.5x out above 200K. Large-context; can afford higher-fidelity retrieval when correctness benefits.",
+        notes="Gemini 3.1 Pro flagship: $2/$12 per MTok (<=200K), 2x in / 1.5x out above 200K. Large-context; can afford higher-fidelity retrieval when correctness benefits. minimum_cacheable_tokens=4096 verified vs ai.google.dev/gemini-api/docs/caching 2026-07-24 (was incorrectly flat 1024; same figure applies to implicit and explicit caching per that doc).",
     ),
     # Gemini 3.5 Flash — $1.50/$9 per MTok, $0.15 cache-read, flat 1M context.
     # Launched 2026-05-19 (Google I/O). Verified vs Google AI pricing +
@@ -239,13 +251,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.15,
         context_window=1_000_000,
         cache_read_field="cachedContentTokenCount",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=4096,
         cache_token_increment=1024,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Same prefix-stability rules as Pro; flat 1M-context pricing means stable-prefix discipline pays off across the whole window.",
         prompt_prefix_strategy="Keep large contexts at the head; 3.5 Flash handles long inputs at a flat rate but still pays per token.",
         recommended_output_format="json",
-        notes="Gemini 3.5 Flash (2026-05-19): frontier-level agentic/coding/multimodal at $1.50/$9 per MTok, flat 1M context. Strong compression ROI given the $9 output rate.",
+        notes="Gemini 3.5 Flash (2026-05-19): frontier-level agentic/coding/multimodal at $1.50/$9 per MTok, flat 1M context. Strong compression ROI given the $9 output rate. minimum_cacheable_tokens=4096 verified vs ai.google.dev/gemini-api/docs/caching 2026-07-24 (was incorrectly 1024).",
     ),
     # Gemini 2.5 Flash — $0.30/$2.50 per MTok, $0.03 cache-read. Kept as a
     # historical/low-cost entry (this was previously mislabeled "gemini-3.1-flash";
@@ -258,13 +270,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.03,
         context_window=1_000_000,
         cache_read_field="cachedContentTokenCount",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=2048,
         cache_token_increment=1024,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Same prefix-stability rules as Pro; Flash tier amplifies the value of cache reuse because the base rate is already low.",
         prompt_prefix_strategy="Keep large contexts at the head; Flash handles long inputs but still pays per token.",
         recommended_output_format="json",
-        notes="Low-cost Gemini 2.5 Flash; pair with aggressive compression and cache reuse to get the best $/request.",
+        notes="Low-cost Gemini 2.5 Flash; pair with aggressive compression and cache reuse to get the best $/request. minimum_cacheable_tokens=2048 verified vs ai.google.dev/gemini-api/docs/caching 2026-07-24 (was incorrectly 1024).",
     ),
     "gemini-auto": ProviderProfile(
         model="gemini-auto",
@@ -275,13 +287,13 @@ _PROFILES = {
         cached_input_cost_per_million=0.06,
         context_window=1_000_000,
         cache_read_field="cachedContentTokenCount",
-        minimum_cacheable_tokens=1024,
+        minimum_cacheable_tokens=4096,
         cache_token_increment=1024,
         supports_prompt_cache_key=False,
         cache_routing_strategy="Auto routing picks Pro for hard prompts and Flash for easy ones; prompt cache hits are per-family, so the same prefix can land on different tiers across turns.",
         prompt_prefix_strategy="Stable prefixes still help, but assume some routing variance — don't overoptimize for a specific tier.",
         recommended_output_format="json",
-        notes="Blended-rate profile for Gemini auto routing; cost math is approximate because actual pricing depends on per-turn tier selection.",
+        notes="Blended-rate profile for Gemini auto routing; cost math is approximate because actual pricing depends on per-turn tier selection. minimum_cacheable_tokens=4096 verified vs ai.google.dev/gemini-api/docs/caching 2026-07-24 — the auto router picks between 3.1 Pro Preview and 3.5 Flash, both 4096, so 4096 is the conservative correct minimum for the pair (was incorrectly 1024).",
     ),
     # gpt-5.4-mini — $0.75/$4.50 per MTok, $0.075 cache-read. Verified vs
     # OpenAI official pricing (platform.openai.com/docs/pricing) AND OpenRouter

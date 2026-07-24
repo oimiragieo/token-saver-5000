@@ -168,3 +168,54 @@ def test_gpt_5_6_alias_resolves_to_sol():
     assert get_provider_profile("gpt-5-6").model == "gpt-5.6-sol"
     assert get_provider_profile("gpt-5-6-terra").model == "gpt-5.6-terra"
     assert get_provider_profile("gpt-5-6-luna").model == "gpt-5.6-luna"
+
+
+# ---------------------------------------------------------------------------
+# minimum_cacheable_tokens correctness (2026-07-24). Both this table and the
+# sibling api/app/services/cache_policy.py `_MIN_TOKENS` dict were found
+# stale/inconsistent (most entries carried a flat 1024 regardless of the
+# real per-model minimum) and corrected against each provider's live docs:
+# Anthropic platform.claude.com/docs, OpenAI developers.openai.com/api/docs/
+# guides/prompt-caching, Google ai.google.dev/gemini-api/docs/caching.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model,expected_minimum",
+    [
+        # Anthropic.
+        ("claude-fable-5", 512),
+        ("claude-opus-4.8", 1024),
+        ("claude-opus-4.7", 2048),
+        ("claude-opus-4.6", 4096),
+        ("claude-sonnet-5", 1024),
+        ("claude-sonnet-4.6", 1024),
+        ("claude-haiku-4.5", 4096),
+        # OpenAI — flat 1024 across every tier, unchanged by this fix.
+        ("gpt-5.4", 1024),
+        ("gpt-4.1", 1024),
+        ("gpt-5.4-mini", 1024),
+        ("gpt-4.1-mini", 1024),
+        ("gpt-5.5", 1024),
+        ("gpt-5.6-sol", 1024),
+        ("gpt-5.6-terra", 1024),
+        ("gpt-5.6-luna", 1024),
+        # Gemini — NOT the flat 1024 previously coded.
+        ("gemini-3.1-pro-preview", 4096),
+        ("gemini-3.5-flash", 4096),
+        ("gemini-2.5-flash", 2048),
+        ("gemini-auto", 4096),
+    ],
+)
+def test_minimum_cacheable_tokens_matches_verified_provider_docs(model, expected_minimum):
+    profile = get_provider_profile(model)
+    assert profile.minimum_cacheable_tokens == expected_minimum
+
+
+def test_claude_mythos_5_minimum_cacheable_tokens_is_unverified_placeholder():
+    # No independently-published Mythos-5 cache doc exists; this locks the
+    # current placeholder so a future silent change is caught, without
+    # asserting it is the CORRECT value (it may not be — see the model's
+    # `notes` field).
+    profile = get_provider_profile("claude-mythos-5")
+    assert profile.minimum_cacheable_tokens == 1024
