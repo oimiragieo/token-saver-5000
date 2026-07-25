@@ -23,6 +23,7 @@ import numpy as np
 import networkx as nx
 
 from .embeddings import EmbeddingManager
+from .node_identity import extract_file_id_from_node
 
 logger = logging.getLogger(__name__)
 
@@ -825,7 +826,10 @@ class CodeSemanticCompressor:
 
         candidates = []
         for chunk_id, chunk in self.chunks.items():
-            if file_id and not chunk_id.startswith(file_id):
+            # #420: boundary-safe membership -- a bare startswith collides
+            # across file_ids that share a prefix ("doc-large::x" matches a
+            # search scoped to "doc").
+            if file_id and extract_file_id_from_node(chunk_id) != file_id:
                 continue
 
             from sklearn.metrics.pairwise import cosine_similarity

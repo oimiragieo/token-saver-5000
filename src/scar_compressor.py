@@ -19,6 +19,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .node_identity import extract_file_id_from_node
+
 _UNTRAINED_WARNING_EMITTED = False
 logger = logging.getLogger(__name__)
 
@@ -390,7 +392,10 @@ class SCAREnhancedCompressor:
         # Get candidate nodes
         candidates = []
         for node_id, node in self.base_compressor.chunks.items():
-            if file_id and not node_id.startswith(file_id):
+            # #420: boundary-safe membership -- a bare startswith collides
+            # across file_ids that share a prefix ("doc-large_n0" matches a
+            # search scoped to "doc").
+            if file_id and extract_file_id_from_node(node_id) != file_id:
                 continue
 
             # Standard cosine similarity

@@ -19,6 +19,7 @@ from typing import Any, Dict
 
 from ..identity_scope import compose_scoped_file_id
 from ..types import HandlerContext  # TypedDict for handler context
+from .compression_handlers import chunks_for_file
 
 logger = logging.getLogger("semantic-modulator")
 
@@ -249,7 +250,7 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
         graph_data = nx.node_link_data(compressor.graphs[scoped_file_id], edges="links")
         persistence.save_document(
             file_id=scoped_file_id,
-            chunks={k: v for k, v in compressor.chunks.items() if k.startswith(scoped_file_id)},
+            chunks=dict(chunks_for_file(compressor.chunks, scoped_file_id)),
             graph_data=graph_data,
             metadata=compressor.file_metadata.get(scoped_file_id, {}),
         )

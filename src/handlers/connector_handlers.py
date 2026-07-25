@@ -11,6 +11,7 @@ import networkx as nx
 from ..connector_registry import ConnectorRegistry
 from ..identity_scope import compose_scoped_file_id
 from ..observability import get_observability
+from .compression_handlers import chunks_for_file
 
 
 def _registry(context: dict[str, Any]) -> ConnectorRegistry:
@@ -136,11 +137,7 @@ async def handle_sync_connector_feed(context: dict[str, Any], args: dict[str, An
                 graph_data = nx.node_link_data(graph, edges="links")
                 context["persistence"].save_document(
                     file_id=scoped_file_id,
-                    chunks={
-                        k: v
-                        for k, v in context["compressor"].chunks.items()
-                        if k.startswith(scoped_file_id)
-                    },
+                    chunks=dict(chunks_for_file(context["compressor"].chunks, scoped_file_id)),
                     graph_data=graph_data,
                     metadata=context["compressor"].file_metadata.get(scoped_file_id, {}),
                 )

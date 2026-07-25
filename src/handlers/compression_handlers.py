@@ -86,6 +86,23 @@ def chunks_for_file(chunks: dict, scoped_file_id: str) -> list:
     )
 
 
+def resolve_anchored_node_ids(chunks: dict, scoped_file_id: str, keywords: list) -> set:
+    """Boundary-safe anchored-keyword resolution (#420).
+
+    Reuses `chunks_for_file` rather than a bare `node_id.startswith(scoped_file_id)`
+    -- the same collision class `chunks_for_file` fixes: `"doc-large_n0"` matches
+    a keyword search scoped to `"doc"` under a naive prefix test.
+    """
+    keywords_lower = [kw.lower() for kw in keywords if kw]
+    if not keywords_lower:
+        return set()
+    return {
+        node_id
+        for node_id, node in chunks_for_file(chunks, scoped_file_id)
+        if any(kw in node.text.lower() for kw in keywords_lower)
+    }
+
+
 def classify_estimate_accuracy(*, actual: float, estimated: float) -> str:
     """Grade an estimated compression ratio against the measured one.
 
@@ -764,11 +781,7 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         graph_data = nx.node_link_data(context["compressor"].graphs[scoped_file_id], edges="links")
         success = context["persistence"].save_document(
             file_id=scoped_file_id,
-            chunks={
-                k: v
-                for k, v in context["compressor"].chunks.items()
-                if k.startswith(scoped_file_id)
-            },
+            chunks=dict(chunks_for_file(context["compressor"].chunks, scoped_file_id)),
             graph_data=graph_data,
             metadata=context["compressor"].file_metadata.get(scoped_file_id, {}),
         )
@@ -1096,15 +1109,11 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
     try:
         compressor = context["compressor"]
         anchored_keywords = args.get("anchored_keywords", [])
-        anchored_node_ids = set()
-        if anchored_keywords:
-            keywords_lower = [kw.lower() for kw in anchored_keywords if kw]
-            anchored_node_ids = {
-                node_id
-                for node_id, node in compressor.chunks.items()
-                if node_id.startswith(scoped_file_id)
-                and any(kw in node.text.lower() for kw in keywords_lower)
-            }
+        anchored_node_ids = (
+            resolve_anchored_node_ids(compressor.chunks, scoped_file_id, anchored_keywords)
+            if anchored_keywords
+            else set()
+        )
 
         # F3: Reconstruct raw_text for auto-mode heuristic from stored chunks.
         # Chunks are sorted by node_id (which encodes insertion order) so the
@@ -1669,7 +1678,7 @@ async def handle_delete_document(context: HandlerContext, args: Dict[str, Any]) 
 You are about to delete document: {file_id}
 
 This will:
-  -Remove all {len([k for k in context['compressor'].chunks.keys() if k.startswith(scoped_file_id)])} semantic nodes from memory
+  -Remove all {len(chunks_for_file(context['compressor'].chunks, scoped_file_id))} semantic nodes from memory
   -Delete persistent storage (cannot be undone)
   -Clear retrieval history for this document
 
@@ -1700,7 +1709,7 @@ Tip: Use list_documents() to see all available documents first
             compressor.delete_document_from_memory(scoped_file_id)
         else:
             # SemanticCompressor path — chunks/graphs/file_metadata are real dicts
-            chunks_to_delete = [k for k in compressor.chunks.keys() if k.startswith(scoped_file_id)]
+            chunks_to_delete = [k for k, _ in chunks_for_file(compressor.chunks, scoped_file_id)]
             for chunk_id in chunks_to_delete:
                 del compressor.chunks[chunk_id]
             if scoped_file_id in compressor.graphs:
@@ -2458,7 +2467,7 @@ async def handle_diff_reingest(context: HandlerContext, args: Dict[str, Any]) ->
             graph_data = nx.node_link_data(compressor.graphs[scoped_file_id], edges="links")
             success = context["persistence"].save_document(
                 file_id=scoped_file_id,
-                chunks={k: v for k, v in compressor.chunks.items() if k.startswith(scoped_file_id)},
+                chunks=dict(chunks_for_file(compressor.chunks, scoped_file_id)),
                 graph_data=graph_data,
                 metadata=compressor.file_metadata.get(scoped_file_id, {}),
             )
