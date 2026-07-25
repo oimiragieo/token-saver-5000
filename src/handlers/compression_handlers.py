@@ -61,6 +61,31 @@ _ESTIMATE_GOOD_MAX_RELATIVE_ERROR = 0.40
 _ESTIMATE_BAND_EPSILON = 1e-9
 
 
+def chunks_for_file(chunks: dict, scoped_file_id: str) -> list:
+    """Select a document's chunks, sorted, WITHOUT capturing prefix siblings.
+
+    `nid.startswith(scoped_file_id)` is not a membership test. `"doc-large_n0"`
+    starts with `"doc"`, so the shorter document silently absorbed the longer
+    one's chunks. Dogfooded live: a no-query `read_skeleton` on the short id
+    came back compressed against the sibling's H1, dropping half its nodes
+    (80 -> 40) and making the ratio WORSE (2.194 -> 1.706).
+
+    `_node_belongs_to_file` already existed for exactly this collision -- its
+    docstring names the same failure and lists the surfaces it broke. It was
+    applied inside the compressor and never adopted by the handlers. Routing
+    every handler site through this one function is what stops the class
+    returning a third time; a sixteenth hand-rolled predicate is how it did.
+
+    Sorted because order carries document structure, and the auto-mode heading
+    heuristic depends on the first chunk actually being first.
+    """
+    from src.semantic_compressor import _node_belongs_to_file
+
+    return sorted(
+        (nid, node) for nid, node in chunks.items() if _node_belongs_to_file(nid, scoped_file_id)
+    )
+
+
 def classify_estimate_accuracy(*, actual: float, estimated: float) -> str:
     """Grade an estimated compression ratio against the measured one.
 
@@ -1090,11 +1115,7 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
         raw_text_for_auto: str | None = None
         if selection_mode == "auto":
             try:
-                file_chunks = sorted(
-                    (nid, node)
-                    for nid, node in compressor.chunks.items()
-                    if nid.startswith(scoped_file_id)
-                )
+                file_chunks = chunks_for_file(compressor.chunks, scoped_file_id)
                 raw_text_for_auto = "\n\n".join(node.text for _, node in file_chunks)
             except (AttributeError, TypeError):
                 raw_text_for_auto = None
