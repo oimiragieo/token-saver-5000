@@ -55,6 +55,10 @@ _LIST_ITEM_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
 #: a 0.8% miss must stay "excellent", a 55% miss must not.
 _ESTIMATE_EXCELLENT_MAX_RELATIVE_ERROR = 0.15
 _ESTIMATE_GOOD_MAX_RELATIVE_ERROR = 0.40
+#: Absorbs float representation error at the band edges so a value that IS the
+#: boundary is not demoted by it. Far smaller than any meaningful difference in
+#: estimate quality.
+_ESTIMATE_BAND_EPSILON = 1e-9
 
 
 def classify_estimate_accuracy(*, actual: float, estimated: float) -> str:
@@ -79,12 +83,19 @@ def classify_estimate_accuracy(*, actual: float, estimated: float) -> str:
         if not math.isfinite(actual) or not math.isfinite(estimated) or actual <= 0:
             return "fair"
         relative_error = abs(actual - estimated) / actual
-    except (TypeError, ZeroDivisionError):
+    except (TypeError, ValueError, OverflowError, ZeroDivisionError):
+        # OverflowError is not hypothetical: math.isfinite(10**400) raises
+        # "int too large to convert to float" on a Python int. Verified.
+        # Catching it here keeps a cosmetic grade from crashing the ingest path.
         return "fair"
 
-    if relative_error <= _ESTIMATE_EXCELLENT_MAX_RELATIVE_ERROR:
+    # Compare against a boundary nudged by one ulp-ish epsilon. An exact 40%
+    # miss computes as 0.4000000000000001 (verified for actual=3.0,
+    # estimated=4.2), so a bare `<=` demotes a value the caller would call
+    # exactly "good" purely on floating-point dust.
+    if relative_error <= _ESTIMATE_EXCELLENT_MAX_RELATIVE_ERROR + _ESTIMATE_BAND_EPSILON:
         return "excellent"
-    if relative_error <= _ESTIMATE_GOOD_MAX_RELATIVE_ERROR:
+    if relative_error <= _ESTIMATE_GOOD_MAX_RELATIVE_ERROR + _ESTIMATE_BAND_EPSILON:
         return "good"
     return "fair"
 

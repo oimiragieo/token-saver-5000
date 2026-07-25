@@ -97,3 +97,25 @@ class TestDegenerateInputs:
         under = classify_estimate_accuracy(actual=10.0, estimated=5.0)
         over = classify_estimate_accuracy(actual=10.0, estimated=15.0)
         assert under == over == "fair"
+
+
+class TestCodexReviewFindings:
+    """Two defects the narrow codex review found, both verified empirically
+    before fixing rather than taken on faith."""
+
+    def test_huge_int_does_not_raise_out_of_the_compression_path(self):
+        # math.isfinite(10**400) raises OverflowError ("int too large to
+        # convert to float"), which the original guard did not catch. A
+        # cosmetic grade must never crash an ingest.
+        assert classify_estimate_accuracy(actual=10**400, estimated=1.0) == "fair"
+        assert classify_estimate_accuracy(actual=2.0, estimated=10**400) == "fair"
+
+    def test_an_exact_band_boundary_is_not_demoted_by_float_dust(self):
+        # abs(3.0-4.2)/3.0 == 0.4000000000000001, so a bare `<=` graded an
+        # exact 40% miss "fair" instead of "good".
+        assert classify_estimate_accuracy(actual=3.0, estimated=4.2) == "good"
+
+    def test_the_epsilon_does_not_widen_the_band_meaningfully(self):
+        # A genuinely worse-than-40% miss must still be "fair" -- the epsilon
+        # absorbs representation error, not real error.
+        assert classify_estimate_accuracy(actual=3.0, estimated=4.25) == "fair"
