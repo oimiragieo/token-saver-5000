@@ -15,6 +15,7 @@ This module contains all handlers for document compression operations:
 Version: 0.7.0 - Added rate limiting, text length validation
 """
 
+import math
 import asyncio
 import json
 import logging
@@ -47,6 +48,45 @@ logger = logging.getLogger("semantic-modulator")
 
 _HEADING_RE = re.compile(r"^#{1,3} ", re.MULTILINE)
 _LIST_ITEM_RE = re.compile(r"^(\d+\.|- )", re.MULTILINE)
+
+
+#: Relative-error bands for grading a compression estimate against the actual
+#: ratio. Chosen against the two live dogfood cases that exposed the old rule:
+#: a 0.8% miss must stay "excellent", a 55% miss must not.
+_ESTIMATE_EXCELLENT_MAX_RELATIVE_ERROR = 0.15
+_ESTIMATE_GOOD_MAX_RELATIVE_ERROR = 0.40
+
+
+def classify_estimate_accuracy(*, actual: float, estimated: float) -> str:
+    """Grade an estimated compression ratio against the measured one.
+
+    Uses RELATIVE error. The previous rule compared absolute ratio points
+    (`abs(actual - estimated) < 2`), which does not mean the same thing at
+    different scales: a gap of 1.5 is catastrophic near ratio 1.0 and
+    negligible near ratio 16. It graded a live 2.24x under-prediction
+    (estimated 1.25, actual 2.81) as "excellent" purely because the absolute
+    gap was under 2.0, on the surface an agent reads to decide whether
+    compressing is worth it.
+
+    Symmetric: over- and under-predicting by the same proportion grade alike.
+
+    Never raises. A grader that throws on the compression path would turn a
+    cosmetic mislabel into a failed ingest, so degenerate input (zero or
+    negative actual ratio, non-finite values) falls through to the most
+    conservative grade rather than propagating.
+    """
+    try:
+        if not math.isfinite(actual) or not math.isfinite(estimated) or actual <= 0:
+            return "fair"
+        relative_error = abs(actual - estimated) / actual
+    except (TypeError, ZeroDivisionError):
+        return "fair"
+
+    if relative_error <= _ESTIMATE_EXCELLENT_MAX_RELATIVE_ERROR:
+        return "excellent"
+    if relative_error <= _ESTIMATE_GOOD_MAX_RELATIVE_ERROR:
+        return "good"
+    return "fair"
 
 
 def _is_structured_markdown(text: str) -> bool:
@@ -740,12 +780,10 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     # Initialize retrieval history
     context["retrieval_history"][scoped_file_id] = []
 
-    # Compare estimate vs actual (v0.4.1+)
+    # Compare estimate vs actual (v0.4.1+; relative-error grading 2026-07-25)
     actual_ratio = skeleton.compression_ratio
-    estimate_accuracy = (
-        "excellent"
-        if abs(actual_ratio - estimate.compression_ratio) < 2
-        else "good" if abs(actual_ratio - estimate.compression_ratio) < 5 else "fair"
+    estimate_accuracy = classify_estimate_accuracy(
+        actual=actual_ratio, estimated=estimate.compression_ratio
     )
 
     token_savings_percent = (
