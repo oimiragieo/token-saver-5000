@@ -82,6 +82,13 @@ benchmarks/results_*.json
 
 # Tensor-grep index (auto-generated)
 .tg_index
+# Newer tg writes .tensor-grep/ rather than .tg_index. The OUTER repo already
+# ignores this, but a submodule is its own git repo and inherits nothing from
+# it, so an index cache generated while working in here was untracked but
+# perfectly committable. This repo is PUBLIC — a tool cache must not be able
+# to land in it by accident.
+.tensor-grep/
+_tg_refs/
 
 # Persistence layer (v0.2.0+)
 .semantic_modulator_data/
