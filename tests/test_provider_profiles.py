@@ -151,10 +151,13 @@ def test_gpt_5_6_family_registered():
         assert p.cache_read_field == "cached_tokens"
         assert p.context_window == 1_050_000
         assert p.supports_prompt_cache_key is True
-    # Verified short-context standard rates (openai.com 2026-07-11).
+    # Corrected short-context rates (OpenRouter 2026-08-08 — #486; prior terra/luna
+    # 2.5x/10x inflated, cache rates included — they feed model_optimizer cost math).
     assert (sol.input_cost_per_million, sol.output_cost_per_million) == (5.0, 30.0)
-    assert (terra.input_cost_per_million, terra.output_cost_per_million) == (2.5, 15.0)
-    assert (luna.input_cost_per_million, luna.output_cost_per_million) == (1.0, 6.0)
+    assert (terra.input_cost_per_million, terra.output_cost_per_million) == (1.0, 6.0)
+    assert (luna.input_cost_per_million, luna.output_cost_per_million) == (0.1, 0.6)
+    assert terra.cached_input_cost_per_million == 0.1
+    assert luna.cached_input_cost_per_million == 0.01
     # Tier ordering: Sol > Terra > Luna on both input and output price.
     assert luna.input_cost_per_million < terra.input_cost_per_million < sol.input_cost_per_million
     assert (

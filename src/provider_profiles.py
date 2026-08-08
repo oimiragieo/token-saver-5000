@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
 
@@ -377,9 +377,9 @@ _PROFILES = {
     "gpt-5.6-terra": ProviderProfile(
         model="gpt-5.6-terra",
         provider="openai",
-        input_cost_per_million=2.5,
-        output_cost_per_million=15.0,
-        cached_input_cost_per_million=0.25,
+        input_cost_per_million=1,
+        output_cost_per_million=6,
+        cached_input_cost_per_million=0.1,
         context_window=1_050_000,
         cache_read_field="cached_tokens",
         minimum_cacheable_tokens=1024,
@@ -388,14 +388,14 @@ _PROFILES = {
         cache_routing_strategy="Use a stable prompt_cache_key per workflow; GPT-5.6 cache writes cost 1.25x uncached input, so a stable prefix pays off.",
         prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
         recommended_output_format="toon",
-        notes="OpenAI GPT-5.6 Terra (GA 2026-07-09), the balanced tier: $2.50/$15 per MTok short-context ($5/$22.50 long-context above 272K), 1.05M ctx, 128K max output. Pricing verified vs openai.com 2026-07-11.",
+        notes="OpenAI GPT-5.6 Terra (GA 2026-07-09), the balanced tier: $1/$6 per MTok short-context, 1.05M ctx, 128K max output. Rates corrected to OpenRouter (openai/gpt-5.6-terra) 2026-08-08; prior $2.50/$15 were 2.5x inflated.",
     ),
     "gpt-5.6-luna": ProviderProfile(
         model="gpt-5.6-luna",
         provider="openai",
-        input_cost_per_million=1.0,
-        output_cost_per_million=6.0,
-        cached_input_cost_per_million=0.10,
+        input_cost_per_million=0.1,
+        output_cost_per_million=0.6,
+        cached_input_cost_per_million=0.01,
         context_window=1_050_000,
         cache_read_field="cached_tokens",
         minimum_cacheable_tokens=1024,
@@ -404,7 +404,7 @@ _PROFILES = {
         cache_routing_strategy="Use a stable prompt_cache_key per workflow; GPT-5.6 cache writes cost 1.25x uncached input, so a stable prefix pays off.",
         prompt_prefix_strategy="Pin system instructions, tool definitions, and large docs at the front; move volatile query material to the tail.",
         recommended_output_format="toon",
-        notes="OpenAI GPT-5.6 Luna (GA 2026-07-09), the high-volume budget tier: $1/$6 per MTok short-context ($2/$9 long-context above 272K), 1.05M ctx, 128K max output. Pricing verified vs openai.com 2026-07-11.",
+        notes="OpenAI GPT-5.6 Luna (GA 2026-07-09), the high-volume budget tier: $0.1/$0.6 per MTok short-context, 1.05M ctx, 128K max output. Rates corrected to OpenRouter (openai/gpt-5.6-luna) 2026-08-08; prior $1/$6 were 10x inflated.",
     ),
 }
 
