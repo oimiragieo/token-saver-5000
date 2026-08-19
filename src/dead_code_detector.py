@@ -137,15 +137,47 @@ def detect_dead_files(
         except OSError:
             continue
 
+    # Resolve every candidate file ONCE, into a lookup keyed by its real path.
+    #
+    # The previous form scanned `files` linearly for each import and called
+    # `.resolve()` on BOTH sides of the comparison inside that innermost loop:
+    #
+    #     for target in files:
+    #         if Path(target).resolve() == Path(resolved).resolve():
+    #
+    # so the cost was O(files x imports x files) realpath SYSCALLS. On this
+    # repo's own `src/` that is millions of them: `detect_dead_files("src")`
+    # exceeded a 300s local timeout, and the same call took the CI "Full
+    # Validation" job down via pytest-timeout inside `_joinrealpath`.
+    #
+    # Resolving each target once turns the inner scan into a dict hit: O(files)
+    # syscalls total, then O(1) per import. Same comparison, same first-match
+    # semantics (one target per resolved path), no behaviour change.
+    resolved_targets: dict[str, str] = {}
+    for target in files:
+        try:
+            resolved_targets.setdefault(str(Path(target).resolve()), target)
+        except OSError:
+            # A broken symlink or a vanished file must not abort the scan; fall
+            # back to the literal path so the entry is still reachable.
+            resolved_targets.setdefault(target, target)
+
+    for fpath in files:
+        content = file_contents.get(fpath)
+        if content is None:
+            continue
+
         imports = _extract_imports(content)
         for module in imports:
             possible_files = _module_name_to_possible_files(module, directory)
             for possible in possible_files:
-                resolved = str(Path(possible).resolve()) if os.path.exists(possible) else possible
-                for target in files:
-                    if Path(target).resolve() == Path(resolved).resolve():
-                        imported_by[target].add(fpath)
-                        break
+                try:
+                    key = str(Path(possible).resolve()) if os.path.exists(possible) else possible
+                except OSError:
+                    key = possible
+                target = resolved_targets.get(key)
+                if target is not None:
+                    imported_by[target].add(fpath)
 
     # Identify entry points and never-dead files
     always_live: set[str] = set()
