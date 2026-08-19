@@ -211,6 +211,22 @@ CLIOutputOptimizer — RTK-inspired CLI output filtering for Token Saver 5000.
 | Kind | Name |
 |------|------|
 | `class` | `FilterResult` |
+| `def` | `_char_savings_pct` |
+| `def` | `_looks_like_json_value_shape` |
+| `def` | `_is_structured_line` |
+| `def` | `_is_collapsible_content_line` |
+| `def` | `_strip_progress_noise_lines` |
+| `def` | `_flush_dup_run` |
+| `def` | `_collapse_exact_dup_runs` |
+| `def` | `_mask_line` |
+| `def` | `_has_distinct_identifier` |
+| `def` | `_flush_masked_run` |
+| `def` | `_collapse_masked_near_dup_runs` |
+| `def` | `_classify_line_kind` |
+| `def` | `_group_frame_units` |
+| `def` | `_elide_stack_frame_blocks` |
+| `def` | `_collapse_blank_runs` |
+| `def` | `_drop_timestamp_only_lines` |
 | `class` | `CLIOutputOptimizer` |
 
 #### `client_config.py`
@@ -420,6 +436,8 @@ Centralized Embedding Management for Semantic Modulator (v0.6.0)
 
 | Kind | Name |
 |------|------|
+| `def` | `_sentence_transformer_cls` |
+| `def` | `__getattr__` |
 | `class` | `_EmbeddingManagerAdapter` |
 | `class` | `EmbeddingTier` |
 | `class` | `EmbeddingManager` |

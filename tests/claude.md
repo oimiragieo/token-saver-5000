@@ -70,6 +70,29 @@ Reusable A-vs-C comparison harness for the #250 multi-node fixture corpus.
 | `def` | `format_report_gac` |
 | `def` | `main_gac` |
 
+#### `test_420_bare_prefix_collision_sweep.py`
+
+#420 sweep of remaining bare-prefix node-id collision sites.
+
+| Kind | Name |
+|------|------|
+| `class` | `_Node` |
+| `async def` | `test_handle_ingest_persists_only_own_chunks_not_prefix_sibling` |
+| `async def` | `test_handle_diff_reingest_persists_only_own_chunks_not_prefix_sibling` |
+| `def` | `test_resolve_anchored_node_ids_excludes_prefix_sibling` |
+| `def` | `_plain_semantic_compressor` |
+| `def` | `_doc_graph` |
+| `async def` | `test_delete_confirmation_count_excludes_prefix_sibling` |
+| `async def` | `test_delete_document_removes_only_own_chunks_from_plain_compressor` |
+| `async def` | `test_connector_sync_persists_only_own_chunks_not_prefix_sibling` |
+| `async def` | `test_refresh_document_persists_only_own_chunks_not_prefix_sibling` |
+| `class` | `_FakeCodeModel` |
+| `def` | `_code_chunk` |
+| `def` | `test_search_code_file_id_filter_excludes_prefix_sibling` |
+| `class` | `_FakeScarModel` |
+| `def` | `_scar_node` |
+| `def` | `test_search_with_alignment_file_id_filter_excludes_prefix_sibling` |
+
 #### `test_ace_context_manager_module.py`
 
 Contract tests for ACE context manager module extraction.
@@ -1210,6 +1233,18 @@ Contract tests for enterprise package layout scaffolding.
 | `def` | `test_bootstrap_wrapper_exposes_server_factory` |
 | `def` | `test_server_uses_enterprise_tooling_gateway` |
 
+#### `test_estimate_accuracy_relative.py`
+
+`estimate_accuracy` must grade RELATIVE error, not absolute ratio points.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestLiveDogfoodCases` |
+| `class` | `TestScaleInvariance` |
+| `class` | `TestBandsAreOrdered` |
+| `class` | `TestDegenerateInputs` |
+| `class` | `TestCodexReviewFindings` |
+
 #### `test_estimate_positive_ratio.py`
 
 #142 regression: the ingest estimate ratio must stay POSITIVE for high skeleton
@@ -1495,6 +1530,32 @@ Tests for Gemini CLI token optimization enhancements (v0.12.0).
 | `def` | `test_get_recommended_ratio_default_trigger_is_0_80` |
 | `def` | `test_compression_trigger_does_not_break_ratio_range` |
 
+#### `test_generic_conservative_strategy.py`
+
+Tests for the #137 generic conservative fallback strategy in
+
+| Kind | Name |
+|------|------|
+| `def` | `_retry_storm_lines` |
+| `def` | `_distinct_batch_lines` |
+| `def` | `_python_traceback_lines` |
+| `def` | `build_retry_storm_fixture` |
+| `class` | `TestStrategyMapAndFilterWiring` |
+| `def` | `_py_traceback` |
+| `class` | `TestLogOutputGenericFallback137c` |
+| `class` | `TestCrResolve` |
+| `class` | `TestProgressNoiseDrop` |
+| `class` | `TestExactDupCollapse` |
+| `class` | `TestMaskedNearDupCollapse` |
+| `class` | `TestDistinctNumericData` |
+| `class` | `TestStructuredContentBypass` |
+| `class` | `TestLengthCeiling` |
+| `class` | `TestStackFrameElision` |
+| `class` | `TestBlankRunCollapse` |
+| `class` | `TestTimestampOnlyLineDrop` |
+| `class` | `TestRetryStormFixture` |
+| `class` | `TestUniqueProseHonestFloor` |
+
 #### `test_github_connector.py`
 
 Tests for GitHub connector normalization.
@@ -1528,6 +1589,19 @@ GTM claim reproduction suite.
 | `class` | `TestROIClaims` |
 | `class` | `TestToolCountClaims` |
 | `class` | `TestFeatureExistence` |
+
+#### `test_handler_chunk_selection_boundary.py`
+
+Handler-side chunk selection must be boundary-safe (#420).
+
+| Kind | Name |
+|------|------|
+| `class` | `_Node` |
+| `def` | `_corpus` |
+| `class` | `TestPrefixSiblingIsolation` |
+| `class` | `TestCodeNodeIdsAlsoIsolate` |
+| `class` | `TestOrdering` |
+| `class` | `TestEmptyAndMissing` |
 
 #### `test_handler_encode_offload.py`
 
@@ -1617,6 +1691,7 @@ Tests for engine identifier-preservation + the proxy ResponseInterceptor wiring.
 | `class` | `TestApplyIdentifierGuard` |
 | `class` | `TestInterceptorIdentifierPreservation` |
 | `class` | `TestHardeningBounds` |
+| `class` | `TestNumericLiteralOrderingFix` |
 
 #### `test_integration_workflows.py`
 
@@ -2469,6 +2544,8 @@ Golden-ish regression tests for prompt version comparison output.
 | `def` | `test_opus_4_6_still_resolves_with_hyphen_alias` |
 | `def` | `test_gpt_5_6_family_registered` |
 | `def` | `test_gpt_5_6_alias_resolves_to_sol` |
+| `def` | `test_minimum_cacheable_tokens_matches_verified_provider_docs` |
+| `def` | `test_claude_mythos_5_minimum_cacheable_tokens_is_unverified_placeholder` |
 
 #### `test_proxy_cli.py`
 
