@@ -43,6 +43,47 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 
+from .constants import (
+    DEFAULT_TEXT_MODEL,
+    DEFAULT_CODE_MODEL,
+    DEFAULT_IMAGE_MODEL,
+)
+
+# Import tier-specific managers (with graceful degradation)
+try:
+    from .embeddings_onnx import ONNXEmbeddingManager
+
+    ONNX_AVAILABLE = True
+except ImportError:
+    ONNX_AVAILABLE = False
+
+try:
+    from .embeddings_tfidf import TFIDFEmbeddingManager
+
+    TFIDF_AVAILABLE = True
+except ImportError:
+    TFIDF_AVAILABLE = False
+
+try:
+    from .embedding_cache import LRUEmbeddingCache
+
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+
+# Enable HuggingFace Hub progress bars for model downloads (v0.4.1+)
+try:
+    from huggingface_hub.utils.tqdm import enable_progress_bars
+
+    enable_progress_bars()
+except ImportError:
+    # If huggingface_hub is not available, progress bars won't show
+    # but model downloads will still work
+    pass
+
+logger = logging.getLogger("embeddings")
+
+
 def _sentence_transformer_cls() -> Any:
     """Return the SentenceTransformer class, or None in ONNX-only mode.
 
@@ -86,47 +127,6 @@ def __getattr__(name: str) -> Any:
     if name == "SentenceTransformer":
         return _sentence_transformer_cls()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-from .constants import (
-    DEFAULT_TEXT_MODEL,
-    DEFAULT_CODE_MODEL,
-    DEFAULT_IMAGE_MODEL,
-)
-
-# Import tier-specific managers (with graceful degradation)
-try:
-    from .embeddings_onnx import ONNXEmbeddingManager
-
-    ONNX_AVAILABLE = True
-except ImportError:
-    ONNX_AVAILABLE = False
-
-try:
-    from .embeddings_tfidf import TFIDFEmbeddingManager
-
-    TFIDF_AVAILABLE = True
-except ImportError:
-    TFIDF_AVAILABLE = False
-
-try:
-    from .embedding_cache import LRUEmbeddingCache
-
-    CACHE_AVAILABLE = True
-except ImportError:
-    CACHE_AVAILABLE = False
-
-# Enable HuggingFace Hub progress bars for model downloads (v0.4.1+)
-try:
-    from huggingface_hub.utils.tqdm import enable_progress_bars
-
-    enable_progress_bars()
-except ImportError:
-    # If huggingface_hub is not available, progress bars won't show
-    # but model downloads will still work
-    pass
-
-logger = logging.getLogger("embeddings")
 
 
 class _EmbeddingManagerAdapter:
