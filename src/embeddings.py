@@ -25,17 +25,68 @@ and automatic fallback for memory-constrained environments.
 Version: 0.6.0
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 
-try:
+if TYPE_CHECKING:
+    # Annotations only. `from __future__ import annotations` above makes every
+    # annotation a string, so this import never runs at runtime — which is the
+    # whole point: the real import is deferred into _sentence_transformer_cls().
+    # Without this block the `-> SentenceTransformer` annotations are undefined
+    # names to a type checker, even though they are harmless to the interpreter.
     from sentence_transformers import SentenceTransformer
-except ImportError:
-    SentenceTransformer = None  # ONNX-only mode — no torch/sentence-transformers
+
+
+def _sentence_transformer_cls() -> Any:
+    """Return the SentenceTransformer class, or None in ONNX-only mode.
+
+    DEFERRED ON PURPOSE. This import pulls sentence_transformers ->
+    transformers -> torch: roughly 7.5 seconds and ~1,070 modules. EVERY module
+    that touches compression imports this one, so binding it at module scope put
+    that cost in every boot, including boots that never build a torch model.
+    Measured: app import 14.1s -> 6.3s, with all 113 routes still registering.
+
+    THE RESULT IS CACHED IN THE MODULE GLOBAL, not a private variable, and that
+    is load-bearing rather than stylistic. Four test files simulate ONNX-only
+    mode with `monkeypatch.setattr(emb, "SentenceTransformer", None)` — a
+    deliberate seam for exercising the no-torch path. Caching privately would
+    leave that patch inert: the tests would set an attribute nothing reads, and
+    pass while testing nothing. Reading the global means a patched None steers
+    this accessor exactly as the old module-level binding did.
+
+    Pairs with `__getattr__` below, which is what keeps the attribute itself
+    accessible without an eager import.
+    """
+    g = globals()
+    if "SentenceTransformer" not in g:
+        try:
+            from sentence_transformers import SentenceTransformer as _ST
+
+            g["SentenceTransformer"] = _ST
+        except ImportError:
+            # ONNX-only mode — no torch/sentence-transformers installed.
+            g["SentenceTransformer"] = None
+    return g["SentenceTransformer"]
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562 module-level attribute hook.
+
+    Keeps `src.embeddings.SentenceTransformer` readable — for the tests that
+    patch it, and for any caller that still reads it — WITHOUT importing
+    sentence_transformers at module load. Once resolved, the real global
+    shadows this hook, so it costs one call.
+    """
+    if name == "SentenceTransformer":
+        return _sentence_transformer_cls()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 from .constants import (
     DEFAULT_TEXT_MODEL,
@@ -386,7 +437,7 @@ class EmbeddingManager:
         #   _encode_with_fallback(ONNX) → _encode_standard → adapter
         #     → encode(ONNX) → _encode_onnx FAILS → _encode_with_fallback(ONNX) → …
         # Only attempt STANDARD when a real SentenceTransformer can actually load.
-        if tier != EmbeddingTier.STANDARD and SentenceTransformer is not None:
+        if tier != EmbeddingTier.STANDARD and _sentence_transformer_cls() is not None:
             try:
                 logger.info("Falling back to STANDARD tier...")
                 return self._encode_standard(texts, normalize)
@@ -516,7 +567,8 @@ class EmbeddingManager:
             # Load model (this is the expensive operation).
             # Guard: SentenceTransformer may be None in ONNX-only mode
             # (e.g. Docker images that skip torch + sentence-transformers).
-            if SentenceTransformer is None:
+            _st_cls = _sentence_transformer_cls()
+            if _st_cls is None:
                 raise ImportError(
                     "sentence-transformers not installed — cannot load "
                     f"STANDARD tier model '{model_name}'. "
@@ -526,7 +578,7 @@ class EmbeddingManager:
                 f"Loading {model_type} embedding model: {model_name} "
                 f"(~80MB download if not cached)"
             )
-            model = SentenceTransformer(model_name)
+            model = _st_cls(model_name)
 
             # Cache for future use
             self._model_cache[model_name] = model
