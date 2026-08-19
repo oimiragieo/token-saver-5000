@@ -49,4 +49,12 @@ pytest-cov>=4.0.0
 pytest-timeout>=2.3.0  # per-test timeout so one hung test fails fast instead of cancelling the whole Full Validation job (#191)
 hypothesis>=6.0.0
 black>=23.0.0
-ruff>=0.1.0
+# PINNED BELOW 0.16 (2026-08-19). The floor was unbounded, so CI resolved
+# whatever ruff shipped that day and the Quality Gate reported 2,405 findings
+# across src/tests/scripts -- none of them real regressions, all of them new
+# rules. That gate has been RED on main for this reason, which is worse than
+# having no gate: it trains people to ignore it. 0.15.22 passes cleanly, and the
+# parent monorepo already pins this same range in deploy-api.yml. A linter
+# version bump belongs in its own PR gated by its own CI, not delivered by
+# whatever PyPI published overnight.
+ruff>=0.15,<0.16

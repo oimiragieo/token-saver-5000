@@ -77,6 +77,9 @@ Compression-related MCP tool handlers.
 
 | Kind | Name |
 |------|------|
+| `def` | `chunks_for_file` |
+| `def` | `resolve_anchored_node_ids` |
+| `def` | `classify_estimate_accuracy` |
 | `def` | `_is_structured_markdown` |
 | `def` | `_resolve_chunking_strategy` |
 | `def` | `_scope_kwargs` |
