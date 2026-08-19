@@ -1102,6 +1102,17 @@ Tests for dead_code_detector.py -- import-graph-based dead file detection.
 | `def` | `test_detect_handles_missing_files` |
 | `def` | `test_detect_all_entry_patterns_live` |
 
+#### `test_dead_code_detector_perf.py`
+
+`detect_dead_files` must not be quadratic in realpath syscalls.
+
+| Kind | Name |
+|------|------|
+| `def` | `_write_pkg` |
+| `def` | `test_resolve_calls_do_not_grow_quadratically` |
+| `def` | `test_the_import_graph_is_still_correct` |
+| `def` | `test_a_broken_symlink_does_not_abort_the_scan` |
+
 #### `test_detection_handlers.py`
 
 Comprehensive tests for detection_handlers.py
