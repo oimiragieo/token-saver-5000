@@ -105,6 +105,56 @@ def test_the_mcp_handler_chain_imports_without_torch() -> None:
     assert count > 15, f"tool catalogue collapsed to {count} tools without torch"
 
 
+def test_the_server_context_builds_without_torch() -> None:
+    """IMPORTING the chain is not enough -- the SERVER CONTEXT must build too.
+
+    The first fix deferred torch to construction time and the catalogue test
+    went green, so it looked done. But `server_factory_service.build`
+    constructs `ContextWindowAdapter` on every `SemanticModulatorServer()`, and
+    that constructor built the torch-backed allocator eagerly. The gateway
+    caught the ImportError and logged:
+
+        MCP gateway: could not initialize server context - tools will receive
+        an empty context and may fail at runtime
+
+    A green catalogue over a broken context is the worst available outcome: the
+    tools LIST fine and fail when called. A deferral that only moves a failure
+    from import to construction has deferred nothing for a caller that always
+    constructs.
+    """
+    proc = _run(
+        "\nfrom src.adaptive_rate_allocator import ContextWindowAdapter\n"
+        "a = ContextWindowAdapter(None)\n"
+        "print('BUILT', type(a).__name__)\n"
+    )
+    assert "BUILT ContextWindowAdapter" in proc.stdout, (
+        "ContextWindowAdapter cannot be constructed without torch -- "
+        "SemanticModulatorServer() will fail and the MCP gateway will serve an "
+        f"empty context.\nstderr tail: {proc.stderr.strip()[-600:]}"
+    )
+
+
+def test_the_deferred_allocator_still_raises_when_actually_used() -> None:
+    """The deferral must not turn a hard requirement into a silent no-op.
+
+    `adapt_to_context_window` genuinely needs torch. Making construction lazy is
+    correct only if USING it still fails loudly and names the reason.
+    """
+    proc = _run(
+        "\nfrom src.adaptive_rate_allocator import ContextWindowAdapter\n"
+        "a = ContextWindowAdapter(None)\n"
+        "try:\n"
+        "    a.rate_allocator\n"
+        "    print('NO_RAISE')\n"
+        "except ImportError as exc:\n"
+        "    print('RAISED', 'torch' in str(exc))\n"
+    )
+    assert "RAISED True" in proc.stdout, (
+        f"using the allocator without torch must raise an ImportError naming "
+        f"torch; got {proc.stdout.strip()[-200:]}"
+    )
+
+
 def test_the_torch_class_still_raises_a_useful_error_without_torch() -> None:
     """Degrading is not the same as pretending.
 

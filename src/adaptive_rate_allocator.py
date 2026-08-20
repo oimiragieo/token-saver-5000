@@ -234,15 +234,34 @@ class ContextWindowAdapter:
 
     def __init__(self, compressor):
         self.compressor = compressor
-        # Resolved through the factory, not the module global, so the torch
-        # dependency is VISIBLE here rather than hidden behind __getattr__.
-        # This class has zero direct torch references but CONSTRUCTS a class
-        # that is entirely torch -- an AST count of `torch.`/`nn.`/`F.`
-        # attribute accesses reports it clean, and ruff's F821 is what caught
-        # the indirect dependency. Importing this module stays torch-free
-        # (which is what `types.py` and the whole MCP chain need);
-        # INSTANTIATING this class still requires torch, and now says so.
-        self.rate_allocator = _build_adaptive_rate_allocator_cls()()
+        # The allocator is built on FIRST USE, not here.
+        #
+        # Constructing it in __init__ made this class un-constructible without
+        # torch, and `server_factory_service.build` constructs it on every
+        # `SemanticModulatorServer()` -- so the MCP gateway caught the
+        # ImportError, logged "tools will receive an empty context and may fail
+        # at runtime", and served a broken context. A deferral that only moves
+        # the failure from import to construction has not deferred anything for
+        # a caller that always constructs.
+        #
+        # This class has ZERO direct torch references but CONSTRUCTS a class
+        # that is entirely torch. An AST census of `torch.`/`nn.`/`F.`
+        # attribute accesses reports it clean; ruff's F821 is what surfaced the
+        # indirect dependency, and the runtime log is what showed the census was
+        # still measuring the wrong thing.
+        self._rate_allocator = None
+
+    @property
+    def rate_allocator(self):
+        """Build the torch-backed allocator on first access.
+
+        Only `adapt_to_context_window` needs it, so an image without torch can
+        construct this adapter, serve the MCP context, and fail with a clear
+        ImportError ONLY if that one method is called.
+        """
+        if self._rate_allocator is None:
+            self._rate_allocator = _build_adaptive_rate_allocator_cls()()
+        return self._rate_allocator
 
     def adapt_to_context_window(
         self,
