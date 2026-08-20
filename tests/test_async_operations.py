@@ -6,6 +6,7 @@ and timeout prevention added in v0.5.0 Phase 1.
 """
 
 import asyncio
+import numpy as np
 import pytest
 import time
 from src.semantic_compressor import SemanticCompressor
@@ -206,10 +207,51 @@ class TestAsyncErrorHandling:
 
     @pytest.mark.asyncio
     async def test_encode_async_error_handling(self, compressor):
-        """Test that _encode_async handles errors gracefully."""
-        # Invalid input type should raise an error
-        with pytest.raises((TypeError, AttributeError)):
-            await compressor._encode_async(None)  # type: ignore
+        """An encoder error must PROPAGATE through the async wrapper.
+
+        DO NOT depend on the ambient model to reject None. `SemanticCompressor`
+        draws `model` from a process-wide singleton `EmbeddingManager`, so a
+        test that ran earlier and replaced it with a Mock makes `None` perfectly
+        acceptable -- and this assertion then fails in the full suite while
+        passing alone and in its own file. That is exactly how it behaved: green
+        in isolation, red only in CI's complete run.
+
+        The property worth pinning is the WRAPPER's: `_encode_async` offloads to
+        a ThreadPoolExecutor, and an exception raised inside that thread must
+        surface to the awaiting caller rather than being swallowed. Driving it
+        with an encoder that raises deterministically tests that, and cannot be
+        neutralised by whatever the singleton currently holds.
+        """
+        sentinel = TypeError("encoder rejected the input")
+
+        class _RaisingModel:
+            def encode(self, *_args, **_kwargs):
+                raise sentinel
+
+        original = compressor.model
+        compressor.model = _RaisingModel()
+        try:
+            with pytest.raises(TypeError) as caught:
+                await compressor._encode_async(["anything"])
+            assert caught.value is sentinel, (
+                "a different TypeError surfaced - the wrapper replaced the "
+                "encoder's error instead of propagating it"
+            )
+        finally:
+            compressor.model = original
+
+        # NON-VACUITY: the same call SUCCEEDS with a working encoder, so the
+        # arm above cannot be passing because _encode_async is simply broken.
+        class _WorkingModel:
+            def encode(self, texts, *_args, **_kwargs):
+                return np.zeros((len(texts), 8), dtype=np.float32)
+
+        compressor.model = _WorkingModel()
+        try:
+            out = await compressor._encode_async(["anything"])
+            assert out.shape == (1, 8), f"working encoder returned {out.shape}"
+        finally:
+            compressor.model = original
 
 
 class TestPerformanceCharacteristics:

@@ -217,14 +217,59 @@ class TestPythonCodeChunking:
         operator payload, which reliably reproduces the uncaught RecursionError
         at this depth without risking the C-stack segfault that deeper payloads
         (~6000+) can trigger.
+
+        THE PAYLOAD EXPIRED, THE HARDENING DID NOT (2026-08-20). This asserted
+        against `"-" * 4000 + "1"`, which raised RecursionError on the CPython
+        of the day. On 3.14 `ast.parse` accepts it, so no exception is raised,
+        no fallback runs, and a module with no defs or classes correctly yields
+        ZERO chunks -- `assert len(chunks) > 0` then fails while the guard it
+        protects is perfectly intact.
+
+        A test whose fixture depends on an interpreter's recursion ceiling is
+        measuring CPython, not us. The handler is now driven directly: force
+        each exception the `except` clause names and assert the fallback runs.
+        The real payload is kept as a control for the property that actually
+        matters -- it must never CRASH, whatever it returns.
         """
-        malicious_code = "-" * 4000 + "1"
+        # 1. THE HANDLER, deterministically. Force each exception the guard
+        #    names; every one must degrade to line-based chunks rather than
+        #    propagate and take down a worker shared by every tenant.
+        real_source = "def a():\n    return 1\n\n\ndef b():\n    return 2\n"
+        for exc_type in (RecursionError, MemoryError, ValueError, SyntaxError):
+            with patch(
+                "src.code_compressor.ast.parse",
+                side_effect=exc_type("forced for the fallback test"),
+            ):
+                chunks = self.compressor.chunk_python_code(real_source, "malicious_file")
 
-        chunks = self.compressor.chunk_python_code(malicious_code, "malicious_file")
+            assert len(chunks) > 0, (
+                f"{exc_type.__name__} produced no chunks - the line-based "
+                f"fallback did not run, so a crafted payload would propagate "
+                f"out of the parser"
+            )
+            assert all(c.chunk_type == "block" for c in chunks), (
+                f"{exc_type.__name__} fell back but did not use line-based "
+                f"block chunking: {[c.chunk_type for c in chunks]}"
+            )
 
-        # Falls back to line-based chunking instead of crashing the process.
-        assert len(chunks) > 0
-        assert all(c.chunk_type == "block" for c in chunks)
+        # 2. NON-VACUITY: without the patch the same source parses normally and
+        #    does NOT produce "block" chunks. If this stopped holding, the loop
+        #    above would pass for the wrong reason.
+        normal = self.compressor.chunk_python_code(real_source, "normal_file")
+        assert normal, "the control source produced no chunks at all"
+        assert not all(
+            c.chunk_type == "block" for c in normal
+        ), "unpatched parsing also yields only 'block' chunks - the arms above cannot discriminate"
+
+        # 3. THE REAL PAYLOAD, as a crash control. Whether this interpreter
+        #    raises RecursionError or parses it is CPython's business; ours is
+        #    that the call returns instead of killing the process.
+        adversarial = "-" * 4000 + "1"
+        result = self.compressor.chunk_python_code(adversarial, "malicious_file")
+        assert isinstance(result, list), (
+            "a crafted deeply-nested payload must return a list, not propagate "
+            "an exception to the worker"
+        )
 
     def test_chunk_python_code_preserves_chunk_ids(self):
         """Test that chunk IDs are properly formatted with :: separator"""
