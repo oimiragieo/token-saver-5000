@@ -10,183 +10,216 @@ This replaces fixed skeleton_ratio with learned adaptive allocation.
 """
 
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
+# torch is OPTIONAL here, and that is load-bearing for the runtime image.
+#
+# `types.py` imports ContextWindowAdapter + MultiLevelSemanticEncoder from this
+# module for its TypedDict annotations, and the whole MCP handler chain imports
+# types.py. Neither of those two classes touches torch (0 references); only
+# AdaptiveRateAllocator does (an nn.Module, 25 references). A module-scope
+# `import torch` therefore made torch a hard requirement of the entire MCP
+# surface on behalf of one class nothing in production imports.
+#
+# Measured in the torch-free image before this change:
+#   mcp_core -> compression_handlers -> types -> here
+#   ModuleNotFoundError: No module named 'torch'
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+except ImportError:  # pragma: no cover - exercised only in torch-free images
+    torch = None
+    nn = None
+    F = None
 import networkx as nx
 from typing import Tuple, Dict
 
 
-class AdaptiveRateAllocator(nn.Module):
+def _build_adaptive_rate_allocator_cls():
+    """Define AdaptiveRateAllocator on first access.
+
+    `class AdaptiveRateAllocator(nn.Module)` is evaluated at import time, so it
+    cannot live at module scope in a build where torch may be absent.
     """
-    Adaptively determine skeleton ratio based on:
-    1. Document semantic complexity
-    2. Available context window ("channel SNR")
-    3. Query requirements
-
-    Inspired by JSCCM's rate allocator (Section IV-C)
-    """
-
-    def __init__(
-        self,
-        num_rate_levels: int = 5,
-        temperature: float = 1.5,
-    ):
-        """
-        Args:
-            num_rate_levels: Number of discrete skeleton ratios to choose from
-            temperature: Gumbel-Softmax temperature for smooth approximation
-        """
-        super().__init__()
-
-        self.num_rate_levels = num_rate_levels
-        self.temperature = temperature
-
-        # Possible skeleton ratios (like JSCCM's rate levels)
-        # [0.10, 0.15, 0.20, 0.25, 0.30]
-        self.rate_levels = nn.Parameter(
-            torch.linspace(0.10, 0.30, num_rate_levels), requires_grad=False
+    if nn is None:
+        raise ImportError(
+            "AdaptiveRateAllocator requires torch, which is not installed in this "
+            "image. The runtime embedder is ONNX; torch is a build-time dependency "
+            "only. Install torch to use the learnable rate allocator."
         )
 
-        # MLP to predict optimal rate level
-        # Input: [complexity_score, context_window_availability, ...]
-        self.rate_predictor = nn.Sequential(
-            nn.Linear(3, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, num_rate_levels),  # Logits for each rate level
-        )
-
-    def calculate_complexity_score(self, graph: nx.Graph) -> float:
+    class AdaptiveRateAllocator(nn.Module):
         """
-        Calculate semantic complexity of document
+        Adaptively determine skeleton ratio based on:
+        1. Document semantic complexity
+        2. Available context window ("channel SNR")
+        3. Query requirements
 
-        Higher complexity → more structure → need higher skeleton ratio
-
-        Metrics:
-        - Graph density
-        - Clustering coefficient
-        - Entropy of importance distribution
+        Inspired by JSCCM's rate allocator (Section IV-C)
         """
-        n_nodes = graph.number_of_nodes()
-        n_edges = graph.number_of_edges()
 
-        if n_nodes <= 1:
-            return 0.0
+        def __init__(
+            self,
+            num_rate_levels: int = 5,
+            temperature: float = 1.5,
+        ):
+            """
+            Args:
+                num_rate_levels: Number of discrete skeleton ratios to choose from
+                temperature: Gumbel-Softmax temperature for smooth approximation
+            """
+            super().__init__()
 
-        # Graph density
-        max_edges = n_nodes * (n_nodes - 1) / 2
-        density = n_edges / max_edges if max_edges > 0 else 0
+            self.num_rate_levels = num_rate_levels
+            self.temperature = temperature
 
-        # Average clustering coefficient
-        clustering = nx.average_clustering(graph) if n_nodes > 2 else 0
+            # Possible skeleton ratios (like JSCCM's rate levels)
+            # [0.10, 0.15, 0.20, 0.25, 0.30]
+            self.rate_levels = nn.Parameter(
+                torch.linspace(0.10, 0.30, num_rate_levels), requires_grad=False
+            )
 
-        # PageRank entropy (measure of importance distribution)
-        pagerank = nx.pagerank(graph)
-        pr_values = np.array(list(pagerank.values()))
-        pr_values = pr_values / pr_values.sum()  # Normalize
-        entropy = -np.sum(pr_values * np.log(pr_values + 1e-10))
-        entropy_normalized = entropy / np.log(n_nodes)  # Normalize by max entropy
+            # MLP to predict optimal rate level
+            # Input: [complexity_score, context_window_availability, ...]
+            self.rate_predictor = nn.Sequential(
+                nn.Linear(3, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, num_rate_levels),  # Logits for each rate level
+            )
 
-        # Combine metrics (higher = more complex)
-        complexity = 0.3 * density + 0.3 * clustering + 0.4 * entropy_normalized
+        def calculate_complexity_score(self, graph: nx.Graph) -> float:
+            """
+            Calculate semantic complexity of document
 
-        return complexity
+            Higher complexity → more structure → need higher skeleton ratio
 
-    def gumbel_softmax_rate_selection(
-        self, logits: torch.Tensor, hard: bool = False
-    ) -> Tuple[torch.Tensor, int]:
-        """
-        Gumbel-Softmax for differentiable rate level selection
+            Metrics:
+            - Graph density
+            - Clustering coefficient
+            - Entropy of importance distribution
+            """
+            n_nodes = graph.number_of_nodes()
+            n_edges = graph.number_of_edges()
 
-        Like JSCCM paper Eq. (17), but for rate levels instead of constellation points
+            if n_nodes <= 1:
+                return 0.0
 
-        Args:
-            logits: [num_rate_levels] unnormalized log probabilities
-            hard: If True, return one-hot in forward, soft in backward (STE)
+            # Graph density
+            max_edges = n_nodes * (n_nodes - 1) / 2
+            density = n_edges / max_edges if max_edges > 0 else 0
 
-        Returns:
-            soft_selection: [num_rate_levels] soft probabilities
-            selected_level: Integer index of selected level
-        """
-        # Sample Gumbel noise
-        gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits) + 1e-10) + 1e-10)
+            # Average clustering coefficient
+            clustering = nx.average_clustering(graph) if n_nodes > 2 else 0
 
-        # Add noise to logits
-        noisy_logits = (logits + gumbel_noise) / self.temperature
+            # PageRank entropy (measure of importance distribution)
+            pagerank = nx.pagerank(graph)
+            pr_values = np.array(list(pagerank.values()))
+            pr_values = pr_values / pr_values.sum()  # Normalize
+            entropy = -np.sum(pr_values * np.log(pr_values + 1e-10))
+            entropy_normalized = entropy / np.log(n_nodes)  # Normalize by max entropy
 
-        # Soft selection (differentiable)
-        soft_selection = F.softmax(noisy_logits, dim=-1)
+            # Combine metrics (higher = more complex)
+            complexity = 0.3 * density + 0.3 * clustering + 0.4 * entropy_normalized
 
-        if hard:
-            # Hard selection in forward pass (argmax)
-            # Soft selection in backward pass (for gradients)
-            selected_level = torch.argmax(soft_selection).item()
+            return complexity
 
-            # One-hot encoding
-            hard_selection = torch.zeros_like(soft_selection)
-            hard_selection[selected_level] = 1.0
+        def gumbel_softmax_rate_selection(
+            self, logits: torch.Tensor, hard: bool = False
+        ) -> Tuple[torch.Tensor, int]:
+            """
+            Gumbel-Softmax for differentiable rate level selection
 
-            # Straight-through estimator
-            # Forward: hard, Backward: soft
-            selection = hard_selection - soft_selection.detach() + soft_selection
-        else:
-            selected_level = torch.argmax(soft_selection).item()
-            selection = soft_selection
+            Like JSCCM paper Eq. (17), but for rate levels instead of constellation points
 
-        return selection, selected_level
+            Args:
+                logits: [num_rate_levels] unnormalized log probabilities
+                hard: If True, return one-hot in forward, soft in backward (STE)
 
-    def forward(
-        self,
-        graph: nx.Graph,
-        available_context_tokens: int,
-        max_context_tokens: int = 100000,
-        query_priority: float = 0.5,
-    ) -> Tuple[float, Dict]:
-        """
-        Determine optimal skeleton ratio
+            Returns:
+                soft_selection: [num_rate_levels] soft probabilities
+                selected_level: Integer index of selected level
+            """
+            # Sample Gumbel noise
+            gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits) + 1e-10) + 1e-10)
 
-        Args:
-            graph: Semantic graph of document
-            available_context_tokens: How many tokens left in context window
-            max_context_tokens: Maximum context window size
-            query_priority: Priority of current query (0-1)
+            # Add noise to logits
+            noisy_logits = (logits + gumbel_noise) / self.temperature
 
-        Returns:
-            skeleton_ratio: Selected ratio (0.1 - 0.3)
-            diagnostics: Debug information
-        """
-        # 1. Calculate complexity
-        complexity = self.calculate_complexity_score(graph)
+            # Soft selection (differentiable)
+            soft_selection = F.softmax(noisy_logits, dim=-1)
 
-        # 2. Calculate "channel SNR" (context window availability)
-        context_availability = available_context_tokens / max_context_tokens
+            if hard:
+                # Hard selection in forward pass (argmax)
+                # Soft selection in backward pass (for gradients)
+                selected_level = torch.argmax(soft_selection).item()
 
-        # 3. Create feature vector
-        features = torch.tensor(
-            [complexity, context_availability, query_priority], dtype=torch.float32
-        )
+                # One-hot encoding
+                hard_selection = torch.zeros_like(soft_selection)
+                hard_selection[selected_level] = 1.0
 
-        # 4. Predict rate level
-        logits = self.rate_predictor(features)
+                # Straight-through estimator
+                # Forward: hard, Backward: soft
+                selection = hard_selection - soft_selection.detach() + soft_selection
+            else:
+                selected_level = torch.argmax(soft_selection).item()
+                selection = soft_selection
 
-        # 5. Select rate using Gumbel-Softmax
-        selection, selected_level = self.gumbel_softmax_rate_selection(logits, hard=True)
+            return selection, selected_level
 
-        # 6. Get skeleton ratio
-        skeleton_ratio = self.rate_levels[selected_level].item()
+        def forward(
+            self,
+            graph: nx.Graph,
+            available_context_tokens: int,
+            max_context_tokens: int = 100000,
+            query_priority: float = 0.5,
+        ) -> Tuple[float, Dict]:
+            """
+            Determine optimal skeleton ratio
 
-        diagnostics = {
-            "complexity": complexity,
-            "context_availability": context_availability,
-            "selected_level": selected_level,
-            "skeleton_ratio": skeleton_ratio,
-            "logits": logits.detach().numpy(),
-            "selection_probs": F.softmax(logits, dim=-1).detach().numpy(),
-        }
+            Args:
+                graph: Semantic graph of document
+                available_context_tokens: How many tokens left in context window
+                max_context_tokens: Maximum context window size
+                query_priority: Priority of current query (0-1)
 
-        return skeleton_ratio, diagnostics
+            Returns:
+                skeleton_ratio: Selected ratio (0.1 - 0.3)
+                diagnostics: Debug information
+            """
+            # 1. Calculate complexity
+            complexity = self.calculate_complexity_score(graph)
+
+            # 2. Calculate "channel SNR" (context window availability)
+            context_availability = available_context_tokens / max_context_tokens
+
+            # 3. Create feature vector
+            features = torch.tensor(
+                [complexity, context_availability, query_priority], dtype=torch.float32
+            )
+
+            # 4. Predict rate level
+            logits = self.rate_predictor(features)
+
+            # 5. Select rate using Gumbel-Softmax
+            selection, selected_level = self.gumbel_softmax_rate_selection(logits, hard=True)
+
+            # 6. Get skeleton ratio
+            skeleton_ratio = self.rate_levels[selected_level].item()
+
+            diagnostics = {
+                "complexity": complexity,
+                "context_availability": context_availability,
+                "selected_level": selected_level,
+                "skeleton_ratio": skeleton_ratio,
+                "logits": logits.detach().numpy(),
+                "selection_probs": F.softmax(logits, dim=-1).detach().numpy(),
+            }
+
+            return skeleton_ratio, diagnostics
+
+    return AdaptiveRateAllocator
 
 
 class ContextWindowAdapter:
@@ -201,7 +234,15 @@ class ContextWindowAdapter:
 
     def __init__(self, compressor):
         self.compressor = compressor
-        self.rate_allocator = AdaptiveRateAllocator()
+        # Resolved through the factory, not the module global, so the torch
+        # dependency is VISIBLE here rather than hidden behind __getattr__.
+        # This class has zero direct torch references but CONSTRUCTS a class
+        # that is entirely torch -- an AST count of `torch.`/`nn.`/`F.`
+        # attribute accesses reports it clean, and ruff's F821 is what caught
+        # the indirect dependency. Importing this module stays torch-free
+        # (which is what `types.py` and the whole MCP chain need);
+        # INSTANTIATING this class still requires torch, and now says so.
+        self.rate_allocator = _build_adaptive_rate_allocator_cls()()
 
     def adapt_to_context_window(
         self,
@@ -429,3 +470,18 @@ if __name__ == "__main__":
         file_id="quantum_doc", available_tokens=10000
     )
     print(skeleton_multilevel)
+
+
+def __getattr__(name):
+    """PEP 562 lazy attribute access for the torch-dependent class.
+
+    Caches into module globals rather than a private variable so that a test
+    doing `monkeypatch.setattr(mod, "AdaptiveRateAllocator", X)` actually takes
+    effect -- a private cache would keep serving the real class and leave the
+    patch silently inert.
+    """
+    if name == "AdaptiveRateAllocator":
+        cls = _build_adaptive_rate_allocator_cls()
+        globals()["AdaptiveRateAllocator"] = cls
+        return cls
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
