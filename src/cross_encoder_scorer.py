@@ -19,6 +19,7 @@ mock scorer; this module is the real model plug-in, still dormant/unwired.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
 # A small INT8-quantized cross-encoder that runs CPU-only (no CUDA). The AVX2
@@ -52,20 +53,85 @@ class CrossEncoderScorer:
         self._max_length = max_length
         self._model = None
         self._tokenizer = None
+        # Which backend _ensure_loaded() selected. Set on every path (not only
+        # the branch that uses it) -- an attribute that exists on one path is
+        # the shape that raises AttributeError somewhere else entirely.
+        self._raw_ort = False
+        self._session_input_names: set = set()
 
     @property
     def is_loaded(self) -> bool:
-        """True once the ONNX model has been lazily loaded."""
-        return self._model is not None
+        """True once the ONNX model has been lazily loaded (either backend)."""
+        return self._model is not None or self._tokenizer is not None
+
+    def _find_cached_raw_files(self) -> tuple[Path, Path] | None:
+        """Locate a cached ONNX artifact + tokenizer.json for the raw path.
+
+        Mirrors embeddings_onnx.py::ONNXEmbeddingManager._find_onnx_file /
+        _find_tokenizer_file: return None (never raise, never guess) when the
+        files aren't cached locally, which routes to the optimum export
+        fallback below instead of failing outright. Resolution goes through
+        huggingface_hub's own cache lookup -- never a hand-rolled glob -- so
+        it agrees with whatever optimum/transformers would also resolve.
+        """
+        try:
+            from huggingface_hub import try_to_load_from_cache
+        except ImportError:
+            return None
+
+        onnx_rel = (
+            f"{self._onnx_subfolder}/{self._onnx_file_name}"
+            if self._onnx_subfolder
+            else self._onnx_file_name
+        )
+        onnx_path = try_to_load_from_cache(self._model_id, onnx_rel)
+        tok_path = try_to_load_from_cache(self._model_id, "tokenizer.json")
+        if not onnx_path or not tok_path:
+            return None
+        return Path(onnx_path), Path(tok_path)
 
     def _ensure_loaded(self) -> None:
-        if self._model is not None:
+        if self._model is not None or self._tokenizer is not None:
             return
-        # Imports are local so the module has no hard optimum/torch dependency at
-        # import time (it stays importable in the default, rerank-OFF path).
+
+        # FAST PATH -- torch-free. onnxruntime + the Rust `tokenizers` lib
+        # never import torch (measured: docs/spikes/2026-08-19-torch-free-
+        # onnx-equivalence.py); optimum.onnxruntime and transformers.
+        # AutoTokenizer both do, at import time. Equivalence with the optimum
+        # path is not assumed -- docs/spikes/2026-08-20-cross-encoder-raw-ort-
+        # equivalence.py measured 0.000e+00 worst |logit delta| between the
+        # two on all 4 shipped ONNX artifacts, across single/mixed-length/
+        # near-512/heavily-padded/truncation-asymmetry batches, with
+        # identical ranking on every batch.
+        cached = self._find_cached_raw_files()
+        if cached is not None:
+            import onnxruntime as ort
+            from tokenizers import Tokenizer
+
+            onnx_path, tok_path = cached
+            tok = Tokenizer.from_file(str(tok_path))
+            # PARITY, not a new choice: `padding=True, truncation=True` on a
+            # transformers tokenizer pair defaults to strategy="longest_first"
+            # -- reproduced exactly, not switched to only_second (that is a
+            # separate, optional follow-up needing its own retrieval-quality
+            # evidence per the plan; bundling it here was a v1 defect).
+            tok.enable_truncation(max_length=self._max_length, strategy="longest_first")
+            tok.enable_padding()
+            self._tokenizer = tok
+            self._model = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+            self._session_input_names = {i.name for i in self._model.get_inputs()}
+            self._raw_ort = True
+            return
+
+        # EXPORT PATH -- needs optimum, and therefore torch. Reached only when
+        # the raw files aren't cached locally (first-time setup / build time).
+        # Imports are local so the module has no hard optimum/torch dependency
+        # at plain import time (it stays importable in the default,
+        # rerank-OFF path).
         from optimum.onnxruntime import ORTModelForSequenceClassification
         from transformers import AutoTokenizer
 
+        self._raw_ort = False
         self._tokenizer = AutoTokenizer.from_pretrained(self._model_id)
         self._model = ORTModelForSequenceClassification.from_pretrained(
             self._model_id,
@@ -78,6 +144,10 @@ class CrossEncoderScorer:
         if not docs:
             return []
         self._ensure_loaded()
+
+        if self._raw_ort:
+            return self._score_raw(query, docs)
+
         import torch
 
         encoded = self._tokenizer(
@@ -94,3 +164,35 @@ class CrossEncoderScorer:
         if logits.ndim == 2 and logits.shape[-1] == 1:
             logits = logits.squeeze(-1)
         return [float(x) for x in logits.tolist()]
+
+    def _score_raw(self, query: str, docs: list[str]) -> list[float]:
+        """Torch-free score: Rust tokenizer batch-encode -> InferenceSession -> numpy.
+
+        Every document for this query is encoded and run in ONE batch, on
+        purpose: the spike measured the quantized graphs to be batch-padding
+        sensitive (batched vs one-doc-at-a-time can differ by >0.3 on the same
+        graph) -- per-document calls would silently diverge from what
+        equivalence was actually measured against.
+        """
+        import numpy as np
+
+        encodings = self._tokenizer.encode_batch([[query, doc] for doc in docs])
+        ids = np.array([e.ids for e in encodings], dtype=np.int64)
+        mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+
+        feed = {"input_ids": ids, "attention_mask": mask}
+        if "token_type_ids" in self._session_input_names:
+            # ORT silently zero-fills an absent declared input; on a
+            # cross-encoder that means every doc segment reads as query
+            # tokens, corrupting relevance without erroring. Always supply
+            # real pair type_ids when the graph declares the input.
+            feed["token_type_ids"] = np.array([e.type_ids for e in encodings], dtype=np.int64)
+
+        out = self._model.run(None, feed)[0]
+        if out.ndim != 2 or out.shape[-1] != 1:
+            raise ValueError(
+                f"expected cross-encoder logits shape [N,1], got {out.shape} for "
+                f"{self._model_id}/{self._onnx_file_name} -- this scorer only "
+                "supports single-logit relevance heads."
+            )
+        return [float(x) for x in out[:, 0].tolist()]

@@ -994,6 +994,16 @@ Coverage boost tests - Round 4.
 | `class` | `TestAFMHandlersRateLimit` |
 | `class` | `TestCompressionHandlersModulate` |
 
+#### `test_cross_encoder_raw_ort.py`
+
+The cross-encoder rerank scorer must run torch-free on a cached model.
+
+| Kind | Name |
+|------|------|
+| `def` | `_run` |
+| `def` | `test_the_block_itself_works` |
+| `def` | `test_cross_encoder_scores_one_pair_torch_free` |
+
 #### `test_cross_encoder_scorer.py`
 
 Tests for CrossEncoderScorer (#187 rerank model-wire).
