@@ -89,6 +89,11 @@ class ONNXEmbeddingManager:
         self._session = None
         self._tokenizer = None
         self._initialized = False
+        # Which backend _initialize() selected. Set here, not only on the
+        # branch that uses it: an attribute that exists on one path is the
+        # shape that raises AttributeError somewhere else entirely.
+        self._raw_ort = False
+        self._session_input_names: set = set()
         self._init_lock = threading.Lock()
 
     def _initialize(self):
@@ -102,19 +107,55 @@ class ONNXEmbeddingManager:
                 return
 
             try:
-                import onnxruntime as ort  # noqa: F401 - Check availability
-                from transformers import AutoTokenizer
-                from optimum.onnxruntime import ORTModelForFeatureExtraction
+                import onnxruntime as ort
 
                 logger.info(f"Initializing ONNX embedding manager: {self.model_name}")
 
-                # Load tokenizer
-                self._tokenizer = AutoTokenizer.from_pretrained(
+                model_path = self.cache_dir / self.model_name.replace("/", "_")
+
+                # FAST PATH — torch-free. Everything this branch touches
+                # (onnxruntime + the Rust `tokenizers` lib) is measured clean of
+                # torch, whereas `optimum.onnxruntime` and
+                # `transformers.AutoTokenizer` both drag torch in at first
+                # ENCODE. This is the path production takes on every boot after
+                # the model is cached, so serving no longer needs torch at all.
+                # Equivalence is not assumed: the two paths agree to 2.22e-16
+                # (machine epsilon) -- see
+                # docs/spikes/2026-08-19-torch-free-onnx-equivalence.py in the
+                # platform repo, which prints its own verdict.
+                onnx_file = self._find_onnx_file(model_path)
+                tok_file = self._find_tokenizer_file(model_path)
+                if onnx_file is not None and tok_file is not None:
+                    from tokenizers import Tokenizer
+
+                    tok = Tokenizer.from_file(str(tok_file))
+                    tok.enable_truncation(max_length=512)
+                    tok.enable_padding()
+                    self._tokenizer = tok
+                    self._session = ort.InferenceSession(
+                        str(onnx_file), providers=["CPUExecutionProvider"]
+                    )
+                    self._session_input_names = {i.name for i in self._session.get_inputs()}
+                    self._raw_ort = True
+                    self._initialized = True
+                    logger.info("ONNX embedding manager initialized (torch-free path)")
+                    return
+
+                # EXPORT PATH — needs optimum, and therefore torch. Only reached
+                # the first time a model is used, which in the deployed image is
+                # BUILD time (the Dockerfile pre-exports both models). If this
+                # runs in a torch-free runtime it will fail loudly at import,
+                # which is the correct outcome: silently degrading here would
+                # mean serving embeddings from a different code path than the
+                # one that was measured.
+                from transformers import AutoTokenizer
+                from optimum.onnxruntime import ORTModelForFeatureExtraction
+
+                self._raw_ort = False
+                tokenizer = AutoTokenizer.from_pretrained(
                     self.model_name, cache_dir=str(self.cache_dir)
                 )
-
-                # Load ONNX model (with optional quantization)
-                model_path = self.cache_dir / self.model_name.replace("/", "_")
+                self._tokenizer = tokenizer
 
                 if not model_path.exists():
                     logger.info("Downloading and optimizing ONNX model (first-time setup)...")
@@ -134,8 +175,15 @@ class ONNXEmbeddingManager:
                             self.model_name, export=True, cache_dir=str(self.cache_dir)
                         )
 
-                    # Save to cache
+                    # Save to cache. The TOKENIZER is saved beside the model on
+                    # purpose: without it the torch-free fast path above has no
+                    # tokenizer.json to read and would silently fall back here
+                    # forever, re-importing optimum (and torch) on every boot.
                     ort_model.save_pretrained(str(model_path))
+                    try:
+                        tokenizer.save_pretrained(str(model_path))
+                    except Exception as exc:  # pragma: no cover - best effort
+                        logger.warning(f"Could not save tokenizer beside ONNX model: {exc}")
                     logger.info(f"ONNX model cached to {model_path}")
                 else:
                     # Load from cache (already in local subfolder form)
@@ -194,29 +242,29 @@ class ONNXEmbeddingManager:
         if isinstance(texts, str):
             texts = [texts]
 
-        # Tokenize
-        encoded = self._tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors="pt",
-        )
-
-        # Run inference
         try:
-            outputs = self._session(**encoded)
-            # Per-model pooling: CLS for granite/ModernBERT, mean for bge/MiniLM.
-            # L2-normalize EXACTLY ONCE below — do not call normalize inside pooling helpers.
-            if _uses_cls_pooling(self.model_name):
-                embeddings = self._cls_pooling(outputs.last_hidden_state)
+            if self._raw_ort:
+                # Torch-free path: numpy in, numpy out, no framework tensors.
+                embeddings = self._encode_raw(texts)
             else:
-                embeddings = self._mean_pooling(
-                    outputs.last_hidden_state, encoded["attention_mask"]
+                encoded = self._tokenizer(
+                    texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                    return_tensors="pt",
                 )
-
-            # Convert to numpy
-            embeddings = embeddings.detach().cpu().numpy()
+                outputs = self._session(**encoded)
+                # Per-model pooling: CLS for granite/ModernBERT, mean for bge/MiniLM.
+                # L2-normalize EXACTLY ONCE below — do not call normalize inside
+                # pooling helpers.
+                if _uses_cls_pooling(self.model_name):
+                    embeddings = self._cls_pooling(outputs.last_hidden_state)
+                else:
+                    embeddings = self._mean_pooling(
+                        outputs.last_hidden_state, encoded["attention_mask"]
+                    )
+                embeddings = embeddings.detach().cpu().numpy()
 
             # Normalize. Guard against a zero-norm row (all-zero model output
             # from pad-only input or a silent failure): dividing by 0 yields NaN
@@ -233,6 +281,74 @@ class ONNXEmbeddingManager:
         except Exception as e:
             logger.error(f"ONNX inference failed: {e}")
             raise
+
+    @staticmethod
+    def _find_onnx_file(model_path):
+        """Locate the exported model.onnx, or None if this model is not cached.
+
+        Two layouts exist because two export routes exist: `save_pretrained`
+        writes `model.onnx` at the top level, while onnx-community repos ship an
+        `onnx/` subfolder. Returning None (rather than guessing) is what routes
+        a cold model to the optimum export path instead of failing.
+        """
+        if not model_path.exists():
+            return None
+        for candidate in (model_path / "model.onnx", model_path / "onnx" / "model.onnx"):
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _find_tokenizer_file(self, model_path):
+        """Locate tokenizer.json for the torch-free path, or None.
+
+        Prefers the copy saved beside the model. Falls back to the HuggingFace
+        hub cache so installs that predate the save-tokenizer-beside-the-model
+        change still take the fast path instead of silently importing optimum
+        forever -- a fallback that costs a glob once per process and removes an
+        upgrade cliff.
+        """
+        if model_path.exists():
+            direct = model_path / "tokenizer.json"
+            if direct.is_file():
+                return direct
+
+        hub_dir = self.cache_dir / f"models--{self.model_name.replace('/', '--')}"
+        if hub_dir.is_dir():
+            matches = sorted(hub_dir.rglob("tokenizer.json"))
+            if matches:
+                return matches[-1]
+        return None
+
+    def _encode_raw(self, texts):
+        """Torch-free encode: Rust tokenizer -> InferenceSession -> numpy pooling.
+
+        Mirrors the optimum path exactly, including the per-model pooling
+        selector -- a single global pooling choice is correct for whichever
+        family you happened to test and silently wrong for the other. (A first
+        port of this used CLS for everything and drifted 4.68e-02 cosine on
+        bge-small, which is mean-pooled.)
+        """
+        encodings = self._tokenizer.encode_batch(list(texts))
+        ids = np.array([e.ids for e in encodings], dtype=np.int64)
+        mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+
+        feed = {"input_ids": ids, "attention_mask": mask}
+        if "token_type_ids" in self._session_input_names:
+            feed["token_type_ids"] = np.array([e.type_ids for e in encodings], dtype=np.int64)
+
+        hidden = self._session.run(None, feed)[0]
+
+        if _uses_cls_pooling(self.model_name):
+            return hidden[:, 0, :]
+
+        # Mask-weighted mean. Clip the denominator rather than letting an
+        # all-padding row divide by zero -- the caller's normalize step guards
+        # zero NORMS, not zero token COUNTS, so a NaN introduced here would slip
+        # past it and corrupt cosine ranking silently.
+        m3 = mask[:, :, None].astype(np.float32)
+        summed = (hidden * m3).sum(axis=1)
+        counts = np.clip(m3.sum(axis=1), 1e-9, None)
+        return summed / counts
 
     def _cls_pooling(self, token_embeddings):
         """

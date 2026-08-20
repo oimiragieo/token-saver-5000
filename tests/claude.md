@@ -2214,6 +2214,22 @@ Coverage tests for handler-level observability spans.
 | `async def` | `test_bundle_handlers_emit_trace` |
 | `async def` | `test_model_handlers_emit_trace` |
 
+#### `test_onnx_torch_free_path.py`
+
+The ONNX embedder must serve without torch, and must not change its vectors.
+
+| Kind | Name |
+|------|------|
+| `def` | `_model_is_cached` |
+| `class` | `_StubSession` |
+| `class` | `_StubTokenizer` |
+| `def` | `_manager_with_stubs` |
+| `def` | `test_raw_path_honours_the_per_model_pooling_selector` |
+| `def` | `test_token_type_ids_are_sent_only_when_the_session_declares_them` |
+| `def` | `test_an_all_padding_row_does_not_become_nan` |
+| `def` | `test_a_cold_model_routes_to_the_export_path` |
+| `def` | `test_a_real_encode_does_not_load_torch` |
+
 #### `test_opencode_enhancements.py`
 
 Tests for OpenCode enhancements: model database, cache strategy advisor, pricing, providers.
