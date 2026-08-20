@@ -150,7 +150,10 @@ class CrossEncoderScorer:
         )
         onnx_path = try_to_load_from_cache(self._model_id, onnx_rel)
         tok_path = try_to_load_from_cache(self._model_id, "tokenizer.json")
-        if not onnx_path or not tok_path:
+        # isinstance BEFORE Path(): the _CACHED_NO_EXIST sentinel is truthy
+        # and not path-like, so Path(sentinel) raises TypeError instead of
+        # routing to the export fallback (codex round-4).
+        if not isinstance(onnx_path, str) or not isinstance(tok_path, str):
             return None
         onnx_path, tok_path = Path(onnx_path), Path(tok_path)
         if not onnx_path.is_file() or not tok_path.is_file():
