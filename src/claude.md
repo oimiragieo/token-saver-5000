@@ -38,6 +38,7 @@ Adaptive Rate Allocator
 
 | Kind | Name |
 |------|------|
+| `class` | `_NumpyRateAllocator` |
 | `def` | `_build_adaptive_rate_allocator_cls` |
 | `class` | `ContextWindowAdapter` |
 | `class` | `MultiLevelSemanticEncoder` |

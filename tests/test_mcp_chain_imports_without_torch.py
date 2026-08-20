@@ -134,43 +134,66 @@ def test_the_server_context_builds_without_torch() -> None:
     )
 
 
-def test_the_deferred_allocator_still_raises_when_actually_used() -> None:
-    """The deferral must not turn a hard requirement into a silent no-op.
+def test_the_allocator_DEGRADES_without_torch_it_does_not_raise() -> None:
+    """SUPERSEDES an earlier assertion that this raised ImportError.
 
-    `adapt_to_context_window` genuinely needs torch. Making construction lazy is
-    correct only if USING it still fails loudly and names the reason.
+    Raising was the wrong contract and production proved it: `adapt_to_context_window`
+    is a LIVE MCP TOOL, and in the torch-free image it returned "Internal error in
+    tool" against production - caught by the 156-tool sweep AFTER every deploy job
+    had gone green. Degrading the engine's guts is one thing; 500ing a tool a
+    customer can call is another.
+
+    The replacement contract: a torch-free image gets a deterministic numpy
+    allocator over the SAME [0.10, 0.30] levels. Worth stating why that is not a
+    downgrade - the torch path runs an UNTRAINED network plus Gumbel sampling, so
+    it was a near-random pick in that band, different on every call for identical
+    inputs.
     """
     proc = _run(
-        "\nfrom src.adaptive_rate_allocator import ContextWindowAdapter\n"
-        "a = ContextWindowAdapter(None)\n"
-        "try:\n"
-        "    a.rate_allocator\n"
-        "    print('NO_RAISE')\n"
-        "except ImportError as exc:\n"
-        "    print('RAISED', 'torch' in str(exc))\n"
+        "\nimport networkx as nx\n"
+        "from src.adaptive_rate_allocator import _build_adaptive_rate_allocator_cls\n"
+        "alloc = _build_adaptive_rate_allocator_cls()()\n"
+        "g = nx.Graph(); g.add_edges_from([(1,2),(2,3),(3,1),(3,4)])\n"
+        "kw = dict(graph=g, available_context_tokens=50000, "
+        "max_context_tokens=100000, query_priority=0.5)\n"
+        "r1, d = alloc(**kw)\n"
+        "r2, _ = alloc(**kw)\n"
+        "print('ALLOC', r1, 0.10 <= r1 <= 0.30, r1 == r2, d['allocator'])\n"
     )
-    assert "RAISED True" in proc.stdout, (
-        f"using the allocator without torch must raise an ImportError naming "
-        f"torch; got {proc.stdout.strip()[-200:]}"
+    line = next((x for x in proc.stdout.splitlines() if x.startswith("ALLOC")), None)
+    assert line, (
+        "the allocator raised instead of degrading - a torch-free image would "
+        f"500 adapt_to_context_window.\nstderr tail: {proc.stderr.strip()[-600:]}"
+    )
+
+    _, ratio, in_band, deterministic, which = line.split()
+    assert in_band == "True", f"ratio {ratio} is outside the documented [0.10, 0.30] band"
+    assert deterministic == "True", "identical inputs gave different ratios"
+    assert which == "numpy_deterministic", (
+        f"diagnostics must name the path that produced the number, got {which!r} - "
+        f"a caller cannot otherwise tell a deterministic ratio from a sampled one"
     )
 
 
-def test_the_torch_class_still_raises_a_useful_error_without_torch() -> None:
-    """Degrading is not the same as pretending.
+def test_the_symbol_still_resolves_without_torch_and_says_which_path() -> None:
+    """The module attribute must resolve, and the caller must be able to tell.
 
-    `AdaptiveRateAllocator` genuinely needs torch. Without it the failure must
-    name the reason, not surface as an AttributeError on a module that quietly
-    stopped exposing the symbol.
+    Degrading silently is the failure mode worth guarding here: if the torch-free
+    allocator were indistinguishable from the torch one, nobody could explain why
+    a ratio stopped varying between identical calls. The class NAME carries it.
     """
     proc = _run(
         "\nimport src.adaptive_rate_allocator as m\n"
-        "try:\n"
-        "    m.AdaptiveRateAllocator\n"
-        "    print('NO_RAISE')\n"
-        "except ImportError as exc:\n"
-        "    print('RAISED', 'torch' in str(exc))\n"
+        "cls = m.AdaptiveRateAllocator\n"
+        "print('CLASS', cls.__name__)\n"
     )
-    assert "RAISED True" in proc.stdout, (
-        f"expected an ImportError naming torch; got: {proc.stdout.strip()[-300:]} "
-        f"/ {proc.stderr.strip()[-300:]}"
+    line = next((x for x in proc.stdout.splitlines() if x.startswith("CLASS")), None)
+    assert line, (
+        "the AdaptiveRateAllocator attribute did not resolve without torch.\n"
+        f"stderr tail: {proc.stderr.strip()[-500:]}"
+    )
+    name = line.split()[1]
+    assert name == "_NumpyRateAllocator", (
+        f"expected the torch-free stand-in, got {name!r} - either torch leaked "
+        f"into this subprocess or the fallback silently returned the torch class"
     )

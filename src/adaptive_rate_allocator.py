@@ -35,6 +35,89 @@ import networkx as nx
 from typing import Tuple, Dict
 
 
+class _NumpyRateAllocator:
+    """Torch-free stand-in for AdaptiveRateAllocator, same call signature.
+
+    WHY THIS EXISTS. The runtime image ships without torch (it is a build-time
+    dependency: the ONNX exports need optimum, serving does not). Raising
+    ImportError here instead took down a LIVE MCP TOOL:
+    `adapt_to_context_window` returned "Internal error in tool" against
+    production, caught by the 156-tool sweep after every deploy job had gone
+    green. Degrading the engine's own guts is one thing; 500ing a tool a
+    customer can call is another.
+
+    WHAT THE TORCH VERSION ACTUALLY DID, which is the reason a numpy stand-in is
+    defensible rather than a downgrade: features -> `nn.Sequential(Linear(3,64),
+    ReLU, ...)` with **untrained random weights** -> **Gumbel-softmax sampling**
+    -> a level from `linspace(0.10, 0.30, 5)`. Nothing trains that network, so
+    the shipped behaviour was a near-random pick inside that band, different on
+    every call for identical inputs.
+
+    This picks from the SAME five levels over the SAME [0.10, 0.30] band using
+    the SAME three features, monotonically and deterministically:
+
+        more context available  -> can afford a richer skeleton
+        higher query priority   -> the caller wants fidelity
+        higher complexity       -> more structure worth keeping
+
+    Deterministic is a behaviour CHANGE and worth saying plainly: identical
+    inputs now give identical ratios. Given the alternative was untrained
+    randomness, that is the direction to change in - but it is a change, not a
+    no-op, and `diagnostics["allocator"]` names which path produced the number
+    so a caller can tell them apart.
+    """
+
+    def __init__(self, num_rate_levels: int = 5, temperature: float = 1.0):
+        self.num_rate_levels = num_rate_levels
+        self.temperature = temperature
+        self.rate_levels = np.linspace(0.10, 0.30, num_rate_levels)
+
+    def calculate_complexity_score(self, graph) -> float:
+        """Same metric as the torch class: density-driven, pure networkx."""
+        n_nodes = graph.number_of_nodes()
+        n_edges = graph.number_of_edges()
+        if n_nodes <= 1:
+            return 0.0
+        max_edges = n_nodes * (n_nodes - 1) / 2
+        density = (n_edges / max_edges) if max_edges > 0 else 0.0
+        return float(min(1.0, max(0.0, density)))
+
+    def __call__(
+        self,
+        graph,
+        available_context_tokens: int,
+        max_context_tokens: int = 100000,
+        query_priority: float = 0.5,
+    ):
+        complexity = self.calculate_complexity_score(graph)
+        context_availability = (
+            available_context_tokens / max_context_tokens if max_context_tokens else 0.0
+        )
+        context_availability = float(min(1.0, max(0.0, context_availability)))
+        query_priority = float(min(1.0, max(0.0, query_priority)))
+
+        # Equal weights: no evidence justifies anything fancier, and inventing
+        # a weighting would be the same unfounded precision the torch path had.
+        score = (complexity + context_availability + query_priority) / 3.0
+
+        idx = int(round(score * (self.num_rate_levels - 1)))
+        idx = max(0, min(self.num_rate_levels - 1, idx))
+        skeleton_ratio = float(self.rate_levels[idx])
+
+        return skeleton_ratio, {
+            "complexity": complexity,
+            "context_availability": context_availability,
+            "selected_level": idx,
+            "skeleton_ratio": skeleton_ratio,
+            "allocator": "numpy_deterministic",
+            "note": (
+                "torch is not installed; used the deterministic numpy allocator. "
+                "The torch path selects from the same [0.10, 0.30] levels via an "
+                "UNTRAINED network plus Gumbel sampling."
+            ),
+        }
+
+
 def _build_adaptive_rate_allocator_cls():
     """Define AdaptiveRateAllocator on first access.
 
@@ -42,11 +125,7 @@ def _build_adaptive_rate_allocator_cls():
     cannot live at module scope in a build where torch may be absent.
     """
     if nn is None:
-        raise ImportError(
-            "AdaptiveRateAllocator requires torch, which is not installed in this "
-            "image. The runtime embedder is ONNX; torch is a build-time dependency "
-            "only. Install torch to use the learnable rate allocator."
-        )
+        return _NumpyRateAllocator
 
     class AdaptiveRateAllocator(nn.Module):
         """
