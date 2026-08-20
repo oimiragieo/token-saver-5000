@@ -1,5 +1,23 @@
 # Core MCP and AI dependencies
-mcp>=0.9.0
+# CAPPED AT <2. `mcp>=0.9.0` was unbounded, so CI resolved whatever PyPI had
+# published that morning. It published **2.0.0**, which removed
+# `Server.list_tools` -- the method `router_binding.py` binds the MCP protocol
+# with -- and **74 tests failed** across help_handlers, docs_contracts,
+# mcp_routing, wiring_integration and every contract suite. Local venvs sat on
+# 1.28.0 and saw none of it.
+#
+# Nobody noticed for months because the timeout in
+# test_mmr_vectorization_equivalence killed Full Validation before it could
+# report: a job that always dies at the same place looks like one flaky test,
+# not like 74 broken ones behind it.
+#
+# THIRD instance of this exact class in the gotcontext repos in one day:
+# svix>=1.40.0 -> 2.0.0 broke every Clerk webhook; ruff>=0.1.0 -> a newer minor
+# reddened Quality Gate for months. An unbounded floor on a dependency whose
+# API you call is a promise that its maintainers will never rename anything.
+#
+# Raise the cap deliberately, in its own PR, with the API migration done.
+mcp>=1.0.0,<2
 sentence-transformers>=3.1.0  # Security: Fixes CVE-2024-11392/11393/11394 (arbitrary code execution)
 networkx>=3.0
 scikit-learn>=1.3.0

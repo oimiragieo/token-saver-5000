@@ -262,15 +262,43 @@ class TestMMRSelectionEquivalence:
 
 @pytest.mark.slow
 class TestMMRSpeedup:
-    def test_vectorized_is_at_least_5x_faster_on_200_nodes(self):
-        n, dim = 200, 384
+    def test_vectorized_is_at_least_5x_faster(self):
+        """The vectorized selector must beat the O(n^2 k) reference.
+
+        SIZED BY MEASUREMENT, NOT BY TASTE. This test previously ran n=200,
+        dim=384, reps=3 and cost **307 seconds** -- 94% of this file's runtime,
+        and the reason CI's Full Validation job hit pytest-timeout on four
+        consecutive PRs (#26). Nearly all of it was spent running the SLOW
+        reference implementation, which is the thing being beaten, not the
+        product: one reference call at n=200 takes ~76 seconds.
+
+        Measured speedup across sizes before shrinking (ref ms / vec ms):
+
+            n=200 dim=384   76480 / 1.5   =  51257x    152.9s
+            n=120 dim=384   16311 / 1.2   =  13723x     32.4s
+            n=80  dim=128    4713 / 0.6   =   7685x      9.4s
+            n=60  dim=64     1965 / 0.4   =   5439x      3.9s
+            n=40  dim=64      559 / 0.4   =   1408x      1.1s
+
+        The margin is three orders of magnitude above the 5x floor at EVERY
+        size, so the 307 seconds bought no additional confidence -- the risk I
+        checked for (numpy's fixed per-call overhead eating the advantage at
+        small n) does not materialise until far below any size worth testing.
+        n=60 keeps ~1000x headroom over the threshold and runs in ~4s.
+
+        The floor stays 5x deliberately. It is a REGRESSION floor, not a
+        performance claim: raising it toward the measured 5439x would make the
+        test fail on a loaded CI runner while the code is perfectly correct,
+        which is how a wall-clock assertion becomes a contention detector.
+        """
+        n, dim = 60, 64
         embeddings = _random_unit(n, dim, seed=99)
         rng = np.random.default_rng(123)
         importances = rng.uniform(0.0, 1.0, size=n)
         nodes = _make_nodes(embeddings, importances, prefix="speed_")
         query_vec = _random_unit(1, dim, seed=999)[0]
         compressor = _build_compressor(query_vec)
-        num_skel = 50
+        num_skel = 15
         query = "performance benchmark query"
 
         # Warm up (model.encode, BLAS) so timing reflects the algorithm.
@@ -279,19 +307,20 @@ class TestMMRSpeedup:
             compressor, nodes, num_skel, query=query
         )
 
-        reps = 3
+        # ONE rep each. Averaging three runs of a deterministic call costs 3x
+        # the wall clock for no extra discrimination when the margin is ~1000x.
         t0 = time.perf_counter()
-        for _ in range(reps):
-            _reference_select_skeleton_nodes(compressor, nodes, num_skel, query=query)
-        ref_time = (time.perf_counter() - t0) / reps
+        _reference_select_skeleton_nodes(compressor, nodes, num_skel, query=query)
+        ref_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        for _ in range(reps):
-            compressor._select_skeleton_nodes(nodes, num_skel, query=query)
-        vec_time = (time.perf_counter() - t0) / reps
+        compressor._select_skeleton_nodes(nodes, num_skel, query=query)
+        vec_time = time.perf_counter() - t0
 
         speedup = ref_time / vec_time if vec_time > 0 else float("inf")
         assert speedup >= 5.0, (
-            f"Vectorized MMR only {speedup:.1f}× faster (ref={ref_time * 1000:.1f}ms, "
-            f"vec={vec_time * 1000:.1f}ms) — expected ≥5×."
+            f"Vectorized MMR only {speedup:.1f}x faster (ref={ref_time * 1000:.1f}ms, "
+            f"vec={vec_time * 1000:.1f}ms) - expected >=5x. Measured ~5439x at this "
+            f"size when written, so a value near the floor means a real regression, "
+            f"not runner noise."
         )

@@ -1113,6 +1113,18 @@ Tests for dead_code_detector.py -- import-graph-based dead file detection.
 | `def` | `test_the_import_graph_is_still_correct` |
 | `def` | `test_a_broken_symlink_does_not_abort_the_scan` |
 
+#### `test_dependency_major_caps.py`
+
+Dependencies whose API we CALL must carry a major-version cap.
+
+| Kind | Name |
+|------|------|
+| `def` | `_requirement_lines` |
+| `def` | `test_the_pin_carries_a_major_cap` |
+| `def` | `test_both_manifests_agree_on_every_capped_package` |
+| `def` | `test_the_guard_can_actually_fail` |
+| `def` | `_requirement_lines_from_text` |
+
 #### `test_detection_handlers.py`
 
 Comprehensive tests for detection_handlers.py
