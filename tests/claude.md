@@ -1001,8 +1001,16 @@ The cross-encoder rerank scorer must run torch-free on a cached model.
 | Kind | Name |
 |------|------|
 | `def` | `_run` |
+| `def` | `_default_artifacts_cached` |
 | `def` | `test_the_block_itself_works` |
 | `def` | `test_cross_encoder_scores_one_pair_torch_free` |
+| `def` | `_real_scorer_or_skip` |
+| `def` | `test_token_type_ids_populated_for_document_segment` |
+| `def` | `test_feed_arrays_are_int64` |
+| `def` | `test_batching_matches_singleton_on_fp32_artifact` |
+| `def` | `test_logits_shape_n2_is_rejected` |
+| `def` | `test_logits_shape_n1_squeezes_to_flat_list` |
+| `class` | `_RealTokenizerStub` |
 
 #### `test_cross_encoder_scorer.py`
 

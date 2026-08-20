@@ -19,6 +19,7 @@ mock scorer; this module is the real model plug-in, still dormant/unwired.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Sequence
 
@@ -58,11 +59,25 @@ class CrossEncoderScorer:
         # the shape that raises AttributeError somewhere else entirely.
         self._raw_ort = False
         self._session_input_names: set = set()
+        # Guards _ensure_loaded() so two concurrent callers can't both build
+        # (and one publish a half-constructed pair). Construction is a rare,
+        # one-time event (first non-empty __call__), so a plain Lock costs
+        # nothing on the hot path once loaded (the readiness check below is
+        # lock-free and happens first).
+        self._load_lock = threading.Lock()
 
     @property
     def is_loaded(self) -> bool:
-        """True once the ONNX model has been lazily loaded (either backend)."""
-        return self._model is not None or self._tokenizer is not None
+        """True once BOTH the model and tokenizer have been published.
+
+        Deliberately AND, not OR: _ensure_loaded() builds both in locals and
+        publishes them together at the very end, so any observer -- including
+        a concurrent caller racing the first load -- must never see one
+        published without the other. A scorer that failed mid-construction
+        (e.g. InferenceSession() raised) must read as NOT loaded, not as
+        half-loaded.
+        """
+        return self._model is not None and self._tokenizer is not None
 
     def _find_cached_raw_files(self) -> tuple[Path, Path] | None:
         """Locate a cached ONNX artifact + tokenizer.json for the raw path.
@@ -91,53 +106,86 @@ class CrossEncoderScorer:
         return Path(onnx_path), Path(tok_path)
 
     def _ensure_loaded(self) -> None:
-        if self._model is not None or self._tokenizer is not None:
+        if self.is_loaded:
             return
 
-        # FAST PATH -- torch-free. onnxruntime + the Rust `tokenizers` lib
-        # never import torch (measured: docs/spikes/2026-08-19-torch-free-
-        # onnx-equivalence.py); optimum.onnxruntime and transformers.
-        # AutoTokenizer both do, at import time. Equivalence with the optimum
-        # path is not assumed -- docs/spikes/2026-08-20-cross-encoder-raw-ort-
-        # equivalence.py measured 0.000e+00 worst |logit delta| between the
-        # two on all 4 shipped ONNX artifacts, across single/mixed-length/
-        # near-512/heavily-padded/truncation-asymmetry batches, with
-        # identical ranking on every batch.
-        cached = self._find_cached_raw_files()
-        if cached is not None:
-            import onnxruntime as ort
-            from tokenizers import Tokenizer
+        with self._load_lock:
+            # Double-checked: another thread may have finished loading (or a
+            # failed attempt may have left nothing published) while this
+            # thread waited for the lock.
+            if self.is_loaded:
+                return
 
-            onnx_path, tok_path = cached
-            tok = Tokenizer.from_file(str(tok_path))
-            # PARITY, not a new choice: `padding=True, truncation=True` on a
-            # transformers tokenizer pair defaults to strategy="longest_first"
-            # -- reproduced exactly, not switched to only_second (that is a
-            # separate, optional follow-up needing its own retrieval-quality
-            # evidence per the plan; bundling it here was a v1 defect).
-            tok.enable_truncation(max_length=self._max_length, strategy="longest_first")
-            tok.enable_padding()
-            self._tokenizer = tok
-            self._model = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-            self._session_input_names = {i.name for i in self._model.get_inputs()}
-            self._raw_ort = True
-            return
+            # Build everything in LOCALS first. Nothing on `self` is touched
+            # until the very end, and every attribute is published in one
+            # block together -- a concurrent reader (or a reader on the next
+            # call, if construction raises partway through) can never observe
+            # a tokenizer without a model or vice versa. A half-published
+            # scorer previously could pass a stale `self._tokenizer is not
+            # None` guard while `self._model` was never set (or was set to a
+            # session that failed construction), which would send a real
+            # request into a scorer that could never actually score.
+            raw_ort: bool
+            tokenizer_local = None
+            model_local = None
+            session_input_names: set = set()
 
-        # EXPORT PATH -- needs optimum, and therefore torch. Reached only when
-        # the raw files aren't cached locally (first-time setup / build time).
-        # Imports are local so the module has no hard optimum/torch dependency
-        # at plain import time (it stays importable in the default,
-        # rerank-OFF path).
-        from optimum.onnxruntime import ORTModelForSequenceClassification
-        from transformers import AutoTokenizer
+            # FAST PATH -- torch-free. onnxruntime + the Rust `tokenizers`
+            # lib never import torch (measured: docs/spikes/2026-08-19-
+            # torch-free-onnx-equivalence.py); optimum.onnxruntime and
+            # transformers.AutoTokenizer both do, at import time. Equivalence
+            # with the optimum path is not assumed -- docs/spikes/2026-08-20-
+            # cross-encoder-raw-ort-equivalence.py measured 0.000e+00 worst
+            # |logit delta| between the two on all 4 shipped ONNX artifacts,
+            # across single/mixed-length/near-512/heavily-padded/truncation-
+            # asymmetry batches, with identical ranking on every batch.
+            cached = self._find_cached_raw_files()
+            if cached is not None:
+                import onnxruntime as ort
+                from tokenizers import Tokenizer
 
-        self._raw_ort = False
-        self._tokenizer = AutoTokenizer.from_pretrained(self._model_id)
-        self._model = ORTModelForSequenceClassification.from_pretrained(
-            self._model_id,
-            subfolder=self._onnx_subfolder,
-            file_name=self._onnx_file_name,
-        )
+                onnx_path, tok_path = cached
+                tok = Tokenizer.from_file(str(tok_path))
+                # PARITY, not a new choice: `padding=True, truncation=True`
+                # on a transformers tokenizer pair defaults to
+                # strategy="longest_first" -- reproduced exactly, not
+                # switched to only_second (that is a separate, optional
+                # follow-up needing its own retrieval-quality evidence per
+                # the plan; bundling it here was a v1 defect).
+                tok.enable_truncation(max_length=self._max_length, strategy="longest_first")
+                tok.enable_padding()
+                # If InferenceSession() raises here, nothing on `self` has
+                # been touched -- the next call retries the load cleanly
+                # instead of reading a stale half-loaded state.
+                session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+                tokenizer_local = tok
+                model_local = session
+                session_input_names = {i.name for i in session.get_inputs()}
+                raw_ort = True
+            else:
+                # EXPORT PATH -- needs optimum, and therefore torch. Reached
+                # only when the raw files aren't cached locally (first-time
+                # setup / build time). Imports are local so the module has no
+                # hard optimum/torch dependency at plain import time (it
+                # stays importable in the default, rerank-OFF path).
+                from optimum.onnxruntime import ORTModelForSequenceClassification
+                from transformers import AutoTokenizer
+
+                tokenizer_local = AutoTokenizer.from_pretrained(self._model_id)
+                model_local = ORTModelForSequenceClassification.from_pretrained(
+                    self._model_id,
+                    subfolder=self._onnx_subfolder,
+                    file_name=self._onnx_file_name,
+                )
+                raw_ort = False
+
+            # Publish atomically -- every attribute a caller reads (is_loaded,
+            # __call__'s self._raw_ort branch, _score_raw's session input
+            # names) becomes visible together.
+            self._tokenizer = tokenizer_local
+            self._model = model_local
+            self._session_input_names = session_input_names
+            self._raw_ort = raw_ort
 
     def __call__(self, query: str, documents: Sequence[str]) -> list[float]:
         docs = list(documents)
