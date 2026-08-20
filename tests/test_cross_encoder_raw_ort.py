@@ -92,7 +92,11 @@ def _cached_file(repo_id: str, relative_path: str) -> bool:
     except ImportError:
         return False
     resolved = try_to_load_from_cache(repo_id, relative_path)
-    if not resolved:
+    # isinstance-str guard FIRST: the sentinel is a bare `object()` instance,
+    # which is truthy (a plain `if not resolved` would not catch it) and
+    # raises TypeError if handed to Path(). Reject anything that isn't
+    # already a string before touching the filesystem.
+    if not isinstance(resolved, str):
         return False
     return Path(resolved).is_file()
 
@@ -229,13 +233,22 @@ def test_token_type_ids_populated_for_document_segment() -> None:
         "in the feed -- ORT would have silently zero-filled it"
     )
     tids = captured["token_type_ids"]
-    assert (tids == 1).any(), (
+    doc_segment_count = int((tids == 1).sum())
+    assert doc_segment_count > 0, (
         f"expected at least one segment-1 (document) type id in the SUBMITTED "
         f"feed, got all: {tids.tolist()}"
     )
-    # negative control: a query-only feed (no document) must be all segment 0
-    # in the SAME submitted-feed sense, proving the assertion above isn't
-    # trivially true for every feed shape.
+
+    # DISCRIMINATING control (codex round-3 finding 1): an empty document
+    # still gets ONE segment-1 token, the trailing separator -- so asserting
+    # "(tids == 1).any()" on the empty-doc feed is the SAME predicate as the
+    # positive arm above and would pass even if the tokenizer/feed silently
+    # stopped emitting doc-CONTENT segment ids for a real document (the
+    # separator alone always satisfies ".any()"). The discriminating claim is
+    # that a real document contributes MORE segment-1 tokens than the bare
+    # separator: doc_segment_count must exceed the empty-doc's separator-only
+    # count, and the empty-doc count must be EXACTLY 1 (proving what the
+    # control is actually isolating).
     captured.clear()
     scorer._model.run = _capturing_run
     try:
@@ -250,9 +263,19 @@ def test_token_type_ids_populated_for_document_segment() -> None:
     finally:
         scorer._model.run = original_run
     tids_empty_doc = captured["token_type_ids"]
-    assert (tids_empty_doc == 1).any(), (
-        "even an empty document should still carry the segment-1 separator "
-        f"token as type_id 1, got all: {tids_empty_doc.tolist()}"
+    empty_doc_segment_count = int((tids_empty_doc == 1).sum())
+    assert empty_doc_segment_count == 1, (
+        "an empty document should carry EXACTLY the trailing segment-1 "
+        f"separator and nothing else, got count={empty_doc_segment_count} "
+        f"type_ids={tids_empty_doc.tolist()}"
+    )
+    assert doc_segment_count > empty_doc_segment_count, (
+        f"a real document ({doc_segment_count} segment-1 tokens) must produce "
+        f"strictly MORE segment-1 tokens than an empty document "
+        f"({empty_doc_segment_count}, the bare separator) -- equal counts "
+        "would mean the real document's own tokens never reached the "
+        "submitted feed as segment 1, and the old '(tids == 1).any()' check "
+        "could not have caught that because the separator alone satisfies it"
     )
 
 

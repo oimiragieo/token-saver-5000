@@ -43,13 +43,27 @@ def test_usable_as_injected_scorer_when_rerank_disabled_no_load():
 
 
 def _model_cached() -> bool:
-    """True if the default cross-encoder is already in the local HF cache."""
+    """True if the default cross-encoder is already in the local HF cache.
+
+    codex round-3 finding 2: ``try_to_load_from_cache`` can return a truthy,
+    non-None SENTINEL (``huggingface_hub.file_download._CACHED_NO_EXIST``)
+    meaning "the hub already recorded that this file does not exist on this
+    repo" -- not a real path. A bare ``is not None`` check accepts that
+    sentinel as if it were usable, which would let this skip guard read as
+    "cached" and push the slow real-model test into a live download instead
+    of skipping cleanly. Guard with an isinstance(str) check first (the
+    sentinel is not a string) and then verify the resolved path is an actual
+    file on disk.
+    """
     if importlib.util.find_spec("optimum") is None:
         return False
     try:
+        from pathlib import Path
+
         from huggingface_hub import try_to_load_from_cache
 
-        return try_to_load_from_cache(DEFAULT_RERANK_MODEL, "config.json") is not None
+        resolved = try_to_load_from_cache(DEFAULT_RERANK_MODEL, "config.json")
+        return isinstance(resolved, str) and Path(resolved).is_file()
     except Exception:
         return False
 
