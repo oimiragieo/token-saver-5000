@@ -1814,6 +1814,18 @@ Contract tests for app-layer server lifecycle service.
 | `def` | `test_lifecycle_service_request_contracts_declared` |
 | `def` | `test_lifecycle_service_validate_startup_request_map_rejects_extra_key` |
 
+#### `test_mcp_chain_imports_without_torch.py`
+
+The MCP handler chain must import without torch.
+
+| Kind | Name |
+|------|------|
+| `def` | `_run` |
+| `def` | `test_the_block_itself_works` |
+| `def` | `test_adaptive_rate_allocator_imports_without_torch` |
+| `def` | `test_the_mcp_handler_chain_imports_without_torch` |
+| `def` | `test_the_torch_class_still_raises_a_useful_error_without_torch` |
+
 #### `test_mcp_context_surfaces.py`
 
 Tests for MCP prompt and resource surfaces.

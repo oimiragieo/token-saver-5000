@@ -38,9 +38,10 @@ Adaptive Rate Allocator
 
 | Kind | Name |
 |------|------|
-| `class` | `AdaptiveRateAllocator` |
+| `def` | `_build_adaptive_rate_allocator_cls` |
 | `class` | `ContextWindowAdapter` |
 | `class` | `MultiLevelSemanticEncoder` |
+| `def` | `__getattr__` |
 
 #### `afm.py`
 
