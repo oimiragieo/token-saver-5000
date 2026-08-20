@@ -396,6 +396,7 @@ ONNX cross-encoder relevance scorer for the recall-gated rerank stage (#187).
 
 | Kind | Name |
 |------|------|
+| `class` | `_LoadedState` |
 | `class` | `CrossEncoderScorer` |
 
 #### `dataset_registry.py`

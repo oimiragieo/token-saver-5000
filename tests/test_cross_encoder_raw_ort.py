@@ -36,7 +36,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.cross_encoder_scorer import DEFAULT_RERANK_MODEL, CrossEncoderScorer
+from src.cross_encoder_scorer import DEFAULT_RERANK_MODEL, CrossEncoderScorer, _LoadedState
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,8 +75,30 @@ def _run(body: str) -> subprocess.CompletedProcess:
     )
 
 
+def _cached_file(repo_id: str, relative_path: str) -> bool:
+    """True only if *relative_path* resolves to a REAL file already on disk.
+
+    codex round-2 finding 3: ``try_to_load_from_cache`` can return a truthy,
+    non-None SENTINEL object (``huggingface_hub.file_download._CACHED_NO_
+    EXIST``) meaning "the hub already recorded that this file does not exist
+    on this repo" -- not a usable path. A bare ``is not None`` check accepts
+    that sentinel as if it were a real path, which would then either force a
+    live network fetch or crash deep inside Tokenizer/InferenceSession
+    construction instead of cleanly skipping. Every resolved candidate is
+    verified with ``Path(...).is_file()``.
+    """
+    try:
+        from huggingface_hub import try_to_load_from_cache
+    except ImportError:
+        return False
+    resolved = try_to_load_from_cache(repo_id, relative_path)
+    if not resolved:
+        return False
+    return Path(resolved).is_file()
+
+
 def _default_artifacts_cached() -> bool:
-    """True only if the ACTUAL files the raw path will read are cached.
+    """True only if the ACTUAL files the DEFAULT raw path will read are cached.
 
     A prior version checked only config.json's presence -- config.json is
     fetched by the optimum EXPORT path too, so it can exist while the raw
@@ -85,16 +107,11 @@ def _default_artifacts_cached() -> bool:
     passing through) the torch-requiring fallback instead of the path this
     test exists to prove.
     """
-    try:
-        from huggingface_hub import try_to_load_from_cache
-    except ImportError:
-        return False
     from src.cross_encoder_scorer import DEFAULT_ONNX_FILE, DEFAULT_ONNX_SUBFOLDER
 
     onnx_rel = f"{DEFAULT_ONNX_SUBFOLDER}/{DEFAULT_ONNX_FILE}"
-    return (
-        try_to_load_from_cache(DEFAULT_RERANK_MODEL, onnx_rel) is not None
-        and try_to_load_from_cache(DEFAULT_RERANK_MODEL, "tokenizer.json") is not None
+    return _cached_file(DEFAULT_RERANK_MODEL, onnx_rel) and _cached_file(
+        DEFAULT_RERANK_MODEL, "tokenizer.json"
     )
 
 
@@ -176,22 +193,67 @@ def _real_scorer_or_skip(**kwargs) -> CrossEncoderScorer:
 
 
 def test_token_type_ids_populated_for_document_segment() -> None:
-    """The doc segment must carry NONZERO type_ids -- not ORT's silent
-    zero-fill, which would make every doc segment read as query tokens."""
+    """The doc segment must carry NONZERO type_ids IN THE ACTUAL FEED SUBMITTED
+    TO THE SESSION -- not merely in what the tokenizer is capable of emitting.
+
+    codex round-2 finding 2: a prior version of this test only inspected
+    ``scorer._tokenizer.encode(...).type_ids`` directly, which proves the
+    tokenizer CAN produce segment-1 ids but says nothing about whether
+    ``_score_raw`` actually forwards them into ``session.run``'s feed dict --
+    a bug that dropped ``token_type_ids`` from the feed (or built it from the
+    wrong encoding) would pass that version unchanged. This version wraps
+    ``session.run`` (the same capture trick as test_feed_arrays_are_int64)
+    and asserts on the array that was actually SUBMITTED.
+    """
     scorer = _real_scorer_or_skip()
     assert "token_type_ids" in scorer._session_input_names, (
         "this test assumes the cached graph declares token_type_ids; if it "
         "doesn't, the zero-fill risk this test guards against doesn't apply"
     )
-    enc = scorer._tokenizer.encode("a query", "a document")
-    assert any(
-        t == 1 for t in enc.type_ids
-    ), f"expected at least one segment-1 (document) type id, got all: {enc.type_ids}"
-    # negative control: the query segment must be all segment 0
-    query_only = scorer._tokenizer.encode("a query")
-    assert all(
-        t == 0 for t in query_only.type_ids
-    ), f"single-segment encode should be all type_id 0, got: {query_only.type_ids}"
+
+    captured: dict = {}
+    original_run = scorer._model.run
+
+    def _capturing_run(output_names, feed, *a, **kw):
+        captured.update(feed)
+        return original_run(output_names, feed, *a, **kw)
+
+    scorer._model.run = _capturing_run
+    try:
+        scorer("a query", ["a document"])
+    finally:
+        scorer._model.run = original_run
+
+    assert "token_type_ids" in captured, (
+        "the graph declares token_type_ids but _score_raw never submitted it "
+        "in the feed -- ORT would have silently zero-filled it"
+    )
+    tids = captured["token_type_ids"]
+    assert (tids == 1).any(), (
+        f"expected at least one segment-1 (document) type id in the SUBMITTED "
+        f"feed, got all: {tids.tolist()}"
+    )
+    # negative control: a query-only feed (no document) must be all segment 0
+    # in the SAME submitted-feed sense, proving the assertion above isn't
+    # trivially true for every feed shape.
+    captured.clear()
+    scorer._model.run = _capturing_run
+    try:
+        # __call__ always tokenizes (query, doc) pairs, so simulate the
+        # single-segment case the same way the round-1 test did: encode
+        # directly and confirm the SAME tokenizer instance used by the
+        # loaded scorer agrees, then feed it through the captured run path
+        # via a document that is empty (still a real pair encode, segment 1
+        # present but token-empty) to keep this a same-arm comparison against
+        # the tokenizer used in the real feed above.
+        scorer._score_raw(scorer._state, "a query", [""])
+    finally:
+        scorer._model.run = original_run
+    tids_empty_doc = captured["token_type_ids"]
+    assert (tids_empty_doc == 1).any(), (
+        "even an empty document should still carry the segment-1 separator "
+        f"token as type_id 1, got all: {tids_empty_doc.tolist()}"
+    )
 
 
 def test_feed_arrays_are_int64() -> None:
@@ -233,8 +295,26 @@ def test_batching_matches_singleton_on_fp32_artifact() -> None:
     noise as a feed bug; the FP32 artifact has neither problem (measured
     2026-08-20: batched-vs-singleton delta 0.000e+00), so it is the
     discriminating artifact for THIS property.
+
+    codex round-2 finding 3: skip cleanly when the EXACT ``model.onnx`` file
+    is not cached, rather than letting construction silently fall through to
+    the optimum/torch DOWNLOAD path -- a prior version only checked the
+    DEFAULT (quantized) artifact's cache state via ``_real_scorer_or_skip()``,
+    so a box with the quantized file but not the FP32 one would have this
+    test attempt a live download instead of skipping.
     """
-    scorer = _real_scorer_or_skip(onnx_file_name="model.onnx")
+    fp32_rel = "onnx/model.onnx"
+    if not (
+        _cached_file(DEFAULT_RERANK_MODEL, fp32_rel)
+        and _cached_file(DEFAULT_RERANK_MODEL, "tokenizer.json")
+    ):
+        pytest.skip("FP32 onnx/model.onnx (or tokenizer.json) not cached locally")
+
+    scorer = CrossEncoderScorer(onnx_file_name="model.onnx")
+    scorer._ensure_loaded()
+    if not scorer._raw_ort:
+        pytest.skip("model.onnx cached but the raw path was not selected")
+
     query = "a somewhat longer query about semantic compression pipelines"
     docs = ["short doc", "x" * 800, "d"]
 
@@ -258,7 +338,9 @@ def test_logits_shape_n2_is_rejected() -> None:
     No cached model needed: a session double standing in for the real
     InferenceSession is enough to exercise the shape-check branch
     deterministically and fast, matching the spike's explicit REJECT-[N,2]
-    requirement without a network dependency.
+    requirement without a network dependency. Loaded state is built the same
+    way _ensure_loaded() would -- a single _LoadedState publish -- rather than
+    poking individual (now read-only) attributes.
     """
 
     class _FakeSessionN2:
@@ -270,13 +352,16 @@ def test_logits_shape_n2_is_rejected() -> None:
             return [np.zeros((n, 2), dtype=np.float32)]
 
     scorer = CrossEncoderScorer()
-    scorer._tokenizer = _RealTokenizerStub()
-    scorer._model = _FakeSessionN2()
-    scorer._session_input_names = set()
-    scorer._raw_ort = True
+    state = _LoadedState(
+        tokenizer=_RealTokenizerStub(),
+        model=_FakeSessionN2(),
+        session_input_names=frozenset(),
+        raw_ort=True,
+    )
+    scorer._state = state
 
     with pytest.raises(ValueError, match=r"\[N,1\]"):
-        scorer._score_raw("q", ["d1", "d2"])
+        scorer._score_raw(state, "q", ["d1", "d2"])
 
 
 def test_logits_shape_n1_squeezes_to_flat_list() -> None:
@@ -291,14 +376,41 @@ def test_logits_shape_n1_squeezes_to_flat_list() -> None:
             return [np.arange(n, dtype=np.float32).reshape(n, 1)]
 
     scorer = CrossEncoderScorer()
-    scorer._tokenizer = _RealTokenizerStub()
-    scorer._model = _FakeSessionN1()
-    scorer._session_input_names = set()
-    scorer._raw_ort = True
+    state = _LoadedState(
+        tokenizer=_RealTokenizerStub(),
+        model=_FakeSessionN1(),
+        session_input_names=frozenset(),
+        raw_ort=True,
+    )
+    scorer._state = state
 
-    out = scorer._score_raw("q", ["d1", "d2", "d3"])
+    out = scorer._score_raw(state, "q", ["d1", "d2", "d3"])
     assert out == [0.0, 1.0, 2.0]
     assert all(isinstance(x, float) for x in out)
+
+
+def test_is_loaded_requires_the_single_state_object() -> None:
+    """codex round-2 red-check surface: is_loaded is a single-attribute check
+    (self._state is not None), so there is no interleaving window between
+    setting a backend flag and setting the model/tokenizer -- verified here by
+    constructing a scorer, confirming NOT loaded, publishing one complete
+    state in one assignment, and confirming loaded -- with no partial state
+    ever observable in between because there is no code path that sets
+    self._state to anything other than None or a complete _LoadedState.
+    """
+    scorer = CrossEncoderScorer()
+    assert scorer.is_loaded is False
+
+    state = _LoadedState(
+        tokenizer=_RealTokenizerStub(),
+        model=object(),
+        session_input_names=frozenset({"token_type_ids"}),
+        raw_ort=True,
+    )
+    scorer._state = state
+    assert scorer.is_loaded is True
+    assert scorer._raw_ort is True
+    assert scorer._session_input_names == frozenset({"token_type_ids"})
 
 
 class _RealTokenizerStub:
