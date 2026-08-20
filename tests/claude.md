@@ -1824,6 +1824,8 @@ The MCP handler chain must import without torch.
 | `def` | `test_the_block_itself_works` |
 | `def` | `test_adaptive_rate_allocator_imports_without_torch` |
 | `def` | `test_the_mcp_handler_chain_imports_without_torch` |
+| `def` | `test_the_server_context_builds_without_torch` |
+| `def` | `test_the_deferred_allocator_still_raises_when_actually_used` |
 | `def` | `test_the_torch_class_still_raises_a_useful_error_without_torch` |
 
 #### `test_mcp_context_surfaces.py`
