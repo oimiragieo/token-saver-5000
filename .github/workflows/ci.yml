@@ -229,6 +229,58 @@ jobs:
           print(f'ONNX model warmed at {model_path}')
           "
 
+      - name: Warm the CROSS-ENCODER artifacts so the rerank guards RUN
+        # A SECOND instance of the same defect, found by enumerating the skips the
+        # embedding warm did NOT remove (18 remained; 4 of them here). The
+        # torch-free cross-encoder rerank path -- the engine's newest feature
+        # (#32) -- gates on ITS OWN artifacts, so warming the embedding model did
+        # nothing for it and all 4 of its guards still never executed.
+        #
+        # The original `pytest.skip` was a reasonable call when nothing warmed
+        # anything ("so a clean-cache CI box doesn't force a download"). Now that
+        # CI warms one model, warming the second is the consistent choice.
+        #
+        # DIFFERENT MECHANISM FROM THE STEP ABOVE, and this is the load-bearing
+        # detail: that gate checks a local_dir, this one calls
+        # `try_to_load_from_cache`, which reads the STANDARD HF cache. So this
+        # needs `hf_hub_download` -- a snapshot into a local_dir would leave the
+        # predicate False and the guards skipping, while looking like it worked.
+        #
+        # It fetches the EXACT files the raw path reads (the quantized artifact +
+        # tokenizer.json), not config.json: the test's own comment records that
+        # checking config.json was the previous bug, because the optimum export
+        # path fetches it too, so it can exist while the raw path's artifact is
+        # missing -- silently degrading the headline test into always exercising
+        # the torch-requiring fallback it exists to prove we do not need.
+        run: |
+          python -c "
+          import sys, pathlib
+          sys.path.insert(0, '.')
+          from huggingface_hub import hf_hub_download, try_to_load_from_cache
+          from src.cross_encoder_scorer import (
+              DEFAULT_RERANK_MODEL, DEFAULT_ONNX_FILE, DEFAULT_ONNX_SUBFOLDER,
+          )
+
+          # Derived from the source constants, never hardcoded: the artifact name
+          # is a quantization choice that has changed before.
+          rel = f'{DEFAULT_ONNX_SUBFOLDER}/{DEFAULT_ONNX_FILE}'
+          for f in (rel, 'tokenizer.json'):
+              hf_hub_download(DEFAULT_RERANK_MODEL, f)
+
+          # Assert the gate's OWN predicate, including its sentinel guard:
+          # try_to_load_from_cache can return a truthy _CACHED_NO_EXIST marker
+          # meaning 'known absent', so a bare 'is not None' would pass while the
+          # file is missing.
+          def cached(r):
+              p = try_to_load_from_cache(DEFAULT_RERANK_MODEL, r)
+              return isinstance(p, str) and pathlib.Path(p).is_file()
+
+          assert cached(rel) and cached('tokenizer.json'), (
+              f'{DEFAULT_RERANK_MODEL}: artifacts still not resolvable from cache -- the skips would remain'
+          )
+          print(f'cross-encoder artifacts warmed for {DEFAULT_RERANK_MODEL}')
+          "
+
       - name: Run full test suite with coverage
         # --timeout converts a single hung test (previously cancelled the whole 45-min
         # job with no gate, #191) into a fast per-test failure that NAMES the culprit.
