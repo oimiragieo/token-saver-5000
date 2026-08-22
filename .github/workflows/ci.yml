@@ -264,7 +264,21 @@ jobs:
           # Derived from the source constants, never hardcoded: the artifact name
           # is a quantization choice that has changed before.
           rel = f'{DEFAULT_ONNX_SUBFOLDER}/{DEFAULT_ONNX_FILE}'
-          for f in (rel, 'tokenizer.json'):
+
+          # THE FP32 ARTIFACT IS A THIRD, SEPARATE FILE -- not a duplicate to
+          # optimise away. Warming only the quantized default recovered 3 of the
+          # 4 skips here (measured: `.ssss...` -> `....s...`, run 32541578052);
+          # the fifth test needs `onnx/model.onnx` specifically. Its docstring
+          # gives the reason: the shipped INT8 graphs are genuinely
+          # batch-padding sensitive (batched vs singleton differing by up to
+          # ~0.3 on the SAME correct feed), so asserting batched==singleton
+          # against a quantized artifact would either hide a real feed bug in
+          # quantization noise or report quantization noise as a feed bug. On
+          # FP32 the measured delta is 0.000e+00, which makes it the only
+          # discriminating artifact for that property.
+          fp32_rel = f'{DEFAULT_ONNX_SUBFOLDER}/model.onnx'
+
+          for f in (rel, fp32_rel, 'tokenizer.json'):
               hf_hub_download(DEFAULT_RERANK_MODEL, f)
 
           # Assert the gate's OWN predicate, including its sentinel guard:
@@ -275,8 +289,9 @@ jobs:
               p = try_to_load_from_cache(DEFAULT_RERANK_MODEL, r)
               return isinstance(p, str) and pathlib.Path(p).is_file()
 
-          assert cached(rel) and cached('tokenizer.json'), (
-              f'{DEFAULT_RERANK_MODEL}: artifacts still not resolvable from cache -- the skips would remain'
+          missing = [r for r in (rel, fp32_rel, 'tokenizer.json') if not cached(r)]
+          assert not missing, (
+              f'{DEFAULT_RERANK_MODEL}: still not resolvable from cache: {missing} -- those skips would remain'
           )
           print(f'cross-encoder artifacts warmed for {DEFAULT_RERANK_MODEL}')
           "
