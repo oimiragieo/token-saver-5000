@@ -471,8 +471,27 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
     """
     Estimate token savings from JSON → TOON conversion.
 
-    Uses simple word-count heuristic (1.3 tokens/word approximation).
-    For accurate counting, integrate tiktoken.
+    Counts with the engine's canonical ``TokenEstimator`` (tiktoken
+    ``cl100k_base``, with a ``len//4`` fallback if the encoder is unavailable).
+
+    WHY NOT THE OLD HEURISTIC (fixed 2026-08-22). This used to be:
+
+        json_tokens = int(len(json_str.split()) * 1.3)
+
+    a WORD count — and it overstated TOON's benefit by **30.7 percentage
+    points**, reporting 92.5% where a real tokenizer measures 61.8%. The
+    mechanism is self-inflicted: TOON's whole trick is packing a record onto one
+    line with commas and no spaces (``n0,0.900,src/module_0.py,function``), which
+    is ONE "word" to ``.split()``, while pretty-printed JSON is spaces
+    everywhere. So the estimate inflated in direct proportion to how well TOON
+    worked — it counted exactly what TOON removes.
+
+    That mattered because this number is CUSTOMER-FACING: ``toon_encode`` /
+    ``toon_decode`` are published MCP tools and this product sells token
+    savings. The real saving (~62%) was always good; only the claim was wrong,
+    and overstatement is the dangerous direction here. ``tiktoken`` was already
+    a declared dependency in both this package and ``api/requirements.txt``, so
+    the correct counter cost nothing.
 
     Args:
         json_str: Original JSON string
@@ -481,9 +500,11 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
     Returns:
         Dictionary with token counts and savings percentage
     """
-    # Simple approximation: 1.3 tokens per word
-    json_tokens = int(len(json_str.split()) * 1.3)
-    toon_tokens = int(len(toon_str.split()) * 1.3)
+    from src.token_estimation import TokenEstimator
+
+    _estimator = TokenEstimator()
+    json_tokens = _estimator.count_tokens(json_str)
+    toon_tokens = _estimator.count_tokens(toon_str)
 
     savings = json_tokens - toon_tokens
     savings_pct = (savings / json_tokens * 100) if json_tokens > 0 else 0
