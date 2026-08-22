@@ -13,11 +13,13 @@ miss is routine (restart / eviction / cross-worker ingest), not exotic.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
 import src.handlers.compression_handlers as ch
+from tests.test_onnx_torch_free_path import _model_is_cached
 
 
 class _FakeSkeletonResponse:
@@ -126,3 +128,75 @@ class TestCacheStablePrefixContract:
 
         assert data["cache_stable_prefix"], "cache_stable_prefix must be non-empty"
         assert data["cache_stable_prefix"] == data["skeleton_text"] == "BASELINE::doc1"
+
+
+class TestCacheStablePrefixContractRealCompressor:
+    """The stub `_FakeCompressor` above is non-vacuous for the original defect
+    (it fails pre-fix and passes post-fix) but its notion of "query
+    independence" is defined only by whether an explicit `query` kwarg was
+    passed in -- it can never catch a REAL compressor that reads hidden
+    current-query state off the instance instead of an argument. This test
+    exercises the genuine miss path (`_baseline_skeleton_cache` deleted after
+    ingest, unlike test_prompt_caching.py's `test_cache_stable_prefix_remains_
+    identical_across_queries`, which never leaves the cache) against a real
+    `SemanticCompressor`.
+    """
+
+    @pytest.mark.skipif(not _model_is_cached(), reason="ONNX model not in the local cache")
+    @pytest.mark.asyncio
+    async def test_real_compressor_stable_prefix_survives_cache_miss(self):
+        from src.semantic_compressor import SemanticCompressor
+
+        compressor = SemanticCompressor()
+        text = "\n\n".join(
+            [
+                "Authentication services validate access tokens and rotate refresh credentials.",
+                "Billing services calculate invoices, credits, and payment retries.",
+                "Session management tracks device activity and expiration windows.",
+                "Audit logging stores privileged actions for compliance review.",
+            ]
+        )
+        await compressor.ingest_file_async(text, "real_cache_doc")
+
+        # Force the genuine miss path: ingest populates `_baseline_skeleton_cache`
+        # for this file_id; delete that entry so the handler must recompute via
+        # `_generate_skeleton` rather than reading a pre-populated hit.
+        baseline_cache = getattr(compressor, "_baseline_skeleton_cache", None)
+        assert isinstance(baseline_cache, dict) and "real_cache_doc" in baseline_cache, (
+            "precondition: ingest must have populated the baseline cache for "
+            "this file_id, or this test cannot prove it exercised the miss path"
+        )
+        del baseline_cache["real_cache_doc"]
+        assert "real_cache_doc" not in baseline_cache
+
+        context = {
+            "compressor": compressor,
+            "sync_manager": SimpleNamespace(file_metadata={}),
+        }
+
+        with patch("src.handlers.compression_handlers.validate_file_id"):
+            result_a = await ch.handle_read_skeleton(
+                context,
+                {
+                    "file_id": "real_cache_doc",
+                    "selection_mode": "query_guided",
+                    "query": "how do refresh tokens get rotated",
+                },
+            )
+            result_b = await ch.handle_read_skeleton(
+                context,
+                {
+                    "file_id": "real_cache_doc",
+                    "selection_mode": "query_guided",
+                    "query": "what does the audit log record for compliance",
+                },
+            )
+
+        data_a = json.loads(result_a)
+        data_b = json.loads(result_b)
+
+        assert data_a["cache_stable_prefix"], "cache_stable_prefix must be non-empty"
+        assert data_a["cache_stable_prefix"] == data_b["cache_stable_prefix"], (
+            "a real SemanticCompressor's recompute diverged across two "
+            "different queries on a genuine cache miss"
+        )

@@ -418,6 +418,12 @@ READ_SKELETON_RESPONSE_TEMPLATE: Dict[str, Any] = {
     "skeleton_tokens": 0,
     "compression_ratio": 0.0,
     "skeleton_text": "",
+    # str | None: query-independent skeleton text safe to use as a stable KV-
+    # cache prefix across calls with different `query` values. `None` means
+    # no query-independent prefix could be produced for this call (e.g. the
+    # baseline cache was cold AND the on-demand recompute also failed) --
+    # do NOT cache this response's `skeleton_text` as a stable prefix in
+    # that case, since it may be query-conditioned.
     "cache_stable_prefix": "",
     "node_map": {},
     "selection_mode": "baseline",
@@ -1200,14 +1206,24 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
                 # test double) doesn't support this mechanism; leave it as-is
                 # rather than forcing an extra call it never asked for.
                 try:
-                    baseline_response = compressor._generate_skeleton(scoped_file_id)
+                    # A3-style offload: this recompute is a synchronous,
+                    # CPU-bound pass (node selection + render over already-
+                    # embedded chunks). The main pipeline above never calls a
+                    # sync compressor method directly on the event loop for
+                    # exactly this reason (see the `asyncio.to_thread` offload
+                    # a few lines up) -- this recompute must not either, or a
+                    # routine cache miss stalls every other in-flight request.
+                    baseline_response = await asyncio.to_thread(
+                        compressor._generate_skeleton, scoped_file_id
+                    )
                     cache_stable_prefix = baseline_response.skeleton_text
                     # Write-through: the next miss for this file_id is now a hit.
                     if isinstance(baseline_cache, dict):
                         baseline_cache[scoped_file_id] = cache_stable_prefix
                 except Exception as exc:
                     logger.warning(
-                        f"cache_stable_prefix baseline recompute failed for " f"'{file_id}': {exc}"
+                        f"cache_stable_prefix baseline recompute failed for '{file_id}': {exc}",
+                        exc_info=True,
                     )
                     cache_stable_prefix = None
 

@@ -500,6 +500,7 @@ N5 contract test: cache_stable_prefix must never silently return
 | `def` | `_context` |
 | `async def` | `_read` |
 | `class` | `TestCacheStablePrefixContract` |
+| `class` | `TestCacheStablePrefixContractRealCompressor` |
 
 #### `test_cache_telemetry.py`
 
