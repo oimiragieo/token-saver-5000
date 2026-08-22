@@ -4,8 +4,20 @@ WHY THIS IS A MONEY BUG, not a cosmetic one. `toon_encode` / `toon_decode` are
 PUBLISHED MCP tools (both appear in the 193-tool catalogue), and this product
 sells token savings. The estimator returned a `savings_percentage` and a
 customer-facing string `"92.5% fewer tokens"` for a payload whose real saving is
-**61.8%** — measured with tiktoken `cl100k_base`, the same encoder the engine's
-own canonical `TokenEstimator` uses.
+**~37%** — measured with tiktoken `cl100k_base`, the same encoder the engine's
+own canonical `TokenEstimator` uses, against a COMPACT JSON baseline.
+
+CORRECTION, 2026-08-22. This docstring originally said 61.8%, and the assertions
+below were built on it. That figure was tiktoken-counted but measured against
+`json.dumps(payload, indent=2)`, so it billed TOON for our own whitespace — the
+SECOND defect, found only when the estimator was taught to normalize its
+baseline and these tests went red. The honest saving on this fixture is 37.0%.
+The line "the real number is still GOOD (~62%)" was therefore itself an
+overstatement, written in a file whose entire purpose is catching overstatement.
+Nothing about TOON changed; the yardstick did. Three sites carried this same
+pretty-baseline error (this file, `toon_encode`, `bundle_distiller`), which is
+why the normalization now lives in `estimate_token_savings` rather than in any
+one caller.
 
 THE MECHANISM IS SELF-INFLICTED, WHICH IS WHY IT WAS SO LARGE. The old
 implementation counted WORDS:
@@ -23,9 +35,10 @@ worked — it counted the very thing TOON removes. The docstring even said "For
 accurate counting, integrate tiktoken", so the shortcut was known; it just
 shipped in a customer-facing surface anyway.
 
-The real number is still GOOD (~62%). Nothing about TOON needed fixing — only
-the claim about it. A public number can be wrong in either direction, and
-overstatement is the dangerous one for a company selling savings.
+The real number is still good (~37% on this fixture, against a compact
+baseline). Nothing about TOON needed fixing — only the claim about it. A public
+number can be wrong in either direction, and overstatement is the dangerous one
+for a company selling savings.
 
 `tiktoken` was already a declared dependency in BOTH `api/requirements.txt` and
 this package, so the fix adds nothing.
@@ -70,7 +83,11 @@ def test_the_reported_saving_matches_a_real_tokenizer():
     """The discriminating property. The old word-count heuristic failed this by
     30.7 percentage points."""
     payload = _payload()
-    json_str = json.dumps(payload, indent=2)
+    # COMPACT baseline. The reference figure must be computed against the same
+    # baseline the estimator normalizes to, or "real" is itself inflated by our
+    # own indentation — which is precisely how the 61.8% in this file's original
+    # docstring came to be recorded as the honest number when it was not.
+    json_str = json.dumps(payload, separators=(",", ":"))
     toon_str = ts.format_response(payload, ts.OutputFormat.TOON)
 
     claimed = ts.estimate_token_savings(json_str, toon_str)["savings_percentage"]
@@ -87,15 +104,18 @@ def test_toon_really_does_save_a_lot():
     """The control. An estimator hardcoded to 0% would pass the test above while
     destroying the feature's whole claim."""
     payload = _payload()
-    json_str = json.dumps(payload, indent=2)
+    json_str = json.dumps(payload, separators=(",", ":"))
     toon_str = ts.format_response(payload, ts.OutputFormat.TOON)
 
     real = _real_savings_pct(json_str, toon_str)
-    assert real > 40.0, (
+    # 30%, not 40%. Against a COMPACT baseline this fixture measures ~37%; the
+    # old 40% floor was set against a pretty-printed baseline and so encoded the
+    # very inflation this file exists to catch.
+    assert real > 30.0, (
         f"TOON saved only {real:.1f}% on structured data — if this is genuinely "
         "true the feature's premise is gone, and the fix is not in the estimator."
     )
-    assert ts.estimate_token_savings(json_str, toon_str)["savings_percentage"] > 40.0
+    assert ts.estimate_token_savings(json_str, toon_str)["savings_percentage"] > 30.0
 
 
 def test_it_does_not_divide_by_zero_on_empty_input():
@@ -163,3 +183,42 @@ def test_toon_encode_handler_baseline_is_compact_json_not_pretty_printed():
         "char and token savings are identical, so this fixture cannot detect the two "
         "being conflated — pick a payload where they differ"
     )
+
+
+def test_estimator_normalizes_a_pretty_printed_baseline():
+    """Whitespace in the caller's JSON is not a saving TOON produced.
+
+    Fixed in the estimator rather than per-caller because this exact defect was
+    found three times in three different places, always overstating: the
+    word-count heuristic (30.7pp), the toon_encode MCP tool (23.2pp), and
+    bundle_distiller's handoff token_estimate (14.5pp). A rule that lives in one
+    caller's comment does not survive a fourth caller.
+    """
+    payload = {"rows": [{"id": i, "name": f"item {i}", "note": "n" * 20} for i in range(10)]}
+    toon = ts.format_response(payload, ts.OutputFormat.TOON)
+
+    pretty = json.dumps(payload, indent=2, sort_keys=True)
+    compact = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    # Control: the fixture must actually differ, or this test cannot detect
+    # a baseline that was never normalized.
+    assert len(pretty) > len(compact), "fixture has no whitespace to normalize away"
+
+    from_pretty = ts.estimate_token_savings(pretty, toon)
+    from_compact = ts.estimate_token_savings(compact, toon)
+    assert from_pretty == from_compact, (
+        f"formatting changed the reported saving ({from_pretty['savings_percentage']}% vs "
+        f"{from_compact['savings_percentage']}%) — the baseline is not normalized, so we are "
+        "billing TOON for our own indentation"
+    )
+
+
+def test_estimator_does_not_zero_out_non_json_input():
+    """The normalization must never be a lossy transform of input it cannot parse.
+
+    A bare ``except: pass`` that also swallowed the count would turn every
+    non-JSON comparison into a silent 0-token baseline, i.e. a 0% saving that
+    reads exactly like an honest measurement.
+    """
+    out = ts.estimate_token_savings("not json at all, just some prose", "prose")
+    assert out["json_tokens"] > 0, "non-JSON baseline was zeroed instead of counted"

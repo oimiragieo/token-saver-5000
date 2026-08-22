@@ -479,7 +479,9 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
         json_tokens = int(len(json_str.split()) * 1.3)
 
     a WORD count — and it overstated TOON's benefit by **30.7 percentage
-    points**, reporting 92.5% where a real tokenizer measures 61.8%. The
+    points**, reporting 92.5% where a real tokenizer measures 61.8% against the
+    pretty-printed baseline that was in use at the time (~37% against the
+    compact baseline this function now normalizes to — see below). The
     mechanism is self-inflicted: TOON's whole trick is packing a record onto one
     line with commas and no spaces (``n0,0.900,src/module_0.py,function``), which
     is ONE "word" to ``.split()``, while pretty-printed JSON is spaces
@@ -488,7 +490,8 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
 
     That mattered because this number is CUSTOMER-FACING: ``toon_encode`` /
     ``toon_decode`` are published MCP tools and this product sells token
-    savings. The real saving (~62%) was always good; only the claim was wrong,
+    savings. The real saving (~37% compact-baseline; ~62% against the pretty
+    baseline in use then) was always good; only the claim was wrong,
     and overstatement is the dangerous direction here. ``tiktoken`` was already
     a declared dependency in both this package and ``api/requirements.txt``, so
     the correct counter cost nothing.
@@ -501,6 +504,27 @@ def estimate_token_savings(json_str: str, toon_str: str) -> Dict[str, Any]:
         Dictionary with token counts and savings percentage
     """
     from src.token_estimation import TokenEstimator
+
+    # NORMALIZE THE BASELINE TO COMPACT JSON (2026-08-22). Whitespace in the
+    # caller's JSON is not a saving TOON produced; it is a saving our own
+    # json.dumps(indent=...) produced, and counting it inflates the claim in the
+    # flattering direction. Two callers were doing exactly that:
+    # bundle_distiller's handoff token_estimate (72.4% reported vs 57.9% true,
+    # 14.5pp) and the toon_encode MCP tool (23.2pp, fixed at its own call site).
+    #
+    # This is deliberately fixed HERE rather than in each caller. The same
+    # defect has now been found three times in this file's blast radius, each
+    # time in a different place, each time overstating; a rule that lives in one
+    # caller's comment does not survive a fourth caller. A caller that already
+    # passes compact JSON is unaffected — re-serializing it is a no-op.
+    #
+    # Non-JSON input is left exactly as given: this must never be a lossy
+    # transform of something it does not understand, and a caller comparing
+    # arbitrary text still gets an honest count of the string it passed.
+    try:
+        json_str = json.dumps(json.loads(json_str), sort_keys=True, separators=(",", ":"))
+    except (ValueError, TypeError):
+        pass
 
     _estimator = TokenEstimator()
     json_tokens = _estimator.count_tokens(json_str)

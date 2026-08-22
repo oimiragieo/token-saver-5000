@@ -168,7 +168,18 @@ def distill_handoff_bundle(
         "context_block": context_block,
         "replay_text": replay_text,
     }
-    artifact_json = json.dumps(artifact, indent=2, sort_keys=True)
+    # COMPACT, not indent=2. This string exists only to be the baseline of the
+    # token_estimate below (grep: it has exactly one other use, that call), so a
+    # pretty-printed baseline does not make the bundle more readable — it just
+    # inflates the saving we report by the size of our own indentation. Measured
+    # on a representative bundle: 72.4% reported vs 57.9% true, 14.5pp.
+    #
+    # Third instance of this class found on 2026-08-22, after estimate_token_savings
+    # (word-count heuristic, 30.7pp) and toon_encode (pretty baseline + chars,
+    # 23.2pp). We sell token savings, so every one of these errs in the direction
+    # that flatters us and none was caught by a test. sort_keys stays: it is for
+    # determinism, not size.
+    artifact_json = json.dumps(artifact, sort_keys=True, separators=(",", ":"))
     artifact_toon = TOONSerializer().serialize_handoff_bundle(artifact)
     replay_tokens = (
         compressor._count_tokens(replay_text)
