@@ -105,7 +105,8 @@ async def handle_toon_encode(context: "HandlerContext", args: Dict[str, Any]) ->
 
     Returns:
         JSON string with toon_output, original_chars, toon_chars,
-        savings_percent, experimental flag
+        original_tokens, toon_tokens, savings_percent (TOKEN savings against a
+        COMPACT-JSON baseline), char_savings_percent, baseline, experimental flag
     """
     data = args.get("data")
     if data is None:
@@ -128,19 +129,54 @@ async def handle_toon_encode(context: "HandlerContext", args: Dict[str, Any]) ->
 
         toon_output = serializer.serialize_search_results(results_list)
 
-        original_json = json.dumps(data, indent=2)
+        # Baseline is COMPACT JSON, not indent=2. Two defects compounded here,
+        # both inflating a number that IS the product's claim. Measured
+        # 2026-08-22 on a 12-row search-result payload (chars: pretty 1,938 /
+        # compact 1,505 / TOON 1,030; tokens via the canonical count_tokens:
+        # compact 410 / TOON 313):
+        #
+        #   old reported (pretty CHARS)      46.9%
+        #   chars vs a compact baseline      31.6%   <- baseline fix, 15.3pp
+        #   tokens vs a compact baseline     23.7%   <- char->token fix, 7.9pp
+        #
+        # i.e. a 23.2pp overstatement. Nobody sends an LLM indent=2 JSON to
+        # save tokens, so the old baseline measured our own formatting choice
+        # rather than TOON.
+        #
+        # The estimator method is load-bearing and nearly cost this comment its
+        # own correctness: a first pass used the estimate_json HEURISTIC, which
+        # put char-vs-token at 0.1pp and would have shipped a comment declaring
+        # that half of the bug irrelevant. The canonical tiktoken count_tokens
+        # — the one this handler now ships — says 7.9pp. Measure with the
+        # instrument you are shipping, not a neighbouring one.
+        original_json = json.dumps(data, separators=(",", ":"))
         original_chars = len(original_json)
         toon_chars = len(toon_output)
-        savings = (
-            ((original_chars - toon_chars) / original_chars * 100) if original_chars > 0 else 0
-        )
+
+        # Tokens are what the customer is billed for; report them as the
+        # headline and keep the character counts beside them so the two can
+        # never be silently conflated again.
+        from src.token_estimation import TokenEstimator
+
+        estimator = TokenEstimator()
+        original_tokens = estimator.count_tokens(original_json)
+        toon_tokens = estimator.count_tokens(toon_output)
+
+        def _pct(before: int, after: int) -> float:
+            return round(((before - after) / before * 100), 1) if before > 0 else 0.0
 
         return json.dumps(
             {
                 "toon_output": toon_output,
                 "original_chars": original_chars,
                 "toon_chars": toon_chars,
-                "savings_percent": round(savings, 1),
+                "original_tokens": original_tokens,
+                "toon_tokens": toon_tokens,
+                # savings_percent is TOKEN savings vs compact JSON — the thing
+                # a caller is actually billed on.
+                "savings_percent": _pct(original_tokens, toon_tokens),
+                "char_savings_percent": _pct(original_chars, toon_chars),
+                "baseline": "compact JSON (json.dumps separators=(',',':'))",
                 "experimental": True,
                 "note": "TOON format is experimental - NOT production-ready",
             }

@@ -101,3 +101,65 @@ def test_toon_really_does_save_a_lot():
 def test_it_does_not_divide_by_zero_on_empty_input():
     out = ts.estimate_token_savings("", "")
     assert out["savings_percentage"] == 0
+
+
+def test_toon_encode_handler_baseline_is_compact_json_not_pretty_printed():
+    """The MCP tool's savings_percent must not be inflated by our own formatting.
+
+    ``handle_toon_encode`` originally built its baseline with
+    ``json.dumps(data, indent=2)`` and compared those CHARACTERS against compact
+    TOON, reporting the result as ``savings_percent``. Two defects compounded,
+    both in the flattering direction, on a published tool whose entire output is
+    a savings claim. Measured on a 12-row payload: 46.9% reported, 31.6% once
+    the baseline is compact, 23.7% once it is counted in tokens.
+
+    Nobody pretty-prints JSON to save tokens, so the old baseline measured our
+    indentation rather than TOON.
+    """
+    import asyncio
+
+    from src.handlers.experimental_handlers import handle_toon_encode
+
+    rows = [
+        {
+            "id": i,
+            "title": f"Result {i}",
+            "url": f"https://example.com/{i}",
+            "score": round(0.9 - i * 0.01, 3),
+            "snippet": "Semantic compression reduces token usage.",
+        }
+        for i in range(12)
+    ]
+
+    raw = handle_toon_encode(None, {"data": rows})
+    if asyncio.iscoroutine(raw):
+        raw = asyncio.run(raw)
+    out = json.loads(raw)
+
+    # Control: a handler that errored or returned an empty payload would make
+    # every assertion below vacuous.
+    assert out.get("original_tokens", 0) > 0, f"no baseline tokens to compare: {out}"
+    assert out.get("toon_output"), "handler produced no TOON output"
+
+    # The baseline must be compact JSON, byte-for-byte.
+    assert out["original_chars"] == len(json.dumps(rows, separators=(",", ":"))), (
+        "baseline is not compact JSON — if this is indent=2 again, savings_percent "
+        "is inflated by our own whitespace"
+    )
+    assert out["original_chars"] < len(json.dumps(rows, indent=2)), (
+        "compact baseline should be smaller than the pretty one; if not, this test "
+        "cannot tell the two apart and proves nothing"
+    )
+
+    # savings_percent is TOKENS, so it must track the token counts, not the chars.
+    expected = round(
+        (out["original_tokens"] - out["toon_tokens"]) / out["original_tokens"] * 100, 1
+    )
+    assert out["savings_percent"] == expected, (
+        f"savings_percent {out['savings_percent']} does not equal the token savings "
+        f"{expected} — the label and the value have drifted apart again"
+    )
+    assert out["char_savings_percent"] != out["savings_percent"], (
+        "char and token savings are identical, so this fixture cannot detect the two "
+        "being conflated — pick a payload where they differ"
+    )
