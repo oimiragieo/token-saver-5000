@@ -252,18 +252,6 @@ Help Handler Module
 | `def` | `get_tool_help_registry` |
 | `async def` | `handle_tool_help` |
 
-#### `mcp_core.py`
-
-MCP Core Routing Module
-
-| Kind | Name |
-|------|------|
-| `def` | `_normalize_tool_profile` |
-| `def` | `_enabled_tool_names` |
-| `def` | `_tools_for_profile` |
-| `def` | `setup_mcp_tools` |
-| `async def` | `route_tool_call` |
-
 #### `memory_handlers.py`
 
 Handlers for explicit memory, personalization, and knowledge management APIs.

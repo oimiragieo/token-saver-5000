@@ -327,6 +327,43 @@ class TestLRUEmbeddingCache:
 class TestEmbeddingTierSwitching:
     """Test embedding tier switching and fallback logic."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_embedding_manager_singleton(self):
+        """Reset the process-global EmbeddingManager singleton around each test.
+
+        EmbeddingManager is a singleton whose tier LOCKS at first construction
+        (src/embeddings.py EmbeddingManager.__new__): a later construction that
+        asks for a different tier does NOT switch it — it just returns the
+        already-locked instance. This class's tests construct EmbeddingManager
+        with an explicit tier and assert `get_tier()` reflects it, which only
+        holds if THIS test's construction is the one that wins the lock.
+
+        In the full suite (order-randomized), whichever OTHER test happens to
+        construct an EmbeddingManager first (anywhere in the file order) wins
+        the tier lock for the whole process, so these assertions fail
+        nondeterministically depending on run order — reproduced via
+        `-p no:randomly` bisection: whichever of these tests runs first in a
+        given ordering passes (it wins the lock), the others fail.
+
+        conftest.py's `_reset_shared_state` only restores the *attributes* of
+        whatever singleton instance already existed before the test — it
+        can't undo an already-locked tier, because nothing about the locked
+        instance changes during this test (the conflicting construction is a
+        no-op by design). So the leaked global here is the singleton's
+        *identity/lock*, not just an attribute value, and needs
+        `reset_for_testing()` (full instance clear), not an attribute
+        snapshot/restore.
+
+        Fix: snapshot the existing singleton, clear it via
+        `reset_for_testing()` so this test's construction wins the lock, then
+        restore the prior singleton afterward so other tests in the suite are
+        unaffected by whichever tier this test happened to lock in.
+        """
+        orig = EmbeddingManager._instance
+        EmbeddingManager.reset_for_testing()
+        yield
+        EmbeddingManager._instance = orig
+
     def test_tier_initialization(self):
         """Test tier-aware EmbeddingManager initialization."""
         # Note: This tests default tier only (STANDARD) since ONNX/TFIDF
