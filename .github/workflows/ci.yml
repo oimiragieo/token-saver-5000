@@ -176,54 +176,6 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Pre-export the ONNX model so model-gated tests actually RUN
-        # WHY THIS EXISTS. `test_onnx_torch_free_path.py` guards the torch-free
-        # embedding path -- the headline property behind the 3.62GB -> 2.32GB
-        # runtime image. Its real-encode arm is
-        # `@pytest.mark.skipif(not _model_is_cached())`, a pure filesystem check
-        # on `~/.cache/token-saver-5000/<model_name with / -> _>/model.onnx`.
-        # Nothing warmed that path here, so the arm SKIPPED on every run --
-        # measured on run 32382311294: `test_onnx_torch_free_path.py ....s`,
-        # suite total 4186 passed / 19 skipped. A skip reads as green, so the
-        # guard for our largest image change was not executing in CI at all.
-        #
-        # The export mirrors api/Dockerfile's pre-export (AutoTokenizer +
-        # ORTModelForFeatureExtraction.export -> save_pretrained) so CI warms the
-        # SAME layout production runs on, rather than inventing a second one.
-        #
-        # NOT `|| echo` like the Dockerfile: there, a failed export degrades to a
-        # runtime lazy-export and the build should still ship. Here, a silent
-        # failure restores exactly the skip-reads-green state this step exists to
-        # remove. It fails the job instead, and says why.
-        run: |
-          python -c "
-          import sys
-          from pathlib import Path
-          from transformers import AutoTokenizer
-          from optimum.onnxruntime import ORTModelForFeatureExtraction
-          sys.path.insert(0, '.')
-          from src.embeddings_onnx import ONNXEmbeddingManager
-
-          # Derive both from the code under test -- a hardcoded model name or
-          # cache path here would silently stop matching the gate the day either
-          # default changes, and the arm would go back to skipping.
-          m = ONNXEmbeddingManager()
-          model_name, cache_dir = m.model_name, m.cache_dir
-          cache_dir.mkdir(parents=True, exist_ok=True)
-          model_path = cache_dir / model_name.replace('/', '_')
-
-          AutoTokenizer.from_pretrained(model_name, cache_dir=str(cache_dir))
-          ORTModelForFeatureExtraction.from_pretrained(
-              model_name, export=True, cache_dir=str(cache_dir)
-          ).save_pretrained(str(model_path))
-
-          # Assert the gate's OWN predicate, not 'the command exited 0'. This is
-          # the only check that proves the skipif will now be False.
-          ok = (model_path / 'model.onnx').is_file() or (model_path / 'onnx' / 'model.onnx').is_file()
-          assert ok, f'export finished but {model_path} holds no model.onnx -- the skipif would still be True'
-          print(f'ONNX model warmed at {model_path}')
-          "
-
       - name: Run full test suite with coverage
         # --timeout converts a single hung test (previously cancelled the whole 45-min
         # job with no gate, #191) into a fast per-test failure that NAMES the culprit.
