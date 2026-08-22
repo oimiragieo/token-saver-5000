@@ -1168,14 +1168,48 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             logger.warning(f"Access tracking failed for '{file_id}': {exc}")
 
         # Build JSON response
+        #
+        # N5 contract: `cache_stable_prefix`, whenever present, MUST be query-
+        # independent. It exists so a caller can build a stable KV-cache prefix
+        # across calls with different `query` values (arXiv 2607.15516) — a
+        # value that silently varies per query defeats that prefix cache and,
+        # below ~6x compression, can cost MORE than not compressing at all.
+        #
+        # `_baseline_skeleton_cache` is populated at ingest time and is purely
+        # in-process (semantic_compressor.py:1451) — a worker restart, an
+        # eviction, or an ingest that happened in a different worker are all
+        # routine ways for it to miss. On a miss we RECOMPUTE the baseline
+        # (query-free) skeleton directly from the already-ingested graph via
+        # `_generate_skeleton(file_id)` with no `query` argument (chosen over
+        # silently omitting the field — see semantic_compressor.py:1693 — this
+        # is a pure node-selection/render pass over already-embedded chunks, no
+        # network or model call, so the recompute is cheap even on a cold
+        # cache). If even that fails (e.g. the graph itself is gone), we surface
+        # `cache_stable_prefix: None` rather than hand back a plausible-looking
+        # but query-conditioned value — a consumer can `is None`-check rather
+        # than being silently handed the wrong thing.
         cache_stable_prefix = skeleton_response.skeleton_text
         if selection_mode != "baseline":
             baseline_cache = getattr(compressor, "_baseline_skeleton_cache", None)
-            if isinstance(baseline_cache, dict):
-                cache_stable_prefix = baseline_cache.get(
-                    scoped_file_id,
-                    skeleton_response.skeleton_text,
-                )
+            if isinstance(baseline_cache, dict) and scoped_file_id in baseline_cache:
+                cache_stable_prefix = baseline_cache[scoped_file_id]
+            elif isinstance(baseline_cache, dict):
+                # Real cache dict present but missing this file_id — the
+                # routine miss case this fix targets. A compressor without a
+                # dict-shaped `_baseline_skeleton_cache` at all (e.g. a bare
+                # test double) doesn't support this mechanism; leave it as-is
+                # rather than forcing an extra call it never asked for.
+                try:
+                    baseline_response = compressor._generate_skeleton(scoped_file_id)
+                    cache_stable_prefix = baseline_response.skeleton_text
+                    # Write-through: the next miss for this file_id is now a hit.
+                    if isinstance(baseline_cache, dict):
+                        baseline_cache[scoped_file_id] = cache_stable_prefix
+                except Exception as exc:
+                    logger.warning(
+                        f"cache_stable_prefix baseline recompute failed for " f"'{file_id}': {exc}"
+                    )
+                    cache_stable_prefix = None
 
         response = {
             "file_id": file_id,

@@ -489,6 +489,18 @@ Tests for Phase 1 cache optimization: cache-stable ordering and provider format 
 | `def` | `test_client_config_cache_stable_ordering_default_true` |
 | `def` | `test_client_config_backward_compatible` |
 
+#### `test_cache_stable_prefix_contract.py`
+
+N5 contract test: cache_stable_prefix must never silently return
+
+| Kind | Name |
+|------|------|
+| `class` | `_FakeSkeletonResponse` |
+| `class` | `_FakeCompressor` |
+| `def` | `_context` |
+| `async def` | `_read` |
+| `class` | `TestCacheStablePrefixContract` |
+
 #### `test_cache_telemetry.py`
 
 (no module docstring — see symbols below)
