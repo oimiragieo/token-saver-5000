@@ -176,6 +176,59 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Warm the ONNX model so model-gated tests actually RUN
+        # WHY THIS EXISTS. The real-encode arm of test_onnx_torch_free_path.py is
+        # `skipif(not _model_is_cached())` -- a pure filesystem check for
+        # `<cache>/<model>/model.onnx` OR `<cache>/<model>/onnx/model.onnx`.
+        # Nothing warmed that path, so the arm SKIPPED on every run. Measured on
+        # run 32382311294: `test_onnx_torch_free_path.py ....s`, suite total
+        # 4186 passed / 19 skipped. A skip reads as green, so the guard for the
+        # 3.62GB -> 2.32GB torch-free image was not executing in CI at all.
+        #
+        # WHY snapshot_download AND NOT the Dockerfile's export. v1 of this step
+        # copied api/Dockerfile (AutoTokenizer + ORTModelForFeatureExtraction)
+        # and FAILED: `ModuleNotFoundError: No module named 'optimum.onnxruntime'`.
+        # requirements.txt pins `optimum[exporters]`, and that extra does NOT
+        # ship the onnxruntime integration -- reading the requirement line is not
+        # the same as verifying the module imports.
+        #
+        # The Hub already hosts a PRE-EXPORTED onnx/model.onnx for this model, so
+        # fetching it needs neither optimum nor torch -- which also matches the
+        # direction of travel (the runtime path is deliberately torch-free), and
+        # is the same snapshot_download the package's own CLAUDE.md prescribes for
+        # repairing a broken HF cache. allow_patterns keeps it to ~134MB by
+        # skipping the pytorch/safetensors weights nothing here loads.
+        #
+        # It FAILS the job rather than `|| echo`: swallowing the error restores
+        # exactly the skip-reads-green state this step exists to remove.
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          from huggingface_hub import snapshot_download
+          from src.embeddings_onnx import ONNXEmbeddingManager
+
+          # Derived, never hardcoded: a literal model name or cache path here
+          # would silently stop matching the gate the day either default changes,
+          # and the arm would quietly go back to skipping.
+          m = ONNXEmbeddingManager()
+          model_path = m.cache_dir / m.model_name.replace('/', '_')
+          model_path.parent.mkdir(parents=True, exist_ok=True)
+
+          snapshot_download(
+              m.model_name,
+              local_dir=str(model_path),
+              allow_patterns=['onnx/*', 'tokenizer.json', 'tokenizer_config.json',
+                              'config.json', 'special_tokens_map.json'],
+          )
+
+          # Assert the gate's OWN predicate, not 'the command exited 0'. This is
+          # the only check that proves the skipif will now be False.
+          ok = (model_path / 'model.onnx').is_file() or (model_path / 'onnx' / 'model.onnx').is_file()
+          assert ok, f'download finished but {model_path} holds no model.onnx -- the skipif would still be True'
+          print(f'ONNX model warmed at {model_path}')
+          "
+
       - name: Run full test suite with coverage
         # --timeout converts a single hung test (previously cancelled the whole 45-min
         # job with no gate, #191) into a fast per-test failure that NAMES the culprit.
