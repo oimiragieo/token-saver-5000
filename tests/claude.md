@@ -1240,6 +1240,16 @@ Task #212 edge-case hardening (2026-07-12 gotcontext.ai engine audit).
 | `def` | `manual_case6_needle_in_long_table_survives_at_any_position` |
 | `def` | `manual_case12_fact_at_midpoint_vs_boundary_recall_parity` |
 
+#### `test_embedding_determinism.py`
+
+Prove the compression path's embedding bytes are DETERMINISTIC, run to run.
+
+| Kind | Name |
+|------|------|
+| `def` | `_assert_non_vacuous_embedding` |
+| `def` | `test_same_process_embedding_is_byte_identical` |
+| `def` | `test_cross_process_embedding_is_byte_identical` |
+
 #### `test_embeddings_hf_import.py`
 
 Regression tests for src/embeddings.py import hygiene.
