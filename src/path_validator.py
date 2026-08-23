@@ -222,7 +222,8 @@ class PathValidator:
         """Validate S3 bucket naming used by connector feeds."""
         if not bucket or not isinstance(bucket, str):
             raise ValueError("bucket cannot be empty or non-string")
-        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket.strip()):
+        bucket = bucket.strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket) or ".." in bucket:
             raise ValueError("Invalid S3 bucket name")
         return bucket.strip()
 

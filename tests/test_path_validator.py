@@ -494,3 +494,27 @@ class TestIntegration:
         for exploit_path in exploits:
             # All exploits should be rejected
             assert validator.is_allowed(exploit_path) is False, f"Failed to block: {exploit_path}"
+
+
+class TestValidateS3Bucket:
+    """Regression lock: consecutive dots are invalid per real S3 bucket naming rules.
+
+    Found by the 2026-08-23 deep-dive audit (docs/audits/2026-08-23-deep-dive-audit.md,
+    item A5). Cosmetic-only in this codebase (not reachable via disk I/O) but a real
+    S3 bucket named this way would be rejected by AWS, so accepting it here is a
+    silent validation gap.
+    """
+
+    def test_rejects_consecutive_dots(self, validator_with_temp_dir):
+        with pytest.raises(ValueError):
+            validator_with_temp_dir.validate_s3_bucket("my..bucket")
+
+    def test_accepts_valid_bucket_name(self, validator_with_temp_dir):
+        assert (
+            validator_with_temp_dir.validate_s3_bucket("my-valid-bucket.name")
+            == "my-valid-bucket.name"
+        )
+
+    def test_rejects_empty_bucket(self, validator_with_temp_dir):
+        with pytest.raises(ValueError):
+            validator_with_temp_dir.validate_s3_bucket("")
