@@ -16,6 +16,8 @@ from threading import RLock
 from typing import Any, Iterable, Optional
 
 from .benchmark_harness import BenchmarkCase, default_corpus_path, load_benchmark_cases
+from .bounded_registry import BoundedDict
+from .constants import MAX_DATASETS
 
 
 def _utc_now() -> str:
@@ -63,9 +65,9 @@ class DatasetRegistry:
 
     _instance: Optional["DatasetRegistry"] = None
 
-    def __init__(self, seed_defaults: bool = True):
+    def __init__(self, seed_defaults: bool = True, max_datasets: int = MAX_DATASETS):
         self._lock = RLock()
-        self._datasets: dict[str, DatasetRecord] = {}
+        self._datasets: BoundedDict = BoundedDict(max_items=max_datasets)
         if seed_defaults:
             self._seed_default_benchmark_dataset()
 

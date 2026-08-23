@@ -337,6 +337,35 @@ WHY: Prevents unbounded memory growth in long-running servers while supporting
 if MAX_ACE_CONTEXTS < 1:
     raise ValueError("MAX_ACE_CONTEXTS must be >= 1")
 
+# ----------------------------------------------------------------------------
+# Bounded-registry caps (A1, docs/plans/2026-08-24-a1-bounded-registries.md)
+# ----------------------------------------------------------------------------
+# These bound 5 previously-unbounded in-memory registries (MemoryAPI,
+# PromptRegistry, ConnectorRegistry, DatasetRegistry, ExperimentTracker) via
+# src/bounded_registry.py::BoundedDict (FIFO eviction, not LRU -- see the
+# "Design decision: FIFO, not LRU" section of the plan above). Env override +
+# ">= 1" validation raised at import time mirrors MAX_ACE_CONTEXTS exactly.
+
+MAX_MEMORY_ENTRIES = int(os.getenv("MAX_MEMORY_ENTRIES", "1000"))
+if MAX_MEMORY_ENTRIES < 1:
+    raise ValueError("MAX_MEMORY_ENTRIES must be >= 1")
+
+MAX_PROMPT_TEMPLATES = int(os.getenv("MAX_PROMPT_TEMPLATES", "500"))
+if MAX_PROMPT_TEMPLATES < 1:
+    raise ValueError("MAX_PROMPT_TEMPLATES must be >= 1")
+
+MAX_CONNECTOR_FEEDS = int(os.getenv("MAX_CONNECTOR_FEEDS", "200"))
+if MAX_CONNECTOR_FEEDS < 1:
+    raise ValueError("MAX_CONNECTOR_FEEDS must be >= 1")
+
+MAX_DATASETS = int(os.getenv("MAX_DATASETS", "200"))
+if MAX_DATASETS < 1:
+    raise ValueError("MAX_DATASETS must be >= 1")
+
+MAX_EXPERIMENT_RUNS = int(os.getenv("MAX_EXPERIMENT_RUNS", "1000"))
+if MAX_EXPERIMENT_RUNS < 1:
+    raise ValueError("MAX_EXPERIMENT_RUNS must be >= 1")
+
 # ============================================================================
 # Logging
 # ============================================================================

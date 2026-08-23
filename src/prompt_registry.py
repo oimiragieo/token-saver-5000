@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 from .compression_presets import list_presets
 from .prompt_cache_audit import audit_prompt_cacheability
 from .prompt_cache_stability_guard import evaluate_prompt_stability
+from .bounded_registry import BoundedDict
+from .constants import MAX_PROMPT_TEMPLATES
 
 
 def _utc_now() -> str:
@@ -132,9 +134,9 @@ class PromptRegistry:
 
     _instance: Optional["PromptRegistry"] = None
 
-    def __init__(self, seed_defaults: bool = True):
+    def __init__(self, seed_defaults: bool = True, max_templates: int = MAX_PROMPT_TEMPLATES):
         self._lock = RLock()
-        self._templates: Dict[str, PromptTemplateRecord] = {}
+        self._templates: Dict[str, PromptTemplateRecord] = BoundedDict(max_templates)
         if seed_defaults:
             self._seed_from_presets()
 

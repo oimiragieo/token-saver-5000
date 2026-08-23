@@ -14,11 +14,13 @@ else:
 from threading import RLock
 from typing import Any, Optional
 
+from .bounded_registry import BoundedDict
 from .connectors.base import ConnectorDocument
 from .connectors.github_connector import GitHubConnector
 from .connectors.s3_connector import S3Connector
 from .connectors.slack_export_connector import SlackExportConnector
 from .connectors.web_connector import WebConnector
+from .constants import MAX_CONNECTOR_FEEDS
 
 
 def _utc_now() -> str:
@@ -56,7 +58,7 @@ class ConnectorRegistry:
 
     _instance: Optional["ConnectorRegistry"] = None
 
-    def __init__(self):
+    def __init__(self, max_feeds: int = MAX_CONNECTOR_FEEDS):
         self._lock = RLock()
         self._connectors = {
             "web": WebConnector(),
@@ -64,7 +66,7 @@ class ConnectorRegistry:
             "s3": S3Connector(),
             "slack_export": SlackExportConnector(),
         }
-        self._feeds: dict[str, ConnectorFeedRecord] = {}
+        self._feeds: BoundedDict = BoundedDict(max_feeds)
 
     @classmethod
     def get_registry(cls) -> "ConnectorRegistry":

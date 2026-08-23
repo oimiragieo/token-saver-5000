@@ -16,6 +16,8 @@ from difflib import SequenceMatcher
 from threading import RLock
 from typing import Any, Optional
 
+from .bounded_registry import BoundedDict
+from .constants import MAX_MEMORY_ENTRIES
 from .memory_classifier import classify_insight
 from .personalization import build_user_profile, summarize_user_memories
 
@@ -108,9 +110,9 @@ class MemoryAPI:
 
     _instance: Optional["MemoryAPI"] = None
 
-    def __init__(self):
+    def __init__(self, max_entries: int = MAX_MEMORY_ENTRIES):
         self._lock = RLock()
-        self._entries: dict[str, MemoryEntry] = {}
+        self._entries: BoundedDict = BoundedDict(max_items=max_entries)
         self._counter = 0
 
     @classmethod

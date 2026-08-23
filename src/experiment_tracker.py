@@ -22,8 +22,10 @@ from .benchmark_harness import (
     run_benchmark_cases_detailed,
     summary_to_dict,
 )
+from .bounded_registry import BoundedDict
 from .compression_rewards import CompressionRewardCalculator
 from .compression_verifier import CompressionVerifier
+from .constants import MAX_EXPERIMENT_RUNS
 from .dataset_registry import DatasetRegistry
 
 
@@ -74,10 +76,14 @@ class ExperimentTracker:
 
     _instance: Optional["ExperimentTracker"] = None
 
-    def __init__(self, dataset_registry: DatasetRegistry | None = None):
+    def __init__(
+        self,
+        dataset_registry: DatasetRegistry | None = None,
+        max_runs: int = MAX_EXPERIMENT_RUNS,
+    ):
         self._lock = RLock()
         self._dataset_registry = dataset_registry or DatasetRegistry.get_registry()
-        self._runs: dict[str, ExperimentRunRecord] = {}
+        self._runs: dict[str, ExperimentRunRecord] = BoundedDict(max_runs)
         self._counter = 0
 
     @classmethod
