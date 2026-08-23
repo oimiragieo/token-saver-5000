@@ -1134,6 +1134,7 @@ Tests for dead_code_detector.py -- import-graph-based dead file detection.
 | `def` | `test_detect_unimported_file_is_dead` |
 | `def` | `test_detect_handles_missing_files` |
 | `def` | `test_detect_all_entry_patterns_live` |
+| `def` | `test_tokens_saved_matches_a_real_tokenizer` |
 
 #### `test_dead_code_detector_perf.py`
 
@@ -1481,6 +1482,17 @@ F11 Path C — BM25 + Reciprocal Rank Fusion hybrid retrieval tests.
 | `class` | `TestRRFFuse` |
 | `class` | `TestSearchSemanticWithScoresPathDispatch` |
 | `class` | `TestScoreTypeInHandlerResponse` |
+
+#### `test_file_size_ratchet.py`
+
+Ratchet for the adopted file-size threshold in the engine — it may only tighten.
+
+| Kind | Name |
+|------|------|
+| `def` | `_python_files` |
+| `def` | `_over` |
+| `def` | `test_the_walk_sees_a_real_population` |
+| `def` | `test_oversized_file_count_only_ever_shrinks` |
 
 #### `test_file_sync.py`
 
@@ -3517,6 +3529,21 @@ Contract tests for MCP tool profile behavior.
 | Kind | Name |
 |------|------|
 | `def` | `test_handoff_bundle_toon_roundtrip` |
+
+#### `test_toon_savings_not_overstated.py`
+
+`estimate_token_savings` overstated TOON's benefit by ~31 percentage points.
+
+| Kind | Name |
+|------|------|
+| `def` | `_payload` |
+| `def` | `_real_savings_pct` |
+| `def` | `test_the_reported_saving_matches_a_real_tokenizer` |
+| `def` | `test_toon_really_does_save_a_lot` |
+| `def` | `test_it_does_not_divide_by_zero_on_empty_input` |
+| `def` | `test_toon_encode_handler_baseline_is_compact_json_not_pretty_printed` |
+| `def` | `test_estimator_normalizes_a_pretty_printed_baseline` |
+| `def` | `test_estimator_does_not_zero_out_non_json_input` |
 
 #### `test_toon_serializer_coverage.py`
 

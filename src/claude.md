@@ -417,6 +417,7 @@ Dead code detection via import graph analysis.
 | Kind | Name |
 |------|------|
 | `class` | `DeadCodeReport` |
+| `def` | `_token_estimator` |
 | `def` | `_extract_imports` |
 | `def` | `_module_name_to_possible_files` |
 | `def` | `_is_entry_point` |
