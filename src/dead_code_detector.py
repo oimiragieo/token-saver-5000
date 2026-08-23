@@ -50,6 +50,26 @@ class DeadCodeReport:
     entry_points: list[str] = field(default_factory=list)
 
 
+_TOKEN_ESTIMATOR = None
+
+
+def _token_estimator():
+    """Lazily build the canonical TokenEstimator once per process.
+
+    Lazy + cached because this module is imported by the dead-code scan, which
+    is latency-sensitive (it was O(files x imports x files) before ts5k #24 took
+    it from 300s to 0.27s) and because constructing the estimator loads a
+    tiktoken encoding. Only DEAD files are ever counted, so the added work is
+    proportional to the finding, not to the repo.
+    """
+    global _TOKEN_ESTIMATOR
+    if _TOKEN_ESTIMATOR is None:
+        from src.token_estimation import TokenEstimator
+
+        _TOKEN_ESTIMATOR = TokenEstimator()
+    return _TOKEN_ESTIMATOR
+
+
 def _extract_imports(code: str) -> list[str]:
     """Extract imported module names from Python code using regex."""
     imports = []
@@ -198,9 +218,23 @@ def detect_dead_files(
             report.live_files.append(fpath)
         else:
             report.dead_files.append(fpath)
-            # Estimate token savings
+            # Count with the canonical estimator, not len//4. Measured
+            # 2026-08-22 over 25 real modules in this package: the len//4
+            # heuristic reports 103,936 tokens where tiktoken cl100k_base counts
+            # 89,718 — it OVERSTATES by 15.8%, and `tokens_saved` is surfaced to
+            # customers through the detect_dead_code MCP tool.
+            #
+            # I expected the opposite. Code is punctuation-dense, so the obvious
+            # reasoning says len//4 should UNDERCOUNT; it does not, because
+            # tiktoken merges the long runs of indentation and common keywords
+            # that dominate Python source. Measured, not assumed — this is the
+            # fifth site in this package found reporting an inflated saving, and
+            # every one of the first four also erred in the flattering direction.
+            #
+            # TokenEstimator falls back to len//4 itself when tiktoken is
+            # unavailable, so this is never worse than what it replaces.
             content = file_contents.get(fpath, "")
-            report.tokens_saved += len(content) // 4
+            report.tokens_saved += _token_estimator().count_tokens(content)
 
     report.dead_file_count = len(report.dead_files)
     report.live_file_count = len(report.live_files)

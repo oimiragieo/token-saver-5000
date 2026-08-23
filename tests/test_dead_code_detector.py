@@ -7,6 +7,7 @@ test fixture (10 Python files + tests/ sub-directory).
 from __future__ import annotations
 
 import os
+import pytest
 import tempfile
 from pathlib import Path
 
@@ -164,3 +165,47 @@ def test_detect_all_entry_patterns_live():
         report = detect_dead_files(tmpdir)
     assert report.dead_file_count == 0
     assert report.live_file_count == 3
+
+
+def test_tokens_saved_matches_a_real_tokenizer():
+    """`tokens_saved` is customer-facing via the detect_dead_code MCP tool.
+
+    It used to be `len(content) // 4`. Measured over 25 real modules in this
+    package, that heuristic reports 103,936 tokens where tiktoken cl100k_base
+    counts 89,718 — it OVERSTATES by 15.8%, on a product that sells token
+    savings. It was the fifth site in this package found inflating a saving, and
+    like the other four it erred in the flattering direction.
+
+    Note the direction is counter-intuitive: code is punctuation-dense, so the
+    obvious reasoning predicts len//4 UNDERCOUNTS. It does not, because tiktoken
+    merges the long indentation runs and common keywords that dominate Python.
+    Reason about it and you get the sign wrong; measure it and you do not.
+    """
+    tiktoken = pytest.importorskip("tiktoken")
+    enc = tiktoken.get_encoding("cl100k_base")
+
+    # A dead file with enough real Python to make the two methods diverge.
+    body = "import os\n\n\n" + "".join(
+        f"def helper_{i}(value):\n"
+        f'    """Return a transformed value for case {i}."""\n'
+        f"    result = value * {i}\n"
+        f"    return result\n\n\n"
+        for i in range(40)
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        (Path(tmpdir) / "orphan_module.py").write_text(body, encoding="utf-8")
+        report = detect_dead_files(tmpdir)
+
+    # Controls: the file must actually be classified dead, and the two methods
+    # must actually differ — otherwise this test cannot detect the heuristic
+    # coming back.
+    assert report.dead_file_count == 1, f"fixture was not classified dead: {report.dead_files}"
+    real = len(enc.encode(body))
+    heuristic = len(body) // 4
+    assert heuristic != real, "fixture is too small for the two methods to diverge"
+
+    assert report.tokens_saved == real, (
+        f"tokens_saved reported {report.tokens_saved} where a real tokenizer counts {real} "
+        f"(the old len//4 heuristic would say {heuristic}). This number is customer-facing."
+    )
