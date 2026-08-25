@@ -146,6 +146,14 @@ BM25 utility functions for semantic search.
 | `def` | `bm25_top1_is_discriminative` |
 | `def` | `bm25_scores` |
 
+#### `bounded_registry.py`
+
+(no module docstring — see symbols below)
+
+| Kind | Name |
+|------|------|
+| `class` | `BoundedDict` |
+
 #### `budget_monitor.py`
 
 Token budget monitoring with configurable limits and alerts.

@@ -17,7 +17,11 @@ class S3Connector(BaseConnector):
     def validate_config(self, config: dict[str, Any]) -> None:
         bucket = config.get("bucket")
         objects = config.get("objects")
-        if not isinstance(bucket, str) or not _BUCKET_RE.match(bucket.strip()):
+        if (
+            not isinstance(bucket, str)
+            or not _BUCKET_RE.match(bucket.strip())
+            or ".." in bucket.strip()
+        ):
             raise ValueError("s3 connector requires a valid 'bucket'")
         if not isinstance(objects, list) or not objects:
             raise ValueError("s3 connector requires a non-empty 'objects' list")

@@ -96,7 +96,7 @@ token-saver-install-mcp --doctor --human  # quick status
 MCP Client → stdio → Server (src/server.py)
   → SemanticModulatorServer.__init__() builds all components via ServerFactoryService
   → bind_mcp_handlers() registers MCP protocol handlers
-  → route_tool_call() in mcp_core.py dispatches to handler modules
+  → route_tool_call() in src/handlers/mcp_core/dispatch.py dispatches to handler modules
   → Handlers receive HandlerContext (TypedDict in src/types.py) with all server components
 ```
 
@@ -108,9 +108,13 @@ MCP Client → stdio → Server (src/server.py)
 - `server_service_adapter.py` bridges server methods to service layer
 - Server uses async context manager (`__aenter__`/`__aexit__`) for lifespan management
 
-**Tool routing** (`src/handlers/mcp_core.py`):
-- `setup_mcp_tools()` returns all MCP tool schemas
-- `route_tool_call()` dispatches by tool name to handler modules
+**Tool routing** (`src/handlers/mcp_core/` — split from a single 3670-line `mcp_core.py` flat module, N2 slice 2, 2026-08-22; see `docs/design/2026-08-22-mcp-core-split.md`):
+- `__init__.py` — re-exports the package's public surface (`SCOPE_PROPERTIES`, `SUPPORTED_TOOL_PROFILES`, `CORE_STABLE_TOOL_NAMES`, `setup_mcp_tools`, `route_tool_call`), including underscore-prefixed helpers nothing outside the file imports today (kept as insurance — one such helper turned out to be used by `registry.py`)
+- `_constants.py` — module-level constants (`SCOPE_PROPERTIES`, `SUPPORTED_TOOL_PROFILES`, `CORE_STABLE_TOOL_NAMES`)
+- `_profile.py` — tool-profile filtering helpers (`_normalize_tool_profile`, `_enabled_tool_names`, `_tools_for_profile`)
+- `setup.py` — `setup_mcp_tools()`, returns all MCP tool schemas by concatenating the `schemas_*.py` modules below
+- `dispatch.py` — `route_tool_call()`, dispatches by tool name to handler modules (the router dict, 1:1 with the schema list)
+- `schemas_*.py` (8 files, one per tool-category group) — the actual `Tool(...)` schema literals, split out of the old file's single 3325-line list: `schemas_compression.py` (Document Compression), `schemas_afm_temporal.py` (AFM Dialogue + Temporal), `schemas_memory.py` (Memory handlers), `schemas_filesync_bundle.py` (File Sync + Handoff Bundles), `schemas_token_optimization.py` (Token Optimization), `schemas_multimodal_viz.py` (Multimodal + Visualization), `schemas_model_experiment.py` (Model + Experiment handlers), `schemas_experimental.py` (experimental / not production-ready), `schemas_prompts_ace.py` (Prompts + ACE), `schemas_misc.py` (Connector + Resource + Detection + Docs + Help)
 - Tool profiles: `"full"` (all tools) or `"core_stable"` (7 essential tools), controlled by `MCP_TOOL_PROFILE` env var
 
 **Handler modules** (`src/handlers/`):
@@ -159,7 +163,7 @@ MCP Client → stdio → Server (src/server.py)
 
 ### Multi-Tenant Scoping
 
-All tools accept optional `workspace_id`, `user_id`, `agent_id`, `session_id` for tenant isolation. These are injected into tool schemas via `SCOPE_PROPERTIES` in `mcp_core.py`.
+All tools accept optional `workspace_id`, `user_id`, `agent_id`, `session_id` for tenant isolation. These are injected into tool schemas via `SCOPE_PROPERTIES` in `src/handlers/mcp_core/_constants.py`.
 
 ### Security
 

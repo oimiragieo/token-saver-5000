@@ -364,6 +364,65 @@ Contract tests for app bootstrap entrypoints.
 | `async def` | `test_bootstrap_async_main_uses_lifespan_and_run` |
 | `def` | `test_bootstrap_main_delegates_to_run_function` |
 
+#### `test_bounded_registry.py`
+
+Tests for src.bounded_registry.BoundedDict (A1 bounded-registry fix).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_construct_and_insert_under_cap_no_eviction` |
+| `def` | `test_max_items_less_than_one_raises_value_error` |
+| `def` | `test_eviction_past_cap_drops_oldest_inserted` |
+| `def` | `test_fifo_position_proof_reassign_does_not_move_key` |
+| `def` | `test_bulk_update_enforces_cap` |
+| `def` | `test_setdefault_enforces_cap` |
+| `def` | `test_ior_bulk_operator_enforces_cap` |
+| `def` | `test_get_stats_reports_total_max_and_approaching_limit` |
+| `def` | `test_read_paths_unaffected_below_cap` |
+
+#### `test_bounded_registry_connector_registry.py`
+
+Regression lock: ConnectorRegistry._feeds is bounded via BoundedDict (A1).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_connector_registry_evicts_oldest_feed_past_max_feeds` |
+
+#### `test_bounded_registry_dataset_registry.py`
+
+Bounded-registry eviction proof for DatasetRegistry (A1).
+
+| Kind | Name |
+|------|------|
+| `def` | `_case` |
+| `def` | `test_dataset_registry_evicts_oldest_past_max_datasets` |
+
+#### `test_bounded_registry_experiment_tracker.py`
+
+BoundedDict cap enforcement for ExperimentTracker._runs (A1).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_dataset_registry` |
+| `def` | `test_experiment_tracker_evicts_oldest_run_past_cap` |
+
+#### `test_bounded_registry_memory_api.py`
+
+BoundedDict cap regression test for MemoryAPI (A1 bounded registries).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_memory_api_evicts_oldest_entry_past_cap` |
+
+#### `test_bounded_registry_prompt_registry.py`
+
+Regression test: PromptRegistry._templates is bounded via BoundedDict.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_registry` |
+| `def` | `test_prompt_registry_evicts_oldest_template_past_cap` |
+
 #### `test_bugfixes.py`
 
 Tests for bug fixes discovered during deep audit.
@@ -2371,6 +2430,7 @@ Comprehensive tests for PathValidator (path traversal prevention).
 | `class` | `TestHelperMethods` |
 | `class` | `TestMultipleAllowedDirectories` |
 | `class` | `TestIntegration` |
+| `class` | `TestValidateS3Bucket` |
 
 #### `test_performance.py`
 
