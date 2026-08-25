@@ -8,8 +8,13 @@ recorded: its five named files span this submodule and the parent, and the row
 named neither. Anyone running the parent's ratchet sees a green bar and concludes
 the standard is covered.
 
-Two of N10's five are here: `tests/test_coverage_boost4.py` and
-`tests/test_server_factory_service.py`.
+Two of N10's five were here: `tests/test_coverage_boost4.py` and
+`tests/test_server_factory_service.py`. Both were split 2026-08-24 into
+size-compliant files (`test_coverage_boost4.py`/`test_coverage_boost4b.py`;
+`test_server_factory_service.py`/`_contracts.py`/`_validation_chain.py`), by
+test-class grouping, no test logic changed. The baseline below dropped to 0
+in the same commit as the split, per the reverse-assertion rule two
+paragraphs down.
 
 WHAT IT DOES NOT DO. It forces no split. The decision doc is explicit that
 adopting the threshold does not authorize the remediation, and none of these
@@ -37,10 +42,11 @@ _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CORE_CEILING = 1000
 _TEST_CEILING = 2000
 
-# Measured 2026-08-23. These may only go DOWN. Lower them in the same commit that
-# reduces the count; never raise one to turn a red gate green.
+# Measured 2026-08-24 (post N10 test-file split). These may only go DOWN. Lower
+# them in the same commit that reduces the count; never raise one to turn a red
+# gate green.
 _CORE_BASELINE = 6
-_TEST_BASELINE = 2
+_TEST_BASELINE = 0
 
 # Asserted rather than assumed: a walk that silently matched nothing would pass
 # forever.
