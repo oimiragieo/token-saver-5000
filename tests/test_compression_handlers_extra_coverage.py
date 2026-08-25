@@ -1,148 +1,145 @@
-"""
-Coverage boost tests for uncovered code paths.
+"""compression handlers — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
 
-Covers: visualization_handlers, experimental_handlers,
-graph_visualizer, experience_synthesis, compression_presets, validation_hooks.
-
-All tests use mocks to avoid heavy dependencies (ChromaDB, ONNX, PyTorch, etc.).
+Moved verbatim (byte-for-byte class bodies); nothing reworded.
 """
 
 import json
 from unittest.mock import MagicMock, Mock, patch
-
 import pytest
-
-# =============================================================================
-# 1. Visualization Handlers (lines 46-156)
-# =============================================================================
-
-
-class TestHandleVisualizeGraphHtml:
-    """Tests for handle_visualize_graph_html."""
-
-    @pytest.mark.asyncio
-    async def test_success(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.visualize_html.return_value = (
-                "Generated interactive visualization: out.html (5 nodes)"
-            )
-            result = await handle_visualize_graph_html(
-                ctx, {"file_id": "doc1", "output_path": "out.html", "max_nodes": 10}
-            )
-        assert "out.html" in result
-
-    @pytest.mark.asyncio
-    async def test_missing_file_id(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        with pytest.raises(Exception, match="file_id"):
-            await handle_visualize_graph_html({"compressor": Mock()}, {})
-
-    @pytest.mark.asyncio
-    async def test_missing_output_path(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        with pytest.raises(Exception, match="output_path"):
-            await handle_visualize_graph_html({"compressor": Mock()}, {"file_id": "doc1"})
-
-    @pytest.mark.asyncio
-    async def test_no_graph_found_raises(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.visualize_html.side_effect = ValueError(
-                "No graph found for file_id: doc1"
-            )
-            with pytest.raises(Exception):
-                await handle_visualize_graph_html(
-                    ctx, {"file_id": "doc1", "output_path": "out.html"}
-                )
-
-    @pytest.mark.asyncio
-    async def test_import_error_pyvis(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.visualize_html.side_effect = ImportError("pyvis")
-            with pytest.raises(ValueError, match="pyvis"):
-                await handle_visualize_graph_html(
-                    ctx, {"file_id": "doc1", "output_path": "out.html"}
-                )
-
-    @pytest.mark.asyncio
-    async def test_generic_error_logged(self):
-        from src.handlers.visualization_handlers import handle_visualize_graph_html
-
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.visualize_html.side_effect = RuntimeError("boom")
-            with pytest.raises(RuntimeError, match="boom"):
-                await handle_visualize_graph_html(
-                    ctx, {"file_id": "doc1", "output_path": "out.html"}
-                )
+from unittest.mock import AsyncMock
+import numpy as np
+from pathlib import PurePath
 
 
-class TestHandleExportGraphGraphml:
-    """Tests for handle_export_graph_graphml."""
+def _make_mock_compressor(nodes=None, edges=None):
+    """Helper to build a mock compressor with graph and chunks."""
+    import networkx as nx
 
-    @pytest.mark.asyncio
-    async def test_success(self):
-        from src.handlers.visualization_handlers import handle_export_graph_graphml
+    compressor = Mock()
+    graph = nx.Graph()
+    chunks = {}
 
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.export_graphml.return_value = (
-                "Exported graph to out.graphml (5 nodes, 3 edges)"
-            )
-            result = await handle_export_graph_graphml(
-                ctx, {"file_id": "doc1", "output_path": "out.graphml"}
-            )
-        assert "out.graphml" in result
+    if nodes is None:
+        nodes = [
+            (
+                "doc_n0",
+                0.9,
+                "Quantum computing is the future",
+                {"tokens": 10, "position": 0, "entities": ["quantum"]},
+            ),
+            (
+                "doc_n1",
+                0.5,
+                "Classical bits use binary",
+                {"tokens": 8, "position": 1, "entities": []},
+            ),
+            (
+                "doc_n2",
+                0.1,
+                "Extra filler text here.",
+                {"tokens": 5, "position": 2, "entities": []},
+            ),
+        ]
+    if edges is None:
+        edges = [("doc_n0", "doc_n1", 0.82), ("doc_n0", "doc_n2", 0.3)]
 
-    @pytest.mark.asyncio
-    async def test_missing_file_id(self):
-        from src.handlers.visualization_handlers import handle_export_graph_graphml
+    for nid, imp, text, meta in nodes:
+        graph.add_node(nid)
+        chunk = Mock()
+        chunk.importance = imp
+        chunk.text = text
+        chunk.metadata = meta
+        chunks[nid] = chunk
 
-        with pytest.raises(Exception, match="file_id"):
-            await handle_export_graph_graphml(
-                {"compressor": Mock()}, {"output_path": "out.graphml"}
-            )
+    for u, v, w in edges:
+        graph.add_edge(u, v, weight=w)
 
-    @pytest.mark.asyncio
-    async def test_missing_output_path(self):
-        from src.handlers.visualization_handlers import handle_export_graph_graphml
+    compressor.graphs = {"doc": graph}
+    compressor.chunks = chunks
+    compressor.skeleton_ratio = 0.5
+    compressor.similarity_threshold = 0.5
+    return compressor
 
-        with pytest.raises(Exception, match="output_path"):
-            await handle_export_graph_graphml({"compressor": Mock()}, {"file_id": "doc1"})
 
-    @pytest.mark.asyncio
-    async def test_no_graph_found(self):
-        from src.handlers.visualization_handlers import handle_export_graph_graphml
+def _has_pillow() -> bool:
+    try:
+        import PIL  # noqa: F401
 
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.export_graphml.side_effect = ValueError("No graph found")
-            with pytest.raises(Exception):
-                await handle_export_graph_graphml(
-                    ctx, {"file_id": "doc1", "output_path": "out.graphml"}
-                )
+        return True
+    except ImportError:
+        return False
 
-    @pytest.mark.asyncio
-    async def test_generic_error_logged(self):
-        from src.handlers.visualization_handlers import handle_export_graph_graphml
 
-        ctx = {"compressor": Mock()}
-        with patch("src.handlers.visualization_handlers.GraphVisualizer") as MockViz:
-            MockViz.return_value.export_graphml.side_effect = RuntimeError("disk full")
-            with pytest.raises(RuntimeError):
-                await handle_export_graph_graphml(
-                    ctx, {"file_id": "doc1", "output_path": "out.graphml"}
-                )
+def _make_mock_context(**overrides):
+    """Build a mock HandlerContext dict."""
+    compressor = MagicMock()
+    compressor.chunks = {}
+    compressor.graphs = {}
+    compressor.file_metadata = {}
+
+    ctx = {
+        "compressor": compressor,
+        "persistence": MagicMock(),
+        "resource_manager": MagicMock(),
+        "sync_manager": MagicMock(),
+        "version_manager": MagicMock(),
+        "path_validator": MagicMock(),
+        "retrieval_history": {},
+        "context_window_adapter": MagicMock(),
+        "multilevel_encoder": MagicMock(),
+    }
+    ctx["resource_manager"].unregister_document_async = AsyncMock()
+    ctx["version_manager"].delete_versions_async = AsyncMock()
+    ctx.update(overrides)
+    return ctx
+
+
+def _make_mock_context(**overrides):
+    """Build a mock HandlerContext dict."""
+    compressor = MagicMock()
+    compressor.chunks = {}
+    compressor.graphs = {}
+    compressor.file_metadata = {}
+
+    ctx = {
+        "compressor": compressor,
+        "persistence": MagicMock(),
+        "resource_manager": MagicMock(),
+        "sync_manager": MagicMock(),
+        "version_manager": MagicMock(),
+        "path_validator": MagicMock(),
+        "retrieval_history": {},
+        "context_window_adapter": MagicMock(),
+        "multilevel_encoder": MagicMock(),
+        "ace_framework": MagicMock(),
+        "focus_manager": MagicMock(),
+    }
+    ctx["resource_manager"].unregister_document_async = AsyncMock()
+    ctx["version_manager"].delete_versions_async = AsyncMock()
+    ctx.update(overrides)
+    return ctx
+
+
+def _make_semantic_node(text="test", importance=0.5, embedding=None):
+    node = MagicMock()
+    node.text = text
+    node.importance = importance
+    node.embedding = embedding if embedding is not None else np.random.rand(384).astype(np.float32)
+    node.metadata = {"tokens": 10, "position": 0, "entities": []}
+    return node
+
+
+def _make_code_chunk(
+    name="func", chunk_type="function", code="def f(): pass", docstring="", start_line=1, end_line=5
+):
+    chunk = MagicMock()
+    chunk.name = name
+    chunk.chunk_type = chunk_type
+    chunk.code = code
+    chunk.docstring = docstring
+    chunk.start_line = start_line
+    chunk.end_line = end_line
+    return chunk
 
 
 class TestHandleExplainCompressionDecision:
@@ -211,16 +208,6 @@ class TestHandleExplainCompressionDecision:
             MockViz.return_value.explain_compression_decision.side_effect = RuntimeError("oops")
             with pytest.raises(RuntimeError):
                 await handle_explain_compression_decision(ctx, {"file_id": "doc1", "node_id": "n0"})
-
-
-# =============================================================================
-# 2. Graceful Degradation (lines 112-295)
-# =============================================================================
-
-
-# NOTE (2026-07-17 cleanup, B4): the four TestGracefulDegradation* classes
-# were removed with the dead src/graceful_degradation.py module (zero
-# production importers).
 
 
 class TestHandleVerifyCompression:
@@ -445,195 +432,6 @@ class TestHandleGenerateSyntheticTests:
         gs.assert_called_once_with(seed=42)
 
 
-# =============================================================================
-# 4. Graph Visualizer (lines 123-466)
-# =============================================================================
-
-
-def _make_mock_compressor(nodes=None, edges=None):
-    """Helper to build a mock compressor with graph and chunks."""
-    import networkx as nx
-
-    compressor = Mock()
-    graph = nx.Graph()
-    chunks = {}
-
-    if nodes is None:
-        nodes = [
-            (
-                "doc_n0",
-                0.9,
-                "Quantum computing is the future",
-                {"tokens": 10, "position": 0, "entities": ["quantum"]},
-            ),
-            (
-                "doc_n1",
-                0.5,
-                "Classical bits use binary",
-                {"tokens": 8, "position": 1, "entities": []},
-            ),
-            (
-                "doc_n2",
-                0.1,
-                "Extra filler text here.",
-                {"tokens": 5, "position": 2, "entities": []},
-            ),
-        ]
-    if edges is None:
-        edges = [("doc_n0", "doc_n1", 0.82), ("doc_n0", "doc_n2", 0.3)]
-
-    for nid, imp, text, meta in nodes:
-        graph.add_node(nid)
-        chunk = Mock()
-        chunk.importance = imp
-        chunk.text = text
-        chunk.metadata = meta
-        chunks[nid] = chunk
-
-    for u, v, w in edges:
-        graph.add_edge(u, v, weight=w)
-
-    compressor.graphs = {"doc": graph}
-    compressor.chunks = chunks
-    compressor.skeleton_ratio = 0.5
-    compressor.similarity_threshold = 0.5
-    return compressor
-
-
-class TestGraphVisualizerExplainDecision:
-    """Tests for explain_compression_decision."""
-
-    def test_kept_node(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        result = viz.explain_compression_decision("doc", "doc_n0")
-        assert "[KEPT]" in result
-        assert "Importance score" in result
-
-    def test_dropped_node(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        result = viz.explain_compression_decision("doc", "doc_n2")
-        assert "[DROPPED]" in result
-
-    def test_no_graph(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = Mock()
-        comp.graphs = {}
-        viz = GraphVisualizer(comp)
-        with pytest.raises(ValueError, match="No graph found"):
-            viz.explain_compression_decision("missing", "n0")
-
-    def test_node_not_in_chunks(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        with pytest.raises(ValueError, match="not found in chunks"):
-            viz.explain_compression_decision("doc", "nonexistent")
-
-    def test_entities_shown(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        result = viz.explain_compression_decision("doc", "doc_n0")
-        assert "quantum" in result
-
-    def test_connected_nodes_shown(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        result = viz.explain_compression_decision("doc", "doc_n0")
-        assert "Connected Nodes" in result
-
-
-class TestGraphVisualizerHtml:
-    """Tests for visualize_html (mocking pyvis)."""
-
-    def test_visualize_html_success(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-
-        mock_network_cls = MagicMock()
-        mock_net_instance = MagicMock()
-        mock_network_cls.return_value = mock_net_instance
-
-        with patch.dict("sys.modules", {"pyvis": MagicMock(), "pyvis.network": MagicMock()}):
-            with patch("src.graph_visualizer.GraphVisualizer.visualize_html") as mock_html:
-                mock_html.return_value = "Generated interactive visualization: out.html (3 nodes)"
-                result = viz.visualize_html("doc", "out.html")
-        assert "out.html" in result
-
-    def test_visualize_html_no_graph(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = Mock()
-        comp.graphs = {}
-        viz = GraphVisualizer(comp)
-        with pytest.raises((ValueError, ImportError)):
-            viz.visualize_html("missing", "out.html")
-
-
-class TestGraphVisualizerExportGraphml:
-    """Tests for export_graphml."""
-
-    def test_export_graphml_success(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-
-        with patch("src.graph_visualizer.nx.write_graphml") as mock_write:
-            result = viz.export_graphml("doc", "out.graphml")
-        assert "out.graphml" in result
-        mock_write.assert_called_once()
-
-    def test_export_graphml_no_graph(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = Mock()
-        comp.graphs = {}
-        viz = GraphVisualizer(comp)
-        with pytest.raises(ValueError, match="No graph found"):
-            viz.export_graphml("missing", "out.graphml")
-
-
-class TestGraphVisualizerRenderAscii:
-    """Tests for render_ascii edge preview."""
-
-    def test_render_ascii_text_preview(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = _make_mock_compressor()
-        viz = GraphVisualizer(comp)
-        result = viz.render_ascii("doc")
-        assert "Semantic Graph: doc" in result
-        assert "Quantum computing" in result
-
-    def test_render_ascii_no_graph(self):
-        from src.graph_visualizer import GraphVisualizer
-
-        comp = Mock()
-        comp.graphs = {}
-        viz = GraphVisualizer(comp)
-        with pytest.raises(ValueError, match="No graph found"):
-            viz.render_ascii("missing")
-
-
-# =============================================================================
-# 5. Experience Synthesis (lines 580-732)
-# =============================================================================
-
-
 class TestStressTestCompression:
     """Tests for stress_test_compression."""
 
@@ -736,11 +534,6 @@ class TestValidateBoundaryCases:
         assert len(suite.ace_contexts) > 0
 
 
-# =============================================================================
-# 6. Compression Presets - to_dict()
-# =============================================================================
-
-
 class TestCompressionPresets:
     """Tests for CompressionPreset.to_dict and helpers."""
 
@@ -779,11 +572,6 @@ class TestCompressionPresets:
         assert "aggressive" in names
 
 
-# =============================================================================
-# 6b. Validation Hooks - modulate_region
-# =============================================================================
-
-
 class TestValidationHooks:
     """Tests for validation hooks including modulate_region."""
 
@@ -820,3 +608,332 @@ class TestValidationHooks:
 
         errors = validate_tool_input("unknown_tool_xyz", {})
         assert errors == []
+
+
+class TestAdaptToContextWindowError:
+    @pytest.mark.asyncio
+    async def test_adapt_raises_runtime_error(self):
+        from src.handlers.compression_handlers import handle_adapt_to_context_window
+
+        ctx = _make_mock_context()
+        ctx["compressor"].graphs = {"doc1": MagicMock()}
+        ctx["context_window_adapter"].adapt_to_context_window.side_effect = Exception("fail")
+
+        with pytest.raises(RuntimeError, match="Failed to adapt"):
+            await handle_adapt_to_context_window(ctx, {"file_id": "doc1", "available_tokens": 500})
+
+
+class TestMultilevelEncodeError:
+    @pytest.mark.asyncio
+    async def test_multilevel_encode_raises_runtime_error(self):
+        from src.handlers.compression_handlers import handle_multilevel_encode
+
+        ctx = _make_mock_context()
+        ctx["compressor"].graphs = {"doc1": MagicMock()}
+        ctx["multilevel_encoder"].generate_adaptive_skeleton.side_effect = Exception("encode fail")
+
+        with pytest.raises(RuntimeError, match="Failed to generate multi-level encoding"):
+            await handle_multilevel_encode(ctx, {"file_id": "doc1", "available_tokens": 1000})
+
+
+class TestRecommendFidelityValidation:
+    @pytest.mark.asyncio
+    async def test_token_budget_too_high(self):
+        from src.handlers.compression_handlers import handle_recommend_fidelity
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError, match="very high"):
+            await handle_recommend_fidelity(
+                ctx,
+                {
+                    "use_case": "question_answering",
+                    "num_nodes": 5,
+                    "token_budget": 2_000_000,
+                    "query_complexity": "medium",
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_token_budget_too_low(self):
+        from src.handlers.compression_handlers import handle_recommend_fidelity
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError, match="too low"):
+            await handle_recommend_fidelity(
+                ctx,
+                {
+                    "use_case": "question_answering",
+                    "num_nodes": 5,
+                    "token_budget": 3,
+                    "query_complexity": "medium",
+                },
+            )
+
+
+class TestCompressionHandlersValidation:
+    """Cover validation helper edge cases."""
+
+    def test_validate_file_id_empty(self):
+        """Cover line 181 - empty file_id."""
+        from src.handlers.compression_handlers import validate_file_id
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError):
+            validate_file_id("", ctx)
+
+    def test_validate_file_id_not_found_no_docs(self):
+        """Cover lines 188-190 - file not found, no docs ingested."""
+        from src.handlers.compression_handlers import validate_file_id
+
+        ctx = _make_mock_context()
+        ctx["compressor"].graphs = {}
+        with pytest.raises(ValueError, match="No documents ingested"):
+            validate_file_id("missing_doc", ctx, must_exist=True)
+
+    def test_validate_node_ids_empty(self):
+        """Cover line 207."""
+        from src.handlers.compression_handlers import validate_node_ids
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError):
+            validate_node_ids([], ctx)
+
+    def test_validate_node_ids_no_valid_nodes(self):
+        """Cover lines 221-225."""
+        from src.handlers.compression_handlers import validate_node_ids
+
+        ctx = _make_mock_context()
+        ctx["compressor"].chunks = {}
+        with pytest.raises(ValueError, match="may not be ingested"):
+            validate_node_ids(["unknown_file_n0"], ctx)
+
+    def test_validate_token_count_zero(self):
+        """Cover lines 242, 251."""
+        from src.handlers.compression_handlers import validate_token_count
+
+        with pytest.raises(ValueError, match="available_tokens is 0"):
+            validate_token_count(0)
+
+    def test_validate_token_count_exceeds_max(self):
+        """Cover line 251."""
+        from src.handlers.compression_handlers import validate_token_count
+
+        with pytest.raises(ValueError, match="exceeds max_tokens"):
+            validate_token_count(10000, max_tokens=5000)
+
+    @pytest.mark.asyncio
+    async def test_ingest_rate_limit(self):
+        """Cover lines 280-281, 294 - rate limit and text size."""
+        from src.handlers.compression_handlers import handle_ingest
+
+        ctx = _make_mock_context()
+        # Text too large
+        with pytest.raises(ValueError, match="too large|Rate limit"):
+            await handle_ingest(
+                ctx,
+                {
+                    "text": "x" * (100 * 1024 * 1024 + 1),  # Over limit
+                    "file_id": "test",
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_ingest_path_validation_error(self):
+        """Cover lines 305-306 - path validation error."""
+        from src.handlers.compression_handlers import handle_ingest
+
+        ctx = _make_mock_context()
+        ctx["path_validator"].validate.side_effect = ValueError("path traversal")
+        with pytest.raises(ValueError, match="Invalid file_path"):
+            await handle_ingest(
+                ctx,
+                {
+                    "text": "hello world this is a test document with enough text to pass validation",
+                    "file_id": "test",
+                    "file_path": "../../../etc/passwd",
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_ingest_save_metadata_failure(self):
+        """Cover lines 408-409 - metadata save failure (non-fatal)."""
+        from src.handlers.compression_handlers import handle_ingest
+
+        ctx = _make_mock_context()
+        ctx["compressor"].ingest_file_async = AsyncMock()
+        mock_skeleton = MagicMock()
+        mock_skeleton.compression_ratio = 5.0
+        mock_skeleton.total_nodes = 10
+        mock_skeleton.total_tokens = 500
+        mock_skeleton.skeleton_tokens = 100
+        mock_skeleton.skeleton_text = "skeleton"
+        mock_skeleton.node_map = {"n0": "desc"}
+        ctx["compressor"].ingest_file_async.return_value = mock_skeleton
+        ctx["compressor"].get_estimate.return_value = MagicMock(compression_ratio=5.0)
+        ctx["sync_manager"].track_file.return_value = None
+        ctx["sync_manager"].export_metadata.return_value = {}
+        ctx["persistence"].save_file_sync_metadata.side_effect = Exception("save fail")
+        ctx["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        ctx["resource_manager"].register_document_async = AsyncMock()
+
+        result = await handle_ingest(
+            ctx,
+            {
+                "text": "hello world this is a test document with enough characters to pass validation",
+                "file_id": "test_doc",
+            },
+        )
+        # Should succeed despite metadata save failure
+        parsed = json.loads(result)
+        assert parsed["file_id"] == "test_doc"
+
+
+class TestCompressionHandlersBatch:
+    """Cover batch ingestion edge paths."""
+
+    @pytest.mark.asyncio
+    async def test_batch_ingest_non_string_file_id(self):
+        """Cover lines 1190, 1201 - non-string file_id/text."""
+        from src.handlers.compression_handlers import handle_batch_ingest
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError, match="must be a string"):
+            await handle_batch_ingest(
+                ctx,
+                {
+                    "documents": [{"file_id": 123, "text": "hello"}],
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_batch_ingest_non_string_text(self):
+        """Cover line 1201."""
+        from src.handlers.compression_handlers import handle_batch_ingest
+
+        ctx = _make_mock_context()
+        with pytest.raises(ValueError, match="must be a string"):
+            await handle_batch_ingest(
+                ctx,
+                {
+                    "documents": [{"file_id": "doc1", "text": 123}],
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_directory_ingest_excluded_patterns(self, tmp_path):
+        """Cover lines 1388-1392, 1403-1405 - exclude patterns and path validation."""
+        from src.handlers.compression_handlers import handle_ingest_directory
+
+        ctx = _make_mock_context()
+        ctx["path_validator"].validate.side_effect = lambda p: str(p)
+
+        # Create test files
+        sub = tmp_path / "subdir"
+        sub.mkdir()
+        (sub / "good.py").write_text("print('hello world test')")
+        (sub / "bad.pyc").write_text("binary content")
+
+        ctx["compressor"].ingest_file_async = AsyncMock(
+            return_value=MagicMock(compression_ratio=2.0, total_nodes=3)
+        )
+
+        result = await handle_ingest_directory(
+            ctx,
+            {
+                "directory": str(sub),
+                "patterns": ["*.py"],
+                "exclude_patterns": ["*.pyc"],
+            },
+        )
+        parsed = json.loads(result)
+        assert parsed["status"] in ("complete", "no_files", "read_failed")
+
+    @pytest.mark.asyncio
+    async def test_directory_ingest_skipped_and_failed(self, tmp_path):
+        """Cover lines 1437-1438, 1498, 1523, 1526-1527 - skipped files."""
+        # Test the is_excluded helper path directly
+        path_obj = PurePath("src/file.pyc")
+        assert path_obj.match("*.pyc")
+
+        path_obj2 = PurePath("src/good.py")
+        assert not path_obj2.match("*.pyc")
+
+
+class TestCompressionHandlersModulate:
+    """Cover modulate_region and search_semantic edge paths."""
+
+    @pytest.mark.asyncio
+    async def test_modulate_tracks_retrieval_history(self):
+        """Cover lines 610-611 - retrieval history tracking."""
+        from src.handlers.compression_handlers import handle_modulate_region
+
+        ctx = _make_mock_context()
+        ctx["compressor"].chunks = {"doc_n0": MagicMock()}
+        ctx["sync_manager"].file_metadata = {}
+        ctx["compressor"].modulate_region.return_value = "content"
+        ctx["retrieval_history"] = {}
+
+        await handle_modulate_region(
+            ctx,
+            {
+                "node_ids": ["doc_n0"],
+                "fidelity_level": "RAW",
+            },
+        )
+        assert "doc" in ctx["retrieval_history"]
+
+    @pytest.mark.asyncio
+    async def test_modulate_staleness_warning(self):
+        """Cover lines 545-546, 578 - staleness warning."""
+        from src.handlers.compression_handlers import handle_modulate_region
+
+        ctx = _make_mock_context()
+        ctx["compressor"].chunks = {"doc_n0": MagicMock()}
+        ctx["compressor"].modulate_region.return_value = "content"
+        ctx["sync_manager"].file_metadata = {"doc": {"file_path": "/tmp/test.py"}}
+        ctx["sync_manager"].check_file_sync.return_value = {
+            "in_sync": False,
+            "reason": "File modified",
+        }
+        ctx["retrieval_history"] = {}
+
+        result = await handle_modulate_region(
+            ctx,
+            {
+                "node_ids": ["doc_n0"],
+                "fidelity_level": "RAW",
+            },
+        )
+        assert "WARNING" in result or "content" in result
+
+    @pytest.mark.asyncio
+    async def test_read_skeleton_exception(self):
+        """Cover line 546 - skeleton read failure."""
+        from src.handlers.compression_handlers import handle_read_skeleton
+
+        ctx = _make_mock_context()
+        ctx["compressor"].graphs = {"doc": MagicMock()}
+        ctx["compressor"]._generate_skeleton.side_effect = Exception("fail")
+        ctx["sync_manager"].file_metadata = {}
+        with pytest.raises(RuntimeError, match="Failed to read skeleton"):
+            await handle_read_skeleton(ctx, {"file_id": "doc"})
+
+    @pytest.mark.asyncio
+    async def test_modulate_exception(self):
+        """Cover lines 618-619 - modulate failure."""
+        from src.handlers.compression_handlers import handle_modulate_region
+
+        ctx = _make_mock_context()
+        ctx["compressor"].chunks = {"doc_n0": MagicMock()}
+        ctx["sync_manager"].file_metadata = {}
+        ctx["compressor"].modulate_region.side_effect = Exception("modulate fail")
+        ctx["retrieval_history"] = {}
+
+        with pytest.raises(RuntimeError, match="Failed to modulate"):
+            await handle_modulate_region(
+                ctx,
+                {
+                    "node_ids": ["doc_n0"],
+                    "fidelity_level": "RAW",
+                },
+            )

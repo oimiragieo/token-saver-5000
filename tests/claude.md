@@ -167,6 +167,18 @@ Comprehensive tests for ace_handlers.py
 | `class` | `TestHandleAceGetPlaybook` |
 | `class` | `TestHandleAceExecuteCycle` |
 
+#### `test_ace_handlers_rate_limit_extra_coverage.py`
+
+ace handlers rate limit — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestACEHandlersRateLimit` |
+
 #### `test_adaptive_compression.py`
 
 Tests for adaptive compression ratio and cost telemetry features.
@@ -190,6 +202,20 @@ Tests for adaptive compression ratio and cost telemetry features.
 | `def` | `test_adaptive_allocator_complexity_and_selection` |
 | `def` | `test_context_window_adapter_and_multilevel_encoder` |
 
+#### `test_adaptive_rate_allocator_extra_coverage.py`
+
+adaptive rate allocator — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestAdaptiveRateAllocator` |
+| `class` | `TestAdaptiveRateAllocator_boost4b` |
+
 #### `test_afm.py`
 
 Tests for Adaptive Focus Memory (AFM) module
@@ -203,6 +229,16 @@ Tests for Adaptive Focus Memory (AFM) module
 | `class` | `TestFocusManager` |
 | `class` | `TestRecencyWeighting` |
 | `class` | `TestScoring` |
+
+#### `test_afm_components_extra_coverage.py`
+
+afm components — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestAFMComponents` |
 
 #### `test_afm_handlers.py`
 
@@ -219,6 +255,18 @@ Comprehensive tests for afm_handlers.py
 | `class` | `TestHandleAfmClearHistory` |
 | `class` | `TestHandleAfmExportHistory` |
 | `class` | `TestHandleAfmImportHistory` |
+
+#### `test_afm_handlers_rate_limit_extra_coverage.py`
+
+afm handlers rate limit — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestAFMHandlersRateLimit` |
 
 #### `test_anchor_comi_survival.py`
 
@@ -296,6 +344,16 @@ Audit follow-up #134 regression locks (2026-06-24).
 | `def` | `test_max_dense_cosine_nan_query_returns_zero` |
 | `def` | `test_select_skeleton_ordered_nan_query_falls_back_to_importance` |
 
+#### `test_batch_manager_extra_coverage.py`
+
+batch manager — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestBatchManager` |
+
 #### `test_batch_processing.py`
 
 Tests for batch processing functionality (v0.6.0)
@@ -327,6 +385,16 @@ Tests for benchmark guard threshold checks.
 | `def` | `test_check_benchmark_guard_writes_summary_markdown` |
 | `def` | `test_check_benchmark_guard_strict_case_set` |
 
+#### `test_benchmark_guard_extra_coverage.py`
+
+benchmark guard — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestBenchmarkGuard` |
+
 #### `test_benchmark_harness.py`
 
 Tests for fixed-corpus benchmark harness.
@@ -353,6 +421,18 @@ Tests for fixed-corpus benchmark harness.
 | `class` | `_Compressor` |
 | `def` | `test_analyze_response_and_wrappers` |
 | `def` | `test_halo_effect_detector_modes_and_missing_file` |
+
+#### `test_blind_spot_detector_extra_coverage.py`
+
+blind spot detector — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestBlindSpotDetector` |
 
 #### `test_bootstrap.py`
 
@@ -705,6 +785,22 @@ Tests for CodeCompressionAdapter v0.9.0 fixes.
 | `class` | `TestDeletionDoesNotOverreach` |
 | `class` | `TestDeleteDocumentFromMemoryPropertyCopy` |
 
+#### `test_code_compression_adapter_extra_coverage.py`
+
+code compression adapter — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_handler_context` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestCodeCompressionAdapter` |
+| `class` | `TestCodeCompressionAdapterProperties` |
+| `class` | `TestCodeCompressionAdapterSkeleton` |
+| `class` | `TestCodeCompressionAdapterCodeNodes` |
+
 #### `test_code_compressor.py`
 
 Comprehensive tests for code_compressor.py (AST-based code compression)
@@ -817,6 +913,34 @@ Comprehensive tests for compression_handlers.py (v0.4.3).
 | `class` | `TestHandleRecommendFidelity` |
 | `class` | `TestValidationHelpers` |
 
+#### `test_compression_handlers_extra_coverage.py`
+
+compression handlers — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_mock_compressor` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestHandleExplainCompressionDecision` |
+| `class` | `TestHandleVerifyCompression` |
+| `class` | `TestHandleCalculateReward` |
+| `class` | `TestHandleGenerateSyntheticTests` |
+| `class` | `TestStressTestCompression` |
+| `class` | `TestStressTestAFM` |
+| `class` | `TestValidateBoundaryCases` |
+| `class` | `TestCompressionPresets` |
+| `class` | `TestValidationHooks` |
+| `class` | `TestAdaptToContextWindowError` |
+| `class` | `TestMultilevelEncodeError` |
+| `class` | `TestRecommendFidelityValidation` |
+| `class` | `TestCompressionHandlersValidation` |
+| `class` | `TestCompressionHandlersBatch` |
+| `class` | `TestCompressionHandlersModulate` |
+
 #### `test_compression_pipeline.py`
 
 Tests for the composable read-skeleton compression pipeline.
@@ -892,6 +1016,16 @@ Tests for Compression Rewards System
 | `class` | `TestProgressiveRewardShaper` |
 | `class` | `TestFidelityConstants` |
 
+#### `test_compression_rewards_extra_coverage.py`
+
+compression rewards — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestCompressionRewards` |
+
 #### `test_compression_verifier.py`
 
 Tests for Compression Verifier
@@ -947,124 +1081,6 @@ Contract tests for app-layer server context service.
 | `def` | `test_context_service_build_context_uses_validate_context_map_class_dispatch` |
 | `def` | `test_context_service_validate_file_id_not_found_has_helpful_message` |
 | `def` | `test_context_service_extract_file_id` |
-
-#### `test_coverage_boost.py`
-
-Coverage boost tests for uncovered code paths.
-
-| Kind | Name |
-|------|------|
-| `class` | `TestHandleVisualizeGraphHtml` |
-| `class` | `TestHandleExportGraphGraphml` |
-| `class` | `TestHandleExplainCompressionDecision` |
-| `class` | `TestHandleVerifyCompression` |
-| `class` | `TestHandleCalculateReward` |
-| `class` | `TestHandleGenerateSyntheticTests` |
-| `def` | `_make_mock_compressor` |
-| `class` | `TestGraphVisualizerExplainDecision` |
-| `class` | `TestGraphVisualizerHtml` |
-| `class` | `TestGraphVisualizerExportGraphml` |
-| `class` | `TestGraphVisualizerRenderAscii` |
-| `class` | `TestStressTestCompression` |
-| `class` | `TestStressTestAFM` |
-| `class` | `TestValidateBoundaryCases` |
-| `class` | `TestCompressionPresets` |
-| `class` | `TestValidationHooks` |
-
-#### `test_coverage_boost2.py`
-
-Coverage boost tests for persistence, compression handlers, code_compression_adapter,
-
-| Kind | Name |
-|------|------|
-| `class` | `TestSaveGraphDataSafe` |
-| `class` | `TestLoadGraphDataSafe` |
-| `class` | `TestChromaDBPaths` |
-| `class` | `TestAfmHistory` |
-| `class` | `TestClearAll` |
-| `class` | `TestChromaDBInitFailure` |
-| `def` | `_make_handler_context` |
-| `class` | `TestHandleDeleteDocument` |
-| `class` | `TestHandleMultilevelEncode` |
-| `class` | `TestHandleBatchIngest` |
-| `class` | `TestHandleIngestDirectory` |
-| `class` | `TestCodeCompressionAdapter` |
-| `class` | `TestEmbeddingManager` |
-| `class` | `TestONNXEmbeddingManager` |
-
-#### `test_coverage_boost3.py`
-
-Coverage boost tests - Round 3.
-
-| Kind | Name |
-|------|------|
-| `def` | `_has_pillow` |
-| `def` | `_make_mock_context` |
-| `class` | `TestListDocumentsMetadata` |
-| `class` | `TestDeleteDocumentErrors` |
-| `class` | `TestAdaptToContextWindowError` |
-| `class` | `TestMultilevelEncodeError` |
-| `class` | `TestRecommendFidelityValidation` |
-| `class` | `TestBatchIngestRateLimit` |
-| `class` | `TestIngestDirectory` |
-| `class` | `TestPersistenceChromaDB` |
-| `class` | `TestPersistenceLoadGraphSafe` |
-| `class` | `TestPersistenceAFMHistory` |
-| `class` | `TestAFMComponents` |
-| `class` | `TestONNXEmbeddings` |
-| `class` | `TestGraphVisualizer` |
-| `class` | `TestEmbeddingManager` |
-| `class` | `TestVersionManager` |
-| `class` | `TestResourceManager` |
-| `class` | `TestBatchManager` |
-| `class` | `TestFileSyncManager` |
-| `class` | `TestObservability` |
-| `class` | `TestMetrics` |
-| `class` | `TestHealth` |
-| `class` | `TestErrorTypes` |
-| `class` | `TestErrorHelpers` |
-| `class` | `TestCompressionRewards` |
-| `class` | `TestEvidenceBundle` |
-| `class` | `TestBenchmarkGuard` |
-| `class` | `TestScarCompressor` |
-| `class` | `TestResourceHandlers` |
-| `class` | `TestAdaptiveRateAllocator` |
-| `class` | `TestMultimodalCompressor` |
-| `class` | `TestRateLimiter` |
-| `class` | `TestPersistenceLoadDocJSON` |
-
-#### `test_coverage_boost4.py`
-
-Coverage boost tests - Round 4.
-
-| Kind | Name |
-|------|------|
-| `def` | `_has_pillow` |
-| `def` | `_make_mock_context` |
-| `def` | `_make_semantic_node` |
-| `def` | `_make_code_chunk` |
-| `class` | `TestCodeCompressionAdapterProperties` |
-| `class` | `TestCodeCompressionAdapterSkeleton` |
-| `class` | `TestCodeCompressionAdapterCodeNodes` |
-| `class` | `TestExperimentalHandlers` |
-| `class` | `TestGraphVisualizer` |
-| `class` | `TestResourceHandlersDiagnostics` |
-| `class` | `TestEmbeddingsImports` |
-| `class` | `TestMultimodalCompressor` |
-| `class` | `TestSCAREnhancedCompressor` |
-| `class` | `TestONNXEmbeddings` |
-| `class` | `TestObservability` |
-| `class` | `TestEvidenceBundle` |
-| `class` | `TestCompressionHandlersValidation` |
-| `class` | `TestCompressionHandlersBatch` |
-| `class` | `TestPersistence` |
-| `class` | `TestAdaptiveRateAllocator` |
-| `class` | `TestStructuredLogging` |
-| `class` | `TestHealth` |
-| `class` | `TestACEHandlersRateLimit` |
-| `class` | `TestBlindSpotDetector` |
-| `class` | `TestAFMHandlersRateLimit` |
-| `class` | `TestCompressionHandlersModulate` |
 
 #### `test_cross_encoder_raw_ort.py`
 
@@ -1265,6 +1281,24 @@ Documentation and help-surface contract tests for launch readiness.
 | `def` | `test_term_freq_with_stemming_python_does_not_match_pythonic` |
 | `async def` | `test_read_doc_enforces_character_cap_on_pathological_output` |
 
+#### `test_document_handlers_extra_coverage.py`
+
+document handlers — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_handler_context` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestHandleDeleteDocument` |
+| `class` | `TestHandleMultilevelEncode` |
+| `class` | `TestHandleBatchIngest` |
+| `class` | `TestHandleIngestDirectory` |
+| `class` | `TestListDocumentsMetadata` |
+| `class` | `TestDeleteDocumentErrors` |
+| `class` | `TestBatchIngestRateLimit` |
+| `class` | `TestIngestDirectory` |
+
 #### `test_e2e_scenarios.py`
 
 End-to-End Scenario Tests for Token Saver 5000 v0.7.0.
@@ -1323,6 +1357,25 @@ Prove the compression path's embedding bytes are DETERMINISTIC, run to run.
 | `def` | `test_same_process_embedding_is_byte_identical` |
 | `def` | `test_cross_process_embedding_is_byte_identical` |
 
+#### `test_embedding_manager_extra_coverage.py`
+
+embedding manager — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_handler_context` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestEmbeddingManager` |
+| `class` | `TestONNXEmbeddingManager` |
+| `class` | `TestEmbeddingManager_boost3` |
+| `class` | `TestONNXEmbeddings` |
+| `class` | `TestEmbeddingsImports` |
+| `class` | `TestONNXEmbeddings_boost4b` |
+
 #### `test_embeddings_hf_import.py`
 
 Regression tests for src/embeddings.py import hygiene.
@@ -1359,6 +1412,17 @@ Contract tests for enterprise package layout scaffolding.
 | `def` | `test_bootstrap_wrapper_exposes_server_factory` |
 | `def` | `test_server_uses_enterprise_tooling_gateway` |
 
+#### `test_error_helpers_extra_coverage.py`
+
+error helpers — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestErrorTypes` |
+| `class` | `TestErrorHelpers` |
+
 #### `test_estimate_accuracy_relative.py`
 
 `estimate_accuracy` must grade RELATIVE error, not absolute ratio points.
@@ -1393,6 +1457,20 @@ Tests for Evidence Bundle System
 | `class` | `TestEvidenceBundle` |
 | `class` | `TestEvidenceStore` |
 | `class` | `TestGlobalStore` |
+
+#### `test_evidence_bundle_extra_coverage.py`
+
+evidence bundle — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestEvidenceBundle` |
+| `class` | `TestEvidenceBundle_boost4b` |
 
 #### `test_experience_synthesis.py`
 
@@ -1457,6 +1535,18 @@ Tests for experimental handlers.
 | `class` | `TestExperimentalHandlerRegistry` |
 | `class` | `TestMCPCoreIntegration` |
 | `class` | `TestOptionalDependencies` |
+
+#### `test_experimental_handlers_extra_coverage.py`
+
+experimental handlers — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestExperimentalHandlers` |
 
 #### `test_extractive_anchor.py`
 
@@ -1576,6 +1666,16 @@ Comprehensive Tests for File Sync Handler Functions
 | `class` | `TestHandleRefreshDocument` |
 | `class` | `TestHandleGetVersionHistory` |
 | `class` | `TestFileSyncHandlersIntegration` |
+
+#### `test_file_sync_manager_extra_coverage.py`
+
+file sync manager — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestFileSyncManager` |
 
 #### `test_filter_rules.py`
 
@@ -1712,6 +1812,27 @@ Tests for the block-wise graph edge-building OOM fix.
 | `def` | `_blockwise_edges` |
 | `class` | `TestBlockWiseEdgeEquivalence` |
 | `class` | `TestGraphBuildingMemoryBound` |
+
+#### `test_graph_visualizer_extra_coverage.py`
+
+graph visualizer — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_mock_compressor` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestHandleVisualizeGraphHtml` |
+| `class` | `TestHandleExportGraphGraphml` |
+| `class` | `TestGraphVisualizerExplainDecision` |
+| `class` | `TestGraphVisualizerHtml` |
+| `class` | `TestGraphVisualizerExportGraphml` |
+| `class` | `TestGraphVisualizerRenderAscii` |
+| `class` | `TestGraphVisualizer` |
+| `class` | `TestGraphVisualizer_boost4` |
 
 #### `test_gtm_benchmarks.py`
 
@@ -2243,6 +2364,20 @@ Tests for multi-agent MCP configuration (install/uninstall/inspect).
 | `def` | `test_ingest_search_get_content_and_summary` |
 | `def` | `test_search_image_query_returns_empty_when_encoder_absent` |
 
+#### `test_multimodal_compressor_extra_coverage.py`
+
+multimodal compressor — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestMultimodalCompressor` |
+| `class` | `TestMultimodalCompressor_boost4` |
+
 #### `test_multimodal_handlers.py`
 
 (no module docstring — see symbols below)
@@ -2354,6 +2489,24 @@ Coverage tests for handler-level observability spans.
 | `async def` | `test_bundle_handlers_emit_trace` |
 | `async def` | `test_model_handlers_emit_trace` |
 
+#### `test_observability_extra_coverage.py`
+
+observability — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestObservability` |
+| `class` | `TestMetrics` |
+| `class` | `TestHealth` |
+| `class` | `TestObservability_boost4b` |
+| `class` | `TestStructuredLogging` |
+| `class` | `TestHealth_boost4b` |
+
 #### `test_onnx_torch_free_path.py`
 
 The ONNX embedder must serve without torch, and must not change its vectors.
@@ -2460,6 +2613,30 @@ Comprehensive Persistence Tests (v1.0.0 - Phase 1)
 | `class` | `TestConcurrentAccess` |
 | `class` | `TestStorageStatsAndUtilities` |
 | `class` | `TestF8AtomicWriteParentDirAutoCreate` |
+
+#### `test_persistence_extra_coverage.py`
+
+persistence — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_handler_context` |
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestSaveGraphDataSafe` |
+| `class` | `TestLoadGraphDataSafe` |
+| `class` | `TestChromaDBPaths` |
+| `class` | `TestAfmHistory` |
+| `class` | `TestClearAll` |
+| `class` | `TestChromaDBInitFailure` |
+| `class` | `TestPersistenceChromaDB` |
+| `class` | `TestPersistenceLoadGraphSafe` |
+| `class` | `TestPersistenceAFMHistory` |
+| `class` | `TestPersistenceLoadDocJSON` |
+| `class` | `TestPersistence` |
 
 #### `test_persistence_orchestration_service.py`
 
@@ -2795,6 +2972,16 @@ TDD coverage for query-guided and evidence-aware compression paths.
 | `def` | `test_retrieve_evidence_detects_insufficient_query_signal` |
 | `def` | `test_read_skeleton_evidence_aware_includes_status_and_skeleton` |
 
+#### `test_rate_limiter_extra_coverage.py`
+
+rate limiter — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestRateLimiter` |
+
 #### `test_read_skeleton_auto_fidelity.py`
 
 Regression locks for the read_skeleton production-default fidelity fix.
@@ -2900,6 +3087,21 @@ Comprehensive tests for resource_handlers.py
 | `def` | `test_memory_health_paths_with_monkeypatched_psutil` |
 | `async def` | `test_async_wrappers_delegate` |
 
+#### `test_resource_manager_extra_coverage.py`
+
+resource manager — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestResourceManager` |
+| `class` | `TestResourceHandlers` |
+| `class` | `TestResourceHandlersDiagnostics` |
+
 #### `test_response_formatter.py`
 
 Tests for src/response_formatter.py (ResponseFormatter class).
@@ -2962,6 +3164,7 @@ Tests for S3 connector normalization.
 | Kind | Name |
 |------|------|
 | `def` | `test_collects_s3_objects_into_documents` |
+| `def` | `test_rejects_bucket_name_with_consecutive_dots` |
 
 #### `test_savings_dashboard.py`
 
@@ -3015,6 +3218,20 @@ Targeted tests for SCAR alignment score behavior.
 |------|------|
 | `def` | `test_search_with_alignment_scores_are_normalized` |
 | `def` | `test_search_with_alignment_rejects_invalid_weight` |
+
+#### `test_scar_compressor_extra_coverage.py`
+
+scar compressor — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_mock_context` |
+| `def` | `_make_semantic_node` |
+| `def` | `_make_code_chunk` |
+| `class` | `TestScarCompressor` |
+| `class` | `TestSCAREnhancedCompressor` |
 
 #### `test_schema_stability.py`
 
@@ -3127,7 +3344,7 @@ Contract tests for server alias mapping helpers.
 
 #### `test_server_factory_service.py`
 
-Contract tests for app-layer server factory service.
+Contract tests for app-layer server factory service, part 1/3.
 
 | Kind | Name |
 |------|------|
@@ -3149,6 +3366,13 @@ Contract tests for app-layer server factory service.
 | `def` | `test_build_delegates_service_layer_construction_through_helper` |
 | `def` | `test_build_core_runtime_layer_wires_foundational_dependencies` |
 | `def` | `test_build_delegates_core_runtime_construction_through_helper` |
+
+#### `test_server_factory_service_contracts.py`
+
+Contract tests for app-layer server factory service, part 2/3.
+
+| Kind | Name |
+|------|------|
 | `def` | `test_factory_typed_artifact_contracts_are_declared` |
 | `def` | `test_factory_class_map_contract_declared_and_aligned_with_overrides` |
 | `def` | `test_build_default_rejects_default_class_map_drift_before_override_merge` |
@@ -3168,6 +3392,13 @@ Contract tests for app-layer server factory service.
 | `def` | `test_build_default_rejects_default_request_drift_before_factory_validation` |
 | `def` | `test_validate_factory_validation_result_contract_declared_and_aligned` |
 | `def` | `test_build_default_from_validation_rejects_validation_drift_before_request_merge` |
+
+#### `test_server_factory_service_validation_chain.py`
+
+Contract tests for app-layer server factory service, part 3/3.
+
+| Kind | Name |
+|------|------|
 | `def` | `test_validate_default_build_inputs_runs_request_then_factory_validation` |
 | `def` | `test_build_default_delegates_to_validate_default_build_inputs` |
 | `def` | `test_validate_default_build_inputs_map_contract_declared_and_aligned` |
@@ -3730,6 +3961,16 @@ Tests for ``_validate_ingest`` — file_id character class.
 | Kind | Name |
 |------|------|
 | `class` | `TestIngestFileIdCharacterClass` |
+
+#### `test_version_manager_extra_coverage.py`
+
+version manager — consolidated from coverage_boost1-4/4b (backlog N10 re-filing).
+
+| Kind | Name |
+|------|------|
+| `def` | `_has_pillow` |
+| `def` | `_make_mock_context` |
+| `class` | `TestVersionManager` |
 
 #### `test_visualization.py`
 
