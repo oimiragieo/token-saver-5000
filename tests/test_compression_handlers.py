@@ -13,6 +13,7 @@ Coverage target: 85%+ of compression_handlers.py
 """
 
 import json
+import os
 from unittest.mock import AsyncMock, Mock, call, patch
 from types import SimpleNamespace
 
@@ -1666,3 +1667,38 @@ Handler Functions:
 
 Coverage: Targeting 85%+ of compression_handlers.py (842 lines)
 """
+
+
+# --- CWE-22 path confinement (2026-08-26 audit HIGH) ---
+
+
+@pytest.mark.asyncio
+async def test_compress_codebase_rejects_out_of_tree_directory():
+    """compress_codebase must confine `directory` to cwd+home via PathValidator,
+    returning an error rather than enumerating an arbitrary server dir."""
+    import json as _json
+
+    from src.handlers import compression_handlers as ch
+    from src.path_validator import PathValidator
+
+    context = {"path_validator": PathValidator()}
+    target = "/etc" if os.name != "nt" else "C:\Windows\System32"
+    result = _json.loads(await ch.handle_compress_codebase(context, {"directory": target}))
+    assert result["status"] == "error"
+    assert "directory" in result["error"].lower() or "path" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_search_code_rejects_out_of_tree_directory():
+    """search_code must confine `directory` to cwd+home via PathValidator."""
+    import json as _json
+
+    from src.handlers import compression_handlers as ch
+    from src.path_validator import PathValidator
+
+    context = {"path_validator": PathValidator()}
+    target = "/etc" if os.name != "nt" else "C:\Windows\System32"
+    result = _json.loads(
+        await ch.handle_search_code(context, {"pattern": "x", "directory": target})
+    )
+    assert result["status"] == "error"

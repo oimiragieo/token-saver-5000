@@ -337,3 +337,36 @@ async def test_read_doc_enforces_character_cap_on_pathological_output(monkeypatc
     )
     assert data["truncated"] is True
     assert "truncated" in data["markdown"].lower()
+
+
+# --- SSRF hardening (2026-08-26 audit CRITICAL: gc_read_doc bare aiohttp fetch) ---
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_markdown_rejects_metadata_host():
+    """_fetch_url_markdown must route through the SSRF-hardened url_fetcher, not a bare
+    aiohttp.get. The cloud-metadata endpoint (http, link-local IP) must be refused."""
+    from src.url_fetcher import URLFetchError
+
+    with pytest.raises(URLFetchError):
+        await dh._fetch_url_markdown("http://169.254.169.254/latest/meta-data/")
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_markdown_rejects_private_https_host():
+    """An internal HTTPS host that resolves to a private IP is refused (SSRF)."""
+    from src.url_fetcher import URLFetchError
+
+    with pytest.raises(URLFetchError):
+        await dh._fetch_url_markdown("https://localhost/admin")
+
+
+@pytest.mark.asyncio
+async def test_read_doc_ssrf_url_returns_error_not_fetch():
+    """handle_gc_read_doc must NOT fetch a blocked SSRF target — it returns an error JSON."""
+    response = await dh.handle_gc_read_doc(
+        {}, {"url_or_slug": "http://169.254.169.254/latest/meta-data/"}
+    )
+    data = json.loads(response)
+    assert "markdown" not in data or not data.get("markdown")
+    assert "error" in data

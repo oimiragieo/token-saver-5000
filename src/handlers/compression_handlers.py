@@ -2820,6 +2820,31 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
     query = args.get("query")
     max_files = int(args.get("max_files", 50))
 
+    # CWE-22 (2026-08-26 audit HIGH): confine `directory` to cwd+home before it
+    # reaches the tg subprocess or glob — mirrors handle_ingest_directory. Without
+    # this, an MCP client could enumerate any server-readable dir (e.g. "/etc").
+    path_validator = context.get("path_validator")
+    if path_validator is not None:
+        try:
+            directory = path_validator.validate(directory)
+        except ValueError as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"Invalid directory path: {e}",
+                    "message": "directory must be within the current working "
+                    "directory or user home directory.",
+                }
+            )
+    else:
+        # Fail-open is observable, not silent: the hosted server always injects
+        # path_validator (contract-enforced key), so a None here means a hand-rolled
+        # context — warn so a future lightweight-context refactor can't silently
+        # regress CWE-22 confinement (matches handle_should_compress precedent).
+        logger.warning(
+            "path_validator absent from context; directory not confined (CWE-22 guard skipped)"
+        )
+
     tg_available = is_available()
     result: Dict[str, Any] = {
         "status": "success",
@@ -2864,6 +2889,30 @@ async def handle_search_code(context: HandlerContext, args: Dict[str, Any]) -> s
 
     pattern = args.get("pattern", "")
     directory = args.get("directory", ".")
+
+    # CWE-22 (2026-08-26 audit HIGH): confine `directory` before it reaches the
+    # tg subprocess — same guard as handle_compress_codebase / ingest_directory.
+    path_validator = context.get("path_validator")
+    if path_validator is not None:
+        try:
+            directory = path_validator.validate(directory)
+        except ValueError as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"Invalid directory path: {e}",
+                    "message": "directory must be within the current working "
+                    "directory or user home directory.",
+                }
+            )
+    else:
+        # Fail-open is observable, not silent: the hosted server always injects
+        # path_validator (contract-enforced key), so a None here means a hand-rolled
+        # context — warn so a future lightweight-context refactor can't silently
+        # regress CWE-22 confinement (matches handle_should_compress precedent).
+        logger.warning(
+            "path_validator absent from context; directory not confined (CWE-22 guard skipped)"
+        )
 
     if not is_available():
         return json.dumps(

@@ -297,17 +297,22 @@ def _excerpt_around_anchor(markdown: str, anchor_slug: str | None, max_tokens: i
 
 
 async def _fetch_url_markdown(url: str) -> str:
-    import aiohttp
     import html2text as _html2text
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=15) as response:
-            response.raise_for_status()
-            raw_html = await response.text()
+    # SSRF hardening (2026-08-26 audit CRITICAL): fetch through the shared
+    # url_fetcher, which enforces https-only + metadata/private-IP hostname block +
+    # DNS-rebinding re-check + IP pinning — the same guards ingest_context uses.
+    # A bare aiohttp.get here let any authenticated MCP client SSRF to
+    # http://169.254.169.254/ cloud-metadata. Do NOT reintroduce a raw fetch.
+    from ..url_fetcher import fetch_url
 
-    content_type = response.headers.get("Content-Type", "")
-    if "html" not in content_type.lower():
-        # Already plain text / markdown — return as-is
+    raw_html = await fetch_url(url)
+
+    # fetch_url returns decoded text with no Content-Type; sniff for HTML so a
+    # plain-text/markdown doc is returned verbatim instead of being run through
+    # html2text (which would mangle it).
+    head = raw_html.lstrip()[:512].lower()
+    if not ("<html" in head or "<!doctype html" in head or "<body" in head):
         return raw_html
 
     converter = _html2text.HTML2Text()
