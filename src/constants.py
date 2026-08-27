@@ -366,6 +366,23 @@ MAX_EXPERIMENT_RUNS = int(os.getenv("MAX_EXPERIMENT_RUNS", "1000"))
 if MAX_EXPERIMENT_RUNS < 1:
     raise ValueError("MAX_EXPERIMENT_RUNS must be >= 1")
 
+# ----------------------------------------------------------------------------
+# Bounded-store caps (B5, A1 sibling): EvidenceStore + CompressionReplayLog are
+# append-only lists/hash-chains, not dict-keyed registries, so they use
+# collections.deque(maxlen=...) rather than BoundedDict -- FIFO eviction of the
+# OLDEST entry once the cap is exceeded, identical semantics to A1. EvidenceStore
+# is a hash chain (previous_bundle_hash links); eviction of the oldest bundles
+# does not invalidate verify_chain() for the SURVIVING bundles, since each
+# bundle only asserts a link to its immediate predecessor, not to the genesis
+# bundle -- the chain stays internally consistent after truncation.
+MAX_EVIDENCE_BUNDLES = int(os.getenv("MAX_EVIDENCE_BUNDLES", "1000"))
+if MAX_EVIDENCE_BUNDLES < 1:
+    raise ValueError("MAX_EVIDENCE_BUNDLES must be >= 1")
+
+MAX_REPLAY_LOG_ENTRIES = int(os.getenv("MAX_REPLAY_LOG_ENTRIES", "1000"))
+if MAX_REPLAY_LOG_ENTRIES < 1:
+    raise ValueError("MAX_REPLAY_LOG_ENTRIES must be >= 1")
+
 # ============================================================================
 # Logging
 # ============================================================================

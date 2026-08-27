@@ -6,14 +6,20 @@ results per content type, enabling data-driven strategy optimization.
 """
 
 import time
+from collections import deque
 from typing import Any, Dict, List, Optional
+
+from src.constants import MAX_REPLAY_LOG_ENTRIES
 
 
 class CompressionReplayLog:
     """Records compression events and computes insights."""
 
     def __init__(self):
-        self._log: List[dict] = []
+        # Bounded via deque(maxlen=...) (B5, A1 sibling): FIFO eviction of the
+        # oldest recorded event once the cap is exceeded, so a long-running
+        # MCP server cannot grow this log without bound.
+        self._log: "deque[dict]" = deque(maxlen=MAX_REPLAY_LOG_ENTRIES)
 
     def record(
         self,

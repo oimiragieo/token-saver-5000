@@ -229,7 +229,7 @@ class TestEvidenceBundle_boost4b:
         bad_file.write_text("invalid json{{{")
         store = EvidenceStore(storage_path=bad_file)
         store._load()
-        assert store._bundles == []
+        assert list(store._bundles) == []
         assert store._chain_valid is False
 
     def test_clear_with_storage(self, tmp_path):
@@ -241,5 +241,5 @@ class TestEvidenceBundle_boost4b:
         store = EvidenceStore(storage_path=store_file)
         store._bundles = [MagicMock()]
         store.clear()
-        assert store._bundles == []
+        assert list(store._bundles) == []
         assert not store_file.exists()

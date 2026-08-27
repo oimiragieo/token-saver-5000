@@ -39,10 +39,13 @@ import json
 import logging
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from src.constants import MAX_EVIDENCE_BUNDLES
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +402,14 @@ class EvidenceStore:
         Args:
             storage_path: Optional path for persistent storage
         """
-        self._bundles: List[EvidenceBundle] = []
+        # Bounded via deque(maxlen=...) (B5, A1 sibling): FIFO eviction of the
+        # OLDEST bundle once the cap is exceeded, so a long-running MCP server
+        # cannot grow this list without bound. Eviction is safe for the hash
+        # chain -- see MAX_EVIDENCE_BUNDLES's docstring in constants.py -- each
+        # surviving bundle only asserts a link to its immediate predecessor,
+        # never to the genesis bundle, so verify_chain() stays valid after
+        # truncation.
+        self._bundles: "deque[EvidenceBundle]" = deque(maxlen=MAX_EVIDENCE_BUNDLES)
         self._storage_path = storage_path
         self._chain_valid = True
 
@@ -557,19 +567,22 @@ class EvidenceStore:
             with open(self._storage_path, "r") as f:
                 data = json.load(f)
 
-            self._bundles = [EvidenceBundle.from_dict(b) for b in data.get("bundles", [])]
+            self._bundles = deque(
+                (EvidenceBundle.from_dict(b) for b in data.get("bundles", [])),
+                maxlen=MAX_EVIDENCE_BUNDLES,
+            )
 
             # Verify chain on load
             self.verify_chain()
 
         except Exception as e:
             logger.error(f"Failed to load evidence store: {e}")
-            self._bundles = []
+            self._bundles = deque(maxlen=MAX_EVIDENCE_BUNDLES)
             self._chain_valid = False
 
     def clear(self) -> None:
         """Clear all bundles (for testing only)"""
-        self._bundles = []
+        self._bundles = deque(maxlen=MAX_EVIDENCE_BUNDLES)
         self._chain_valid = True
         if self._storage_path and self._storage_path.exists():
             self._storage_path.unlink()
