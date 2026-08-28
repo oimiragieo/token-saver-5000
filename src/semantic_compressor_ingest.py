@@ -21,6 +21,7 @@ from .semantic_compressor_types import (
     logger,
 )
 
+
 class SemanticCompressorIngestMixin:
     async def ingest_file_async(
         self,
@@ -938,4 +939,3 @@ class SemanticCompressorIngestMixin:
             skeleton_text=skeleton_text,
             node_map=node_map,
         )
-

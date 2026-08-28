@@ -164,7 +164,9 @@ class TestHandleIngest:
             "file_id": "test_doc",
         }
 
-        with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as mock_advisor_cls:
+        with patch(
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor"
+        ) as mock_advisor_cls:
             mock_advisor = Mock()
             mock_estimate = Mock()
             mock_estimate.compression_ratio = 9.5
@@ -191,7 +193,9 @@ class TestHandleIngest:
             "file_id": "test_doc_async_sync_save",
         }
 
-        with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as mock_advisor_cls:
+        with patch(
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor"
+        ) as mock_advisor_cls:
             mock_advisor = Mock()
             mock_estimate = Mock()
             mock_estimate.compression_ratio = 9.5

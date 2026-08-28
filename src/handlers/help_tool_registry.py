@@ -1465,5 +1465,3 @@ _AUTO_RELATED_TOOLS = {
     "toon_encode": ["toon_decode", "verify_compression", "create_handoff_bundle"],
     "verify_compression": ["calculate_reward", "get_evidence_stats", "read_skeleton"],
 }
-
-

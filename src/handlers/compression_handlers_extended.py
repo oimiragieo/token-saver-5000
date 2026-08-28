@@ -10,6 +10,7 @@ from .compression_handlers_common import (
 )
 from .compression_handlers_common import *  # noqa: F403, F401
 
+
 async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """
     Handle batch_ingest_documents MCP tool (v0.6.0, rate limiting v0.7.0).

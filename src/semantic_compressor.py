@@ -39,6 +39,7 @@ from .semantic_compressor_retrieval import SemanticCompressorRetrievalMixin
 
 logger = logging.getLogger(__name__)
 
+
 class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrievalMixin):
     """
     Core compressor implementing adaptive semantic fidelity.
@@ -930,4 +931,3 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
         )
 
         return embeddings
-

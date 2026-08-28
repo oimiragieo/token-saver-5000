@@ -236,4 +236,3 @@ def compute_adaptive_ratio(total_tokens: int) -> float:
         return 0.2
     else:
         return 0.1
-

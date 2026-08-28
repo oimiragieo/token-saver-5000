@@ -1,4 +1,5 @@
 """Count MCP tools in schema modules vs setup_mcp_tools()."""
+
 import re
 from pathlib import Path
 

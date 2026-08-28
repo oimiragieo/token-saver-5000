@@ -19,6 +19,7 @@ from .semantic_compressor_types import (
     logger,
 )
 
+
 class SemanticCompressorRetrievalMixin:
     def read_skeleton(
         self,

@@ -26,6 +26,7 @@ from .compression_handlers_common import (
 )
 from .compression_handlers_common import *  # noqa: F403, F401
 
+
 async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle ingest_context tool call.
 
@@ -1411,5 +1412,3 @@ async def handle_recommend_fidelity(context: HandlerContext, args: Dict[str, Any
 # ===========================
 # Batch Processing Handler
 # ===========================
-
-

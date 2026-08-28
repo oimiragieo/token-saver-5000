@@ -17,6 +17,7 @@ from .help_tool_registry import TOOL_HELP_REGISTRY
 
 logger = logging.getLogger("semantic-modulator")
 
+
 def _infer_tool_category(tool_name: str) -> str:
     for prefix, category in _AUTO_CATEGORY_BY_PREFIX.items():
         if tool_name.startswith(prefix):

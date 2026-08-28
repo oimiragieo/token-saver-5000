@@ -1,4 +1,5 @@
 """Split semantic_compressor into types + ingest + retrieval mixins."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,8 +30,7 @@ ingest_content = (
     "import numpy as np\n"
     "import networkx as nx\n\n"
     "from .semantic_compressor_types import DiffReingestionResult, FidelityLevel, SkeletonResponse\n\n"
-    "class SemanticCompressorIngestMixin:\n"
-    + "".join(ingest_body)
+    "class SemanticCompressorIngestMixin:\n" + "".join(ingest_body)
 )
 ingest_path.write_text(ingest_content, encoding="utf-8", newline="\n")
 
@@ -40,8 +40,7 @@ retrieval_content = (
     "from typing import Dict, List, Optional, Tuple\n\n"
     "import numpy as np\n\n"
     "from .semantic_compressor_types import DiffReingestionResult, EvidenceResult, FidelityLevel\n\n"
-    "class SemanticCompressorRetrievalMixin:\n"
-    + "".join(retrieval_body)
+    "class SemanticCompressorRetrievalMixin:\n" + "".join(retrieval_body)
 )
 retrieval_path.write_text(retrieval_content, encoding="utf-8", newline="\n")
 

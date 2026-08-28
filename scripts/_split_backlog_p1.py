@@ -1,4 +1,5 @@
 """One-off splits for backlog P1 (help registry, schemas_compression, compression_handlers)."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +45,9 @@ def split_help_handlers() -> None:
     (ROOT / "src/handlers/help_tool_registry.py").write_text(
         imports + "".join(registry_block), encoding="utf-8", newline="\n"
     )
-    new_hh = "".join(header) + "from .help_tool_registry import TOOL_HELP_REGISTRY\n\n" + "".join(tail)
+    new_hh = (
+        "".join(header) + "from .help_tool_registry import TOOL_HELP_REGISTRY\n\n" + "".join(tail)
+    )
     hh_path.write_text(new_hh, encoding="utf-8", newline="\n")
     print(f"help_handlers: {len(lines)} -> {len(new_hh.splitlines())} lines")
 
