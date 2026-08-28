@@ -139,6 +139,7 @@ Compression handlers: ingest, read, search, manage documents.
 
 | Kind | Name |
 |------|------|
+| `def` | `_f11_ranker_path` |
 | `async def` | `handle_ingest` |
 | `async def` | `handle_read_skeleton` |
 | `async def` | `handle_modulate_region` |

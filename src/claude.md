@@ -1135,6 +1135,7 @@ Read, search, and evidence retrieval mixin for SemanticCompressor.
 
 | Kind | Name |
 |------|------|
+| `def` | `_f11_ranker_path` |
 | `class` | `SemanticCompressorRetrievalMixin` |
 
 #### `semantic_compressor_types.py`
