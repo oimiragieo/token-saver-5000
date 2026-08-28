@@ -228,7 +228,8 @@ class TestHandleIngestProtection:
             "file_id": "test",
         }
         with patch(
-            "src.handlers.compression_handlers_ingest.compute_cost_savings", side_effect=Exception("boom")
+            "src.handlers.compression_handlers_ingest.compute_cost_savings",
+            side_effect=Exception("boom"),
         ):
             result = await handle_ingest(context, args)
         parsed = json.loads(result)
