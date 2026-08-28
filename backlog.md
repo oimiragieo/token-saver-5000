@@ -1,42 +1,52 @@
 # Token Saver 5000 — Engineering Backlog
 
-> Updated: 2026-08-28 after Slice P0-A (security & contract hardening).
+> Updated: 2026-08-28 after P0-B, P1, P2, P3 slices.
 
-## Done (P0-A)
+## Done
 
+### P0-A — Security & contract
 - [x] H-001: `compile_knowledge` validates `output_dir` via `PathValidator`
-- [x] H-002: `SCOPE_PROPERTIES` on ACE/prompt/model/experiment tool schemas (29 tools)
+- [x] H-002: `SCOPE_PROPERTIES` on ACE/prompt/model/experiment tool schemas
 - [x] M-001: `refresh_document` re-validates stored path before read
 
-## P0-B — Documentation single source of truth (next slice)
+### P0-B — Documentation single source of truth
+- [x] `docs/reference/MCP_TOOL_COUNTS.md` — 128 tools, profiles, verification
+- [x] Pin tool count **128**, version 0.11.0, profiles in CLAUDE.md + copilot instructions
+- [x] `MCP_TOOLS_GUIDE.md` updated; token-optimization section (20 tools in `schemas_token_optimization.py`)
+- [x] `.env.example` profile comment aligned with `full` / `core_stable`
+- [x] Routing docstrings point at `src/handlers/mcp_core/` package (not flat `mcp_core.py`)
 
-- [ ] Replace stale `mcp_core.py` references with `src/handlers/mcp_core/` package map
-- [ ] Pin tool count (138), version (0.11.0), profiles (`full` / `core_stable`) in README + CLAUDE.md
-- [ ] Expand `MCP_TOOLS_GUIDE.md` for token-optimization tools (21 tools)
-- [ ] Fix `.env.example` profile comment (`core_stable` not `core`)
+### P1 — File size compliance
+- [x] Split `help_handlers.py` → `help_tool_registry.py` (~312 + ~1470 lines)
+- [x] Split `compression_handlers.py` → common / ingest / extended + facade
+- [x] Split `schemas_compression.py` → core / batch + shim
+- [x] Split `semantic_compressor.py` → types / ingest mixin / retrieval mixin / core (~906 lines)
+- [x] Remove generated `tests/f11_gac_fixture_harness_receipt.json` (gitignored; harness writes on `--gac`)
 
-## P1 — File size compliance
+### P2 — Test hardening
+- [x] `conftest.py` threading lock around `_reset_shared_state`
+- [x] `tests/test_all_tools_have_handlers.py` — setup tools == router keys
+- [x] `test_mcp_routing.py` uses router key extraction vs hardcoded count only
 
-- [ ] Split `src/semantic_compressor.py` (2870 lines)
-- [ ] Split `src/handlers/compression_handlers.py` (2935 lines)
-- [ ] Split `src/handlers/help_handlers.py` (1748 lines)
-- [ ] Split `schemas_compression.py` (730 lines)
-- [ ] Compress or split `tests/f11_gac_fixture_harness_receipt.json` (7990 lines)
+### P3 — Docs rebuild pack
+- [x] `docs/reference/TOKEN_ECONOMY.md`
+- [x] `docs/reference/PROXY.md`
+- [x] `docs/guides/FILTER_RULES_DSL.md`
+- [x] `docs/reference/MCP_ROUTING.md`
 
-## P2 — Test hardening
+### Validation
+- [x] CI gate: `python scripts/audit_env_example.py` (VAL-DOCKER-002)
+- [x] `scripts/audit_env_example.py`, `scripts/count_mcp_tools.py`
 
-- [ ] conftest `_reset_shared_state` threading lock for parallel pytest
-- [ ] `test_all_tools_have_handlers` for 138 tools
-- [ ] Replace hardcoded tool count in `test_mcp_routing.py`
+- [x] VAL matrix executed — `artifacts/validation-run-2026-08-28.md` (areas 1–4; UI/degrade waived)
+- [x] Regenerate `**/claude.md` folder guides (on disk; sync check green after commit)
 
-## P3 — Docs rebuild pack
+## Open / follow-up
 
-- [ ] `docs/reference/TOKEN_ECONOMY.md`
-- [ ] `docs/reference/PROXY.md`
-- [ ] `docs/guides/FILTER_RULES_DSL.md`
-- [ ] `docs/reference/MCP_ROUTING.md` (post-split)
+- [ ] Commit slice P0-B through P4 (guides + splits + docs + validation receipt)
+- [ ] Docker VAL-DOCKER-001/003/004 in CI or manual smoke
+- [ ] Growth VAL-* (`validation-contract-growth.md`) when SaaS features land in repo
 
-## Validation contracts (execution verify)
+## Thinktank verdict (2026-08-28)
 
-- [ ] Run VAL-* matrix from `artifacts/validation-contract-areas-1-4.md`
-- [ ] CI gate for `scripts/audit_env_example.py` (VAL-DOCKER-002)
+**CHANGES_REQUIRED** on monolithic P1 — executed as ordered slices (docs → tests → handler splits → compressor split). Do not merge further file splits without per-slice test green.

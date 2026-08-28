@@ -1115,7 +1115,31 @@ Semantic chunking for context ingestion.
 
 #### `semantic_compressor.py`
 
-Fidelity-Preserving Semantic Compressor
+Fidelity-Preserving Semantic Compressor (facade + core graph/chunking).
+
+| Kind | Name |
+|------|------|
+| `class` | `SemanticCompressor` |
+
+#### `semantic_compressor_ingest.py`
+
+Ingestion and skeleton generation mixin for SemanticCompressor.
+
+| Kind | Name |
+|------|------|
+| `class` | `SemanticCompressorIngestMixin` |
+
+#### `semantic_compressor_retrieval.py`
+
+Read, search, and evidence retrieval mixin for SemanticCompressor.
+
+| Kind | Name |
+|------|------|
+| `class` | `SemanticCompressorRetrievalMixin` |
+
+#### `semantic_compressor_types.py`
+
+Types, constants, and helpers for semantic compression.
 
 | Kind | Name |
 |------|------|
@@ -1128,7 +1152,6 @@ Fidelity-Preserving Semantic Compressor
 | `class` | `EvidenceResult` |
 | `class` | `DiffReingestionResult` |
 | `def` | `compute_adaptive_ratio` |
-| `class` | `SemanticCompressor` |
 
 #### `server.py`
 

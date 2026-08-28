@@ -1,6 +1,6 @@
 # MCP Tools Guide: Complete Reference
 
-**Comprehensive documentation for all 44 Token Saver 5000 MCP tools**
+**Comprehensive documentation for all 128 Token Saver 5000 MCP tools**
 
 ---
 
@@ -15,6 +15,7 @@
 - [File Sync & Version Management Tools (4)](#file-sync--version-management-tools) - NEW in v0.4.0
 - [ACE Framework Tools (7)](#ace-framework-tools) - NEW in v0.4.0
 - [Health & Assessment Tools (2)](#health--assessment-tools) - Updated in v0.9.2
+- [Token Optimization Tools (20)](#token-optimization-tools-20) - NEW in v0.11.0
 - [Experimental Tools (5)](#experimental-tools) - NEW in v0.10.0
 - [Common Usage Patterns](#common-usage-patterns)
 - [Error Handling](#error-handling)
@@ -24,7 +25,7 @@
 
 ## Overview
 
-Token Saver 5000 exposes **126 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
+Token Saver 5000 exposes **128 MCP tools** via the stdio transport protocol. These tools enable AI assistants to:
 
 1. **Compress documents** with 80-95% token reduction
 2. **Manage dialogue memory** with ~66% token savings and safety preservation
@@ -51,6 +52,7 @@ All tools operate **locally** (no external API calls required) and use **persist
 | **File Sync & Versions** | 4 tools | Track file changes and version history (v0.4.0) |
 | **ACE Framework** | 7 tools | Self-evolving playbooks for domain optimization (v0.4.0) |
 | **Health & Assessment** | 2 tools | Health monitoring + pre-flight assessment (v0.9.2) |
+| **Token Optimization** | 20 tools | Token estimation, profiles, savings, CLI filtering, budgets (v0.11.0) |
 | **Experimental** | 5 tools | TOON serialization, SCAR compression, Multimodal (v0.10.0) |
 
 ### Typical Workflow
@@ -1693,6 +1695,35 @@ print(f"Cycle complete! Playbook now has {result['cycle_summary']['total_bullets
 
 ---
 
+## Token Optimization Tools (20)
+
+**NEW in v0.11.0** — Token budgeting, client-aware compression tuning, savings tracking, CLI output filtering, and session recovery. Schemas live in `src/handlers/mcp_core/schemas_token_optimization.py`; handlers in `src/handlers/token_optimization_handlers.py`.
+
+| Tool | Description |
+|------|-------------|
+| `advise_cache_strategy` | Returns provider-specific prompt caching tips for a model (Anthropic markers, OpenAI automatic, Gemini modes). |
+| `calculate_roi` | Compares monthly cost with vs without compression; shows Pro plan ROI and breakeven. |
+| `check_budget` | Checks session/daily/monthly token budgets; can record usage and return alert level. |
+| `compress_meta_tokens` | Lossless meta-token compression (arXiv 2506.00307): replaces repeated n-grams with dictionary symbols. |
+| `configure_for_client` | Auto-tunes compression for a target model or explicit context window size. |
+| `detect_dead_code` | Finds Python files in a directory never imported by others; estimates token savings if excluded. |
+| `discover_savings` | Scans a directory or item list for compressible content; ranks opportunities by estimated savings. |
+| `estimate_tokens` | Multi-method token count (tiktoken, bytes/4, bytes/2, raw bytes) for context budgeting. |
+| `export_team_data` | Exports aggregated team savings as JSON, CSV, or Prometheus exposition format. |
+| `filter_cli_output` | Strips noise from CLI output (git, pytest, lint, etc.) with auto-detected command strategies. |
+| `generate_structural_summary` | AST-based code outline: imports, classes, signatures; bodies replaced with `...` (~80–90% reduction). |
+| `get_compression_profile` | Returns the active session compression profile and its parameter values. |
+| `get_original_output` | Retrieves pre-compression content from the tee store by entry ID. |
+| `get_savings_inline` | One-line savings summary suitable for embedding in other tool responses. |
+| `get_savings_report` | Detailed session savings: tokens, dollars, per-tool breakdown, monthly projection, ROI. |
+| `list_tee_entries` | Lists recent tee-store entries (original content preserved before aggressive compression). |
+| `recommend_compression` | Simulates profiles and recommends the most compressed preset meeting a quality floor. |
+| `recover_session` | Rebuilds a compact summary of prior ingestions and tool calls after context compaction. |
+| `set_compression_profile` | Activates a named preset: minimal, summary, balanced, detailed, or full. |
+| `tee_store_stats` | Tee store statistics: entry count, total size, mode, and thresholds. |
+
+---
+
 ## Experimental Tools
 
 **NEW in v0.10.0** - Experimental features for advanced use cases. NOT production-ready.
@@ -2417,7 +2448,7 @@ Index-first search: compiles index, returns matching articles by query keyword m
 
 ## Conclusion
 
-The 126 MCP tools provide comprehensive capabilities for:
+The 128 MCP tools provide comprehensive capabilities for:
 
 - **Document compression** (80-95% reduction)
 - **Dialogue memory** (~66% reduction with safety preservation)

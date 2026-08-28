@@ -1,11 +1,17 @@
 {
-  "last_slice": "P0-A-security-contract",
+  "last_slice": "P4-validation-guides-closeout",
   "completed_at": "2026-08-28",
-  "status": "merged_locally",
+  "status": "ready_to_commit",
   "checks": {
-    "test_mcp_scope_properties": "pass",
-    "test_knowledge_handlers": "pass",
-    "test_refresh_traversal": "pass"
+    "audit_env_example": "pass",
+    "test_async_compression_f11_tools": "116 passed",
+    "mcp_tool_count": 128,
+    "claude_folder_guides": "regenerated_on_disk_pending_commit"
   },
-  "next_slice": "P0-B-doc-truth"
+  "artifacts": {
+    "wayfinder": ".wayfinder/validation-guides-closeout/MAP.md",
+    "plan": "docs/plans/2026-08-28-validation-guides-closeout.md",
+    "validation_receipt": "artifacts/validation-run-2026-08-28.md"
+  },
+  "next_slice": "commit-and-docker-smoke"
 }

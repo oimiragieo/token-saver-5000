@@ -73,6 +73,12 @@ MCP tool manifest compression handler (v1.8.0 A2b).
 
 #### `compression_handlers.py`
 
+Compression MCP handlers (re-export facade).
+
+_No top-level classes or functions (may re-export only)._
+
+#### `compression_handlers_common.py`
+
 Compression-related MCP tool handlers.
 
 | Kind | Name |
@@ -105,16 +111,13 @@ Compression-related MCP tool handlers.
 | `def` | `validate_file_id` |
 | `def` | `validate_node_ids` |
 | `def` | `validate_token_count` |
-| `async def` | `handle_ingest` |
-| `async def` | `handle_read_skeleton` |
-| `async def` | `handle_modulate_region` |
-| `async def` | `handle_search_semantic` |
-| `async def` | `handle_get_stats` |
-| `async def` | `handle_list_documents` |
-| `async def` | `handle_delete_document` |
-| `async def` | `handle_adapt_to_context_window` |
-| `async def` | `handle_multilevel_encode` |
-| `async def` | `handle_recommend_fidelity` |
+
+#### `compression_handlers_extended.py`
+
+Compression handlers: batch, directory, codebase, and extended ops.
+
+| Kind | Name |
+|------|------|
 | `async def` | `handle_batch_ingest` |
 | `async def` | `handle_ingest_directory` |
 | `async def` | `handle_diff_reingest` |
@@ -129,6 +132,23 @@ Compression-related MCP tool handlers.
 | `async def` | `handle_generate_rewrite_prompt` |
 | `async def` | `handle_compress_codebase` |
 | `async def` | `handle_search_code` |
+
+#### `compression_handlers_ingest.py`
+
+Compression handlers: ingest, read, search, manage documents.
+
+| Kind | Name |
+|------|------|
+| `async def` | `handle_ingest` |
+| `async def` | `handle_read_skeleton` |
+| `async def` | `handle_modulate_region` |
+| `async def` | `handle_search_semantic` |
+| `async def` | `handle_get_stats` |
+| `async def` | `handle_list_documents` |
+| `async def` | `handle_delete_document` |
+| `async def` | `handle_adapt_to_context_window` |
+| `async def` | `handle_multilevel_encode` |
+| `async def` | `handle_recommend_fidelity` |
 
 #### `connector_handlers.py`
 
@@ -251,6 +271,12 @@ Help Handler Module
 | `def` | `_auto_related_tools` |
 | `def` | `get_tool_help_registry` |
 | `async def` | `handle_tool_help` |
+
+#### `help_tool_registry.py`
+
+Static tool help registry (examples, tips, output fields).
+
+_No top-level classes or functions (may re-export only)._
 
 #### `memory_handlers.py`
 

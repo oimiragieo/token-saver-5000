@@ -422,9 +422,9 @@ _GATE_OPEN_QUERY = "API_KEY_HMAC_SECRET"
 
 
 def _set_path(monkeypatch: pytest.MonkeyPatch, path: str) -> None:
-    import src.semantic_compressor as _sc
+    import src.constants as _constants
 
-    monkeypatch.setattr(_sc, "F11_RANKER_PATH", path, raising=True)
+    monkeypatch.setattr(_constants, "F11_RANKER_PATH", path, raising=False)
 
 
 class TestPathGMatchesPathAWhenGateClosed:
@@ -596,12 +596,10 @@ class TestBlocker3ScoreTypeLabelReflectsWhatRan:
         """End-to-end at the handler: under Path G, a gate-opening query must
         make the wire response report score_type == 'rrf' (both top-level and
         per-result), not the hardcoded-cosine bug."""
-        import src.semantic_compressor as _sc
-        import src.handlers.compression_handlers as _ch
+        import src.constants as _constants
         from src.handlers.compression_handlers import handle_search_semantic
 
-        monkeypatch.setattr(_sc, "F11_RANKER_PATH", "g", raising=True)
-        monkeypatch.setattr(_ch, "F11_RANKER_PATH", "g", raising=True)
+        monkeypatch.setattr(_constants, "F11_RANKER_PATH", "g", raising=False)
 
         compressor = _make_compressor_with_chunks(_GATE_OPEN_CHUNKS, fake_embedder)
         compressor._generate_summary = lambda text, max_length=100: text[:max_length]
@@ -621,12 +619,10 @@ class TestBlocker3ScoreTypeLabelReflectsWhatRan:
     ) -> None:
         """End-to-end at the handler: under Path G, a pure-paraphrase query
         (gate closes -> dense-only) must report score_type == 'cosine'."""
-        import src.semantic_compressor as _sc
-        import src.handlers.compression_handlers as _ch
+        import src.constants as _constants
         from src.handlers.compression_handlers import handle_search_semantic
 
-        monkeypatch.setattr(_sc, "F11_RANKER_PATH", "g", raising=True)
-        monkeypatch.setattr(_ch, "F11_RANKER_PATH", "g", raising=True)
+        monkeypatch.setattr(_constants, "F11_RANKER_PATH", "g", raising=False)
 
         compressor = _make_compressor_with_chunks(_GATE_CLOSED_CHUNKS, fake_embedder)
         compressor._generate_summary = lambda text, max_length=100: text[:max_length]
