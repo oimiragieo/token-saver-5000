@@ -452,6 +452,7 @@ Centralized Embedding Management for Semantic Modulator (v0.6.0)
 | `def` | `__getattr__` |
 | `class` | `_EmbeddingManagerAdapter` |
 | `class` | `EmbeddingTier` |
+| `def` | `_tier_from_env` |
 | `class` | `EmbeddingManager` |
 | `def` | `get_embedding_manager` |
 
@@ -849,6 +850,15 @@ OpenTelemetry distributed tracing with async context propagation.
 | `def` | `get_observability` |
 | `def` | `configure_observability` |
 
+#### `pagerank_numpy.py`
+
+NumPy PageRank for environments without SciPy (Docker ONNX-only image).
+
+| Kind | Name |
+|------|------|
+| `def` | `pagerank_numpy` |
+| `def` | `compute_pagerank` |
+
 #### `path_validator.py`
 
 Path Validator for File Sync Operations
@@ -1185,6 +1195,12 @@ Guided setup CLI for Token Saver MCP onboarding.
 | `def` | `_apply_target` |
 | `def` | `_remove_target` |
 | `def` | `main` |
+
+#### `similarity.py`
+
+Pairwise cosine similarity without a hard sklearn dependency.
+
+_No top-level classes or functions (may re-export only)._
 
 #### `structural_summary.py`
 

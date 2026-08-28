@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import networkx as nx
-from sklearn.metrics.pairwise import cosine_similarity
+from .similarity import cosine_similarity
 import tiktoken
 
 from .constants import DEFAULT_TEXT_MODEL, F11_RANKER_PATH, RERANK_ENABLED, RERANK_POOL_SIZE
@@ -297,9 +297,11 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
             logger.debug(f"PageRank cache HIT for {doc_id} ({len(graph.nodes)} nodes)")
             return self._pagerank_cache[cache_key]
 
-        # Cache miss - compute PageRank
+        # Cache miss - compute PageRank (NumPy fallback when SciPy absent)
         logger.debug(f"PageRank cache MISS for {doc_id} - computing ({len(graph.nodes)} nodes)")
-        pagerank = nx.pagerank(graph)
+        from .pagerank_numpy import compute_pagerank
+
+        pagerank = compute_pagerank(graph)
 
         # Cache result
         self._pagerank_cache[cache_key] = pagerank

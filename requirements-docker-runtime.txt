@@ -1,0 +1,26 @@
+# Runtime-only deps for the Docker image (ONNX inference, no torch/sklearn).
+# Builder stage still uses full requirements.txt to export ONNX models.
+# sklearn/scipy omitted — src.similarity provides NumPy cosine fallback.
+
+mcp>=1.0.0,<2
+networkx>=3.0
+numpy>=1.26,<3
+pydantic>=2.0.0
+tiktoken>=0.5.0
+
+# Torch-free ONNX path (embeddings_onnx.py fast path)
+onnxruntime>=1.16.0
+tokenizers>=0.15.0
+msgpack>=1.0.7
+
+# Server / handlers
+structlog>=24.1.0
+orjson>=3.9.0
+prometheus-client>=0.20.0
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+aiohttp>=3.9.0
+httpx>=0.27.0
+html2text>=2020.1.16
+tqdm>=4.65.0
+psutil>=5.9.0

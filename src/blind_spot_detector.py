@@ -14,7 +14,7 @@ This prevents hallucination by ensuring fidelity preservation.
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from sklearn.metrics.pairwise import cosine_similarity
+from .similarity import cosine_similarity
 
 from .semantic_compressor import SemanticCompressor
 

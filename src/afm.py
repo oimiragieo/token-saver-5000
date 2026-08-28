@@ -30,7 +30,7 @@ import threading
 
 import numpy as np
 import tiktoken
-from sklearn.metrics.pairwise import cosine_similarity
+from .similarity import cosine_similarity
 
 # Import EmbeddingManager for shared model caching
 from .constants import DEFAULT_TEXT_MODEL

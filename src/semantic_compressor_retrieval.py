@@ -4,13 +4,13 @@ import re
 from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
 from .bm25_utils import bm25_scores as _bm25_score_texts
 from . import constants
 from .constants import _RRF_K
 from .node_identity import extract_file_id_from_node
 from .reranker_gate import RerankConfig, rerank_candidates
+from .similarity import cosine_similarity
 from .semantic_compressor_types import (
     DiffReingestionResult,
     EvidenceResult,

@@ -1,133 +1,108 @@
 # Multi-stage Dockerfile for Token Saver 5000 MCP Server
-# Builder stage: Install dependencies and download models
-# Runtime stage: Minimal image with only runtime dependencies
-# Target image size: <500MB
+# Builder: full deps + torch (CPU) to export + quantize ONNX
+# Runtime: ONNX-only venv (no torch / sentence-transformers / transformers)
+# Target image size: <600MB (VAL-DOCKER-003)
 
 # ==============================================================================
-# Builder Stage: Install dependencies and download models
+# Builder Stage: export + quantize ONNX (needs torch + optimum)
 # ==============================================================================
 FROM python:3.12-slim AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies for building
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies in a virtual environment
-# Using venv ensures clean separation from system packages
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+RUN python -m venv /opt/venv-build
+ENV PATH="/opt/venv-build/bin:$PATH"
 
-# Install Python dependencies with pip cache.
-# Force CPU torch: default PyPI wheels pull CUDA (~4GB+) and blow past the
-# <600MB image-size contract. Runtime never needs GPU in this MCP image.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     grep -vE '^torch([>=<]|$)' requirements.txt > /tmp/requirements-no-torch.txt && \
     pip install --no-cache-dir -r /tmp/requirements-no-torch.txt && \
     pip install --no-cache-dir "optimum[onnxruntime]>=1.15.0"
 
-# Pre-cache DEFAULT_TEXT_MODEL (must match src.constants.DEFAULT_TEXT_MODEL).
-# Also export ONNX so VAL-DOCKER-001 can take the torch-free ORT path as mcp.
 COPY src/ /app/src/
 COPY pyproject.toml /app/
 ENV HF_HOME=/root/.cache/huggingface \
     PYTHONPATH=/app
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')" && \
-    python -c "from src.embeddings_onnx import ONNXEmbeddingManager; print(ONNXEmbeddingManager().encode(['warmup']).shape)"
+
+# Export DEFAULT_TEXT_MODEL, then dynamic-quantize weights for a smaller runtime cache.
+RUN python - <<'PY'
+from pathlib import Path
+from src.embeddings_onnx import ONNXEmbeddingManager
+from onnxruntime.quantization import QuantType, quantize_dynamic
+
+mgr = ONNXEmbeddingManager()
+print("warmup", mgr.encode(["warmup"]).shape)
+model_dir = Path.home() / ".cache" / "token-saver-5000" / "BAAI_bge-small-en-v1.5"
+onnx_path = model_dir / "model.onnx"
+quant_path = model_dir / "model.quant.onnx"
+quantize_dynamic(str(onnx_path), str(quant_path), weight_type=QuantType.QInt8)
+onnx_path.unlink()
+quant_path.rename(onnx_path)
+print("quantized_bytes", onnx_path.stat().st_size)
+# Prove torch-free path still loads the quantized file.
+mgr2 = ONNXEmbeddingManager.__new__(ONNXEmbeddingManager)
+mgr2.__init__()
+print("requant_ok", mgr2.encode(["warmup"]).shape)
+PY
+
+# Stage only the exported model dir (not the HF hub blob mirror).
+RUN mkdir -p /opt/onnx-export && \
+    cp -a /root/.cache/token-saver-5000/BAAI_bge-small-en-v1.5 /opt/onnx-export/
 
 # ==============================================================================
-# Runtime Stage: Minimal image with only runtime dependencies
+# Runtime Stage: slim ONNX-only image
 # ==============================================================================
 FROM python:3.12-slim AS runtime
 
-# Install runtime system dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -u 1000 -s /bin/bash mcp \
+    && mkdir -p /app /data /home/mcp/.cache/huggingface /home/mcp/.cache/token-saver-5000 \
+    && chown -R mcp:mcp /app /data /home/mcp
 
-# Create non-root user for security
-# Running as non-root is a security best practice
-RUN useradd -m -u 1000 -s /bin/bash mcp && \
-    mkdir -p /app /data && \
-    chown -R mcp:mcp /app /data
-
-# Set working directory
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application code
+COPY requirements-docker-runtime.txt /tmp/requirements-docker-runtime.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements-docker-runtime.txt && \
+    pip uninstall -y pip setuptools wheel huggingface-hub hf_xet 2>/dev/null || true && \
+    find /opt/venv -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name 'tests' -path '*/site-packages/*' -exec rm -rf {} + 2>/dev/null || true && \
+    rm -rf /tmp/requirements-docker-runtime.txt /root/.cache/pip /tmp/*
+
 COPY --chown=mcp:mcp src/ /app/src/
 COPY --chown=mcp:mcp pyproject.toml /app/
+COPY --chown=mcp:mcp --from=builder /opt/onnx-export/BAAI_bge-small-en-v1.5 \
+    /home/mcp/.cache/token-saver-5000/BAAI_bge-small-en-v1.5
 
-# Copy HF + ONNX model caches from builder (includes ~/.cache/token-saver-5000)
-COPY --from=builder /root/.cache /home/mcp/.cache
-RUN chown -R mcp:mcp /home/mcp/.cache
-
-# Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/home/mcp/.cache/huggingface \
-    # HTTP server configuration (optional, disabled by default)
+    EMBEDDING_TIER=onnx \
     HTTP_ENABLED=false \
     HTTP_HOST=0.0.0.0 \
     HTTP_PORT=8080 \
-    # Data storage directory
     DATA_DIR=/data \
-    # Python path
     PYTHONPATH=/app
 
-# Switch to non-root user
 USER mcp
 
-# Health check (requires HTTP_ENABLED=true)
-# Kubernetes will use /health/liveness and /health/readiness endpoints
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD if [ "$HTTP_ENABLED" = "true" ]; then curl -f http://localhost:${HTTP_PORT}/health/liveness || exit 1; else exit 0; fi
+    CMD if [ "$HTTP_ENABLED" = "true" ]; then python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:'+__import__('os').environ.get('HTTP_PORT','8080')+'/health/liveness')" || exit 1; else exit 0; fi
 
-# Expose HTTP port (for health checks and metrics)
-# Only used if HTTP_ENABLED=true
 EXPOSE 8080
-
-# Volume for persistent data (semantic modulator data, version history)
 VOLUME ["/data"]
 
-# Default command: Run MCP server in stdio mode
-# Override with HTTP-enabled startup for Kubernetes deployment
 CMD ["python", "-m", "src.server"]
 
-# ==============================================================================
-# Build Instructions
-# ==============================================================================
-# Build image:
-#   docker build -t token-saver-5000:latest .
-#
-# Run with stdio mode (default):
-#   docker run -i token-saver-5000:latest
-#
-# Run with HTTP server enabled (for Kubernetes):
-#   docker run -e HTTP_ENABLED=true -p 8080:8080 token-saver-5000:latest
-#
-# Run with volume for persistent data:
-#   docker run -v $(pwd)/data:/data -i token-saver-5000:latest
-#
-# Development mode with source code mounted:
-#   docker run -v $(pwd)/src:/app/src -e HTTP_ENABLED=true -p 8080:8080 token-saver-5000:latest
-#
-# ==============================================================================
-# Image Size Optimization
-# ==============================================================================
-# Expected image size: ~500-800MB with CPU torch + bge-small + ONNX export.
-# Previous CUDA torch wheels inflated the image to ~9GB.
-# Further cuts: drop torch entirely and serve ONNX-only (~200-400MB).
-# ==============================================================================
+# Build: docker build -t gotcontext:test .
+# Size:  docker images gotcontext:test --format "{{.Size}}"   # must be <600MB
