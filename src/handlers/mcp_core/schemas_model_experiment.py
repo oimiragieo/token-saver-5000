@@ -6,6 +6,8 @@ monolithic `setup_mcp_tools`, unchanged.
 
 from mcp.types import Tool
 
+from ._constants import SCOPE_PROPERTIES
+
 MODEL_TOOLS: list = [
     Tool(
         name="get_provider_profile",
@@ -13,6 +15,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "model": {"type": "string", "description": "Model identifier"},
             },
             "required": ["model"],
@@ -24,6 +27,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "model": {"type": "string", "description": "Model identifier"},
                 "original_tokens": {"type": "integer", "description": "Original token count"},
                 "compressed_tokens": {
@@ -40,6 +44,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "model": {"type": "string", "description": "Model identifier"},
                 "text": {"type": "string", "description": "Representative source text"},
                 "use_case": {
@@ -78,6 +83,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "model": {"type": "string", "description": "Model identifier"},
                 "harness": {
                     "type": "string",
@@ -111,6 +117,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "model": {"type": "string", "description": "Model identifier"},
                 "api_response": {
                     "type": "object",
@@ -150,6 +157,7 @@ MODEL_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "prompt_id": {
                     "type": "string",
                     "description": "Prompt identifier returned by render_prompt_template",
@@ -180,6 +188,7 @@ EXPERIMENT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Dataset name"},
                 "description": {"type": "string", "description": "Dataset description"},
                 "cases": {
@@ -188,6 +197,7 @@ EXPERIMENT_TOOLS: list = [
                     "items": {
                         "type": "object",
                         "properties": {
+                            **SCOPE_PROPERTIES,
                             "case_id": {"type": "string"},
                             "name": {"type": "string"},
                             "text": {"type": "string"},
@@ -219,7 +229,7 @@ EXPERIMENT_TOOLS: list = [
     Tool(
         name="list_datasets",
         description="List named datasets available for experiment runs.",
-        inputSchema={"type": "object", "properties": {}},
+        inputSchema={"type": "object", "properties": {**SCOPE_PROPERTIES}},
     ),
     Tool(
         name="run_experiment",
@@ -230,6 +240,7 @@ EXPERIMENT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "dataset_name": {"type": "string", "description": "Dataset name"},
                 "mode": {
                     "type": "string",
@@ -270,7 +281,8 @@ EXPERIMENT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
-                "run_id": {"type": "string", "description": "Experiment run identifier"}
+                **SCOPE_PROPERTIES,
+                "run_id": {"type": "string", "description": "Experiment run identifier"},
             },
             "required": ["run_id"],
         },
@@ -284,6 +296,7 @@ EXPERIMENT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "run_id_a": {"type": "string", "description": "Base run identifier"},
                 "run_id_b": {"type": "string", "description": "Comparison run identifier"},
             },

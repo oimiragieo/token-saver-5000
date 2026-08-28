@@ -189,9 +189,24 @@ async def handle_refresh_document(context: HandlerContext, args: Dict[str, Any])
 
     logger.info(f"Refreshing document from disk: {scoped_file_id} <- {metadata.file_path}")
 
+    read_path = metadata.file_path
+    path_validator = context.get("path_validator")
+    if path_validator is not None:
+        try:
+            read_path = path_validator.validate(read_path)
+        except ValueError as exc:
+            return (
+                f"[ERROR] Invalid source file path\n"
+                f"\n"
+                f"Path: {metadata.file_path}\n"
+                f"Error: {str(exc)}\n"
+                f"\n"
+                f"Tip: Re-ingest with a path inside allowed directories."
+            )
+
     # Read current file
     try:
-        with open(metadata.file_path, "r", encoding="utf-8") as f:
+        with open(read_path, "r", encoding="utf-8") as f:
             content = f.read()
     except Exception as e:
         return (

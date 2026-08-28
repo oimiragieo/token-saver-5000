@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from ..memory_api import MemoryAPI
+from ..path_validator import PathValidator
 from ..knowledge_compiler import KnowledgeCompiler
 from ..knowledge_lint import KnowledgeLinter
 from ..transcript_extractor import ingest_transcript
@@ -232,9 +234,20 @@ async def handle_compile_knowledge(context: dict[str, Any], args: dict[str, Any]
     write_files = bool(args.get("write_files", False))
     output_dir = _optional_string(args, "output_dir")
 
+    validated_output_dir: Path | None = None
+    if write_files and output_dir:
+        path_validator = context.get("path_validator")
+        if path_validator is None:
+            path_validator = PathValidator(allowed_base_dirs=[os.getcwd(), os.path.expanduser("~")])
+        try:
+            output_dir = path_validator.validate(output_dir)
+        except ValueError as exc:
+            raise ValueError(f"Invalid output_dir: {exc}") from exc
+        validated_output_dir = Path(output_dir)
+
     with observe.trace("knowledge.compile", write_files=write_files, **_scope_args(args)):
         compiler = KnowledgeCompiler(
-            output_dir=Path(output_dir) if output_dir else None,
+            output_dir=validated_output_dir,
         )
         result = compiler.compile_from_api(
             memory_api=_memory_api(context),
