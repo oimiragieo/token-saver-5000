@@ -13,7 +13,12 @@ from functools import lru_cache
 from typing import Any, Dict
 
 from ..types import HandlerContext
-from .help_tool_registry import TOOL_HELP_REGISTRY
+from .help_tool_registry import (
+    TOOL_HELP_REGISTRY,
+    _AUTO_CATEGORY_BY_PREFIX,
+    _AUTO_CATEGORY_BY_TOOL,
+    _AUTO_RELATED_TOOLS,
+)
 
 logger = logging.getLogger("semantic-modulator")
 

@@ -1,45 +1,22 @@
-"""Types, constants, and helpers for semantic compression."""
+"""Types, constants, and helpers for semantic compression.
 
-"""
-Fidelity-Preserving Semantic Compressor
-
-Implements the core encoding/decoding logic inspired by:
-- Paper 1: JSCCM (Joint Semantic-Channel Coding) - Rate adaptation
-- Paper 2: FPQE (Fidelity-Preserving Quantization) - Structure preservation
+Fidelity-Preserving Semantic Compressor — core encoding/decoding inspired by
+JSCCM (rate adaptation) and FPQE (structure preservation).
 """
 
-import asyncio
-import hashlib
 import logging
 import os
 import re
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import AsyncExitStack
 from dataclasses import dataclass
-from os import cpu_count
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from typing import Dict, List, Tuple
 from enum import Enum
 
 import numpy as np
-import networkx as nx
-from sklearn.metrics.pairwise import cosine_similarity
-import tiktoken
 
-from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 from .bm25_utils import (
-    bm25_scores as _bm25_score_texts,
     query_has_lexical_shape as _gate_query_has_lexical_shape,
 )
-from .constants import (
-    _RRF_K,
-    F11_RANKER_PATH,
-    RERANK_ENABLED,
-    RERANK_POOL_SIZE,
-    DEFAULT_TEXT_MODEL,
-)
 from .node_identity import extract_file_id_from_node
-from .reranker_gate import RerankConfig, rerank_candidates
 
 logger = logging.getLogger(__name__)
 

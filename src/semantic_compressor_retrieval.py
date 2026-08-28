@@ -1,19 +1,22 @@
 """Read, search, and evidence retrieval mixin for SemanticCompressor."""
 
+import re
 from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+from .bm25_utils import bm25_scores as _bm25_score_texts
 from . import constants
 from .constants import _RRF_K
+from .node_identity import extract_file_id_from_node
 from .reranker_gate import RerankConfig, rerank_candidates
 from .semantic_compressor_types import (
     DiffReingestionResult,
     EvidenceResult,
     FidelityLevel,
-    _bm25_score_texts,
-    _gate_query_has_lexical_shape,
+    SemanticNode,
+    compute_adaptive_ratio,
     _gate_should_fuse_g,
     _node_belongs_to_file,
     logger,

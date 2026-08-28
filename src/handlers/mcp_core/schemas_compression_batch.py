@@ -1,6 +1,6 @@
 """Compression tool schemas: batch, directory, and extended ops."""
 
-from mcp.types import Tool, ToolAnnotations
+from mcp.types import Tool
 
 from ._constants import SCOPE_PROPERTIES
 

@@ -6,19 +6,15 @@ import logging
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import AsyncExitStack
 from os import cpu_count
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import networkx as nx
-from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
-from .constants import DEFAULT_TEXT_MODEL, F11_RANKER_PATH, RERANK_ENABLED, RERANK_POOL_SIZE
+from .constants import DEFAULT_TEXT_MODEL
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
-from .node_identity import extract_file_id_from_node
-from .reranker_gate import RerankConfig, rerank_candidates
 from .semantic_compressor_types import (
     DiffReingestionResult,
     EvidenceResult,
@@ -26,11 +22,11 @@ from .semantic_compressor_types import (
     SemanticNode,
     SkeletonResponse,
     compute_adaptive_ratio,
-    _gate_should_fuse_g,
     _gate_query_has_lexical_shape,
+    _gate_should_fuse_g,
+    _node_belongs_to_file,
     _MAX_GRAPH_CHUNKS,
     _SIMILARITY_BLOCK_SIZE,
-    _node_belongs_to_file,
     _SENTENCE_SPLIT_RE,
     _strip_admonition_markers,
 )

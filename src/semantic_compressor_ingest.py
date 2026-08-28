@@ -1,8 +1,6 @@
 """Ingestion and skeleton generation mixin for SemanticCompressor."""
 
 import asyncio
-import hashlib
-import logging
 import re
 from contextlib import AsyncExitStack
 from typing import Dict, List, Literal, Optional, Set, Tuple
@@ -11,10 +9,9 @@ import numpy as np
 import networkx as nx
 
 from .semantic_compressor_types import (
-    DiffReingestionResult,
-    FidelityLevel,
     SemanticNode,
     SkeletonResponse,
+    compute_adaptive_ratio,
     _MAX_GRAPH_CHUNKS,
     _SIMILARITY_BLOCK_SIZE,
     _node_belongs_to_file,
