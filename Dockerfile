@@ -25,14 +25,23 @@ COPY requirements.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies with pip cache
-# --no-cache-dir reduces image size
+# Install Python dependencies with pip cache.
+# Force CPU torch: default PyPI wheels pull CUDA (~4GB+) and blow past the
+# <600MB image-size contract. Runtime never needs GPU in this MCP image.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    grep -vE '^torch([>=<]|$)' requirements.txt > /tmp/requirements-no-torch.txt && \
+    pip install --no-cache-dir -r /tmp/requirements-no-torch.txt && \
+    pip install --no-cache-dir "optimum[onnxruntime]>=1.15.0"
 
-# Download sentence-transformers model in builder stage
-# This reduces runtime startup time and ensures model is cached
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Pre-cache DEFAULT_TEXT_MODEL (must match src.constants.DEFAULT_TEXT_MODEL).
+# Also export ONNX so VAL-DOCKER-001 can take the torch-free ORT path as mcp.
+COPY src/ /app/src/
+COPY pyproject.toml /app/
+ENV HF_HOME=/root/.cache/huggingface \
+    PYTHONPATH=/app
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')" && \
+    python -c "from src.embeddings_onnx import ONNXEmbeddingManager; print(ONNXEmbeddingManager().encode(['warmup']).shape)"
 
 # ==============================================================================
 # Runtime Stage: Minimal image with only runtime dependencies
@@ -60,8 +69,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=mcp:mcp src/ /app/src/
 COPY --chown=mcp:mcp pyproject.toml /app/
 
-# Copy sentence-transformers cache from builder
-# This includes the pre-downloaded model
+# Copy HF + ONNX model caches from builder (includes ~/.cache/token-saver-5000)
 COPY --from=builder /root/.cache /home/mcp/.cache
 RUN chown -R mcp:mcp /home/mcp/.cache
 
@@ -69,6 +77,7 @@ RUN chown -R mcp:mcp /home/mcp/.cache
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/home/mcp/.cache/huggingface \
     # HTTP server configuration (optional, disabled by default)
     HTTP_ENABLED=false \
     HTTP_HOST=0.0.0.0 \
@@ -118,16 +127,7 @@ CMD ["python", "-m", "src.server"]
 # ==============================================================================
 # Image Size Optimization
 # ==============================================================================
-# Expected image size: ~450MB
-# - python:3.12-slim base: ~150MB
-# - Python dependencies: ~150MB
-# - sentence-transformers model (all-MiniLM-L6-v2): ~80MB
-# - Application code: ~10MB
-# - System dependencies: ~60MB
-#
-# Further optimization options:
-# 1. Use ONNX models instead of PyTorch: Saves ~250MB, reduces to ~200MB
-# 2. Use python:3.12-alpine: Saves ~50MB, but may require additional dependencies
-# 3. Use multi-arch builds: Build for amd64 and arm64 platforms
-# 4. Layer caching: Separating requirements.txt changes from code changes
+# Expected image size: ~500-800MB with CPU torch + bge-small + ONNX export.
+# Previous CUDA torch wheels inflated the image to ~9GB.
+# Further cuts: drop torch entirely and serve ONNX-only (~200-400MB).
 # ==============================================================================

@@ -1,17 +1,21 @@
 {
-  "last_slice": "P4-validation-guides-closeout",
+  "last_slice": "commit-and-docker-smoke",
   "completed_at": "2026-08-28",
-  "status": "ready_to_commit",
+  "status": "closed",
   "checks": {
+    "ci_main": "pass",
     "audit_env_example": "pass",
-    "test_async_compression_f11_tools": "116 passed",
-    "mcp_tool_count": 128,
-    "claude_folder_guides": "regenerated_on_disk_pending_commit"
+    "val_docker_001": "pass",
+    "val_docker_002": "pass",
+    "val_docker_003_build_ingest": "pass",
+    "val_docker_003_size": "fail_3.7GB_was_9.2GB",
+    "val_docker_004": "pass",
+    "mcp_tool_count": 128
   },
   "artifacts": {
     "wayfinder": ".wayfinder/validation-guides-closeout/MAP.md",
     "plan": "docs/plans/2026-08-28-validation-guides-closeout.md",
     "validation_receipt": "artifacts/validation-run-2026-08-28.md"
   },
-  "next_slice": "commit-and-docker-smoke"
+  "next_slice": "docker-onnx-only-size-under-600mb"
 }

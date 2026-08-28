@@ -1,6 +1,6 @@
 # Token Saver 5000 — Engineering Backlog
 
-> Updated: 2026-08-28 after P0-B, P1, P2, P3 slices.
+> Updated: 2026-08-28 after commit-and-docker-smoke closeout.
 
 ## Done
 
@@ -37,14 +37,14 @@
 ### Validation
 - [x] CI gate: `python scripts/audit_env_example.py` (VAL-DOCKER-002)
 - [x] `scripts/audit_env_example.py`, `scripts/count_mcp_tools.py`
-
-- [x] VAL matrix executed — `artifacts/validation-run-2026-08-28.md` (areas 1–4; UI/degrade waived)
-- [x] Regenerate `**/claude.md` folder guides (on disk; sync check green after commit)
+- [x] VAL matrix executed — `artifacts/validation-run-2026-08-28.md`
+- [x] Regenerate `**/claude.md` folder guides
+- [x] Commit P0-B through P4 + CI green on `main`
+- [x] Docker smoke: VAL-DOCKER-001/002/004 **pass**; VAL-DOCKER-003 build+ingest **pass**, size **fail** (3.7GB after CPU-torch; was 9.2GB)
 
 ## Open / follow-up
 
-- [ ] Commit slice P0-B through P4 (guides + splits + docs + validation receipt)
-- [ ] Docker VAL-DOCKER-001/003/004 in CI or manual smoke
+- [ ] **Docker image size** — get under 600MB (ONNX-only runtime stage; drop torch from final image)
 - [ ] Growth VAL-* (`validation-contract-growth.md`) when SaaS features land in repo
 
 ## Thinktank verdict (2026-08-28)
