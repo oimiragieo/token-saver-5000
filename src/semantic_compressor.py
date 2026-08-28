@@ -11,10 +11,13 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import networkx as nx
+from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
-from .constants import DEFAULT_TEXT_MODEL
+from .constants import DEFAULT_TEXT_MODEL, F11_RANKER_PATH, RERANK_ENABLED, RERANK_POOL_SIZE
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
+from .node_identity import extract_file_id_from_node
+from .reranker_gate import RerankConfig, rerank_candidates
 from .semantic_compressor_types import (
     DiffReingestionResult,
     EvidenceResult,

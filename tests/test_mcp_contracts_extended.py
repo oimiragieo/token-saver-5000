@@ -142,7 +142,7 @@ async def test_ingest_runtime_output_matches_canonical_contract():
         "path_validator": Mock(),
     }
 
-    with patch("src.handlers.compression_handlers.CompressionAdvisor") as advisor_cls:
+    with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as advisor_cls:
         advisor = Mock()
         advisor.estimate_compression.return_value = SimpleNamespace(
             compression_ratio=3.1, original_tokens=200, estimated_compressed=64

@@ -319,7 +319,7 @@ class TestHandlerCostSavingsIntegration:
         }
 
     @pytest.mark.asyncio
-    @patch("src.handlers.compression_handlers.validate_file_id")
+    @patch("src.handlers.compression_handlers_ingest.validate_file_id")
     async def test_ingest_response_includes_cost_savings(self, mock_validate, mock_context):
         """handle_ingest response should include cost_savings field."""
         from src.handlers.compression_handlers import handle_ingest

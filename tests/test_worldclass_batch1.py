@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.handlers import compression_handlers as ch
+import src.handlers.compression_handlers_ingest as ch_ingest
 from src.semantic_compressor import SemanticCompressor
 
 # H2 section headers force one semantic node per section regardless of embedding tier
@@ -92,8 +93,8 @@ async def test_ingest_surfaces_reasoning_confidence_and_estimated_compressed():
     compressor.ingest_file_async = AsyncMock(return_value=_make_skeleton(1000, 100))
     args = {"text": "x" * 4000, "file_id": "wc_estimate"}
     with (
-        patch.object(ch, "CompressionAdvisor") as MockAdvisor,
-        patch.object(ch, "validate_file_id"),
+        patch.object(ch_ingest, "CompressionAdvisor") as MockAdvisor,
+        patch.object(ch_ingest, "validate_file_id"),
     ):
         MockAdvisor.return_value.estimate_compression.return_value = _make_estimate(
             ratio=9.5, compressed=105, confidence="high", reasoning="Large structured doc."
@@ -114,8 +115,8 @@ async def test_ingest_small_doc_returns_honesty_note():
     compressor.ingest_file_async = AsyncMock(return_value=_make_skeleton(60, 90))
     args = {"text": "Small snippet that is over twenty characters long.", "file_id": "wc_small"}
     with (
-        patch.object(ch, "CompressionAdvisor") as MockAdvisor,
-        patch.object(ch, "validate_file_id"),
+        patch.object(ch_ingest, "CompressionAdvisor") as MockAdvisor,
+        patch.object(ch_ingest, "validate_file_id"),
     ):
         MockAdvisor.return_value.estimate_compression.return_value = _make_estimate()
         result = await ch.handle_ingest(context, args)

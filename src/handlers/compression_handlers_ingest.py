@@ -27,6 +27,12 @@ from .compression_handlers_common import (
 from .compression_handlers_common import *  # noqa: F403, F401
 
 
+def _f11_ranker_path() -> str:
+    from ..semantic_compressor import F11_RANKER_PATH
+
+    return F11_RANKER_PATH
+
+
 async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
     """Handle ingest_context tool call.
 
@@ -815,7 +821,7 @@ async def handle_search_semantic(context: HandlerContext, args: Dict[str, Any]) 
     # Fallback label when the ranker doesn't surface a per-call score_type
     # (older/stub compressor or a test Mock without the typed API): mirror the
     # pre-Path-G behavior — Path C is RRF, everything else cosine.
-    _fallback_score_type = "rrf" if constants.F11_RANKER_PATH == "c" else "cosine"
+    _fallback_score_type = "rrf" if _f11_ranker_path() == "c" else "cosine"
 
     def _valid_score_type(candidate: object) -> str:
         # Value-validate rather than presence-detect: a unittest.mock.Mock

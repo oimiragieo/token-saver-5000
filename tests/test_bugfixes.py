@@ -228,7 +228,7 @@ class TestHandleIngestProtection:
             "file_id": "test",
         }
         with patch(
-            "src.handlers.compression_handlers.compute_cost_savings", side_effect=Exception("boom")
+            "src.handlers.compression_handlers_ingest.compute_cost_savings", side_effect=Exception("boom")
         ):
             result = await handle_ingest(context, args)
         parsed = json.loads(result)
@@ -707,7 +707,7 @@ class TestHandleBatchIngestTenantScoping:
         context = {"compressor": fake_compressor}
 
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_ingest.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             result_a = await handle_batch_ingest(
@@ -764,7 +764,7 @@ class TestHandleBatchIngestTenantScoping:
         context = {"compressor": fake_compressor}
 
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_ingest.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             result = await handle_batch_ingest(
@@ -876,7 +876,7 @@ class TestMetricsWiring:
             "retrieval_history": {},
         }
 
-        with patch("src.handlers.compression_handlers.get_metrics") as mock_get_metrics:
+        with patch("src.handlers.compression_handlers_ingest.get_metrics") as mock_get_metrics:
             mock_metrics = MagicMock()
             mock_get_metrics.return_value = mock_metrics
 

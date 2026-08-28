@@ -124,6 +124,7 @@ async def test_compile_knowledge_empty(memory_context):
 async def test_compile_knowledge_write_files(memory_context, tmp_path):
     from src.handlers.memory_handlers import handle_add_memory, handle_compile_knowledge
 
+    memory_context["path_validator"] = PathValidator(allowed_base_dirs=[str(tmp_path.resolve())])
     await handle_add_memory(memory_context, {"text": "Use dependency injection pattern always"})
     result = json.loads(
         await handle_compile_knowledge(

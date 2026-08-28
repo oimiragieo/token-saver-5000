@@ -23,6 +23,13 @@ from .semantic_compressor_types import (
 )
 
 
+def _f11_ranker_path() -> str:
+    """Read ranker path from the facade module so tests can patch `semantic_compressor.F11_RANKER_PATH`."""
+    from .semantic_compressor import F11_RANKER_PATH
+
+    return F11_RANKER_PATH
+
+
 class SemanticCompressorRetrievalMixin:
     def read_skeleton(
         self,
@@ -425,7 +432,7 @@ class SemanticCompressorRetrievalMixin:
         pool_k = max(top_k, constants.RERANK_POOL_SIZE) if rerank_on else top_k
 
         # --- Path dispatch (produces `ranked` + `score_type`) ---
-        if constants.F11_RANKER_PATH == "c":
+        if _f11_ranker_path() == "c":
             # Path C: BM25 + RRF hybrid — unconditional fusion (HOLD as of
             # 2026-07-08; see docs/audits/2026-07-08-f11-retrieval-fusion-ideas.md).
             # Council patch P1: BM25 receives the SAME file_id-filtered
@@ -434,7 +441,7 @@ class SemanticCompressorRetrievalMixin:
             bm25_ranked = self._bm25_scores_for_nodes(query, candidate_nodes)
             ranked = self._rrf_fuse(dense_ranked, bm25_ranked, k=_RRF_K, top_k=pool_k)
             score_type = "rrf"
-        elif constants.F11_RANKER_PATH == "g" and _gate_should_fuse_g(query):
+        elif _f11_ranker_path() == "g" and _gate_should_fuse_g(query):
             # Path G: gated fusion (design memo idea #1, EXPERIMENTAL) — fuse
             # only when the query has provable lexical signal; otherwise degrade
             # to Path A dense-only. The gate is query-shape only (#267) so it is

@@ -46,14 +46,14 @@ def _make_ingest_context():
 async def test_handle_ingest_logs_metrics_warning_on_metrics_failure(caplog):
     skeleton, context = _make_ingest_context()
 
-    with patch("src.handlers.compression_handlers.CompressionAdvisor") as advisor_cls:
+    with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as advisor_cls:
         advisor = Mock()
         advisor.estimate_compression.return_value = SimpleNamespace(
             compression_ratio=2.9, original_tokens=skeleton.total_tokens, estimated_compressed=41
         )
         advisor_cls.return_value = advisor
 
-        with patch("src.handlers.compression_handlers.get_metrics") as get_metrics:
+        with patch("src.handlers.compression_handlers_ingest.get_metrics") as get_metrics:
             get_metrics.return_value = Mock(
                 record_compression_ratio=Mock(side_effect=RuntimeError("metrics down")),
                 increment_documents_processed=Mock(),
@@ -79,7 +79,7 @@ async def test_handle_ingest_logs_persistence_error_but_returns_success(caplog):
     _, context = _make_ingest_context()
     context["persistence"].save_document.side_effect = RuntimeError("disk unavailable")
 
-    with patch("src.handlers.compression_handlers.CompressionAdvisor") as advisor_cls:
+    with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as advisor_cls:
         advisor = Mock()
         advisor.estimate_compression.return_value = SimpleNamespace(
             compression_ratio=2.9, original_tokens=120, estimated_compressed=41

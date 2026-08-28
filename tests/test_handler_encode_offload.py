@@ -122,11 +122,11 @@ class TestReadSkeletonOffload:
             }
 
         monkeypatch.setattr(
-            "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+            "src.handlers.compression_handlers_ingest.run_read_skeleton_pipeline",
             fake_pipeline,
         )
         monkeypatch.setattr(
-            "src.handlers.compression_handlers.validate_file_id",
+            "src.handlers.compression_handlers_ingest.validate_file_id",
             lambda *a, **k: None,
         )
 

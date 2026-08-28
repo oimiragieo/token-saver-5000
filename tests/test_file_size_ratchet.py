@@ -45,7 +45,7 @@ _TEST_CEILING = 2000
 # Measured 2026-08-24 (post N10 test-file split). These may only go DOWN. Lower
 # them in the same commit that reduces the count; never raise one to turn a red
 # gate green.
-_CORE_BASELINE = 6
+_CORE_BASELINE = 5
 _TEST_BASELINE = 0
 
 # Asserted rather than assumed: a walk that silently matched nothing would pass
