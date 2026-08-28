@@ -28,7 +28,7 @@ from .compression_handlers_common import *  # noqa: F403, F401
 
 
 def _f11_ranker_path() -> str:
-    from ..semantic_compressor import F11_RANKER_PATH
+    from ..constants import F11_RANKER_PATH
 
     return F11_RANKER_PATH
 

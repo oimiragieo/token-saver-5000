@@ -31,6 +31,8 @@ from typing import Any, Dict
 import numpy as np
 import pytest
 
+from tests.f11_ranker_path_helpers import restore_f11_ranker_path, set_f11_ranker_path
+
 # ---------------------------------------------------------------------------
 # Deterministic fake embedder (mirrors test_f11_path_c._FakeEmbedder)
 # ---------------------------------------------------------------------------
@@ -91,8 +93,6 @@ class TestRrfSufficiencyReachable:
     """
 
     def test_rrf_sufficient_reachable(self, fake_embedder):
-        import src.semantic_compressor as _sc
-
         chunks = {
             # Strong lexical + dense match for the query → top RRF rank.
             "doc_a_n0": {"text": "python fastapi async endpoint routing", "importance": 0.5},
@@ -101,8 +101,7 @@ class TestRrfSufficiencyReachable:
         }
         compressor = _make_compressor_with_chunks(chunks, fake_embedder)
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             evidence = compressor.retrieve_evidence(
                 query="python fastapi async endpoint routing",
@@ -116,7 +115,7 @@ class TestRrfSufficiencyReachable:
                 f"threshold={evidence.threshold!r}"
             )
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_rrf_irrelevant_query_reports_insufficient(self, fake_embedder):
         """LOAD-BEARING (audit re-fix): under Path C, a genuinely-irrelevant /
@@ -129,8 +128,6 @@ class TestRrfSufficiencyReachable:
         gibberish. The corrected gate must threshold on the DENSE COSINE
         similarity of the top-ranked node against the cosine bar (min_similarity).
         """
-        import src.semantic_compressor as _sc
-
         chunks = {
             "doc_a_n0": {"text": "python fastapi async endpoint routing", "importance": 0.5},
             "doc_a_n1": {"text": "database migration alembic postgresql", "importance": 0.5},
@@ -138,8 +135,7 @@ class TestRrfSufficiencyReachable:
         }
         compressor = _make_compressor_with_chunks(chunks, fake_embedder)
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             evidence = compressor.retrieve_evidence(
                 query="zzzqqq gibberish nonsense xylophone quasar wibble",
@@ -157,20 +153,17 @@ class TestRrfSufficiencyReachable:
                 "dense cosine magnitude."
             )
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_cosine_threshold_unchanged_under_path_a(self, fake_embedder):
         """Path A must keep the cosine min_similarity semantics (no regression)."""
-        import src.semantic_compressor as _sc
-
         chunks = {
             "doc_a_n0": {"text": "alpha beta gamma", "importance": 0.5},
             "doc_a_n1": {"text": "delta epsilon zeta", "importance": 0.5},
         }
         compressor = _make_compressor_with_chunks(chunks, fake_embedder)
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "a"
+        orig = set_f11_ranker_path("a")
         try:
             evidence = compressor.retrieve_evidence(
                 query="completely unrelated xylophone quasar",
@@ -182,7 +175,7 @@ class TestRrfSufficiencyReachable:
             assert evidence.sufficient is False
             assert evidence.threshold == 0.99
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
 
 # ===========================================================================
@@ -472,8 +465,6 @@ class TestScoreTypeUnderPathC:
     @pytest.mark.asyncio
     async def test_score_type_rrf_under_path_c_even_when_evidence_aware(self, fake_embedder):
         from src.handlers.compression_handlers import handle_search_semantic
-        import src.handlers.compression_handlers as _ch
-        import src.semantic_compressor as _sc
 
         chunks = {
             "doc_a_n0": {"text": "bm25 rrf hybrid retrieval ranking search", "importance": 0.5},
@@ -483,9 +474,7 @@ class TestScoreTypeUnderPathC:
         compressor._generate_summary = lambda text, max_length=100: text[:max_length]
         context = {"compressor": compressor}
 
-        orig_sc, orig_ch = _sc.F11_RANKER_PATH, _ch.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
-        _ch.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             args = {
                 "query": "bm25 ranking",
@@ -501,8 +490,7 @@ class TestScoreTypeUnderPathC:
             for result in response["results"]:
                 assert result["score_type"] == "rrf"
         finally:
-            _sc.F11_RANKER_PATH = orig_sc
-            _ch.F11_RANKER_PATH = orig_ch
+            restore_f11_ranker_path(orig)
 
 
 # ===========================================================================

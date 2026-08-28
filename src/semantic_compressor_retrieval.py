@@ -24,8 +24,7 @@ from .semantic_compressor_types import (
 
 
 def _f11_ranker_path() -> str:
-    """Read ranker path from the facade module so tests can patch `semantic_compressor.F11_RANKER_PATH`."""
-    from .semantic_compressor import F11_RANKER_PATH
+    from .constants import F11_RANKER_PATH
 
     return F11_RANKER_PATH
 

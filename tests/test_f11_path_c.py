@@ -27,6 +27,8 @@ from typing import Any, Dict
 import numpy as np
 import pytest
 
+from tests.f11_ranker_path_helpers import restore_f11_ranker_path, set_f11_ranker_path
+
 # ---------------------------------------------------------------------------
 # Minimal stubs — avoid importing the full server stack in CI
 # ---------------------------------------------------------------------------
@@ -312,14 +314,9 @@ class TestIdfPollutionRegression:
         receives the full corpus instead of the filtered candidates, doc_b
         IDF values bleed into doc_a scores — this test catches that.
         """
-        import src.semantic_compressor as _sc
-        import src.handlers.compression_handlers as _ch
         from src.handlers.compression_handlers import handle_search_semantic
 
-        orig_sc = _sc.F11_RANKER_PATH
-        orig_ch = _ch.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
-        _ch.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
 
         chunks = {
             "doc_a::1": {
@@ -366,8 +363,7 @@ class TestIdfPollutionRegression:
                 len(doc_a_results) > 0
             ), "Expected at least one doc_a result for 'ValueError asyncpg' query"
         finally:
-            _sc.F11_RANKER_PATH = orig_sc
-            _ch.F11_RANKER_PATH = orig_ch
+            restore_f11_ranker_path(orig)
 
     def test_full_corpus_bm25_differs_from_filtered(self, fake_embedder):
         """
@@ -499,10 +495,8 @@ class TestSearchSemanticWithScoresPathDispatch:
         compressor = _make_compressor_with_chunks(chunks, fake_embedder)
 
         # Patch the module-level constant in semantic_compressor
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "a"
+        orig = set_f11_ranker_path("a")
         try:
             results = compressor.search_semantic_with_scores("python async", top_k=2)
             assert len(results) == 2
@@ -510,14 +504,12 @@ class TestSearchSemanticWithScoresPathDispatch:
             for nid, score in results:
                 assert isinstance(score, float)
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_feature_flag_c_enables_hybrid(self, fake_embedder):
         """F11_RANKER_PATH=c → BM25+RRF hybrid path is taken."""
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             chunks = {
                 "doc_a::1": {
@@ -534,7 +526,7 @@ class TestSearchSemanticWithScoresPathDispatch:
             for nid, score in results:
                 assert score > 0.0, f"RRF score for {nid} must be positive"
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_rrf_scores_differ_from_dense_only(self, fake_embedder):
         """
@@ -554,7 +546,6 @@ class TestSearchSemanticWithScoresPathDispatch:
         Assert: at least one of the 3 query pairs produces different top-1
         ranking between Path A and Path C.
         """
-        import src.semantic_compressor as _sc
 
         # Build a corpus where BM25 and dense will disagree on at least one query
         chunks = {
@@ -576,16 +567,15 @@ class TestSearchSemanticWithScoresPathDispatch:
             "exact term scoring",  # multi-term match
         ]
 
-        orig_path = _sc.F11_RANKER_PATH
+        orig_path = set_f11_ranker_path("a")
         try:
             # Collect Path A scores
-            _sc.F11_RANKER_PATH = "a"
             dense_results = {}
             for q in test_queries:
                 dense_results[q] = compressor.search_semantic_with_scores(q, top_k=4)
 
             # Collect Path C scores
-            _sc.F11_RANKER_PATH = "c"
+            set_f11_ranker_path("c")
             rrf_results = {}
             for q in test_queries:
                 rrf_results[q] = compressor.search_semantic_with_scores(q, top_k=4)
@@ -612,41 +602,35 @@ class TestSearchSemanticWithScoresPathDispatch:
                 "the hybrid fusion. Check F11_RANKER_PATH dispatch and _bm25_scores_for_nodes."
             )
         finally:
-            _sc.F11_RANKER_PATH = orig_path
+            restore_f11_ranker_path(orig_path)
 
     def test_single_document_corpus_does_not_raise(self, fake_embedder):
         """Edge case: corpus with one node — BM25 avgdl = doc_len, no division issues."""
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             chunks = {"doc_a::1": {"text": "single document corpus", "importance": 0.5}}
             compressor = _make_compressor_with_chunks(chunks, fake_embedder)
             results = compressor.search_semantic_with_scores("single document", top_k=1)
             assert len(results) == 1
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_empty_corpus_returns_empty(self, fake_embedder):
         """Empty corpus returns empty list without raising."""
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             compressor = _make_compressor_with_chunks({}, fake_embedder)
             results = compressor.search_semantic_with_scores("query", top_k=5)
             assert results == []
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_file_id_filter_applied_under_path_c(self, fake_embedder):
         """file_id filter is respected under Path C (BM25 sees only filtered nodes)."""
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             chunks = {
                 "doc_a::1": {"text": "python authentication fastapi endpoint", "importance": 0.5},
@@ -660,7 +644,7 @@ class TestSearchSemanticWithScoresPathDispatch:
             for nid in result_ids:
                 assert nid.startswith("doc_a"), f"file_id filter leak: {nid} is not in doc_a"
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
     def test_path_a_regression_lock_unaffected_under_path_c(self, fake_embedder):
         """
@@ -669,10 +653,8 @@ class TestSearchSemanticWithScoresPathDispatch:
         without error. (Exact threshold is Path A's concern; this test guards
         against Path C breaking the handler call chain.)
         """
-        import src.semantic_compressor as _sc
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
         try:
             # Minimal structured-doc fixture
             chunks = {
@@ -690,7 +672,7 @@ class TestSearchSemanticWithScoresPathDispatch:
             results = compressor.search_semantic_with_scores("Fly deployment", top_k=3)
             assert len(results) > 0, "Path C must return results for structured-doc fixture"
         finally:
-            _sc.F11_RANKER_PATH = orig
+            restore_f11_ranker_path(orig)
 
 
 # ---------------------------------------------------------------------------
@@ -719,17 +701,9 @@ class TestScoreTypeInHandlerResponse:
     @pytest.mark.asyncio
     async def test_response_includes_score_type_cosine_path_a(self, fake_embedder):
         """Path A response must include score_type: 'cosine'."""
-        import src.semantic_compressor as _sc
         from src.handlers.compression_handlers import handle_search_semantic
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "a"
-
-        # Patch F11_RANKER_PATH in the handlers module too
-        import src.handlers.compression_handlers as _ch
-
-        orig_ch = _ch.F11_RANKER_PATH
-        _ch.F11_RANKER_PATH = "a"
+        orig = set_f11_ranker_path("a")
 
         try:
             chunks = {
@@ -752,22 +726,14 @@ class TestScoreTypeInHandlerResponse:
                 ), f"Per-result score_type missing for {result['node_id']}"
                 assert result["score_type"] == "cosine"
         finally:
-            _sc.F11_RANKER_PATH = orig
-            _ch.F11_RANKER_PATH = orig_ch
+            restore_f11_ranker_path(orig)
 
     @pytest.mark.asyncio
     async def test_response_includes_score_type_rrf_path_c(self, fake_embedder):
         """Path C response must include score_type: 'rrf'."""
-        import src.semantic_compressor as _sc
         from src.handlers.compression_handlers import handle_search_semantic
 
-        orig = _sc.F11_RANKER_PATH
-        _sc.F11_RANKER_PATH = "c"
-
-        import src.handlers.compression_handlers as _ch
-
-        orig_ch = _ch.F11_RANKER_PATH
-        _ch.F11_RANKER_PATH = "c"
+        orig = set_f11_ranker_path("c")
 
         try:
             chunks = {
@@ -789,5 +755,4 @@ class TestScoreTypeInHandlerResponse:
                     result.get("score_type") == "rrf"
                 ), f"Per-result score_type should be 'rrf' for {result['node_id']}"
         finally:
-            _sc.F11_RANKER_PATH = orig
-            _ch.F11_RANKER_PATH = orig_ch
+            restore_f11_ranker_path(orig)
