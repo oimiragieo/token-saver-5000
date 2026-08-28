@@ -70,6 +70,16 @@ Reusable A-vs-C comparison harness for the #250 multi-node fixture corpus.
 | `def` | `format_report_gac` |
 | `def` | `main_gac` |
 
+#### `f11_ranker_path_helpers.py`
+
+Shared helpers for patching F11_RANKER_PATH across constants + facade modules.
+
+| Kind | Name |
+|------|------|
+| `def` | `f11_ranker_path_orig` |
+| `def` | `set_f11_ranker_path` |
+| `def` | `restore_f11_ranker_path` |
+
 #### `test_420_bare_prefix_collision_sweep.py`
 
 #420 sweep of remaining bare-prefix node-id collision sites.
