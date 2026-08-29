@@ -503,6 +503,17 @@ Regression test: PromptRegistry._templates is bounded via BoundedDict.
 | `def` | `_make_registry` |
 | `def` | `test_prompt_registry_evicts_oldest_template_past_cap` |
 
+#### `test_bounded_store_b5.py`
+
+Bounded-store regression tests for EvidenceStore + CompressionReplayLog (B5, A1 sibling).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_bundle` |
+| `class` | `TestEvidenceStoreEvictsOldestBeyondCap` |
+| `class` | `TestVerifyChainValidAfterEviction` |
+| `class` | `TestReplayLogBounded` |
+
 #### `test_bugfixes.py`
 
 Tests for bug fixes discovered during deep audit.
@@ -912,6 +923,11 @@ Comprehensive tests for compression_handlers.py (v0.4.3).
 | `class` | `TestHandleMultilevelEncode` |
 | `class` | `TestHandleRecommendFidelity` |
 | `class` | `TestValidationHelpers` |
+| `async def` | `test_compress_codebase_rejects_out_of_tree_directory` |
+| `async def` | `test_search_code_rejects_out_of_tree_directory` |
+| `async def` | `test_compress_codebase_FAILS_CLOSED_without_a_path_validator` |
+| `async def` | `test_search_code_FAILS_CLOSED_without_a_path_validator` |
+| `async def` | `test_a_PRESENT_validator_still_admits_an_in_tree_directory` |
 
 #### `test_compression_handlers_extra_coverage.py`
 
@@ -1280,6 +1296,9 @@ Documentation and help-surface contract tests for launch readiness.
 | `def` | `test_term_freq_with_stemming_long_term_prefix_match` |
 | `def` | `test_term_freq_with_stemming_python_does_not_match_pythonic` |
 | `async def` | `test_read_doc_enforces_character_cap_on_pathological_output` |
+| `async def` | `test_fetch_url_markdown_rejects_metadata_host` |
+| `async def` | `test_fetch_url_markdown_rejects_private_https_host` |
+| `async def` | `test_read_doc_ssrf_url_returns_error_not_fetch` |
 
 #### `test_document_handlers_extra_coverage.py`
 
