@@ -1,9 +1,14 @@
 {
-  "last_slice": "docker-onnx-only-size-under-600mb",
+  "last_slice": "numpy-pagerank-fallback",
   "completed_at": "2026-08-28",
   "status": "closed",
   "checks": {
     "ci_main": "pass_prior",
+    "ci_main_sha": "f7f479f9d86812fc1cf45091d97fc301ae163220",
+    "ci_main_run_id": "33217369479",
+    "bl_npr_001": "pass",
+    "bl_npr_002": "pass",
+    "bl_npr_003": "pass",
     "val_docker_001": "pass",
     "val_docker_002": "pass",
     "val_docker_003_build_ingest": "pass",
@@ -13,8 +18,10 @@
   },
   "artifacts": {
     "validation_receipt": "artifacts/validation-run-2026-08-28.md",
-    "dockerfile": "Dockerfile",
-    "runtime_requirements": "requirements-docker-runtime.txt"
+    "ceo_update": "artifacts/ceo-update-2026-08-28.md",
+    "plan": "docs/plans/2026-08-28-numpy-pagerank-fallback-slice.md",
+    "wayfinder": ".wayfinder/numpy-pagerank-fallback/MAP.md"
   },
-  "next_slice": null
+  "next_slice": null,
+  "open_backlog": "CEO-gate Growth VAL-* only (SaaS-not-in-repo)"
 }

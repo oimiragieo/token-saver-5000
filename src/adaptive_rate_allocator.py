@@ -34,6 +34,8 @@ except ImportError:  # pragma: no cover - exercised only in torch-free images
 import networkx as nx
 from typing import Tuple, Dict
 
+from .pagerank_numpy import compute_pagerank
+
 
 class _NumpyRateAllocator:
     """Torch-free stand-in for AdaptiveRateAllocator, same call signature.
@@ -193,7 +195,7 @@ def _build_adaptive_rate_allocator_cls():
             clustering = nx.average_clustering(graph) if n_nodes > 2 else 0
 
             # PageRank entropy (measure of importance distribution)
-            pagerank = nx.pagerank(graph)
+            pagerank = compute_pagerank(graph)
             pr_values = np.array(list(pagerank.values()))
             pr_values = pr_values / pr_values.sum()  # Normalize
             entropy = -np.sum(pr_values * np.log(pr_values + 1e-10))

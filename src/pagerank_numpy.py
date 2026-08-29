@@ -63,4 +63,5 @@ def compute_pagerank(graph: Any, **kwargs: Any) -> Dict[str, float]:
 
         return nx.pagerank(graph, **kwargs)
     except ImportError:
+        # nx.pagerank imports scipy internally; Docker ONNX image has networkx but not scipy.
         return pagerank_numpy(graph, **kwargs)
