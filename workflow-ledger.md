@@ -100,5 +100,24 @@ rg 'nx\.pagerank' src/code_compressor.py src/adaptive_rate_allocator.py src/mult
 ```
 
 ### Open for next session
-- CEO-gate Growth VAL-* (see `docs/strategy/2026-08-28-growth-val-defer-brief.md`)
+- Growth VAL park relocated to gotcontext-main (2026-08-29) — engine backlog pointer-only
 - CI must be green on HEAD after closeout push
+
+---
+
+## 2026-08-29 — Slice: Growth VAL park relocate
+
+**Wayfinder:** `.wayfinder/growth-val-park-relocate/MAP.md`  
+**Plan:** `docs/plans/2026-08-29-growth-val-park-relocate.md`  
+**Fable:** round1 CHANGES_REQUIRED → round2 **APPROVED**
+
+### Changes
+- Engine `backlog.md` → pointer only (0 Growth VAL ID rows)
+- Platform `gotcontext-main/docs/growth-val-park.md` — 23 IDs + BACKLOG pointer
+- Defer brief updated; VAL-DOCKER stays engine
+
+### Verification
+```bash
+# park_count=23, engine_growth_rows=0
+python scripts/check_claude_folder_guides_sync.py
+```

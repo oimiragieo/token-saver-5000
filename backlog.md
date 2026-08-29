@@ -1,6 +1,6 @@
 # Token Saver 5000 — Engineering Backlog
 
-> Updated: 2026-08-29 CEO update. HEAD `e8fc124` — CI green run **`33254371815`**. Evidence: `artifacts/ceo-update-2026-08-29.md`.
+> Updated: 2026-08-29 growth-val-park-relocate. Growth VAL park → gotcontext-main (23 IDs).
 
 ## Done
 
@@ -24,37 +24,12 @@
 ### Engine AI-doable
 *(none)*
 
-### CEO-gate: SaaS → gotcontext-main (parked contracts, not engine work)
-
-Defer brief: `docs/strategy/2026-08-28-growth-val-defer-brief.md`  
-Contracts: `artifacts/validation-contract-growth.md`  
-Platform backlog: `gotcontext-main/docs/BACKLOG.md`
-
-| ID | Item | Blocker |
-|----|------|---------|
-| VAL-TEAM-001 | Team Creation | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-TEAM-002 | Invite Member by Email | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-TEAM-003 | Remove Member | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-TEAM-004 | Transfer Ownership | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-TEAM-005 | Team-Scoped Usage Aggregation | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-TEAM-006 | Team Management UI in Dashboard | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-001 | Create Webhook Endpoint | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-002 | Test Ping Delivery | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-003 | Webhook Fires on Compression Event | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-004 | Retry on Failure with Exponential Backoff | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-005 | HMAC-SHA256 Payload Signature | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-WEBHOOK-006 | Delivery Log in Dashboard | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-ENTERPRISE-001 | License Key Generation | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-ENTERPRISE-002 | Docker License Check on Startup | **CEO-gate: SaaS → gotcontext-main** + no LICENSE_KEY in MCP image |
-| VAL-ENTERPRISE-003 | Usage Metering Phone-Home | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-ENTERPRISE-004 | Enterprise Contact Form | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-ENTERPRISE-005 | License Expiry Grace Period | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-CROSS-001 | Team Webhook End-to-End | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-CROSS-002 | Self-Hosted Docker ONNX | **CEO-gate** — partial engine smoke; full contract SaaS/self-host |
-| VAL-CROSS-003 | Redis-Down Team Usage Aggregation | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-CROSS-004 | New User Onboarding into Team | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-CROSS-005 | Fidelity + Usage + Webhook | **CEO-gate: SaaS → gotcontext-main** |
-| VAL-CROSS-006 | Self-Hosted Metering Reflects Team Usage | **CEO-gate: SaaS → gotcontext-main** |
+### SaaS Growth VAL (relocated)
+Parked validation IDs **VAL-TEAM / VAL-WEBHOOK / VAL-ENTERPRISE / VAL-CROSS** live in the platform repo:
+- **Owner list:** `C:\dev\projects\gotcontext-main\docs\growth-val-park.md` (also `docs/growth-val-park.md` inside gotcontext-main)
+- **Contracts (engine artifact, kept):** `artifacts/validation-contract-growth.md`
+- **Defer brief:** `docs/strategy/2026-08-28-growth-val-defer-brief.md`
+Do **not** implement these in token-saver-5000.
 
 ### Pipeline gaps (honest state, not work)
 - verify-feature / feature-verify / review-router / audit-until-clear / dogfood — not run on BL-NPR

@@ -1,25 +1,25 @@
-# Defer brief — Growth VAL-* in token-saver-5000
+# Defer brief — Growth VAL-* (engine park relocated)
 
-**Date:** 2026-08-28  
-**Skill:** `research-council-defer` (no research council run — demand signal already absent; BLOCK not DEFER-by-enthusiasm)
+**Date:** 2026-08-28 · **Updated:** 2026-08-29 (relocate slice)  
+**Skill:** `research-council-defer`
 
 ## Context
 
-`artifacts/validation-contract-growth.md` lists Teams / Webhooks / Enterprise / Cross-area VAL-* for gotcontext.ai SaaS. This repository is the MCP compression server (`semantic-modulator`). Grep of `src/` shows no `/api/teams`, webhook, or license phone-home surfaces.
+Growth VAL contracts for Teams / Webhooks / Enterprise / Cross belong to **gotcontext.ai SaaS**, not the MCP compression engine.
 
 ## Decision
 
-**BLOCK** (not soft defer): do not implement Growth VAL-* inside `token-saver-5000`.
+**BLOCK** implementation inside `token-saver-5000`.
+
+**2026-08-29:** Enumeration **relocated** to `gotcontext-main/docs/growth-val-park.md`. Engine `backlog.md` keeps a pointer only. Contract text remains at `artifacts/validation-contract-growth.md`.
+
+**Not parked:** `VAL-DOCKER-*` (engine Docker / Areas 1–4).
 
 ## Named prereqs
 
-1. SaaS surfaces exist in the product home (expected: `gotcontext-main` or successor), **or**
-2. CEO explicitly relocates a named VAL-* (e.g. MCP-only rewrite of VAL-CROSS-002) into this repo’s contract set.
+1. CEO opens a named VAL-* in gotcontext-main, **or**
+2. CEO explicitly relocates a VAL into the engine contract set.
 
 ## Re-trigger
 
-Behavior ≥ payment or shipped SaaS API in the product repo that maps 1:1 to a VAL-* ID — then open a wayfinder in *that* repo, not here.
-
-## Integration shape (if triggered)
-
-Keep MCP Docker ONNX proofs under VAL-DOCKER-*; rewrite any cross-item that only needs self-hosted image smoke into an Areas 1–4 ID so Growth stays SaaS-scoped.
+Payment / shipped SaaS API matching a VAL-* ID → wayfinder in **gotcontext-main**, not here.
