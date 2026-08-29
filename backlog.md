@@ -1,6 +1,6 @@
 # Token Saver 5000 — Engineering Backlog
 
-> Updated: 2026-08-29 session closeout. HEAD `b031441` (pending CI re-green after `tests/claude.md` sync).
+> Updated: 2026-08-29 session closeout. HEAD `59cd255` — CI green run **`33234361179`**.
 
 ## Done
 
@@ -17,7 +17,7 @@
 ## Open / follow-up
 
 ### CI / hygiene (session closeout)
-- [ ] **CI re-green on HEAD** — run **`33230864165`** **FAILED** (Quality Gate: `tests/claude.md` out of sync). Fix staged: regenerate + commit `tests/claude.md` in closeout commit **`pending`**. Blocker: closeout push → new run.
+- [x] **CI re-green on HEAD** — run **`33234361179`** **success** on `59cd255` (prior fail `33230864165` was `tests/claude.md` drift, fixed in closeout)
 
 ### CEO-gate: SaaS-not-in-repo (`artifacts/validation-contract-growth.md`)
 Defer brief: `docs/strategy/2026-08-28-growth-val-defer-brief.md` (**BLOCK** — do not build here)

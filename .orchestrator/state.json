@@ -1,13 +1,14 @@
 {
   "session_closeout": "2026-08-29",
   "last_slice": "numpy-pagerank-fallback",
-  "completed_at": "2026-08-28",
+  "completed_at": "2026-08-29",
   "status": "closed",
   "checks": {
-    "ci_main": "fail_then_closeout_fix_pending",
-    "ci_main_sha": "b03144102d490bbad9e83c72c00764d6419f23fc",
-    "ci_fail_run_id": "33230864165",
-    "ci_fail_reason": "tests/claude.md out of sync after test_pagerank_numpy_fallback.py",
+    "ci_main": "pass",
+    "ci_main_sha": "59cd2557ba3cdf42e1eba3eb02225b5a7e17af58",
+    "ci_main_run_id": "33234361179",
+    "ci_fail_run_id_prior": "33230864165",
+    "ci_fail_reason_prior": "tests/claude.md out of sync after test_pagerank_numpy_fallback.py",
     "bl_npr_001": "pass",
     "bl_npr_002": "pass",
     "bl_npr_003": "pass",
@@ -24,7 +25,7 @@
     "wayfinder_bl_npr": ".wayfinder/numpy-pagerank-fallback/MAP.md"
   },
   "next_slice": null,
-  "open_backlog": "CEO-gate Growth VAL-* only; CI re-green after closeout commit",
+  "open_backlog": "CEO-gate Growth VAL-* only (SaaS-not-in-repo)",
   "worktrees": "none",
   "open_prs": 0
 }
