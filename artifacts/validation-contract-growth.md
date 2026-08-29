@@ -11,7 +11,7 @@
 **Title:** Create a new team with a display name
 
 **Behavioral description:**
-An authenticated user submits a team name (1–64 characters, trimmed, non-empty) via `POST /api/teams`. The API returns `201` with `{ id, name, owner_id, created_at }`. The creating user is recorded as `owner` in the `team_members` table. The team appears in the user's dashboard under "My Teams."
+An authenticated user submits a team name (1–64 characters, trimmed, non-empty) via `POST /v1/teams`. The API returns `201` with `{ id, name, owner_id, created_at }`. The creating user is recorded as `owner` in the `team_members` table. The team appears in the user's dashboard under "My Teams."
 
 **Pass condition:** Response is `201`, returned `name` matches input (trimmed), `owner_id` equals the requesting user, and the team row plus owner membership row exist in the database.
 **Fail condition:** Team is created without an owner membership, `name` is empty/whitespace-only and accepted, or duplicate team names for the same owner are silently allowed without clear policy.
@@ -28,9 +28,9 @@ An authenticated user submits a team name (1–64 characters, trimmed, non-empty
 **Title:** Invite a user to a team by email address
 
 **Behavioral description:**
-A team owner or admin calls `POST /api/teams/{team_id}/invites` with `{ email }`. The API returns `201` with an invite record. An invitation email is sent (via Resend) containing a unique, time-limited accept link. If the email belongs to an existing user, they see the invite in their dashboard. If not, they receive the email and can sign up to accept.
+A team owner or admin calls `POST /v1/teams/{team_id}/invites` with `{ email }`. The API returns `201` with an invite record. An invitation email is sent (via Resend) containing a unique, time-limited accept link. If the email belongs to an existing user, they see the invite in their dashboard. If not, they receive the email and can sign up to accept.
 
-**Pass condition:** API returns `201`, invitation row is persisted with `status=pending` and an expiry ≥ 24 hours in the future, and the Resend API is called with the correct recipient and a valid accept URL.
+**Pass condition:** API returns `201`, invitation row is persisted with `status=invited` and an expiry ≥ 24 hours in the future, and the Resend API is called with the correct recipient and a valid accept URL.
 **Fail condition:** Invite is created but no email is sent, invite link has no expiry, or a non-owner/non-admin can send invites.
 
 **Evidence requirements:**
@@ -46,7 +46,7 @@ A team owner or admin calls `POST /api/teams/{team_id}/invites` with `{ email }`
 **Title:** Remove a member from a team
 
 **Behavioral description:**
-A team owner calls `DELETE /api/teams/{team_id}/members/{user_id}`. The member is removed from the `team_members` table. The removed user no longer sees the team in their dashboard and loses access to team-scoped resources. The owner cannot remove themselves (must transfer ownership first).
+A team owner calls `DELETE /v1/teams/{team_id}/members/{user_id}`. The member is removed from the `team_members` table. The removed user no longer sees the team in their dashboard and loses access to team-scoped resources. The owner cannot remove themselves (must transfer ownership first).
 
 **Pass condition:** API returns `200`, the membership row is deleted, subsequent requests by the removed user to team endpoints return `403`, and attempting to remove the owner returns `400`/`409` with a descriptive error.
 **Fail condition:** Membership row remains after deletion, removed user can still access team resources, or owner can self-remove leaving an ownerless team.
@@ -64,7 +64,7 @@ A team owner calls `DELETE /api/teams/{team_id}/members/{user_id}`. The member i
 **Title:** Transfer team ownership to another member
 
 **Behavioral description:**
-The current owner calls `POST /api/teams/{team_id}/transfer` with `{ new_owner_id }`. The target must be an existing member. On success the `owner_id` on the team row updates, the previous owner is demoted to `admin`, and the new owner gains full control. An email notification is sent to the new owner.
+The current owner calls `POST /v1/teams/{team_id}/transfer` with `{ new_owner_id }`. The target must be an existing member. On success the `owner_id` on the team row updates, the previous owner is demoted to `admin`, and the new owner gains full control. An email notification is sent to the new owner.
 
 **Pass condition:** API returns `200`, `teams.owner_id` equals `new_owner_id`, previous owner's role is `admin`, and the new owner can perform owner-only actions (e.g., delete team).
 **Fail condition:** Transfer succeeds to a non-member, both users end up as owner, or the previous owner retains owner privileges.
@@ -81,14 +81,14 @@ The current owner calls `POST /api/teams/{team_id}/transfer` with `{ new_owner_i
 **Title:** Aggregate compression usage across all team members
 
 **Behavioral description:**
-`GET /api/teams/{team_id}/usage?period=current_month` returns `{ total_tokens_in, total_tokens_out, total_compressions, by_member: [...] }` aggregated from all members' activity in the current billing period. Values update within 60 seconds of a new compression event. Only team owners/admins can access this endpoint.
+`GET /v1/teams/{team_id}/usage?period=current_month` returns `{ total_tokens_in, total_tokens_out, total_compressions, by_member: [...] }` aggregated from all members' activity in the current billing period. Values update within 60 seconds of a new compression event. Only team owners/admins can access this endpoint.
 
 **Pass condition:** Returned totals equal the sum of individual member usage for the period, a new compression by any member is reflected within 60 s on refresh, and a regular member calling this endpoint receives `403`.
 **Fail condition:** Totals are stale beyond 60 s, individual member breakdowns don't sum to the total, or non-admin members can view team usage.
 
 **Evidence requirements:**
 - API response with aggregated and per-member breakdown
-- Comparison against individual `GET /api/usage` responses for each member
+- Comparison against individual `GET /v1/usage` responses for each member
 - Timing evidence (compression event timestamp vs. aggregation query timestamp)
 - `403` response for unauthorized member
 
@@ -119,15 +119,15 @@ When a team owner navigates to `/dashboard/teams/{team_id}`, the page renders: t
 **Title:** Register a new webhook endpoint with URL and event subscriptions
 
 **Behavioral description:**
-An authenticated user calls `POST /api/webhooks` with `{ url, events: ["compression.completed", ...] }`. The API validates the URL (HTTPS required in production, HTTP allowed in dev), stores the webhook with a generated `secret` for HMAC signing, and returns `201` with `{ id, url, events, secret, created_at }`. The secret is shown once at creation time.
+An authenticated user calls `POST /v1/webhooks` with `{ url, events: ["compression.completed", ...] }`. The API validates the URL (HTTPS required in production, HTTP allowed in dev), stores the webhook with a generated `secret` for HMAC signing, and returns `201` with `{ id, url, events, secret, created_at }`. The secret is shown once at creation time.
 
-**Pass condition:** API returns `201`, the webhook row is persisted with the correct URL and events, the returned `secret` is a 32+ character hex string, and subsequent `GET /api/webhooks` lists the new webhook (with secret redacted).
+**Pass condition:** API returns `201`, the webhook row is persisted with the correct URL and events, the returned `secret` is a 32+ character hex string, and subsequent `GET /v1/webhooks` lists the new webhook (with secret redacted).
 **Fail condition:** HTTP URLs are accepted in production, secret is not returned on creation, or the webhook is created with no event subscriptions.
 
 **Evidence requirements:**
 - API response with `id`, `url`, `events`, `secret`
 - Database row confirmation
-- `GET /api/webhooks` listing with `secret` masked/redacted
+- `GET /v1/webhooks` listing with `secret` masked/redacted
 
 ---
 
@@ -136,7 +136,7 @@ An authenticated user calls `POST /api/webhooks` with `{ url, events: ["compress
 **Title:** Send a test ping to a webhook endpoint
 
 **Behavioral description:**
-User calls `POST /api/webhooks/{webhook_id}/test`. The system delivers a `ping` event to the configured URL with a standard payload `{ event: "ping", webhook_id, timestamp }` and an `X-GotContext-Signature` header. The API returns the delivery result (HTTP status from the target, latency).
+User calls `POST /v1/webhooks/{webhook_id}/test`. The system delivers a `ping` event to the configured URL with a standard payload `{ event: "ping", webhook_id, timestamp }` and an `X-GotContext-Signature` header. The API returns the delivery result (HTTP status from the target, latency).
 
 **Pass condition:** The target URL receives the POST with correct headers and payload, the `X-GotContext-Signature` header contains a valid HMAC-SHA256 of the body using the webhook secret, and the API response includes the target's HTTP status code and round-trip latency.
 **Fail condition:** Ping is sent without signature header, payload is missing required fields, or delivery result is not reported back to the caller.
@@ -153,7 +153,7 @@ User calls `POST /api/webhooks/{webhook_id}/test`. The system delivers a `ping` 
 **Title:** Webhook delivers payload when a compression completes
 
 **Behavioral description:**
-After a user compresses a document via `POST /api/compress`, and the user has a webhook subscribed to `compression.completed`, the system asynchronously delivers a POST to the webhook URL with `{ event: "compression.completed", data: { document_id, tokens_in, tokens_out, ratio, timestamp } }` and a valid HMAC signature. Delivery occurs within 5 seconds of compression completion.
+After a user compresses a document via `POST /v1/compress`, and the user has a webhook subscribed to `compression.completed`, the system asynchronously delivers a POST to the webhook URL with `{ event: "compression.completed", data: { document_id, tokens_in, tokens_out, ratio, timestamp } }` and a valid HMAC signature. Delivery occurs within 5 seconds of compression completion.
 
 **Pass condition:** Webhook POST arrives at the target within 5 s, payload contains all specified fields with correct values matching the compression result, and the HMAC signature is valid.
 **Fail condition:** Webhook does not fire, payload is missing fields, data doesn't match the actual compression result, or delivery exceeds 5 s under normal conditions.
@@ -208,7 +208,7 @@ Every webhook delivery includes an `X-GotContext-Signature` header computed as `
 **Title:** Dashboard shows webhook delivery history with status and details
 
 **Behavioral description:**
-`GET /api/webhooks/{webhook_id}/deliveries` returns a paginated list of delivery attempts. Each entry includes `{ event, status (success|failed|pending), attempts, last_attempt_at, response_code, latency_ms }`. The dashboard UI at `/dashboard/webhooks/{id}` renders this as a table with status badges and an expandable detail view per delivery.
+`GET /v1/webhooks/{webhook_id}/deliveries` returns a paginated list of delivery attempts. Each entry includes `{ event, status (success|failed|pending), attempts, last_attempt_at, response_code, latency_ms }`. The dashboard UI at `/dashboard/webhooks/{id}` renders this as a table with status badges and an expandable detail view per delivery.
 
 **Pass condition:** API returns deliveries in reverse-chronological order, each entry contains all specified fields, pagination works with `?page=&per_page=` parameters, and the UI renders status badges (green=success, red=failed, yellow=pending) correctly.
 **Fail condition:** Deliveries are missing from the log, pagination returns duplicates or skips entries, or the UI does not distinguish delivery statuses visually.
@@ -280,9 +280,9 @@ Every 24 hours (± 1 hour jitter), the self-hosted instance sends a metering pay
 **Title:** Pricing page enterprise contact form submits lead to sales
 
 **Behavioral description:**
-On `/pricing`, an "Contact Sales" form collects `{ name, email, company, message }`. On submit, `POST /api/leads` validates fields (email format, non-empty name/company), persists a row in the `leads` table with `source=pricing_page`, and sends a notification email to `sales@gotcontext.ai` via Resend containing the lead details. The user sees a "Thank you" confirmation.
+On `/pricing`, an "Contact Sales" form collects `{ name, email, company, message }`. On submit, `POST /v1/leads` validates fields (email format, non-empty name/company), persists a row in the `leads` table with `source=pricing_enterprise`, and sends a notification email to `sales@gotcontext.ai` via Resend containing the lead details. The user sees a "Thank you" confirmation.
 
-**Pass condition:** API returns `201`, lead row exists in DB with all fields and `source=pricing_page`, Resend sends email to `sales@gotcontext.ai` with lead details, and the UI shows confirmation. Invalid email → `422` with field-level error.
+**Pass condition:** API returns `201`, lead row exists in DB with all fields and `source=pricing_enterprise`, Resend sends email to `sales@gotcontext.ai` with lead details, and the UI shows confirmation. Invalid email → `422` with field-level error.
 **Fail condition:** Lead is persisted but email is not sent, email goes to wrong recipient, or invalid emails are accepted.
 
 **Evidence requirements:**
@@ -318,7 +318,7 @@ When a self-hosted license expires, the instance enters a 7-day grace period. Du
 **Title:** Team member's compression triggers webhook delivery to team-configured endpoint
 
 **Behavioral description:**
-A team admin configures a webhook on the team's account subscribed to `compression.completed`. A different team member performs a compression via `POST /api/compress`. The webhook fires with the compression data and is delivered to the team's endpoint. The delivery is visible in the team's webhook delivery log, and the compression is counted in the team's usage aggregation.
+A team admin configures a webhook on the team's account subscribed to `compression.completed`. A different team member performs a compression via `POST /v1/compress`. The webhook fires with the compression data and is delivered to the team's endpoint. The delivery is visible in the team's webhook delivery log, and the compression is counted in the team's usage aggregation.
 
 **Pass condition:** Webhook fires within 5 s of compression, payload attributes the event to the correct team and member, the delivery appears in the team webhook log, and team usage aggregation reflects the new compression.
 **Fail condition:** Webhook does not fire for non-admin member compressions, delivery is missing from team log, or usage is not aggregated under the team.
@@ -358,7 +358,7 @@ The gotcontext Docker image, started with a valid `LICENSE_KEY`, initializes the
 **Title:** Team usage aggregation degrades gracefully when Redis is unavailable
 
 **Behavioral description:**
-With Redis down (simulated via network partition or stopped container), a team usage aggregation request (`GET /api/teams/{team_id}/usage`) falls back to a direct database query. The response is still correct but may have higher latency. A warning is logged: `"Redis unavailable — falling back to DB for usage aggregation"`. Individual compressions continue to work (usage is written to DB regardless of Redis). When Redis recovers, the cache is repopulated on the next request.
+With Redis down (simulated via network partition or stopped container), a team usage aggregation request (`GET /v1/teams/{team_id}/usage`) falls back to a direct database query. The response is still correct but may have higher latency. A warning is logged: `"Redis unavailable — falling back to DB for usage aggregation"`. Individual compressions continue to work (usage is written to DB regardless of Redis). When Redis recovers, the cache is repopulated on the next request.
 
 **Pass condition:** Usage endpoint returns correct data within 10 s (degraded latency acceptable), warning is logged, compressions are unaffected, and cache repopulates after Redis recovery.
 **Fail condition:** Usage endpoint returns `500`, compressions fail due to Redis being down, or stale data is served after recovery without repopulation.
