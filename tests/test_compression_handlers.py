@@ -1706,3 +1706,70 @@ async def test_search_code_rejects_out_of_tree_directory():
         await ch.handle_search_code(context, {"pattern": "x", "directory": target})
     )
     assert result["status"] == "error"
+    # ASSERT THE REASON, not just that something failed (codex review 2026-08-29).
+    # `status == "error"` alone could not discriminate: when tg is unavailable the
+    # handler ALSO returns an error status, so deleting the validation entirely
+    # left this test green on any machine without tg. Naming the path pins the
+    # guard as the cause -- and the sibling compress_codebase arm above already
+    # did this, so the two were inconsistent as well as weak.
+    assert "directory" in result["error"].lower() or "path" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_compress_codebase_FAILS_CLOSED_without_a_path_validator():
+    """An absent `path_validator` must REFUSE, not run unconfined.
+
+    This branch used to warn and continue, reasoning that the hosted server
+    always injects the validator so a None means a hand-rolled context. That is
+    an invariant held by one set of callers, not a property of the handler --
+    and both existing tests for this guard supplied a real PathValidator, so the
+    fail-open branch had no coverage at all.
+
+    Measured before changing it: only `context_service.py` and
+    `server_factory_service.py` construct this context, and both inject the
+    validator, so failing closed cannot break a real server path.
+    """
+    import json as _json
+
+    from src.handlers import compression_handlers as ch
+
+    result = _json.loads(await ch.handle_compress_codebase({}, {"directory": "/etc"}))
+    assert result["status"] == "error"
+    assert "path_validator" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_code_FAILS_CLOSED_without_a_path_validator():
+    """Sibling of the arm above; the same fail-open lived in both handlers."""
+    import json as _json
+
+    from src.handlers import compression_handlers as ch
+
+    result = _json.loads(await ch.handle_search_code({}, {"pattern": "x", "directory": "/etc"}))
+    assert result["status"] == "error"
+    assert "path_validator" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_a_PRESENT_validator_still_admits_an_in_tree_directory():
+    """THE CONTROL for the two fail-closed arms.
+
+    Without it, a handler that refused EVERY directory would satisfy them both.
+    Uses cwd, which PathValidator's default whitelist allows.
+    """
+    import json as _json
+    import os as _os
+
+    from src.handlers import compression_handlers as ch
+    from src.path_validator import PathValidator
+
+    context = {"path_validator": PathValidator()}
+    result = _json.loads(
+        await ch.handle_search_code(context, {"pattern": "def", "directory": _os.getcwd()})
+    )
+    # It may still fail for unrelated reasons (tg absent), but it must NOT be
+    # refused for a path/validator reason -- that is what distinguishes
+    # "confinement admitted this" from "confinement refused everything".
+    err = (result.get("error") or "").lower()
+    assert "path_validator missing" not in err
+    assert "must be within" not in err
