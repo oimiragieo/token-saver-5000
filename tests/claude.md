@@ -944,6 +944,9 @@ Comprehensive tests for compression_handlers.py (v0.4.3).
 | `class` | `TestValidationHelpers` |
 | `async def` | `test_compress_codebase_rejects_out_of_tree_directory` |
 | `async def` | `test_search_code_rejects_out_of_tree_directory` |
+| `async def` | `test_compress_codebase_FAILS_CLOSED_without_a_path_validator` |
+| `async def` | `test_search_code_FAILS_CLOSED_without_a_path_validator` |
+| `async def` | `test_a_PRESENT_validator_still_admits_an_in_tree_directory` |
 
 #### `test_compression_handlers_extra_coverage.py`
 
