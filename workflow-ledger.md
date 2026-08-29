@@ -60,4 +60,21 @@ pytest tests/test_async_operations.py tests/test_compression_handlers.py \
 python scripts/audit_env_example.py
 ```
 
+---
+
+## 2026-08-28 — Slice BL-NPR: NumPy PageRank fallback
+
+**Wayfinder:** `.wayfinder/numpy-pagerank-fallback/MAP.md`  
+**Plan:** `docs/plans/2026-08-28-numpy-pagerank-fallback-slice.md`  
+**Commit:** `b70f2bb`
+
+### Changes
+- Route `code_compressor`, `adaptive_rate_allocator`, `multimodal_compressor` through `compute_pagerank`
+- `tests/test_pagerank_numpy_fallback.py`
+
+### Verification
+```bash
+pytest tests/test_pagerank_numpy_fallback.py tests/test_code_compressor.py \
+  tests/test_adaptive_rate_allocator_coverage.py tests/test_multimodal_compressor_coverage.py -q --no-cov
+```
 
