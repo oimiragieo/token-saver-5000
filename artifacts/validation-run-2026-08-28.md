@@ -13,7 +13,7 @@
 | Degrade (6) | 0 | 6 | 0 | 0 |
 | **Areas 1–4 total** | **8** | **12** | **0** | **0** |
 
-Growth contracts (`validation-contract-growth.md`) are **waived** — SaaS/team/webhook features not in this MCP server repo.
+Growth contracts (`validation-contract-growth.md`) remain **open under CEO-gate: SaaS-not-in-repo** (enumerated in `backlog.md` / `artifacts/ceo-update-2026-08-28.md`). Do not treat “waived” as closed — especially VAL-CROSS-002 (partial ONNX smoke ≠ full license/health contract).
 
 ## Area 1: Docker & Infrastructure
 

@@ -78,3 +78,27 @@ pytest tests/test_pagerank_numpy_fallback.py tests/test_code_compressor.py \
   tests/test_adaptive_rate_allocator_coverage.py tests/test_multimodal_compressor_coverage.py -q --no-cov
 ```
 
+---
+
+## 2026-08-29 — Session closeout
+
+**HEAD:** `b031441` (BL-NPR + ledger) · **CI:** run `33230864165` **FAIL** — `tests/claude.md` drift after new test file.
+
+### Closeout actions
+- Regenerated `tests/claude.md` (folder guide sync)
+- Committed CEO update, validation receipt honesty, growth VAL defer brief
+- Deleted ephemeral `benchmarks/_saas_tmp/`, `benchmarks/_saas_results/`
+- Secret sweep: CLEAN on tracked `src/` `tests/` `scripts/`
+- Worktrees: none · Open PRs: none
+
+### Verification (closeout)
+```bash
+python scripts/check_claude_folder_guides_sync.py
+pytest tests/test_pagerank_numpy_fallback.py -q --no-cov
+rg 'nx\.pagerank' src/code_compressor.py src/adaptive_rate_allocator.py src/multimodal_compressor.py
+# expect no matches
+```
+
+### Open for next session
+- CEO-gate Growth VAL-* (see `docs/strategy/2026-08-28-growth-val-defer-brief.md`)
+- CI must be green on HEAD after closeout push

@@ -2595,6 +2595,16 @@ Cross-process output determinism regression gate.
 | `def` | `_run_worker` |
 | `def` | `test_skeleton_deterministic_across_hashseed` |
 
+#### `test_pagerank_numpy_fallback.py`
+
+Tests for PageRank SciPy fallback (Docker ONNX runtime has no scipy).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_pagerank_numpy_small_graph` |
+| `def` | `test_compute_pagerank_falls_back_when_scipy_missing` |
+| `def` | `test_compute_pagerank_uses_networkx_when_available` |
+
 #### `test_parity_characterization.py`
 
 Phase 0 characterization tests for core MCP compression flows.
