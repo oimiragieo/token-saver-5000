@@ -2823,26 +2823,46 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
     # CWE-22 (2026-08-26 audit HIGH): confine `directory` to cwd+home before it
     # reaches the tg subprocess or glob — mirrors handle_ingest_directory. Without
     # this, an MCP client could enumerate any server-readable dir (e.g. "/etc").
+    # FAIL CLOSED when the validator is absent (codex security review, 2026-08-29).
+    #
+    # This branch used to WARN and continue, on the reasoning that "the hosted
+    # server always injects path_validator, so a None here means a hand-rolled
+    # context". That reasoning is an invariant held by ONE set of callers, not a
+    # property of this function -- exactly the shape that breaks when the next
+    # caller appears without knowing the invariant exists. Measured: only two
+    # sites construct this context (`context_service.py`,
+    # `server_factory_service.py`) and BOTH inject the validator, so failing
+    # closed cannot break a real server path -- it can only refuse a context that
+    # was never entitled to skip confinement.
+    #
+    # It also made this function inconsistent with its own siblings: the
+    # `file_path` guard and `handle_ingest_directory` both index
+    # `context["path_validator"]` directly and therefore already fail closed.
+    #
+    # And a `logger.warning` is not a control. Nothing alerts on it, so the
+    # "observable, not silent" claim was true only in the sense that the bytes
+    # existed in a log file nobody reads.
     path_validator = context.get("path_validator")
-    if path_validator is not None:
-        try:
-            directory = path_validator.validate(directory)
-        except ValueError as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "error": f"Invalid directory path: {e}",
-                    "message": "directory must be within the current working "
-                    "directory or user home directory.",
-                }
-            )
-    else:
-        # Fail-open is observable, not silent: the hosted server always injects
-        # path_validator (contract-enforced key), so a None here means a hand-rolled
-        # context — warn so a future lightweight-context refactor can't silently
-        # regress CWE-22 confinement (matches handle_should_compress precedent).
-        logger.warning(
-            "path_validator absent from context; directory not confined (CWE-22 guard skipped)"
+    if path_validator is None:
+        logger.error("path_validator absent from context; refusing to run unconfined (CWE-22)")
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "path_validator missing from server context",
+                "message": "directory cannot be confined without a path validator; "
+                "refusing rather than enumerating an unconfined path.",
+            }
+        )
+    try:
+        directory = path_validator.validate(directory)
+    except ValueError as e:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": f"Invalid directory path: {e}",
+                "message": "directory must be within the current working "
+                "directory or user home directory.",
+            }
         )
 
     tg_available = is_available()
@@ -2892,26 +2912,46 @@ async def handle_search_code(context: HandlerContext, args: Dict[str, Any]) -> s
 
     # CWE-22 (2026-08-26 audit HIGH): confine `directory` before it reaches the
     # tg subprocess — same guard as handle_compress_codebase / ingest_directory.
+    # FAIL CLOSED when the validator is absent (codex security review, 2026-08-29).
+    #
+    # This branch used to WARN and continue, on the reasoning that "the hosted
+    # server always injects path_validator, so a None here means a hand-rolled
+    # context". That reasoning is an invariant held by ONE set of callers, not a
+    # property of this function -- exactly the shape that breaks when the next
+    # caller appears without knowing the invariant exists. Measured: only two
+    # sites construct this context (`context_service.py`,
+    # `server_factory_service.py`) and BOTH inject the validator, so failing
+    # closed cannot break a real server path -- it can only refuse a context that
+    # was never entitled to skip confinement.
+    #
+    # It also made this function inconsistent with its own siblings: the
+    # `file_path` guard and `handle_ingest_directory` both index
+    # `context["path_validator"]` directly and therefore already fail closed.
+    #
+    # And a `logger.warning` is not a control. Nothing alerts on it, so the
+    # "observable, not silent" claim was true only in the sense that the bytes
+    # existed in a log file nobody reads.
     path_validator = context.get("path_validator")
-    if path_validator is not None:
-        try:
-            directory = path_validator.validate(directory)
-        except ValueError as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "error": f"Invalid directory path: {e}",
-                    "message": "directory must be within the current working "
-                    "directory or user home directory.",
-                }
-            )
-    else:
-        # Fail-open is observable, not silent: the hosted server always injects
-        # path_validator (contract-enforced key), so a None here means a hand-rolled
-        # context — warn so a future lightweight-context refactor can't silently
-        # regress CWE-22 confinement (matches handle_should_compress precedent).
-        logger.warning(
-            "path_validator absent from context; directory not confined (CWE-22 guard skipped)"
+    if path_validator is None:
+        logger.error("path_validator absent from context; refusing to run unconfined (CWE-22)")
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "path_validator missing from server context",
+                "message": "directory cannot be confined without a path validator; "
+                "refusing rather than enumerating an unconfined path.",
+            }
+        )
+    try:
+        directory = path_validator.validate(directory)
+    except ValueError as e:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": f"Invalid directory path: {e}",
+                "message": "directory must be within the current working "
+                "directory or user home directory.",
+            }
         )
 
     if not is_available():
