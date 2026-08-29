@@ -1,31 +1,33 @@
 {
   "session_closeout": "2026-08-29",
+  "ceo_update": "2026-08-29",
   "last_slice": "numpy-pagerank-fallback",
   "completed_at": "2026-08-29",
   "status": "closed",
   "checks": {
     "ci_main": "pass",
-    "ci_main_sha": "59cd2557ba3cdf42e1eba3eb02225b5a7e17af58",
-    "ci_main_run_id": "33234361179",
+    "ci_main_sha": "e8fc12495acfca972eec1e54696037ee5fe54d0c",
+    "ci_main_run_id": "33254371815",
+    "ci_closeout_sha": "59cd2557ba3cdf42e1eba3eb02225b5a7e17af58",
+    "ci_closeout_run_id": "33234361179",
     "ci_fail_run_id_prior": "33230864165",
-    "ci_fail_reason_prior": "tests/claude.md out of sync after test_pagerank_numpy_fallback.py",
     "bl_npr_001": "pass",
     "bl_npr_002": "pass",
     "bl_npr_003": "pass",
-    "wayfinder_numpy_pagerank_checks": "pass_local",
-    "val_docker_001": "pass_prior_f7f479f",
-    "val_docker_003_size": "pass_519MB",
+    "docker_image_size": "519MB",
+    "mcp_tools": "128",
     "secret_leak_sweep": "clean_tracked"
   },
   "artifacts": {
+    "ceo_update": "artifacts/ceo-update-2026-08-29.md",
+    "ceo_update_prior": "artifacts/ceo-update-2026-08-28.md",
     "validation_receipt": "artifacts/validation-run-2026-08-28.md",
-    "ceo_update": "artifacts/ceo-update-2026-08-28.md",
     "growth_val_defer": "docs/strategy/2026-08-28-growth-val-defer-brief.md",
     "plan_bl_npr": "docs/plans/2026-08-28-numpy-pagerank-fallback-slice.md",
     "wayfinder_bl_npr": ".wayfinder/numpy-pagerank-fallback/MAP.md"
   },
   "next_slice": null,
-  "open_backlog": "CEO-gate Growth VAL-* only (SaaS-not-in-repo)",
+  "open_backlog": "CEO-gate Growth VAL-* → gotcontext-main (not engine)",
   "worktrees": "none",
   "open_prs": 0
 }
