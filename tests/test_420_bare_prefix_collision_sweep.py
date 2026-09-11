@@ -93,6 +93,9 @@ async def test_handle_ingest_persists_only_own_chunks_not_prefix_sibling():
         "retrieval_history": {},
     }
     context["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+    context["resource_manager"].check_and_reserve_document_size_async = AsyncMock(
+        return_value=(True, None)
+    )
     context["resource_manager"].register_document_async = AsyncMock()
 
     args = {
@@ -300,6 +303,7 @@ async def test_connector_sync_persists_only_own_chunks_not_prefix_sibling():
         "resource_manager": MagicMock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
             check_document_size_async=AsyncMock(return_value=(True, None)),
+            check_and_reserve_document_size_async=AsyncMock(return_value=(True, None)),
             register_document_async=AsyncMock(),
         ),
         "sync_manager": MagicMock(register_file=MagicMock()),

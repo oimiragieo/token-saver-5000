@@ -44,6 +44,7 @@ def _make_context():
     compressor.file_metadata = {}
     resource_manager = Mock()
     resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+    resource_manager.check_and_reserve_document_size_async = AsyncMock(return_value=(True, ""))
     resource_manager.register_document_async = AsyncMock()
     version_manager = Mock()
     version_manager.add_version_async = AsyncMock()

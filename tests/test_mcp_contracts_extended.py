@@ -125,6 +125,7 @@ async def test_ingest_runtime_output_matches_canonical_contract():
     )
     resource_manager = Mock(
         check_document_size_async=AsyncMock(return_value=(True, "")),
+        check_and_reserve_document_size_async=AsyncMock(return_value=(True, "")),
         register_document_async=AsyncMock(),
     )
     sync_manager = Mock(export_metadata=Mock(return_value=[]), register_file=Mock())

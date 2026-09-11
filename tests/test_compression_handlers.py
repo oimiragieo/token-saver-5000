@@ -44,6 +44,9 @@ class TestHandleIngest:
         # Configure resource manager to allow ingestion by default
         # v0.8.0: Handler now calls async wrappers
         self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
         self.mock_resource_manager.register_document_async = AsyncMock()
 
         # Configure version manager async wrappers (v0.8.0 audit fix)
@@ -139,8 +142,8 @@ class TestHandleIngest:
         self, mock_validate_token, mock_validate_nodes, mock_validate_file
     ):
         """Test that exceeding resource limits raises error"""
-        # v0.8.0: Handler now calls async wrapper
-        self.mock_resource_manager.check_document_size_async.return_value = (
+        # #236 rank11: Handler now calls the atomic check-and-reserve wrapper
+        self.mock_resource_manager.check_and_reserve_document_size_async.return_value = (
             False,
             "Document exceeds limit",
         )
@@ -296,6 +299,9 @@ class TestHandleIngestF4ChunkingStrategy:
         self.mock_version_manager = Mock()
 
         self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
         self.mock_resource_manager.register_document_async = AsyncMock()
         self.mock_version_manager.add_version_async = AsyncMock()
         self.mock_version_manager.delete_versions_async = AsyncMock()
@@ -454,6 +460,9 @@ class TestHandleIngestF12SavingsTrackerWired:
         self.mock_version_manager = Mock()
 
         self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
         self.mock_resource_manager.register_document_async = AsyncMock()
         self.mock_version_manager.add_version_async = AsyncMock()
         self.mock_version_manager.delete_versions_async = AsyncMock()
@@ -589,6 +598,9 @@ class TestHandleIngestF6InlineQuery:
         self.mock_version_manager = Mock()
 
         self.mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        self.mock_resource_manager.check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
         self.mock_resource_manager.register_document_async = AsyncMock()
         self.mock_version_manager.add_version_async = AsyncMock()
         self.mock_version_manager.delete_versions_async = AsyncMock()

@@ -179,6 +179,9 @@ class TestHandleIngestProtection:
             "retrieval_history": {},
         }
         context["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        context["resource_manager"].check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, None)
+        )
         context["resource_manager"].register_document_async = AsyncMock()
         context["persistence"].save_document = MagicMock(return_value=True)
 
@@ -220,6 +223,9 @@ class TestHandleIngestProtection:
             "retrieval_history": {},
         }
         context["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        context["resource_manager"].check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, None)
+        )
         context["resource_manager"].register_document_async = AsyncMock()
         context["persistence"].save_document = MagicMock(return_value=True)
 
@@ -277,6 +283,9 @@ class TestHandleIngestProtection:
             "retrieval_history": {},
         }
         context["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        context["resource_manager"].check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, None)
+        )
         context["resource_manager"].register_document_async = AsyncMock()
         context["persistence"].save_document = MagicMock(return_value=True)
 
@@ -866,6 +875,7 @@ class TestMetricsWiring:
             "persistence": MagicMock(save_document=MagicMock(return_value=True)),
             "resource_manager": AsyncMock(
                 check_document_size_async=AsyncMock(return_value=(True, None)),
+                check_and_reserve_document_size_async=AsyncMock(return_value=(True, None)),
                 register_document_async=AsyncMock(),
             ),
             "version_manager": AsyncMock(add_version_async=AsyncMock()),

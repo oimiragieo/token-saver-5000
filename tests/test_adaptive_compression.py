@@ -286,6 +286,9 @@ class TestHandlerCostSavingsIntegration:
 
         mock_resource_manager = Mock()
         mock_resource_manager.check_document_size_async = AsyncMock(return_value=(True, ""))
+        mock_resource_manager.check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, "")
+        )
         mock_resource_manager.register_document_async = AsyncMock()
 
         mock_persistence = Mock()

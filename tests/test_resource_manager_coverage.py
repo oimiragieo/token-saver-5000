@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +29,114 @@ def test_document_limit_checks_and_register_unregister():
 
     manager.unregister_document("a")
     assert manager.document_sizes == {}
+
+
+def test_check_then_register_race_over_admits_past_the_storage_limit():
+    """#236 rank11: two concurrent ingests using check-then-register (the old,
+    non-atomic pattern) can BOTH pass admission before either registers,
+    because neither has written to document_sizes yet when the other checks.
+
+    This is the regression the atomic `check_and_reserve_document_size`
+    closes below — the same race demonstrated here as a control.
+    """
+    manager = ResourceManager(ResourceLimits(max_total_storage_mb=10.0, max_documents=1000))
+
+    # Both ingests of a 6MB document check admission (under the 10MB cap
+    # individually) before either has registered — the classic TOCTOU window.
+    ok_a, err_a = manager.check_document_size("doc_a", int(6 * 1024 * 1024))
+    ok_b, err_b = manager.check_document_size("doc_b", int(6 * 1024 * 1024))
+    assert ok_a is True and err_a is None
+    assert ok_b is True and err_b is None  # <-- the race: should have been rejected
+
+    manager.register_document("doc_a", int(6 * 1024 * 1024))
+    manager.register_document("doc_b", int(6 * 1024 * 1024))
+
+    # The limit is blown: 12MB registered against a 10MB cap.
+    assert sum(manager.document_sizes.values()) > manager.limits.max_total_storage_mb
+
+
+def test_check_and_reserve_document_size_closes_the_admission_race():
+    """The atomic check-and-reserve method must admit the FIRST of two
+    concurrent 6MB ingests against a 10MB cap, then REJECT the second —
+    because the first call's reservation is visible to the second before it
+    computes its own candidate total.
+    """
+    manager = ResourceManager(ResourceLimits(max_total_storage_mb=10.0, max_documents=1000))
+
+    ok_a, err_a = manager.check_and_reserve_document_size("doc_a", int(6 * 1024 * 1024))
+    assert ok_a is True and err_a is None
+
+    ok_b, err_b = manager.check_and_reserve_document_size("doc_b", int(6 * 1024 * 1024))
+    assert ok_b is False
+    assert "Total storage limit exceeded" in err_b
+
+    # Only the admitted document counts against the tenant.
+    assert sum(manager.document_sizes.values()) <= manager.limits.max_total_storage_mb
+    assert "doc_b" not in manager.document_sizes
+
+
+def test_check_and_reserve_document_size_thread_race_admits_only_one():
+    """Real concurrent callers (two OS threads racing check_and_reserve) must
+    never both be admitted when doing so would exceed the cap — proving the
+    lock genuinely serializes the check+write, not just the single-threaded
+    call order used by the test above.
+    """
+    manager = ResourceManager(ResourceLimits(max_total_storage_mb=10.0, max_documents=1000))
+    results: dict[str, tuple[bool, object]] = {}
+    barrier = threading.Barrier(2)
+
+    def _attempt(doc_id: str) -> None:
+        barrier.wait(timeout=5)
+        results[doc_id] = manager.check_and_reserve_document_size(doc_id, int(6 * 1024 * 1024))
+
+    threads = [
+        threading.Thread(target=_attempt, args=("doc_a",)),
+        threading.Thread(target=_attempt, args=("doc_b",)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5)
+
+    admitted = [doc_id for doc_id, (ok, _err) in results.items() if ok]
+    assert (
+        len(admitted) == 1
+    ), f"exactly one of two racing 6MB ingests must be admitted, got {results}"
+    assert sum(manager.document_sizes.values()) <= manager.limits.max_total_storage_mb
+
+
+@pytest.mark.asyncio
+async def test_check_and_reserve_document_size_async_race_admits_only_one():
+    """The async wrapper (the real call site used by handlers) preserves the
+    same admission guarantee under asyncio.gather concurrency.
+    """
+    manager = ResourceManager(ResourceLimits(max_total_storage_mb=10.0, max_documents=1000))
+
+    results = await asyncio.gather(
+        manager.check_and_reserve_document_size_async("doc_a", int(6 * 1024 * 1024)),
+        manager.check_and_reserve_document_size_async("doc_b", int(6 * 1024 * 1024)),
+    )
+    admitted = [ok for ok, _err in results]
+    assert admitted.count(True) == 1
+    assert sum(manager.document_sizes.values()) <= manager.limits.max_total_storage_mb
+
+
+def test_check_and_reserve_document_size_release_on_failure_frees_the_slot():
+    """Callers must release a reservation (via unregister_document) when the
+    subsequent ingest fails — otherwise the atomic reserve would leak space
+    for documents that never actually landed.
+    """
+    manager = ResourceManager(ResourceLimits(max_total_storage_mb=10.0, max_documents=1000))
+
+    ok, err = manager.check_and_reserve_document_size("doc_a", int(6 * 1024 * 1024))
+    assert ok is True and err is None
+
+    # Simulate the caller's ingest failing and releasing the reservation.
+    manager.unregister_document("doc_a")
+
+    # A second, equally large document must now be admittable.
+    ok2, err2 = manager.check_and_reserve_document_size("doc_b", int(6 * 1024 * 1024))
+    assert ok2 is True and err2 is None
 
 
 def test_health_summary_stats_and_cleanup_recommendation():
