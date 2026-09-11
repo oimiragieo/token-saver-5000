@@ -103,7 +103,9 @@ def test_mcp_profile_guard_workflow_exists_and_checks_core_contract():
 
     assert "name: MCP Profile Guard" in content
     assert "pull_request:" in content
-    assert "src/handlers/mcp_core.py" in content
+    # mcp_core.py became a package (src/handlers/mcp_core/) in the 2026-08-22
+    # N2 slice 2 split; assert the current path, not the stale file name.
+    assert "src/handlers/mcp_core/" in content
     assert "src/server.py" in content
     assert "tests/test_tool_profiles.py" in content
     assert "tests/test_server_unit.py" in content
