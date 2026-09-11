@@ -6,6 +6,38 @@ Breadcrumb for AI navigation. Master index: [`CLAUDE.md`](../CLAUDE.md).
 
 ### Python modules
 
+#### `_count_tools.py`
+
+(no module docstring — see symbols below)
+
+_No top-level classes or functions (may re-export only)._
+
+#### `_split_backlog_p1.py`
+
+One-off splits for backlog P1 (help registry, schemas_compression, compression_handlers).
+
+| Kind | Name |
+|------|------|
+| `def` | `split_help_handlers` |
+| `def` | `split_schemas_compression` |
+| `def` | `split_compression_handlers` |
+
+#### `_split_semantic_compressor.py`
+
+Split semantic_compressor into types + ingest + retrieval mixins.
+
+_No top-level classes or functions (may re-export only)._
+
+#### `audit_env_example.py`
+
+Audit that every os.getenv/os.environ key in src/ is documented in .env.example.
+
+| Kind | Name |
+|------|------|
+| `def` | `collect_src_env_vars` |
+| `def` | `collect_documented_env_vars` |
+| `def` | `main` |
+
 #### `benchmark.py`
 
 Performance Benchmarking Script for Token Saver 5000
@@ -81,6 +113,12 @@ Setup Verification Script for Token Saver 5000
 | `def` | `check_embedding_model` |
 | `def` | `quick_smoke_test` |
 | `def` | `main` |
+
+#### `count_mcp_tools.py`
+
+Count MCP tools in schema modules vs setup_mcp_tools().
+
+_No top-level classes or functions (may re-export only)._
 
 #### `generate_claude_folder_guides.py`
 

@@ -36,6 +36,7 @@ import numpy as np
 import networkx as nx
 
 from .embeddings import EmbeddingManager
+from .pagerank_numpy import compute_pagerank
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ class MultiModalCompressor:
 
         # Calculate importance
         if len(graph.nodes) > 0:
-            pagerank = nx.pagerank(graph)
+            pagerank = compute_pagerank(graph)
             for node_id, score in pagerank.items():
                 if node_id in self.nodes:
                     self.nodes[node_id].importance = score

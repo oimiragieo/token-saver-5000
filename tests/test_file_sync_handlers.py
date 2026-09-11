@@ -23,6 +23,7 @@ from src.handlers.file_sync_handlers import (
 )
 from src.types import HandlerContext
 from src.file_sync_manager import FileSyncManager, FileMetadata
+from src.path_validator import PathValidator
 from src.version_manager import VersionManager
 from src.semantic_compressor import SemanticCompressor
 
@@ -428,6 +429,43 @@ class TestHandleRefreshDocument:
         assert "Error reading source file" in result
         assert "nonexistent" in result.lower() or "path.txt" in result
         assert "may have been moved or deleted" in result
+
+    @pytest.mark.asyncio
+    async def test_refresh_document_rejects_path_outside_validator(self, tmp_path):
+        """Stored file_path must pass PathValidator before read (TOCTOU guard)."""
+        allowed_dir = tmp_path / "allowed"
+        allowed_dir.mkdir()
+        outside_file = tmp_path / "outside.txt"
+        outside_file.write_text("outside content", encoding="utf-8")
+
+        sync_manager = FileSyncManager()
+        file_id = "traversal_doc"
+        sync_manager.register_file(file_id, str(outside_file), "outside content")
+
+        compressor = Mock()
+        skeleton_mock = Mock()
+        skeleton_mock.total_tokens = 10
+        skeleton_mock.skeleton_tokens = 2
+        skeleton_mock.compression_ratio = 5.0
+        compressor.ingest_file_async = Mock(return_value=skeleton_mock)
+        compressor.graphs = {file_id: Mock()}
+        compressor.chunks = {}
+        compressor.file_metadata = {}
+
+        context: HandlerContext = {
+            "sync_manager": sync_manager,
+            "version_manager": VersionManager(storage_dir=str(tmp_path / "versions")),
+            "compressor": compressor,
+            "persistence": Mock(),
+            "validate_file_id": lambda file_id, must_exist=False: None,
+            "path_validator": PathValidator(allowed_base_dirs=[str(allowed_dir.resolve())]),
+        }
+
+        result = await handle_refresh_document(context, {"file_id": file_id})
+
+        assert "[ERROR]" in result
+        assert "Invalid source file path" in result
+        compressor.ingest_file_async.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_refresh_document_ingestion_error(self, mock_context, temp_file):

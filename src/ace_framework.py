@@ -31,7 +31,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Set
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from .similarity import cosine_similarity
 
 from .embeddings import EmbeddingManager
 

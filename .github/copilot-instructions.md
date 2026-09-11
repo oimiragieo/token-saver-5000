@@ -54,14 +54,14 @@ Small documents (<100 tokens) may *expand* due to skeleton overhead. The system 
 MCP Client → stdio → Server (src/server.py)
   → ServerFactoryService.build_default() wires all components
   → bind_mcp_handlers() registers MCP protocol handlers
-  → route_tool_call() in src/handlers/mcp_core.py dispatches to handler modules
+  → route_tool_call() in src/handlers/mcp_core/ dispatches to handler modules
   → Handlers receive HandlerContext (TypedDict in src/types.py)
 ```
 
 ### Key Layers
 
 - **Server bootstrap** (`src/server.py` → `src/semantic_modulator/app/`): `ServerFactoryService` wires compressor, detectors, persistence, etc. Server uses async context manager for lifespan.
-- **Tool routing** (`src/handlers/mcp_core.py`): `setup_mcp_tools()` returns tool schemas; `route_tool_call()` dispatches by name to handler modules. Tool profiles: `"full"` (all ~121 tools) or `"core_stable"` (7 essential), via `MCP_TOOL_PROFILE` env var.
+- **Tool routing** (`src/handlers/mcp_core/`): `setup_mcp_tools()` returns tool schemas; `route_tool_call()` dispatches by name to handler modules. Tool profiles: `"full"` (all 128 tools) or `"core_stable"` (7 essential), via `MCP_TOOL_PROFILE` env var.
 - **Handler modules** (`src/handlers/`): 19 files, each handling a category (compression, AFM, ACE, file sync, visualization, etc.). All async, receive `HandlerContext` dict, return JSON-serializable dicts.
 - **Core compression** (`src/semantic_compressor.py`, `src/code_compressor.py`): `CodeCompressionAdapter` routes files to text vs code compressor by extension. Code compressor uses AST-aware chunking by functions/classes.
 - **Embeddings** (`src/embeddings.py`, `src/embeddings_onnx.py`, `src/embeddings_tfidf.py`): 3-tier fallback: SBERT (best quality) → ONNX (60-70% less memory) → TF-IDF (98% less memory). Singleton `EmbeddingManager` with LRU cache.
@@ -70,7 +70,7 @@ MCP Client → stdio → Server (src/server.py)
 
 ### Multi-Tenant Scoping
 
-All tools accept optional `workspace_id`, `user_id`, `agent_id`, `session_id` for tenant isolation. These are injected via `SCOPE_PROPERTIES` in `mcp_core.py` and managed through helpers in `src/identity_scope.py`.
+All tools accept optional `workspace_id`, `user_id`, `agent_id`, `session_id` for tenant isolation. These are injected via `SCOPE_PROPERTIES` in `src/handlers/mcp_core/_constants.py` and managed through helpers in `src/identity_scope.py`.
 
 ### Security
 
@@ -102,7 +102,7 @@ async def handle_my_tool(context: HandlerContext, args: Dict[str, Any]) -> Dict[
     return {"status": "success", "result": ...}
 ```
 
-Register new tools in `src/handlers/mcp_core.py` via `setup_mcp_tools()` and `route_tool_call()`.
+Register new tools in `src/handlers/mcp_core/` (add schema to the appropriate `schemas_*.py`, wire in `setup.py` and `dispatch.py`).
 
 ### Error Handling
 

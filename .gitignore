@@ -46,6 +46,7 @@ logs/
 
 # Testing
 .pytest_cache/
+tests/f11_gac_fixture_harness_receipt.json
 .ruff_cache/
 .coverage
 .coverage.*

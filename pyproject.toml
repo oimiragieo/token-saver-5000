@@ -124,6 +124,12 @@ target-version = ['py310']
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint.per-file-ignores]
+"src/handlers/compression_handlers_common.py" = ["F401"]
+"src/handlers/compression_handlers_ingest.py" = ["F401", "F405"]
+"src/handlers/compression_handlers_extended.py" = ["F405"]
+"src/semantic_compressor.py" = ["F401"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]

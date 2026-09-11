@@ -44,6 +44,18 @@ _No top-level classes or functions (may re-export only)._
 
 #### `schemas_compression.py`
 
+Compression MCP tool schemas (core + batch modules).
+
+_No top-level classes or functions (may re-export only)._
+
+#### `schemas_compression_batch.py`
+
+Compression tool schemas: batch, directory, and extended ops.
+
+_No top-level classes or functions (may re-export only)._
+
+#### `schemas_compression_core.py`
+
 Tool schemas: Document Compression (ch). Split from mcp_core.py (N2 slice 2).
 
 _No top-level classes or functions (may re-export only)._

@@ -199,7 +199,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises((ValueError, Exception)):
@@ -211,7 +211,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises(ValueError, match="must be a list"):
@@ -223,7 +223,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises(ValueError, match="max_concurrent"):
@@ -241,7 +241,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises((ValueError, Exception)):
@@ -258,7 +258,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises((ValueError, Exception)):
@@ -282,7 +282,7 @@ class TestHandleBatchIngest:
         mock_result.result = MagicMock(skeleton_text="skeleton...", compression_ratio=2.0)
 
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with patch("src.batch_manager.BatchCompressionManager") as MockBCM:
@@ -303,7 +303,7 @@ class TestHandleBatchIngest:
 
         context = _make_handler_context()
         with patch(
-            "src.handlers.compression_handlers.RATE_LIMITERS",
+            "src.handlers.compression_handlers_extended.RATE_LIMITERS",
             {"batch_ingest": AsyncMock(acquire=AsyncMock())},
         ):
             with pytest.raises(ValueError, match="must be an object"):
@@ -574,7 +574,7 @@ class TestBatchIngestRateLimit:
 
         ctx = _make_mock_context()
 
-        with patch("src.handlers.compression_handlers.RATE_LIMITERS") as mock_rl:
+        with patch("src.handlers.compression_handlers_extended.RATE_LIMITERS") as mock_rl:
             mock_limiter = AsyncMock()
             mock_limiter.acquire.side_effect = RateLimitExceededError("batch", 2.0)
             mock_rl.__getitem__.return_value = mock_limiter

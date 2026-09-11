@@ -6,7 +6,7 @@ passed, a real compression passed -- and the MCP gateway returned **500 on
 every request**, caught only by the post-deploy smoke test, after staging had
 already taken the image:
 
-    src/handlers/mcp_core.py       -> from . import compression_handlers
+    src/handlers/mcp_core/         -> from . import compression_handlers
     src/handlers/compression_handlers.py -> from ..types import HandlerContext
     src/types.py                   -> from src.adaptive_rate_allocator import ...
     src/adaptive_rate_allocator.py -> import torch      <-- module scope

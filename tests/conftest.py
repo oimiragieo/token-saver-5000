@@ -15,6 +15,7 @@ Added in v0.7.0 Week 3-4 (Comprehensive Testing Suite).
 import asyncio
 import json
 import tempfile
+import threading
 from pathlib import Path
 from typing import Dict, Any
 import pytest
@@ -28,6 +29,8 @@ from src.afm import FocusManager
 from src.ace_framework import ACEFramework
 from src.batch_manager import BatchDocument
 from src.path_validator import PathValidator
+
+_RESET_SHARED_STATE_LOCK = threading.Lock()
 
 # ===========================
 # Rate Limiter Reset
@@ -46,40 +49,43 @@ def _reset_shared_state():
     from src.rate_limiter import RATE_LIMITERS, RateLimiter
     from src.embeddings import EmbeddingManager
 
-    # Save originals
-    orig_keys = set(RATE_LIMITERS.keys())
-    orig_acquire = {name: RateLimiter.acquire for name in orig_keys}
-    # Save EmbeddingManager singleton state (not the instance — avoid model reloads)
-    orig_emb = EmbeddingManager._instance
-    orig_tier = getattr(orig_emb, "_tier", None) if orig_emb else None
-    orig_cache = getattr(orig_emb, "_enable_cache", None) if orig_emb else None
+    with _RESET_SHARED_STATE_LOCK:
+        # Save originals
+        orig_keys = set(RATE_LIMITERS.keys())
+        orig_acquire = {name: RateLimiter.acquire for name in orig_keys}
+        # Save EmbeddingManager singleton state (not the instance — avoid model reloads)
+        orig_emb = EmbeddingManager._instance
+        orig_tier = getattr(orig_emb, "_tier", None) if orig_emb else None
+        orig_cache = getattr(orig_emb, "_enable_cache", None) if orig_emb else None
 
-    # Reset rate limiters before test
-    for limiter in RATE_LIMITERS.values():
-        limiter.reset()
+        # Reset rate limiters before test
+        for limiter in RATE_LIMITERS.values():
+            limiter.reset()
 
-    yield
+        yield
 
-    # After test: restore rate limiter acquire methods for original keys
-    for name in list(RATE_LIMITERS.keys()):
-        if name in orig_keys:
-            RATE_LIMITERS[name].acquire = orig_acquire[name].__get__(
-                RATE_LIMITERS[name], RateLimiter
-            )
-            RATE_LIMITERS[name].reset()
-        else:
-            del RATE_LIMITERS[name]
+        # After test: restore rate limiter acquire methods for original keys
+        for name in list(RATE_LIMITERS.keys()):
+            if name in orig_keys:
+                try:
+                    bound = orig_acquire[name].__get__(RATE_LIMITERS[name], RateLimiter)
+                    RATE_LIMITERS[name].acquire = bound
+                except (TypeError, AttributeError):
+                    pass
+                RATE_LIMITERS[name].reset()
+            else:
+                del RATE_LIMITERS[name]
 
-    # Restore EmbeddingManager: if test replaced singleton with mock, restore original
-    current = EmbeddingManager._instance
-    if current is not orig_emb and orig_emb is not None:
-        EmbeddingManager._instance = orig_emb
-    # Restore tier/cache settings if they were mutated
-    emb = EmbeddingManager._instance
-    if emb is not None and orig_tier is not None:
-        emb._tier = orig_tier
-    if emb is not None and orig_cache is not None:
-        emb._enable_cache = orig_cache
+        # Restore EmbeddingManager: if test replaced singleton with mock, restore original
+        current = EmbeddingManager._instance
+        if current is not orig_emb and orig_emb is not None:
+            EmbeddingManager._instance = orig_emb
+        # Restore tier/cache settings if they were mutated
+        emb = EmbeddingManager._instance
+        if emb is not None and orig_tier is not None:
+            emb._tier = orig_tier
+        if emb is not None and orig_cache is not None:
+            emb._enable_cache = orig_cache
 
 
 # ===========================

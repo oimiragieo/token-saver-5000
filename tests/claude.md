@@ -70,6 +70,16 @@ Reusable A-vs-C comparison harness for the #250 multi-node fixture corpus.
 | `def` | `format_report_gac` |
 | `def` | `main_gac` |
 
+#### `f11_ranker_path_helpers.py`
+
+Shared helpers for patching F11_RANKER_PATH across constants + facade modules.
+
+| Kind | Name |
+|------|------|
+| `def` | `f11_ranker_path_orig` |
+| `def` | `set_f11_ranker_path` |
+| `def` | `restore_f11_ranker_path` |
+
 #### `test_420_bare_prefix_collision_sweep.py`
 
 #420 sweep of remaining bare-prefix node-id collision sites.
@@ -267,6 +277,15 @@ afm handlers rate limit — consolidated from coverage_boost1-4/4b (backlog N10 
 | `def` | `_make_semantic_node` |
 | `def` | `_make_code_chunk` |
 | `class` | `TestAFMHandlersRateLimit` |
+
+#### `test_all_tools_have_handlers.py`
+
+Verify every registered MCP tool has a dispatch handler.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_all_full_profile_tools_have_router_handlers` |
+| `def` | `test_critical_tools_registered` |
 
 #### `test_anchor_comi_survival.py`
 
@@ -2030,6 +2049,7 @@ Tests for knowledge management MCP handlers (ingest_transcript, compile, lint, i
 | `async def` | `test_compile_knowledge_handler` |
 | `async def` | `test_compile_knowledge_empty` |
 | `async def` | `test_compile_knowledge_write_files` |
+| `async def` | `test_compile_knowledge_rejects_traversal_output_dir` |
 | `async def` | `test_get_knowledge_index_handler` |
 | `async def` | `test_lint_knowledge_handler` |
 | `async def` | `test_lint_knowledge_invalid_stale_days` |
@@ -2159,13 +2179,25 @@ Phase 0 MCP contract tests for core stable runtime surfaces.
 
 #### `test_mcp_routing.py`
 
-Unit tests for MCP Core Routing (mcp_core.py)
+Unit tests for MCP Core Routing (mcp_core package)
 
 | Kind | Name |
 |------|------|
 | `class` | `TestSetupMCPTools` |
 | `class` | `TestRouteToolCall` |
 | `class` | `TestRouterIntegrity` |
+
+#### `test_mcp_scope_properties.py`
+
+MCP tool schemas must advertise tenant scope properties on all tools.
+
+| Kind | Name |
+|------|------|
+| `def` | `_tool_properties` |
+| `def` | `test_ace_tools_have_scope_properties` |
+| `def` | `test_prompt_tools_have_scope_properties` |
+| `def` | `test_model_tools_have_scope_properties` |
+| `def` | `test_experiment_tools_have_scope_properties` |
 
 #### `test_mcp_tooling_gateway.py`
 
@@ -2565,6 +2597,16 @@ Cross-process output determinism regression gate.
 | `def` | `test_skeleton_deterministic_same_process` |
 | `def` | `_run_worker` |
 | `def` | `test_skeleton_deterministic_across_hashseed` |
+
+#### `test_pagerank_numpy_fallback.py`
+
+Tests for PageRank SciPy fallback (Docker ONNX runtime has no scipy).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_pagerank_numpy_small_graph` |
+| `def` | `test_compute_pagerank_falls_back_when_scipy_missing` |
+| `def` | `test_compute_pagerank_uses_networkx_when_available` |
 
 #### `test_parity_characterization.py`
 
@@ -4063,10 +4105,6 @@ World-Class Compression Sprint — Task 4: summary + entity quality (2026-07-02)
 | `class` | `TestEntityStopwordFilter` |
 | `class` | `TestEntityMarkdownLinkStrip` |
 | `class` | `TestSummaryMarkdownStrip` |
-
-### Other files
-
-- `f11_gac_fixture_harness_receipt.json`
 
 ---
 

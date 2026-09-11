@@ -26,9 +26,9 @@ from src.semantic_compressor import FidelityLevel
 # ===========================
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
-@patch("src.handlers.compression_handlers.validate_node_ids")
-@patch("src.handlers.compression_handlers.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
 class TestHandleIngest:
     """Test handle_ingest handler (15 tests)"""
 
@@ -91,7 +91,7 @@ class TestHandleIngest:
             "file_id": "test_doc",
         }
 
-        with patch("src.handlers.compression_handlers.CompressionAdvisor") as MockAdvisor:
+        with patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as MockAdvisor:
             mock_advisor_instance = Mock()
             mock_estimate = Mock()
             mock_estimate.compression_ratio = 9.5
@@ -167,7 +167,9 @@ class TestHandleIngest:
             "file_id": "test_doc",
         }
 
-        with patch("src.handlers.compression_handlers.CompressionAdvisor") as mock_advisor_cls:
+        with patch(
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor"
+        ) as mock_advisor_cls:
             mock_advisor = Mock()
             mock_estimate = Mock()
             mock_estimate.compression_ratio = 9.5
@@ -194,7 +196,9 @@ class TestHandleIngest:
             "file_id": "test_doc_async_sync_save",
         }
 
-        with patch("src.handlers.compression_handlers.CompressionAdvisor") as mock_advisor_cls:
+        with patch(
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor"
+        ) as mock_advisor_cls:
             mock_advisor = Mock()
             mock_estimate = Mock()
             mock_estimate.compression_ratio = 9.5
@@ -221,10 +225,10 @@ class TestHandleIngest:
         fetched_text = "This is a remote document with enough content to be meaningful."
         with (
             patch(
-                "src.handlers.compression_handlers.fetch_url",
+                "src.handlers.compression_handlers_ingest.fetch_url",
                 new_callable=lambda: lambda *a, **kw: _make_async_return(fetched_text),
             ),
-            patch("src.handlers.compression_handlers.CompressionAdvisor") as MockAdvisor,
+            patch("src.handlers.compression_handlers_ingest.CompressionAdvisor") as MockAdvisor,
         ):
             mock_advisor = Mock()
             mock_estimate = Mock()
@@ -268,7 +272,7 @@ class TestHandleIngest:
         async def _raise(*a, **kw):
             raise URLFetchError("private IP blocked", code="private_ip")
 
-        with patch("src.handlers.compression_handlers.fetch_url", side_effect=_raise):
+        with patch("src.handlers.compression_handlers_ingest.fetch_url", side_effect=_raise):
             with pytest.raises(ValueError, match="private_ip"):
                 await ch.handle_ingest(
                     self.context,
@@ -285,9 +289,9 @@ def _make_async_return(value):
     return _inner()
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
-@patch("src.handlers.compression_handlers.validate_node_ids")
-@patch("src.handlers.compression_handlers.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
 class TestHandleIngestF4ChunkingStrategy:
     """Tests for F4 — auto-detect structured markdown and default to chunking_strategy=fixed."""
 
@@ -340,7 +344,7 @@ class TestHandleIngestF4ChunkingStrategy:
         mock_advisor = _Mock()
         mock_advisor.estimate_compression.return_value = mock_estimate
         return _patch(
-            "src.handlers.compression_handlers.CompressionAdvisor",
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor",
             return_value=mock_advisor,
         )
 
@@ -432,9 +436,9 @@ class TestHandleIngestF4ChunkingStrategy:
         )
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
-@patch("src.handlers.compression_handlers.validate_node_ids")
-@patch("src.handlers.compression_handlers.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
 class TestHandleIngestF12SavingsTrackerWired:
     """F12 regression-lock (2026-05-23 evening dogfood discovery):
 
@@ -501,7 +505,7 @@ class TestHandleIngestF12SavingsTrackerWired:
         mock_advisor = _Mock()
         mock_advisor.estimate_compression.return_value = mock_estimate
         return _patch(
-            "src.handlers.compression_handlers.CompressionAdvisor",
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor",
             return_value=mock_advisor,
         )
 
@@ -584,9 +588,9 @@ class TestHandleIngestF12SavingsTrackerWired:
         )
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
-@patch("src.handlers.compression_handlers.validate_node_ids")
-@patch("src.handlers.compression_handlers.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
 class TestHandleIngestF6InlineQuery:
     """Tests for F6 — optional query param for ingest+query in one call."""
 
@@ -639,7 +643,7 @@ class TestHandleIngestF6InlineQuery:
         mock_advisor = _Mock()
         mock_advisor.estimate_compression.return_value = mock_estimate
         return _patch(
-            "src.handlers.compression_handlers.CompressionAdvisor",
+            "src.handlers.compression_handlers_ingest.CompressionAdvisor",
             return_value=mock_advisor,
         )
 
@@ -744,7 +748,7 @@ class TestHandleIngestF6InlineQuery:
 
         with self._make_advisor_patch():
             with patch(
-                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+                "src.handlers.compression_handlers_ingest.run_read_skeleton_pipeline",
                 return_value=mock_pipeline_result,
             ):
                 # Pre-fix this raised TypeError. Post-fix it returns a JSON string.
@@ -806,7 +810,7 @@ class TestHandleIngestF6InlineQuery:
         assert "query_skeleton" not in data
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
 class TestHandleReadSkeletonF12ClassCompletion:
     """v1.34.28 regression: read_skeleton must hit SavingsTracker.record().
 
@@ -851,7 +855,7 @@ class TestHandleReadSkeletonF12ClassCompletion:
             }
 
         with patch(
-            "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+            "src.handlers.compression_handlers_ingest.run_read_skeleton_pipeline",
             side_effect=fake_pipeline,
         ):
             await ch.handle_read_skeleton(
@@ -913,7 +917,7 @@ class TestHandleReadSkeletonF12ClassCompletion:
 
         with (
             patch(
-                "src.handlers.compression_handlers.run_read_skeleton_pipeline",
+                "src.handlers.compression_handlers_ingest.run_read_skeleton_pipeline",
                 side_effect=fake_pipeline,
             ),
             patch(
@@ -937,7 +941,7 @@ class TestHandleReadSkeletonF12ClassCompletion:
         )
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
 class TestHandleReadSkeleton:
     """Test handle_read_skeleton handler (6 tests)"""
 
@@ -1073,7 +1077,7 @@ class TestHandleReadSkeleton:
         assert "Mock skeleton text" in data["skeleton_text"]
 
 
-@patch("src.handlers.compression_handlers.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
 class TestHandleModulateRegionF10SingularNodeId:
     """v1.34.30 (F10): handle_modulate_region must accept singular `node_id`.
 
@@ -1146,7 +1150,7 @@ class TestHandleModulateRegionF10SingularNodeId:
         assert "[TIP]" in msg
 
 
-@patch("src.handlers.compression_handlers.validate_node_ids")
+@patch("src.handlers.compression_handlers_ingest.validate_node_ids")
 class TestHandleModulateRegion:
     """Test handle_modulate_region handler (12 tests)"""
 
@@ -1429,7 +1433,7 @@ class TestHandleListDocuments:
         assert "Total documents: 2" in result
 
 
-@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
 class TestHandleDeleteDocument:
     """Test handle_delete_document handler (6 tests)"""
 
@@ -1484,8 +1488,8 @@ class TestHandleDeleteDocument:
         assert "doc1" in result
 
 
-@patch("src.handlers.compression_handlers.validate_token_count")
-@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
 class TestHandleAdaptToContextWindow:
     """Test handle_adapt_to_context_window handler (6 tests)"""
 
@@ -1526,8 +1530,8 @@ class TestHandleAdaptToContextWindow:
         assert "between 0.0 and 1.0" in str(exc_info.value)
 
 
-@patch("src.handlers.compression_handlers.validate_token_count")
-@patch("src.handlers.compression_handlers.validate_file_id")
+@patch("src.handlers.compression_handlers_ingest.validate_token_count")
+@patch("src.handlers.compression_handlers_ingest.validate_file_id")
 class TestHandleMultilevelEncode:
     """Test handle_multilevel_encode handler (4 tests)"""
 
@@ -1730,7 +1734,7 @@ async def test_compress_codebase_FAILS_CLOSED_without_a_path_validator():
     This branch used to warn and continue, reasoning that the hosted server
     always injects the validator so a None means a hand-rolled context. That is
     an invariant held by one set of callers, not a property of the handler --
-    and both tests for this guard supplied a real PathValidator, so the
+    and both existing tests for this guard supplied a real PathValidator, so the
     fail-open branch had no coverage at all.
 
     Measured before changing it: only `context_service.py` and

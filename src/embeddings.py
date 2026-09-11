@@ -28,6 +28,7 @@ Version: 0.6.0
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -197,6 +198,22 @@ class EmbeddingTier(Enum):
     TFIDF = "tfidf"  # Sklearn TF-IDF fallback
 
 
+def _tier_from_env(default: EmbeddingTier = EmbeddingTier.STANDARD) -> EmbeddingTier:
+    """Resolve ``EMBEDDING_TIER`` env (standard|onnx|tfidf). Invalid/empty → default."""
+    raw = os.environ.get("EMBEDDING_TIER", "").strip().lower()
+    if not raw:
+        return default
+    try:
+        return EmbeddingTier(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid EMBEDDING_TIER=%r (expected standard|onnx|tfidf); using %s",
+            raw,
+            default.value,
+        )
+        return default
+
+
 class EmbeddingManager:
     """
     Singleton manager for embedding models with multi-tier support and caching (v0.6.0).
@@ -221,12 +238,13 @@ class EmbeddingManager:
     _instance: Optional["EmbeddingManager"] = None
     _lock: threading.Lock = threading.Lock()
 
-    def __new__(cls, tier: EmbeddingTier = EmbeddingTier.STANDARD, enable_cache: bool = True):
+    def __new__(cls, tier: EmbeddingTier | None = None, enable_cache: bool = True):
         """
         Singleton pattern with thread-safe lazy initialization.
 
         Args:
-            tier: Embedding tier to use (default: STANDARD)
+            tier: Embedding tier to use. When omitted, reads ``EMBEDDING_TIER``
+                (standard|onnx|tfidf) then defaults to STANDARD.
             enable_cache: Enable LRU caching (default: True)
 
         Returns:
@@ -240,6 +258,8 @@ class EmbeddingManager:
             (before the first ``EmbeddingManager(...)`` call). Use
             :meth:`reset_for_testing` to clear the singleton between tests.
         """
+        if tier is None:
+            tier = _tier_from_env(EmbeddingTier.STANDARD)
         if cls._instance is None:
             with cls._lock:
                 # Double-checked locking

@@ -6,6 +6,8 @@ monolithic `setup_mcp_tools`, unchanged.
 
 from mcp.types import Tool
 
+from ._constants import SCOPE_PROPERTIES
+
 ACE_TOOLS: list = [
     Tool(
         name="ace_generate",
@@ -18,6 +20,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "task": {
                     "type": "string",
                     "description": "The task or query to reason about",
@@ -49,6 +52,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "trajectory": {
                     "type": "array",
                     "description": "Generated reasoning trajectory from ace_generate",
@@ -81,6 +85,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "insights": {
                     "type": "array",
                     "description": "Insights from ace_reflect",
@@ -109,12 +114,14 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "bullets": {
                     "type": "array",
                     "description": "Bullets to add",
                     "items": {
                         "type": "object",
                         "properties": {
+                            **SCOPE_PROPERTIES,
                             "text": {"type": "string"},
                             "bullet_type": {
                                 "type": "string",
@@ -155,6 +162,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "bullet_ids": {
                     "type": "array",
                     "description": "Bullet IDs to update",
@@ -187,6 +195,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "context_id": {
                     "type": "string",
                     "description": "ACE context identifier (default: 'default')",
@@ -226,6 +235,7 @@ ACE_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "task": {
                     "type": "string",
                     "description": "The task or query",
@@ -263,6 +273,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Unique prompt template name"},
                 "description": {
                     "type": "string",
@@ -302,6 +313,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Existing prompt template name"},
                 "description": {
                     "type": "string",
@@ -341,11 +353,12 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "include_versions": {
                     "type": "boolean",
                     "description": "Include all versions for each template (default: false)",
                     "default": False,
-                }
+                },
             },
         },
     ),
@@ -358,6 +371,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Prompt template name"},
                 "version": {
                     "type": "integer",
@@ -380,6 +394,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Prompt template name"},
                 "version": {"type": "integer", "description": "Version to deploy"},
                 "deployment_label": {
@@ -404,6 +419,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Prompt template name"},
                 "version_a": {"type": "integer", "description": "Base version"},
                 "version_b": {"type": "integer", "description": "Comparison version"},
@@ -420,6 +436,7 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "name": {"type": "string", "description": "Prompt template name"},
                 "variables": {
                     "type": "object",
@@ -465,7 +482,7 @@ PROMPT_TOOLS: list = [
             "List rendered prompt prefixes that collide across templates so shared "
             "provider-cacheable prefixes are visible."
         ),
-        inputSchema={"type": "object", "properties": {}},
+        inputSchema={"type": "object", "properties": {**SCOPE_PROPERTIES}},
     ),
     Tool(
         name="audit_prompt_cacheability",
@@ -476,12 +493,14 @@ PROMPT_TOOLS: list = [
         inputSchema={
             "type": "object",
             "properties": {
+                **SCOPE_PROPERTIES,
                 "sections": {
                     "type": "array",
                     "description": "Ordered prompt sections using canonical names",
                     "items": {
                         "type": "object",
                         "properties": {
+                            **SCOPE_PROPERTIES,
                             "name": {
                                 "type": "string",
                                 "enum": [
@@ -498,7 +517,7 @@ PROMPT_TOOLS: list = [
                         },
                         "required": ["name", "content"],
                     },
-                }
+                },
             },
             "required": ["sections"],
         },

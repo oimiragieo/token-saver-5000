@@ -1,5 +1,5 @@
 """
-Unit tests for MCP Core Routing (mcp_core.py)
+Unit tests for MCP Core Routing (mcp_core package)
 
 Tests the central routing logic that dispatches MCP tool calls to appropriate
 handler functions. Following 2025 best practices for pytest testing.
@@ -28,43 +28,14 @@ class TestSetupMCPTools:
         assert len(tools) > 0
 
     def test_correct_number_of_tools(self):
-        """Test that all MCP tools are registered."""
+        """Full profile tool count matches dispatch router (see MCP_TOOL_COUNTS.md)."""
         tools = mcp_core.setup_mcp_tools()
+        from tests.test_all_tools_have_handlers import _ROUTER_KEYS
 
-        # Expected count: 112 tools total
-        # - Document Compression: 9
-        # - Batch Processing: 1 (NEW in v0.6.0)
-        # - Directory Ingestion: 1 (NEW in v0.9.0)
-        # - Fidelity Advisor: 1
-        # - Detection: 2
-        # - AFM Dialogue: 6
-        # - File Sync: 4
-        # - Resource Management: 3 (check_resource_health, check_environment, should_compress)
-        # - Help & Documentation: 1 (NEW in v0.9.0)
-        # - ACE Framework: 7
-        # - Visualization: 4 (NEW in v0.6.0)
-        # - Experimental: 9 (v0.11.0) - TOON, SCAR, Multimodal, ASG-SI suite
-        # - New: 3 (diff_reingest, find_duplicates, get_compression_presets)
-        # - New: 1 (check_context_budget)
-        # - Prompt registry: 6
-        # - Explicit memory and personalization: 6
-        # - Datasets and experiments: 5
-        # - Managed connector feeds: 5
-        # - Temporal context and lifecycle: 4
-        # - Stable multimodal: 2
-        # - Structured handoff bundles: 4
-        # - Model optimization: 6
-        # - Prompt registry/cache audit/rendering: 8
-        # - Token Optimization: 4 (v0.11.0) - estimate_tokens, configure_for_client, set/get_compression_profile
-        # - arXiv paper techniques: 2 (v0.12.0) - compress_meta_tokens, recommend_compression
-        # - Session Journal: 1 (v0.13.0) - recover_session
-        # - Tensor-Grep Integration: 2 (v0.13.0) - compress_codebase, search_code
-        # - Savings Tracker: 2 (v0.14.0) - get_savings_report, get_savings_inline
-        # - Cache Strategy Advisor: 1 - advise_cache_strategy
-        # - Structural Summary + Dead Code Detector: 2 (v0.15.0)
-        # - Knowledge Management: 5 (ingest_transcript, compile_knowledge,
-        #   get_knowledge_index, lint_knowledge, search_memory_index)
-        assert len(tools) == 128, f"Expected 128 tools, got {len(tools)}"
+        tool_names = {t.name for t in tools}
+        assert len(tools) >= 120
+        assert tool_names == set(_ROUTER_KEYS)
+        assert len(tools) == len(_ROUTER_KEYS)
 
     def test_core_stable_profile_has_expected_tools(self):
         """Test that core_stable profile exposes only stable core tools."""

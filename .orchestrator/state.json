@@ -1,0 +1,25 @@
+{
+  "last_slice": "growth-val-park-relocate",
+  "completed_at": "2026-08-29",
+  "status": "closed",
+  "checks": {
+    "fable_plan_audit": "APPROVED",
+    "plan_audit_seat": "APPROVED",
+    "growth_val_park_id_count": 23,
+    "engine_backlog_growth_val_rows": 0,
+    "val_docker_stays_engine": true,
+    "contracts_file_kept": true,
+    "folder_guides_sync": "pass",
+    "ci_base_sha": "2bd939a2359d1afaaac4cfd2c13e6a5b59a182c9"
+  },
+  "artifacts": {
+    "wayfinder": ".wayfinder/growth-val-park-relocate/MAP.md",
+    "plan": "docs/plans/2026-08-29-growth-val-park-relocate.md",
+    "platform_park": "gotcontext-main/docs/growth-val-park.md",
+    "defer_brief": "docs/strategy/2026-08-28-growth-val-defer-brief.md",
+    "contracts": "artifacts/validation-contract-growth.md"
+  },
+  "next_slice": null,
+  "open_backlog": "none in engine; Growth VAL park on gotcontext-main",
+  "worktrees": "none"
+}

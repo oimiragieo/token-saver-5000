@@ -24,6 +24,7 @@ import networkx as nx
 
 from .embeddings import EmbeddingManager
 from .node_identity import extract_file_id_from_node
+from .pagerank_numpy import compute_pagerank
 
 logger = logging.getLogger(__name__)
 
@@ -684,7 +685,7 @@ class CodeSemanticCompressor:
         if len(graph.nodes) > 0:
             # Convert to undirected for PageRank
             undirected = graph.to_undirected()
-            pagerank = nx.pagerank(undirected)
+            pagerank = compute_pagerank(undirected)
 
             for chunk_id, score in pagerank.items():
                 if chunk_id in self.chunks:

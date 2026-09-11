@@ -25,8 +25,8 @@ This CLAUDE.md is authoritative. Subdirectories extend these rules within the Cl
 | Metric | Value | Status |
 |--------|-------|--------|
 | **Source tree** | `src/` package (core + `semantic_modulator/` + `handlers/`) | ✅ Active |
-| **Handler modules** | 19 handler modules + `mcp_core.py` under `src/handlers/` | ✅ Routed via `mcp_core` |
-| **MCP tools** | Large surface (100+); exact count changes release-to-release | ✅ See `mcp_core.py` / tests |
+| **Handler modules** | 19 handler modules + `src/handlers/mcp_core/` package | ✅ Routed via `mcp_core` |
+| **MCP tools** | 128 tools (v0.11.0); see `docs/reference/MCP_TOOL_COUNTS.md` | ✅ See `src/handlers/mcp_core/` / tests |
 | **Tests** | 3,000+ tests in `tests/` | ✅ `pytest` is authoritative |
 | **Coverage** | Enforced ≥70% in `pyproject` | ✅ |
 
@@ -52,7 +52,7 @@ src/                              # 75 modules, ~26,000 lines
 ├── Knowledge Management (3 modules) # transcript_extractor, knowledge_compiler, knowledge_lint
 ├── Experimental (3 modules)      # SCAR, TOON, training_utils
 ├── semantic_modulator/           # subpackage (additional modules)
-└── handlers/ (~19 modules + mcp_core)  # large MCP tool surface
+└── handlers/ (~19 modules + mcp_core/)  # large MCP tool surface
 ```
 
 ### Experimental Features Status
@@ -644,7 +644,7 @@ Claude Code has unique capabilities that set it apart from generic agent configu
 - ✅ Modular handler architecture with centralized routing
 - ✅ `src/server.py` reduced from 1,911 → 299 lines (84% reduction)
 - ✅ Created `src/handlers/` with 7 focused modules (v0.4.3 baseline; 10 modules as of v0.10.0):
-  - `mcp_core.py` - Tool schemas and routing
+  - `src/handlers/mcp_core/` - Tool schemas and routing package
   - `compression_handlers.py` - 9 document compression handlers
   - `afm_handlers.py` - 6 dialogue memory handlers
   - `ace_handlers.py` - 7 ACE Framework handlers (NEW in v0.4.0!)
@@ -703,7 +703,7 @@ All experimental features are KEPT (not deleted) to allow future production inte
 ### Code Navigation
 ```bash
 # Find all MCP tool definitions
-rg -n "Tool\(" src/handlers/mcp_core.py
+rg -n "Tool\(" src/handlers/mcp_core/
 
 # Find handler implementations
 rg -n "async def handle_" src/handlers/
@@ -873,7 +873,7 @@ Token Saver 5000 exposes a **large MCP tool surface** (100+ tools; exact set evo
 
 **Representative categories** (not an exhaustive count): document compression, AFM dialogue memory, ACE context engineering, file sync/versioning, visualization, detection, health/assessment, experimental (TOON/SCAR/multimodal), token optimization, memory/session tools, prompts/cache tooling, connectors, experiments, and more.
 
-See `docs/guides/MCP_TOOLS_GUIDE.md` and `src/handlers/mcp_core.py` for the authoritative list.
+See `docs/guides/MCP_TOOLS_GUIDE.md` and `docs/reference/MCP_TOOL_COUNTS.md` for the authoritative list.
 
 ## Code Style Guidelines
 

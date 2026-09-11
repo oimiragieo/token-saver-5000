@@ -68,7 +68,7 @@ async def _read(context, query):
         "selection_mode": "query_guided",
         "query": query,
     }
-    with patch("src.handlers.compression_handlers.validate_file_id"):
+    with patch("src.handlers.compression_handlers_ingest.validate_file_id"):
         result = await ch.handle_read_skeleton(context, args)
     return json.loads(result)
 
@@ -122,7 +122,7 @@ class TestCacheStablePrefixContract:
         context, _ = _context()
         args = {"file_id": "doc1", "selection_mode": "baseline"}
 
-        with patch("src.handlers.compression_handlers.validate_file_id"):
+        with patch("src.handlers.compression_handlers_ingest.validate_file_id"):
             result = await ch.handle_read_skeleton(context, args)
         data = json.loads(result)
 
@@ -174,7 +174,7 @@ class TestCacheStablePrefixContractRealCompressor:
             "sync_manager": SimpleNamespace(file_metadata={}),
         }
 
-        with patch("src.handlers.compression_handlers.validate_file_id"):
+        with patch("src.handlers.compression_handlers_ingest.validate_file_id"):
             result_a = await ch.handle_read_skeleton(
                 context,
                 {
