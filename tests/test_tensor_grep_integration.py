@@ -249,6 +249,60 @@ class TestCodeSearch:
         assert result.matches == []
         proc.kill.assert_called_once()
 
+    def test_code_search_bounds_a_stalled_stdout_read(self) -> None:
+        """A subprocess that stops writing (without closing stdout) must not
+        hang code_search forever.
+
+        Regression for the real bug: the previous implementation iterated
+        `proc.stdout` to EOF BEFORE ever calling `proc.wait(timeout=...)`, so
+        the configured timeout never covered the read itself — only the wait
+        that ran after the loop already returned. A pipe reader whose
+        readline() call blocks (no more data, but the fd stays open) hung the
+        call indefinitely regardless of the `timeout` argument.
+
+        `_make_popen` always builds an in-memory StringIO that reaches EOF
+        instantly, so it cannot exercise this path — a real blocking iterable
+        is required.
+        """
+        import time as _time
+
+        class _NeverEndingStdout:
+            """Mimics a pipe whose readline() blocks forever (no more data,
+            fd never closes)."""
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                # Block "forever" relative to the tiny test timeout below —
+                # simulates a hung child process without a real subprocess.
+                _time.sleep(30)
+                raise StopIteration
+
+            def close(self) -> None:
+                pass
+
+        proc = MagicMock()
+        proc.stdout = _NeverEndingStdout()
+        proc.returncode = None
+        proc.wait = MagicMock(return_value=0)
+        proc.kill = MagicMock()
+
+        start = _time.monotonic()
+        with (
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
+        ):
+            result = code_search("pattern", "/repo", timeout=0.2)
+        elapsed = _time.monotonic() - start
+
+        assert result.available is True
+        assert result.matches == []
+        assert (
+            elapsed < 5.0
+        ), f"code_search should bound the hang near the 0.2s timeout, took {elapsed}s"
+        proc.kill.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # ast_search

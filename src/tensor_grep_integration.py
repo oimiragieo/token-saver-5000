@@ -22,9 +22,12 @@ Minimum tensor-grep version: **>=1.8.0**.
 from __future__ import annotations
 
 import json
+import queue
 import re
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -201,12 +204,48 @@ def code_search(
         )
         try:
             assert proc.stdout is not None  # always true when stdout=PIPE
-            for line in proc.stdout:
-                line = line.strip()
-                if not line:
+
+            # A bare `for line in proc.stdout` blocks on the underlying
+            # readline() with no timeout of its own — the wall-clock budget
+            # below only ever applied to proc.wait(), which runs AFTER the
+            # loop exits. A subprocess that stops writing without closing
+            # stdout (hung provider, wedged tg process) would hang this call
+            # forever. Read on a background thread into a bounded queue so
+            # the main thread can always enforce the deadline via
+            # queue.get(timeout=...), regardless of what the child is doing.
+            line_queue: queue.Queue[str | None] = queue.Queue()
+
+            def _drain_stdout() -> None:
+                try:
+                    assert proc.stdout is not None
+                    for raw_line in proc.stdout:
+                        line_queue.put(raw_line)
+                finally:
+                    line_queue.put(None)  # EOF sentinel
+
+            reader = threading.Thread(target=_drain_stdout, daemon=True)
+            reader.start()
+
+            deadline = time.monotonic() + timeout
+            timed_out = False
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                try:
+                    raw_line = line_queue.get(timeout=remaining)
+                except queue.Empty:
+                    timed_out = True
+                    break
+                if raw_line is None:
+                    break  # reader hit EOF
+
+                stripped = raw_line.strip()
+                if not stripped:
                     continue
                 try:
-                    obj = json.loads(line)
+                    obj = json.loads(stripped)
                 except json.JSONDecodeError:
                     continue
                 # Each NDJSON line is a match object; accumulate them.
@@ -215,7 +254,13 @@ def code_search(
                 elif isinstance(obj, list):
                     matches.extend(obj)
 
-            proc.wait(timeout=timeout)
+            if timed_out:
+                proc.kill()
+                proc.wait()
+                reader.join(timeout=1.0)
+                return CodeSearchResult(pattern=pattern, available=True)
+
+            proc.wait(timeout=max(0.1, deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
