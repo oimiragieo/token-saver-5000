@@ -1044,6 +1044,14 @@ Response formatter for MCP tool results.
 | `def` | `_is_more_compact_fidelity` |
 | `class` | `ResponseFormatter` |
 
+#### `safe_identifier.py`
+
+Shared allowlist validation for caller-supplied storage identifiers.
+
+| Kind | Name |
+|------|------|
+| `def` | `validate_safe_storage_id` |
+
 #### `savings_dashboard.py`
 
 Cross-session savings dashboard for gotcontext.ai.

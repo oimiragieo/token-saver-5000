@@ -2627,6 +2627,19 @@ Phase 10 cross-surface launch-readiness tests.
 | `async def` | `test_platform_workflow_spans_memory_prompt_experiment_connector_and_model` |
 | `async def` | `test_workspace_scopes_isolate_memory_and_connector_outputs` |
 
+#### `test_path_escape_hardening_508.py`
+
+Regression lock: file_id / session_id must not escape their storage dir.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestValidateSafeStorageId` |
+| `class` | `TestIngestFileIdEscapeRejected` |
+| `class` | `TestDeleteDocumentFileIdEscapeRejected` |
+| `class` | `TestBatchIngestDocumentsFileIdEscapeRejected` |
+| `class` | `TestPersistenceManagerRejectsEscapingFileId` |
+| `class` | `TestSessionJournalRejectsUnsafeSessionId` |
+
 #### `test_path_validator.py`
 
 Comprehensive tests for PathValidator (path traversal prevention).

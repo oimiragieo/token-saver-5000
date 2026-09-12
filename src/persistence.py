@@ -30,6 +30,7 @@ import tempfile
 import shutil
 
 from .identity_scope import compose_scoped_file_id, display_file_id, has_scope, scope_matches
+from .safe_identifier import validate_safe_storage_id
 
 # File format version for migration tracking
 PERSISTENCE_FORMAT_VERSION = 2  # v1 = pickle, v2 = JSON + numpy
@@ -381,6 +382,18 @@ class PersistenceManager:
         Returns:
             True if saved successfully
         """
+        # CWE-22 defense-in-depth: reject a file_id that could escape
+        # `documents_dir` BEFORE it is ever joined onto a storage Path.
+        # compose_scoped_file_id() percent-encodes file_id when a
+        # workspace/user/agent/session scope is present, but returns it
+        # UNCHANGED when no scope is given -- this check must not rely on
+        # that encoding, since the unscoped call path is the one that was
+        # exploitable.
+        id_error = validate_safe_storage_id(file_id, "file_id", allow_subdirs=True)
+        if id_error:
+            logger.error(f"Rejected unsafe file_id for save_document: {id_error}")
+            return False
+
         internal_file_id = compose_scoped_file_id(
             file_id,
             workspace_id=workspace_id,
@@ -518,6 +531,12 @@ class PersistenceManager:
         Returns:
             Dictionary with chunks, graph_data, metadata, or None if not found
         """
+        # CWE-22 defense-in-depth -- see the matching check in save_document.
+        id_error = validate_safe_storage_id(file_id, "file_id", allow_subdirs=True)
+        if id_error:
+            logger.error(f"Rejected unsafe file_id for load_document: {id_error}")
+            return None
+
         internal_file_id = compose_scoped_file_id(
             file_id,
             workspace_id=workspace_id,
@@ -751,6 +770,12 @@ class PersistenceManager:
         Returns:
             True if deleted successfully
         """
+        # CWE-22 defense-in-depth -- see the matching check in save_document.
+        id_error = validate_safe_storage_id(file_id, "file_id", allow_subdirs=True)
+        if id_error:
+            logger.error(f"Rejected unsafe file_id for delete_document: {id_error}")
+            return False
+
         internal_file_id = compose_scoped_file_id(
             file_id,
             workspace_id=workspace_id,
