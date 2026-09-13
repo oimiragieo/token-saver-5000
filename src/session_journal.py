@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .safe_identifier import validate_safe_storage_id
+
 _DEFAULT_STORAGE_DIR = Path(".semantic_modulator_data") / "sessions"
 
 
@@ -60,6 +62,15 @@ class SessionJournal:
         session_id: str,
         storage_dir: Path | str | None = None,
     ) -> None:
+        # CWE-22 defense: session_id builds a SQLite db PATH below
+        # (`{session_id}.db`). Reject before the join is ever constructed --
+        # this is the sole chokepoint regardless of which caller (MCP tool
+        # handler, SavingsTracker, tests) supplies session_id, so validating
+        # here (rather than only at the MCP entry point) covers every path.
+        id_error = validate_safe_storage_id(session_id, "session_id", allow_subdirs=False)
+        if id_error:
+            raise ValueError(f"Unsafe session_id: {id_error}")
+
         self._session_id = session_id
         self._storage_dir = Path(storage_dir) if storage_dir is not None else _DEFAULT_STORAGE_DIR
         self._storage_dir.mkdir(parents=True, exist_ok=True)
