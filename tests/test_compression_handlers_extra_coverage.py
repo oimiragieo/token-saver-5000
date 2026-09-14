@@ -774,6 +774,9 @@ class TestCompressionHandlersValidation:
         ctx["sync_manager"].export_metadata.return_value = {}
         ctx["persistence"].save_file_sync_metadata.side_effect = Exception("save fail")
         ctx["resource_manager"].check_document_size_async = AsyncMock(return_value=(True, None))
+        ctx["resource_manager"].check_and_reserve_document_size_async = AsyncMock(
+            return_value=(True, None)
+        )
         ctx["resource_manager"].register_document_async = AsyncMock()
 
         result = await handle_ingest(

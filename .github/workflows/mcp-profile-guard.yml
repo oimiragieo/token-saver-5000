@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - src/handlers/mcp_core.py
+      - src/handlers/mcp_core/**
       - src/server.py
       - tests/test_tool_profiles.py
       - tests/test_server_unit.py
@@ -13,7 +13,7 @@ on:
   push:
     branches: [main, develop, claude/**]
     paths:
-      - src/handlers/mcp_core.py
+      - src/handlers/mcp_core/**
       - src/server.py
       - tests/test_tool_profiles.py
       - tests/test_server_unit.py
@@ -51,11 +51,11 @@ jobs:
 
       - name: Black (profile guard scope)
         run: |
-          python -m black --check src/handlers/mcp_core.py src/server.py tests/test_tool_profiles.py tests/test_server_unit.py tests/test_ci_workflows.py
+          python -m black --check src/handlers/mcp_core/ src/server.py tests/test_tool_profiles.py tests/test_server_unit.py tests/test_ci_workflows.py
 
       - name: Ruff (profile guard scope)
         run: |
-          python -m ruff check src/handlers/mcp_core.py src/server.py tests/test_tool_profiles.py tests/test_server_unit.py tests/test_ci_workflows.py
+          python -m ruff check src/handlers/mcp_core/ src/server.py tests/test_tool_profiles.py tests/test_server_unit.py tests/test_ci_workflows.py
 
       - name: Profile contract tests
         run: |

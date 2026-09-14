@@ -143,10 +143,13 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     validate_file_id(scoped_file_id, context, must_exist=False)
 
-    # Check resource limits BEFORE ingestion
-    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
+    # Check resource limits AND reserve the space BEFORE ingestion, atomically
+    # (#236 rank11) — a separate check-then-register pair left a window where
+    # two concurrent ingests could each pass admission before either
+    # registered, since ingest_file_async below can take a while. The
+    # reservation must be released (see the except block) if ingestion fails.
     text_size = len(text.encode("utf-8"))
-    allowed, error_msg = await context["resource_manager"].check_document_size_async(
+    allowed, error_msg = await context["resource_manager"].check_and_reserve_document_size_async(
         scoped_file_id, text_size
     )
     if not allowed:
@@ -181,14 +184,13 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             text, scoped_file_id, metadata, chunking_strategy=chunking_strategy
         )
     except Exception as e:
+        # Release the reservation taken above — the ingest never happened, so
+        # the space must not stay counted against the tenant's admission.
+        await context["resource_manager"].unregister_document_async(scoped_file_id)
         raise RuntimeError(
             f"Failed to ingest document: {str(e)}\n"
             "Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
         ) from e
-
-    # Register with resource manager
-    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
-    await context["resource_manager"].register_document_async(scoped_file_id, text_size)
 
     # Persist to storage
     try:

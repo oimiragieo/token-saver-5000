@@ -145,6 +145,78 @@ class ResourceManager:
 
         return True, None
 
+    def check_and_reserve_document_size(
+        self, file_id: str, size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Atomically validate a document against resource limits AND reserve its
+        space, in one lock acquisition — closing the check-then-act admission
+        race between concurrent ingests (#236 rank11).
+
+        `check_document_size()` followed by a separate `register_document()`
+        call AFTER a (potentially slow) ingest leaves a window where two
+        concurrent ingests can each see room under the limit and both proceed,
+        since neither has registered yet. This method folds the check and the
+        registration into the SAME critical section: if admitted, the size is
+        written to `document_sizes` before the lock is released, so a second
+        concurrent call sees the updated total immediately.
+
+        Callers MUST release the reservation via `unregister_document()` (or
+        its async wrapper) if the subsequent ingest fails — the reservation is
+        provisional until the caller's work actually succeeds. On success, no
+        further `register_document()` call is needed; the reservation already
+        reflects the final size.
+
+        Returns:
+            (allowed, error_message)
+        """
+        size_mb = size_bytes / (1024 * 1024)
+
+        with self._lock:
+            old_size_mb = self.document_sizes.get(file_id, 0)
+            current_total_mb = sum(self.document_sizes.values())
+            doc_count = len(self.document_sizes)
+            is_reingest = file_id in self.document_sizes
+            candidate_total_mb = current_total_mb - old_size_mb + size_mb
+
+            if candidate_total_mb > self.limits.max_total_storage_mb:
+                return False, (
+                    f"Total storage limit exceeded: {candidate_total_mb:.1f}MB > {self.limits.max_total_storage_mb:.1f}MB\n"
+                    f"Tip: Delete old documents or increase max_total_storage_mb\n"
+                    f"   Current documents: {doc_count}, Total size: {current_total_mb:.1f}MB"
+                )
+
+            if not is_reingest and doc_count >= self.limits.max_documents:
+                return False, (
+                    f"Too many documents: {doc_count} >= {self.limits.max_documents}\n"
+                    f"Tip: Delete old documents or increase max_documents"
+                )
+
+            if size_mb > self.limits.max_document_size_mb:
+                return False, (
+                    f"Document too large: {size_mb:.1f}MB exceeds limit of {self.limits.max_document_size_mb:.1f}MB\n"
+                    f"Tip: Split document into smaller sections or increase max_document_size_mb"
+                )
+
+            # Reserve immediately, still under the lock, so a concurrent
+            # admission check sees this document's size in current_total_mb.
+            self.document_sizes[file_id] = size_mb
+
+        if size_mb > self.limits.max_document_size_mb * self.limits.warn_threshold:
+            logger.warning(
+                f"[WARN] Document {file_id} is large: {size_mb:.1f}MB "
+                f"({size_mb/self.limits.max_document_size_mb*100:.0f}% of limit)"
+            )
+
+        if candidate_total_mb > self.limits.max_total_storage_mb * self.limits.warn_threshold:
+            logger.warning(
+                f"[WARN] Total storage approaching limit: {candidate_total_mb:.1f}MB "
+                f"({candidate_total_mb/self.limits.max_total_storage_mb*100:.0f}% of limit)"
+            )
+
+        logger.info(f"Reserved document {file_id}: {size_mb:.2f}MB")
+        return True, None
+
     def register_document(self, file_id: str, size_bytes: int):
         """
         Register a document after successful ingestion.
@@ -289,6 +361,27 @@ class ResourceManager:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor, lambda: self.check_document_size(file_id, size_bytes)
+        )
+
+    async def check_and_reserve_document_size_async(
+        self, file_id: str, size_bytes: int
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Async wrapper for check_and_reserve_document_size (#236 rank11).
+
+        Runs check_and_reserve_document_size in thread pool to avoid blocking
+        the event loop when called from async handlers.
+
+        Args:
+            file_id: Document identifier
+            size_bytes: Document size in bytes
+
+        Returns:
+            (allowed, error_message)
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, lambda: self.check_and_reserve_document_size(file_id, size_bytes)
         )
 
     async def register_document_async(self, file_id: str, size_bytes: int) -> None:

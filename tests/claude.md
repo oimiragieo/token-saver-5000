@@ -3157,6 +3157,11 @@ Comprehensive tests for resource_handlers.py
 | Kind | Name |
 |------|------|
 | `def` | `test_document_limit_checks_and_register_unregister` |
+| `def` | `test_check_then_register_race_over_admits_past_the_storage_limit` |
+| `def` | `test_check_and_reserve_document_size_closes_the_admission_race` |
+| `def` | `test_check_and_reserve_document_size_thread_race_admits_only_one` |
+| `async def` | `test_check_and_reserve_document_size_async_race_admits_only_one` |
+| `def` | `test_check_and_reserve_document_size_release_on_failure_frees_the_slot` |
 | `def` | `test_health_summary_stats_and_cleanup_recommendation` |
 | `def` | `test_memory_health_paths_with_monkeypatched_psutil` |
 | `async def` | `test_async_wrappers_delegate` |

@@ -118,19 +118,27 @@ async def handle_sync_connector_feed(context: dict[str, Any], args: dict[str, An
             scoped_file_id = compose_scoped_file_id(visible_file_id, **_scope_args(args))
             text_size = len(document.text.encode("utf-8"))
 
-            allowed_doc, error = await context["resource_manager"].check_document_size_async(
-                scoped_file_id, text_size
-            )
+            # Atomic check-and-reserve (#236 rank11) — a separate check then a
+            # post-ingest register left a window where two concurrent syncs
+            # could both pass admission before either registered.
+            allowed_doc, error = await context[
+                "resource_manager"
+            ].check_and_reserve_document_size_async(scoped_file_id, text_size)
             if not allowed_doc:
                 results.append({"file_id": visible_file_id, "success": False, "error": error})
                 continue
 
             metadata = dict(document.metadata)
             metadata.update({"connector_feed": feed_name, "source_id": document.source_id})
-            skeleton = await context["compressor"].ingest_file_async(
-                document.text, scoped_file_id, metadata
-            )
-            await context["resource_manager"].register_document_async(scoped_file_id, text_size)
+            try:
+                skeleton = await context["compressor"].ingest_file_async(
+                    document.text, scoped_file_id, metadata
+                )
+            except Exception:
+                # Ingest never happened — release the reservation rather than
+                # leaking counted space against a document that doesn't exist.
+                await context["resource_manager"].unregister_document_async(scoped_file_id)
+                raise
 
             graph = context["compressor"].graphs.get(scoped_file_id)
             if isinstance(graph, nx.Graph):
