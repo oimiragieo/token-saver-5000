@@ -249,6 +249,69 @@ class TestCodeSearch:
         assert result.matches == []
         proc.kill.assert_called_once()
 
+    def test_code_search_rejects_argument_injection(self) -> None:
+        """Patterns or directories starting with '-' or containing controls are rejected gracefully."""
+        with patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"):
+            # Leading dash flag injection attempt
+            res = code_search("--pre=/bin/sh", "/repo")
+            assert res.available is True
+            assert res.matches == []
+
+            # Control characters
+            res = code_search("pattern\x00inject", "/repo")
+            assert res.available is True
+            assert res.matches == []
+
+            # Empty pattern
+            res = code_search("", "/repo")
+            assert res.available is True
+            assert res.matches == []
+
+            # Directory leading dash
+            res = code_search("pattern", "-malicious-dir")
+            assert res.available is True
+            assert res.matches == []
+
+    def test_code_search_caps_output_bytes(self) -> None:
+        """code_search sets overflow=True and kills proc when max_bytes is exceeded."""
+        line = json.dumps({"file": "huge.py", "content": "x" * 500})
+        proc = _make_popen([line, line, line])
+
+        with (
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.Popen", return_value=proc),
+        ):
+            result = code_search("pattern", "/repo", max_bytes=600)
+
+        assert result.available is True
+        assert result.overflow is True
+        proc.kill.assert_called()
+
+    def test_ast_search_rejects_argument_injection(self) -> None:
+        """ast_search rejects leading dash or control characters in pattern, dir, or lang."""
+        with patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"):
+            res = ast_search("--rewrite=attack", "/repo")
+            assert res.available is True
+            assert res.matches == []
+
+            res = ast_search("pattern", "/repo", lang="--bad-flag")
+            assert res.available is True
+            assert res.matches == []
+
+    def test_ast_search_caps_output_bytes(self) -> None:
+        """ast_search marks overflow=True when output exceeds max_bytes."""
+        huge_stdout = json.dumps({"matches": [{"file": "f.py"}] * 100})
+        cp = _make_completed_process(huge_stdout)
+
+        with (
+            patch("src.tensor_grep_integration.shutil.which", return_value="/usr/bin/tg"),
+            patch("src.tensor_grep_integration.subprocess.run", return_value=cp),
+        ):
+            result = ast_search("pattern", "/repo", max_bytes=20)
+
+        assert result.available is True
+        assert result.overflow is True
+
 
 # ---------------------------------------------------------------------------
 # ast_search
