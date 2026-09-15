@@ -265,6 +265,14 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
             logger.debug(f"Cleared {len(keys_to_remove)} PageRank cache entries for {file_id}")
         return len(keys_to_remove)
 
+    def purge_document_caches(self, file_id: str) -> None:
+        """Purge all baseline skeleton and PageRank caches for a deleted file_id."""
+        if hasattr(self, "_baseline_skeleton_cache"):
+            self._baseline_skeleton_cache.pop(file_id, None)
+        if hasattr(self, "_baseline_skeleton_stats"):
+            self._baseline_skeleton_stats.pop(file_id, None)
+        self._clear_cache_for_doc(file_id)
+
     def _get_cached_pagerank(self, graph: nx.Graph, doc_id: str) -> Dict[str, float]:
         """
         Get PageRank scores with caching to avoid recomputation (v0.4.4, v0.8.0 audit fix).

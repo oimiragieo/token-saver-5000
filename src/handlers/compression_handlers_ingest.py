@@ -1193,6 +1193,8 @@ Tip: Use list_documents() to see all available documents first
                 del compressor.graphs[scoped_file_id]
             if scoped_file_id in compressor.file_metadata:
                 del compressor.file_metadata[scoped_file_id]
+            if hasattr(compressor, "purge_document_caches"):
+                compressor.purge_document_caches(scoped_file_id)
 
         # Remove retrieval history (plain dict on context — safe to mutate directly)
         if scoped_file_id in context["retrieval_history"]:

@@ -267,6 +267,8 @@ class CodeCompressionAdapter:
         # override so a deleted-then-re-ingested file_id without an explicit
         # skeleton_ratio doesn't silently inherit a stale prior request.
         tc._file_skeleton_ratio_overrides.pop(file_id, None)
+        if hasattr(tc, "purge_document_caches"):
+            tc.purge_document_caches(file_id)
 
         # Code compressor (if loaded)
         if self._code_compressor is not None:
