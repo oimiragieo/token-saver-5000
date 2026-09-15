@@ -12,6 +12,7 @@ Limits:
 import asyncio
 import logging
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
@@ -26,6 +27,15 @@ except ImportError:
 
 
 logger = logging.getLogger("resource_manager")
+
+
+@dataclass
+class ReservationToken:
+    """Token representing an in-flight resource reservation."""
+
+    token_id: str
+    file_id: str
+    size_mb: float
 
 
 @dataclass
@@ -62,6 +72,8 @@ class ResourceManager:
         """
         self.limits = limits or ResourceLimits()
         self.document_sizes: Dict[str, float] = {}  # file_id -> size in MB
+        self.pending_reservations: Dict[str, ReservationToken] = {}  # file_id -> ReservationToken
+        self.reservations_by_token: Dict[str, ReservationToken] = {}  # token_id -> ReservationToken
 
         # Concurrency protection (v0.8.0 audit fix - Issue 3)
         # Uses threading.Lock since operations are fast in-memory dict updates (<1ms).
@@ -144,6 +156,128 @@ class ResourceManager:
             )
 
         return True, None
+
+    def reserve_document(
+        self, file_id: str, size_bytes: int
+    ) -> tuple[Optional[ReservationToken], Optional[str]]:
+        """
+        Atomically check limits and reserve capacity for a document ingestion.
+
+        Prevents TOCTOU races by tracking pending reservations alongside committed sizes.
+
+        Args:
+            file_id: Document identifier
+            size_bytes: Document size in bytes
+
+        Returns:
+            (ReservationToken, None) on success, or (None, error_message) on failure
+        """
+        size_mb = size_bytes / (1024 * 1024)
+
+        with self._lock:
+            # Check individual document size
+            if size_mb > self.limits.max_document_size_mb:
+                return None, (
+                    f"Document too large: {size_mb:.1f}MB exceeds limit of {self.limits.max_document_size_mb:.1f}MB\n"
+                    f"Tip: Split document into smaller sections or increase max_document_size_mb"
+                )
+
+            # Check effective document count including pending non-reingest reservations
+            is_reingest = file_id in self.document_sizes or file_id in self.pending_reservations
+            unique_docs = set(self.document_sizes.keys()) | set(self.pending_reservations.keys())
+            if not is_reingest and len(unique_docs) >= self.limits.max_documents:
+                return None, (
+                    f"Too many documents: {len(unique_docs)} >= {self.limits.max_documents}\n"
+                    f"Tip: Delete old documents or increase max_documents"
+                )
+
+            # Check storage limit
+            # If this file_id is currently stored or pending, subtract its old size
+            old_size_mb = self.document_sizes.get(file_id, 0.0)
+            if file_id in self.pending_reservations:
+                old_size_mb = max(old_size_mb, self.pending_reservations[file_id].size_mb)
+
+            committed_total_mb = sum(self.document_sizes.values())
+            pending_total_mb = sum(token.size_mb for token in self.reservations_by_token.values())
+            candidate_total_mb = (committed_total_mb + pending_total_mb) - old_size_mb + size_mb
+
+            if candidate_total_mb > self.limits.max_total_storage_mb:
+                return None, (
+                    f"Total storage limit exceeded: {candidate_total_mb:.1f}MB > {self.limits.max_total_storage_mb:.1f}MB\n"
+                    f"Tip: Delete old documents or increase max_total_storage_mb\n"
+                    f"   Current documents: {len(unique_docs)}, Total size: {committed_total_mb + pending_total_mb:.1f}MB"
+                )
+
+            token = ReservationToken(
+                token_id=str(uuid.uuid4()),
+                file_id=file_id,
+                size_mb=size_mb,
+            )
+            self.pending_reservations[file_id] = token
+            self.reservations_by_token[token.token_id] = token
+
+            logger.info(f"Reserved {size_mb:.2f}MB for document {file_id} (token {token.token_id})")
+            return token, None
+
+    def commit_document(self, token: ReservationToken) -> bool:
+        """
+        Commit a previously reserved document capacity upon successful ingestion.
+
+        Args:
+            token: ReservationToken returned by reserve_document
+
+        Returns:
+            True if committed successfully, False if already committed or invalid
+        """
+        with self._lock:
+            if token.token_id not in self.reservations_by_token:
+                return False
+
+            self.reservations_by_token.pop(token.token_id, None)
+            self.pending_reservations.pop(token.file_id, None)
+            self.document_sizes[token.file_id] = token.size_mb
+            logger.info(
+                f"Committed reservation for document {token.file_id}: {token.size_mb:.2f}MB"
+            )
+            return True
+
+    def release_document(self, token: ReservationToken) -> bool:
+        """
+        Release a previously reserved document capacity upon failed or cancelled ingestion.
+
+        Args:
+            token: ReservationToken returned by reserve_document
+
+        Returns:
+            True if released, False if not found or already committed/released
+        """
+        with self._lock:
+            if token.token_id not in self.reservations_by_token:
+                return False
+
+            self.reservations_by_token.pop(token.token_id, None)
+            self.pending_reservations.pop(token.file_id, None)
+            logger.info(f"Released reservation for document {token.file_id}: {token.size_mb:.2f}MB")
+            return True
+
+    async def reserve_document_async(
+        self, file_id: str, size_bytes: int
+    ) -> tuple[Optional[ReservationToken], Optional[str]]:
+        """Async wrapper for reserve_document."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, lambda: self.reserve_document(file_id, size_bytes)
+        )
+
+    async def commit_document_async(self, token: ReservationToken) -> bool:
+        """Async wrapper for commit_document."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, lambda: self.commit_document(token))
+
+    async def release_document_async(self, token: ReservationToken) -> bool:
+        """Async wrapper for release_document."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, lambda: self.release_document(token))
 
     def register_document(self, file_id: str, size_bytes: int):
         """

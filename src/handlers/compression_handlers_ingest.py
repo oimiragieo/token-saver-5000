@@ -143,14 +143,25 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
 
     validate_file_id(scoped_file_id, context, must_exist=False)
 
-    # Check resource limits BEFORE ingestion
-    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
+    # Check resource limits and atomically reserve capacity BEFORE ingestion (ARCH-AUDIT-07)
     text_size = len(text.encode("utf-8"))
-    allowed, error_msg = await context["resource_manager"].check_document_size_async(
-        scoped_file_id, text_size
+    reservation_token = None
+    res_mgr = context.get("resource_manager")
+    res_tuple = await _call_explicit_optional_method(
+        res_mgr, "reserve_document_async", scoped_file_id, text_size
     )
-    if not allowed:
-        raise ValueError(error_msg)
+    if res_tuple is not None:
+        reservation_token, error_msg = res_tuple
+        if error_msg:
+            raise ValueError(error_msg)
+    elif res_mgr is not None and hasattr(res_mgr, "check_document_size_async"):
+        check_res = await _resolve_awaitable(
+            res_mgr.check_document_size_async(scoped_file_id, text_size)
+        )
+        if check_res is not None:
+            allowed, error_msg = check_res
+            if not allowed:
+                raise ValueError(error_msg)
 
     logger.info(
         f"Ingesting document: {scoped_file_id} ({len(text)} chars, {text_size / 1024:.1f}KB)"
@@ -181,14 +192,20 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
             text, scoped_file_id, metadata, chunking_strategy=chunking_strategy
         )
     except Exception as e:
+        if reservation_token is not None:
+            await _call_explicit_optional_method(
+                res_mgr, "release_document_async", reservation_token
+            )
         raise RuntimeError(
             f"Failed to ingest document: {str(e)}\n"
             "Tip: Check that text is valid and file_id contains only alphanumeric and underscores"
         ) from e
 
-    # Register with resource manager
-    # v0.8.0 audit fix: use async wrapper to avoid blocking event loop
-    await context["resource_manager"].register_document_async(scoped_file_id, text_size)
+    # Register/commit with resource manager
+    if reservation_token is not None:
+        await _call_explicit_optional_method(res_mgr, "commit_document_async", reservation_token)
+    elif res_mgr is not None and hasattr(res_mgr, "register_document_async"):
+        await _resolve_awaitable(res_mgr.register_document_async(scoped_file_id, text_size))
 
     # Persist to storage
     try:
