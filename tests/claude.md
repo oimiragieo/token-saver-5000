@@ -2177,6 +2177,17 @@ Phase 0 MCP contract tests for core stable runtime surfaces.
 | `def` | `test_recommend_setup_target_defaults_to_desktop_for_plain_directory` |
 | `def` | `test_build_status_report_recommends_follow_up_command` |
 
+#### `test_mcp_registry.py`
+
+Parity and characterization tests for the typed MCP engine registry.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_registry_is_the_schema_and_handler_join` |
+| `def` | `test_setup_is_a_projection_of_registry_and_profiles_are_unchanged` |
+| `def` | `test_execution_metadata_has_typed_policy_homes_and_independent_flags` |
+| `async def` | `test_registry_handler_proxy_observes_runtime_handler_patches` |
+
 #### `test_mcp_routing.py`
 
 Unit tests for MCP Core Routing (mcp_core package)

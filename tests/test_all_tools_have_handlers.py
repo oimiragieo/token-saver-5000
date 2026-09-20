@@ -1,16 +1,8 @@
 """Verify every registered MCP tool has a dispatch handler."""
 
-from src.handlers.mcp_core import setup_mcp_tools
-from src.handlers.mcp_core.dispatch import route_tool_call  # noqa: F401 — import side
+from src.handlers.mcp_core import registered_tool_names, setup_mcp_tools
 
-import re
-from pathlib import Path
-
-_DISPATCH_PATH = Path(__file__).resolve().parents[1] / "src/handlers/mcp_core/dispatch.py"
-_ROUTER_KEYS = re.findall(
-    r'"([a-z_][a-z0-9_]*)":\s+\w+\.handle',
-    _DISPATCH_PATH.read_text(encoding="utf-8"),
-)
+_ROUTER_KEYS = tuple(sorted(registered_tool_names("full")))
 
 
 def test_all_full_profile_tools_have_router_handlers():
