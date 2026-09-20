@@ -1029,6 +1029,7 @@ Resource Management for Semantic Modulator
 
 | Kind | Name |
 |------|------|
+| `class` | `ReservationToken` |
 | `class` | `ResourceLimits` |
 | `class` | `ResourceManager` |
 
@@ -1300,6 +1301,8 @@ Optional tensor-grep integration for AST-aware code compression and search.
 
 | Kind | Name |
 |------|------|
+| `class` | `TgInputError` |
+| `def` | `sanitize_tg_positional` |
 | `class` | `RepoMapResult` |
 | `class` | `CodeSearchResult` |
 | `class` | `ASTSearchResult` |

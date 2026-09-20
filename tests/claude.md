@@ -1257,6 +1257,15 @@ Tests for dead_code_detector.py -- import-graph-based dead file detection.
 | `def` | `test_the_import_graph_is_still_correct` |
 | `def` | `test_a_broken_symlink_does_not_abort_the_scan` |
 
+#### `test_delete_document_cache_purge.py`
+
+(no module docstring — see symbols below)
+
+| Kind | Name |
+|------|------|
+| `def` | `test_semantic_compressor_purge_document_caches` |
+| `def` | `test_code_compression_adapter_deletes_document_caches` |
+
 #### `test_dependency_major_caps.py`
 
 Dependencies whose API we CALL must carry a major-version cap.
@@ -3186,6 +3195,16 @@ resource manager — consolidated from coverage_boost1-4/4b (backlog N10 re-fili
 | `class` | `TestResourceManager` |
 | `class` | `TestResourceHandlers` |
 | `class` | `TestResourceHandlersDiagnostics` |
+
+#### `test_resource_reservation_contract.py`
+
+Tests for atomic resource reservation in token-saver-5000 (ARCH-AUDIT-07).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_reserve_commit_release_lifecycle` |
+| `def` | `test_reserve_release_lifecycle` |
+| `def` | `test_concurrent_reservations_cannot_exceed_capacity` |
 
 #### `test_response_formatter.py`
 
