@@ -264,7 +264,7 @@ _HANDLER_SPECS: dict[str, tuple[ModuleType, str]] = {
     "invalidate_fact": (th, "handle_invalidate_fact"),
     "check_context_budget": (ch, "handle_check_context_budget"),
     "prune_by_relevance": (ch, "handle_prune_by_relevance"),
-    "get_multi_level_skeleton": (ch, "handle_get_multi_level_skeleton"),
+    "get_multi_level_skeleton": (ch, "handle_multi_level_skeleton"),
     "evict_stale": (ch, "handle_evict_stale"),
     "advise_context": (ch, "handle_advise_context"),
     "get_compression_insights": (ch, "handle_get_compression_insights"),
@@ -425,6 +425,14 @@ def _build_registry() -> tuple[RegisteredTool, ...]:
         missing = sorted(schema_names - handler_names)
         orphaned = sorted(handler_names - schema_names)
         raise RuntimeError(f"MCP registry drift: missing={missing}, orphaned={orphaned}")
+
+    unresolved = sorted(
+        f"{name}:{module.__name__}.{attribute}"
+        for name, (module, attribute) in _HANDLER_SPECS.items()
+        if not hasattr(module, attribute)
+    )
+    if unresolved:
+        raise RuntimeError(f"MCP registry contains unresolved handlers: {unresolved}")
 
     entries = []
     for name, schema in schema_by_name.items():

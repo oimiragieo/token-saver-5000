@@ -2195,7 +2195,10 @@ Parity and characterization tests for the typed MCP engine registry.
 | `def` | `test_registry_is_the_schema_and_handler_join` |
 | `def` | `test_setup_is_a_projection_of_registry_and_profiles_are_unchanged` |
 | `def` | `test_execution_metadata_has_typed_policy_homes_and_independent_flags` |
+| `def` | `test_every_handler_proxy_resolves_to_a_real_module_attribute` |
+| `def` | `test_registry_build_rejects_an_unresolved_handler` |
 | `async def` | `test_registry_handler_proxy_observes_runtime_handler_patches` |
+| `async def` | `test_get_multi_level_skeleton_routes_to_the_live_handler` |
 
 #### `test_mcp_routing.py`
 
