@@ -116,3 +116,45 @@ async def test_get_multi_level_skeleton_routes_to_the_live_handler():
         )
     handler.assert_awaited_once_with(context, {"doc_id": "fixture"})
     assert result == "skeleton"
+
+
+def test_registry_build_rejects_non_coroutine_handler(monkeypatch):
+    """Negative control: a synchronous handler must fail registry construction."""
+    module, _ = _HANDLER_SPECS["ingest_context"]
+    monkeypatch.setattr(module, "_dummy_sync_handler_for_test", lambda ctx, args: "sync", raising=False)
+    monkeypatch.setitem(
+        _HANDLER_SPECS,
+        "ingest_context",
+        (module, "_dummy_sync_handler_for_test"),
+    )
+
+    with pytest.raises(
+        TypeError,
+        match="ingest_context:src.handlers.compression_handlers._dummy_sync_handler_for_test",
+    ):
+        _build_registry()
+
+
+def test_registered_tool_rejects_non_callable_handler():
+    """Negative control: non-callable handler raises TypeError."""
+    first_tool = REGISTERED_TOOLS[0]
+    with pytest.raises(TypeError, match="RegisteredTool.handler must be callable"):
+        RegisteredTool(
+            schema=first_tool.schema,
+            handler="not_a_callable",  # type: ignore[arg-type]
+            fixture_id="test_fix",
+            test_policy="test_pol",
+        )
+
+
+def test_registered_tool_rejects_non_coroutine_handler():
+    """Negative control: sync function handler raises TypeError."""
+    first_tool = REGISTERED_TOOLS[0]
+    with pytest.raises(TypeError, match="RegisteredTool.handler must be a coroutine function"):
+        RegisteredTool(
+            schema=first_tool.schema,
+            handler=lambda ctx, args: "sync_return",  # type: ignore[arg-type]
+            fixture_id="test_fix",
+            test_policy="test_pol",
+        )
+

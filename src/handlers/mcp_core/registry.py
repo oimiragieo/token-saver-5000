@@ -95,6 +95,11 @@ class RegisteredTool:
             raise ValueError("RegisteredTool.timeout must be non-negative")
         if any(not dependency.strip() for dependency in self.deps):
             raise ValueError("RegisteredTool.deps cannot contain empty names")
+        if not callable(self.handler):
+            raise TypeError("RegisteredTool.handler must be callable")
+        import inspect
+        if not inspect.iscoroutinefunction(self.handler):
+            raise TypeError("RegisteredTool.handler must be a coroutine function")
         if self.read_only and self.destructive:
             raise ValueError("RegisteredTool cannot be both read_only and destructive")
         if self.destructive and not self.mutates_state:
@@ -433,6 +438,20 @@ def _build_registry() -> tuple[RegisteredTool, ...]:
     )
     if unresolved:
         raise RuntimeError(f"MCP registry contains unresolved handlers: {unresolved}")
+
+    import inspect
+
+    invalid_handlers = sorted(
+        f"{name}:{module.__name__}.{attribute}"
+        for name, (module, attribute) in _HANDLER_SPECS.items()
+        if hasattr(module, attribute)
+        and (
+            not callable(getattr(module, attribute))
+            or not inspect.iscoroutinefunction(getattr(module, attribute))
+        )
+    )
+    if invalid_handlers:
+        raise TypeError(f"MCP registry contains non-coroutine handlers: {invalid_handlers}")
 
     entries = []
     for name, schema in schema_by_name.items():
