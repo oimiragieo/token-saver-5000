@@ -48,6 +48,27 @@ class SessionSummary:
     tool_call_stats: dict[str, int] = field(default_factory=dict)
     total_tokens_saved: int = 0
 
+    def to_context_digest(self) -> str:
+        """Markdown digest bounded to 800 characters for re-orientation after compaction."""
+        files = [f.get("file_id") for f in self.ingested_files if f.get("file_id")]
+        files_str = ", ".join(str(f)[:64] for f in files[:5]) if files else "none"
+        if len(files) > 5:
+            files_str += f" (+{len(files) - 5} more)"
+        profile_str = (self.active_profile or "default")[:48]
+        tools_str = (
+            ", ".join(f"{k[:32]}:{v}" for k, v in sorted(self.tool_call_stats.items())[:5])
+            or "none"
+        )
+        if len(self.tool_call_stats) > 5:
+            tools_str += f" (+{len(self.tool_call_stats) - 5} more)"
+        return (
+            f"[gotcontext session digest: session `{self.session_id[:16]}` | "
+            f"{self.event_count} events | {self.total_tokens_saved:,} tokens saved]\n"
+            f"- Active profile: `{profile_str}`\n"
+            f"- Ingested context: {files_str}\n"
+            f"- Activity: {tools_str}"
+        )[:800]
+
 
 class SessionJournal:
     """

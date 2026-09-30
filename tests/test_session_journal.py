@@ -228,3 +228,35 @@ class TestWALMode:
         j.close()
         assert row is not None
         assert row[0] == "wal"
+
+
+class TestContextDigest:
+    def test_to_context_digest_format(self, tmp_path: Path) -> None:
+        """SessionSummary.to_context_digest() returns a compact formatted string."""
+        j = _make_journal(tmp_path, session_id="sess-digest-123")
+        j.write_event("profile", {"profile_name": "balanced"})
+        j.write_event(
+            "ingest", {"file_id": "api/main.py", "original_tokens": 1000, "compressed_tokens": 150}
+        )
+        j.write_event("tool_call", {"tool_name": "read_skeleton"})
+        summary = j.recover()
+        j.close()
+
+        digest = summary.to_context_digest()
+        assert "sess-digest-123" in digest
+        assert "850 tokens saved" in digest
+        assert "balanced" in digest
+        assert "api/main.py" in digest
+        assert "read_skeleton:1" in digest
+
+    def test_digest_bounds_large_session_metadata(self) -> None:
+        summary = SessionSummary(
+            session_id="session" * 100,
+            ingested_files=[{"file_id": "file" * 1000} for _ in range(20)],
+            active_profile="profile" * 1000,
+            tool_call_stats={f"tool{i}" * 100: i for i in range(100)},
+        )
+        digest = summary.to_context_digest()
+        assert len(digest) <= 800
+        assert "session digest" in digest
+        assert "+15 more" in digest
