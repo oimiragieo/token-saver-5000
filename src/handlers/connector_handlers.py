@@ -118,19 +118,46 @@ async def handle_sync_connector_feed(context: dict[str, Any], args: dict[str, An
             scoped_file_id = compose_scoped_file_id(visible_file_id, **_scope_args(args))
             text_size = len(document.text.encode("utf-8"))
 
-            allowed_doc, error = await context["resource_manager"].check_document_size_async(
-                scoped_file_id, text_size
-            )
-            if not allowed_doc:
-                results.append({"file_id": visible_file_id, "success": False, "error": error})
-                continue
+            res_mgr = context.get("resource_manager")
+            reservation_token = None
+            if res_mgr is not None and hasattr(res_mgr, "reserve_document_async"):
+                reservation_token, error = await res_mgr.reserve_document_async(
+                    scoped_file_id, text_size
+                )
+                if error:
+                    results.append({"file_id": visible_file_id, "success": False, "error": error})
+                    continue
+            elif res_mgr is not None and hasattr(res_mgr, "check_document_size_async"):
+                allowed_doc, error = await res_mgr.check_document_size_async(
+                    scoped_file_id, text_size
+                )
+                if not allowed_doc:
+                    results.append({"file_id": visible_file_id, "success": False, "error": error})
+                    continue
 
             metadata = dict(document.metadata)
             metadata.update({"connector_feed": feed_name, "source_id": document.source_id})
-            skeleton = await context["compressor"].ingest_file_async(
-                document.text, scoped_file_id, metadata
-            )
-            await context["resource_manager"].register_document_async(scoped_file_id, text_size)
+            try:
+                skeleton = await context["compressor"].ingest_file_async(
+                    document.text, scoped_file_id, metadata
+                )
+            except Exception:
+                if (
+                    reservation_token is not None
+                    and res_mgr is not None
+                    and hasattr(res_mgr, "release_document_async")
+                ):
+                    await res_mgr.release_document_async(reservation_token)
+                raise
+
+            if (
+                reservation_token is not None
+                and res_mgr is not None
+                and hasattr(res_mgr, "commit_document_async")
+            ):
+                await res_mgr.commit_document_async(reservation_token)
+            elif res_mgr is not None and hasattr(res_mgr, "register_document_async"):
+                await res_mgr.register_document_async(scoped_file_id, text_size)
 
             graph = context["compressor"].graphs.get(scoped_file_id)
             if isinstance(graph, nx.Graph):
