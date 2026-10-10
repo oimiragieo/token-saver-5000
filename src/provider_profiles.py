@@ -353,6 +353,22 @@ _PROFILES = {
         recommended_output_format="toon",
         notes="OpenAI GPT-5.5 flagship (2026-04-23). 1M-token context, $5/$30 per MTok input/output. Compression ROI is high given the expensive output rate.",
     ),
+    "gpt-5.5-instant": ProviderProfile(
+        model="gpt-5.5-instant",
+        provider="openai",
+        input_cost_per_million=2.50,
+        output_cost_per_million=15.0,
+        cached_input_cost_per_million=0.25,
+        context_window=1_000_000,
+        cache_read_field="cached_tokens",
+        minimum_cacheable_tokens=1024,
+        cache_token_increment=128,
+        supports_prompt_cache_key=True,
+        cache_routing_strategy="Use stable prompt_cache_key for instant low-latency chat workflows; benefits from fast prefix cache lookups.",
+        prompt_prefix_strategy="Keep system instructions and static tools at the head for sub-second responsive turns.",
+        recommended_output_format="toon",
+        notes="OpenAI ChatGPT Instant low-latency responsive tier with 1M context and 90% cache discount.",
+    ),
     # GPT-5.6 family (GA 2026-07-09; Sol/Terra/Luna). Verified vs OpenRouter
     # 2026-09-14: Sol $2/$10 (cache $0.20), Terra $2/$12 (cache $0.20), Luna $0.20/$1.20 (cache $0.02).
     # Cached-read is a flat 90% discount; cache writes cost 1.25x uncached input (30-min min cache).
@@ -558,6 +574,10 @@ _ALIASES = {
     "gpt-4-mini": "gpt-4.1-mini",
     # GPT-5.5 hyphen alias (e.g. used as "gpt-5-5" in some clients)
     "gpt-5-5": "gpt-5.5",
+    "gpt-5.5-instant": "gpt-5.5-instant",
+    "gpt-5-5-instant": "gpt-5.5-instant",
+    "instant": "gpt-5.5-instant",
+    "chatgpt-instant": "gpt-5.5-instant",
     # GPT-5.6 family (GA 2026-07-09). Unversioned "gpt-5.6" routes to Sol per
     # OpenAI's own alias; hyphen variants for clients that dot-strip.
     "gpt-5.6": "gpt-5.6-sol",
