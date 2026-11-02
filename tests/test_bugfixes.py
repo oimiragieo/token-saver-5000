@@ -163,6 +163,7 @@ class TestHandleIngestProtection:
         mock_estimate.compression_ratio = 0
 
         compressor = AsyncMock()
+        compressor.set_file_skeleton_ratio = MagicMock()
         compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
         compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
         compressor.estimate_compression = MagicMock(return_value=mock_estimate)
@@ -204,6 +205,7 @@ class TestHandleIngestProtection:
         mock_estimate.compression_ratio = 5.0
 
         compressor = AsyncMock()
+        compressor.set_file_skeleton_ratio = MagicMock()
         compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
         compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
         compressor.estimate_compression = MagicMock(return_value=mock_estimate)
@@ -857,6 +859,7 @@ class TestMetricsWiring:
         mock_skeleton.skeleton_text = "test"
 
         compressor = AsyncMock()
+        compressor.set_file_skeleton_ratio = MagicMock()
         compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
         compressor.graphs = {"test": MagicMock()}
         compressor.chunks = {"test_n0": MagicMock()}

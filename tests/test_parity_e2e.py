@@ -41,6 +41,7 @@ def platform_context():
         "resource_manager": Mock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
             check_document_size_async=AsyncMock(return_value=(True, None)),
+            reserve_document_async=AsyncMock(return_value=(None, None)),
             register_document_async=AsyncMock(),
         ),
         "sync_manager": Mock(register_file=Mock(), export_metadata=Mock(return_value={})),
