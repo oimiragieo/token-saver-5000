@@ -6,7 +6,7 @@ guard used the ASCII-only `[A-Za-z0-9]`, so a pure non-Latin sentence (CJK, Cyri
 Arabic) was treated as non-substantive -> every candidate was skipped -> the summary
 fell through to the `cleaned.strip()` fallback that RETAINS the leading markdown
 marker. Result: `Summary: "# 部署手册"` (the '#' leaked). English stripped it fine.
-Fix: `[^\W_]` (Unicode letter/digit, no '_') so non-Latin text is substantive and
+Fix: `[^\\W_]` (Unicode letter/digit, no '_') so non-Latin text is substantive and
 gets the markdown-heading strip -- while '!!!' / '---' / '___' stay skipped.
 
 BUG 2 (_extract_key_entities): `.strip()` only touches word ends, so a code fragment

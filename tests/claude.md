@@ -1083,6 +1083,7 @@ Tests for managed connector feed handlers.
 |------|------|
 | `def` | `connector_context` |
 | `async def` | `test_create_list_get_and_sync_connector_feed` |
+| `async def` | `test_sync_connector_feed_reservation_lifecycle` |
 
 #### `test_connector_registry.py`
 
@@ -2199,6 +2200,9 @@ Parity and characterization tests for the typed MCP engine registry.
 | `def` | `test_registry_build_rejects_an_unresolved_handler` |
 | `async def` | `test_registry_handler_proxy_observes_runtime_handler_patches` |
 | `async def` | `test_get_multi_level_skeleton_routes_to_the_live_handler` |
+| `def` | `test_registry_build_rejects_non_coroutine_handler` |
+| `def` | `test_registered_tool_rejects_non_callable_handler` |
+| `def` | `test_registered_tool_rejects_non_coroutine_handler` |
 
 #### `test_mcp_routing.py`
 
@@ -2988,6 +2992,7 @@ Golden-ish regression tests for prompt version comparison output.
 | `def` | `test_gpt_5_6_alias_resolves_to_sol` |
 | `def` | `test_minimum_cacheable_tokens_matches_verified_provider_docs` |
 | `def` | `test_claude_mythos_5_minimum_cacheable_tokens_is_unverified_placeholder` |
+| `def` | `test_gpt_5_5_instant_profile` |
 
 #### `test_proxy_cli.py`
 
@@ -3602,6 +3607,7 @@ Tests for SessionJournal (src/session_journal.py).
 | `class` | `TestSessionIsolation` |
 | `class` | `TestPersistence` |
 | `class` | `TestWALMode` |
+| `class` | `TestContextDigest` |
 
 #### `test_skeleton_ratio_knob.py`
 
