@@ -121,7 +121,9 @@ async def test_get_multi_level_skeleton_routes_to_the_live_handler():
 def test_registry_build_rejects_non_coroutine_handler(monkeypatch):
     """Negative control: a synchronous handler must fail registry construction."""
     module, _ = _HANDLER_SPECS["ingest_context"]
-    monkeypatch.setattr(module, "_dummy_sync_handler_for_test", lambda ctx, args: "sync", raising=False)
+    monkeypatch.setattr(
+        module, "_dummy_sync_handler_for_test", lambda ctx, args: "sync", raising=False
+    )
     monkeypatch.setitem(
         _HANDLER_SPECS,
         "ingest_context",
@@ -157,4 +159,3 @@ def test_registered_tool_rejects_non_coroutine_handler():
             fixture_id="test_fix",
             test_policy="test_pol",
         )
-

@@ -71,6 +71,7 @@ async def test_handle_ingest_persists_only_own_chunks_not_prefix_sibling():
     mock_estimate.compression_ratio = 5.0
 
     compressor = AsyncMock()
+    compressor.set_file_skeleton_ratio = MagicMock()
     compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
     compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
     compressor.chunks = {
@@ -187,6 +188,7 @@ def _plain_semantic_compressor(chunks: dict, graphs: dict, file_metadata: dict |
     c.file_metadata = file_metadata or {}
     c._baseline_skeleton_stats = {fid: {"skeleton_tokens": 10, "ratio": 2.0} for fid in graphs}
     c._baseline_skeleton_cache = {}
+    c._pagerank_cache = {}
     return c
 
 
@@ -300,6 +302,7 @@ async def test_connector_sync_persists_only_own_chunks_not_prefix_sibling():
         "resource_manager": MagicMock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
             check_document_size_async=AsyncMock(return_value=(True, None)),
+            reserve_document_async=AsyncMock(return_value=(None, None)),
             register_document_async=AsyncMock(),
         ),
         "sync_manager": MagicMock(register_file=MagicMock()),

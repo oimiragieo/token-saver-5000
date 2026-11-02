@@ -1686,7 +1686,7 @@ async def test_compress_codebase_rejects_out_of_tree_directory():
     from src.path_validator import PathValidator
 
     context = {"path_validator": PathValidator()}
-    target = "/etc" if os.name != "nt" else "C:\Windows\System32"
+    target = "/etc" if os.name != "nt" else r"C:\Windows\System32"
     result = _json.loads(await ch.handle_compress_codebase(context, {"directory": target}))
     assert result["status"] == "error"
     assert "directory" in result["error"].lower() or "path" in result["error"].lower()
@@ -1701,7 +1701,7 @@ async def test_search_code_rejects_out_of_tree_directory():
     from src.path_validator import PathValidator
 
     context = {"path_validator": PathValidator()}
-    target = "/etc" if os.name != "nt" else "C:\Windows\System32"
+    target = "/etc" if os.name != "nt" else r"C:\Windows\System32"
     result = _json.loads(
         await ch.handle_search_code(context, {"pattern": "x", "directory": target})
     )
