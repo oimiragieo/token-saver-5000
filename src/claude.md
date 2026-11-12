@@ -850,6 +850,15 @@ OpenTelemetry distributed tracing with async context propagation.
 | `def` | `get_observability` |
 | `def` | `configure_observability` |
 
+#### `outbound_address_policy.py`
+
+Stdlib-only public-unicast address policy for outbound fetch adapters.
+
+| Kind | Name |
+|------|------|
+| `def` | `normalize_address` |
+| `def` | `rejection_reason` |
+
 #### `pagerank_numpy.py`
 
 NumPy PageRank for environments without SciPy (Docker ONNX-only image).
