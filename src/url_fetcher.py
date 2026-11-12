@@ -20,6 +20,7 @@ Hostname rules, error contracts, DNS checks and transport behavior remain local.
 import asyncio
 import ipaddress
 import socket
+from threading import BoundedSemaphore, Thread
 from typing import Optional
 
 import httpx
@@ -31,6 +32,8 @@ from .outbound_address_policy import normalize_address, rejection_reason
 # ---------------------------------------------------------------------------
 
 _MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_TOTAL_TIMEOUT = 30.0
+_DNS_SLOTS = BoundedSemaphore(4)
 
 _ALLOWED_CONTENT_TYPE_PREFIXES = (
     "text/",
@@ -228,7 +231,62 @@ def _pin_request(
 # ---------------------------------------------------------------------------
 
 
+async def _run_dns(function, *args):
+    """Observe DNS in a bounded daemon lane; cancellation does not free a running slot."""
+    slots = _DNS_SLOTS
+    if not slots.acquire(blocking=False):
+        raise URLFetchError("DNS observation capacity is exhausted.", code="timeout")
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def publish(result, error):
+        if not future.done():
+            if error is None:
+                future.set_result(result)
+            else:
+                future.set_exception(error)
+
+    def worker():
+        try:
+            try:
+                outcome = (function(*args), None)
+            except BaseException as error:
+                outcome = (None, error)
+            try:
+                loop.call_soon_threadsafe(publish, *outcome)
+            except RuntimeError:
+                pass  # The originating loop may have closed after caller cancellation.
+        finally:
+            slots.release()
+
+    try:
+        Thread(target=worker, daemon=True).start()
+    except BaseException:
+        slots.release()
+        raise
+    return await future
+
+
 async def fetch_url(
+    url: str,
+    *,
+    _transport: Optional[httpx.AsyncBaseTransport] = None,
+    _skip_dns: Optional[bool] = None,
+) -> str:
+    """Fetch text with one overall operation deadline and cooperative cleanup."""
+    task = asyncio.create_task(_fetch_url(url, _transport=_transport, _skip_dns=_skip_dns))
+    try:
+        done, _ = await asyncio.wait({task}, timeout=_TOTAL_TIMEOUT)
+        if not done:
+            raise URLFetchError(f"Overall deadline exceeded for '{url}'.", code="timeout")
+        return await task
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def _fetch_url(
     url: str,
     *,
     _transport: Optional[httpx.AsyncBaseTransport] = None,
@@ -289,7 +347,7 @@ async def fetch_url(
         # authoritative nameserver stalls only THIS request's thread, not the whole
         # worker's event loop (#219: a handful of concurrent slow-DNS ingests would
         # otherwise wedge the entire Fly machine's API).
-        first_ips = await asyncio.to_thread(_resolve_and_check_host, host)
+        first_ips = await _run_dns(_resolve_and_check_host, host)
 
     # --- Build client ---
     client_kwargs: dict = {
@@ -311,7 +369,7 @@ async def fetch_url(
         request_extensions: Optional[dict[str, str]] = None
         if not skip_dns and first_ips is not None:
             # Second resolution (rebind check) — also off the event loop (#219).
-            await asyncio.to_thread(_check_dns_rebinding, host, first_ips)
+            await _run_dns(_check_dns_rebinding, host, first_ips)
             request_url, request_headers, request_extensions = _pin_request(url, host, first_ips)
 
         try:
