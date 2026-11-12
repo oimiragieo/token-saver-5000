@@ -4024,6 +4024,29 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `async def` | `test_server_error_raises_error` |
 | `async def` | `test_urlfetcherror_has_code_attribute` |
 | `def` | `test_urlfetcherror_construction` |
+| `async def` | `test_identity_encoding_controls_keep_request_pinning` |
+| `async def` | `test_encoded_response_rejected_before_iteration_or_decoder` |
+| `async def` | `test_gzip_expansion_rejected_before_decompression` |
+
+#### `test_url_fetcher_deadline.py`
+
+Overall fetch deadline, cancellation and bounded daemon-DNS lifecycle regressions.
+
+| Kind | Name |
+|------|------|
+| `async def` | `_until` |
+| `def` | `lane` |
+| `class` | `_Body` |
+| `def` | `_transport` |
+| `async def` | `test_deadline_and_external_cancel_at_each_phase` |
+| `async def` | `test_plain_success_closes_body` |
+| `async def` | `test_public_deadline_stops_finite_drip` |
+| `async def` | `test_abandoned_dns_holds_capacity_but_not_default_executor` |
+| `async def` | `test_worker_exception_and_start_failure_restore_slots` |
+| `async def` | `test_cancelled_future_ignores_queued_publication` |
+| `def` | `test_closed_origin_loop_releases_slot` |
+| `async def` | `test_completed_child_external_cancel_race_keeps_cancel` |
+| `def` | `test_permanently_blocked_dns_child_exits_without_executor_join` |
 
 #### `test_url_fetcher_ip_pinning.py`
 

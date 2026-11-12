@@ -96,7 +96,7 @@ jobs:
 
       - name: Compatibility smoke tests
         run: |
-          pytest -q -o addopts="" tests/test_health.py tests/test_server_aliases.py tests/test_mcp_packaging.py
+          pytest -q -o addopts="" tests/test_health.py tests/test_server_aliases.py tests/test_mcp_packaging.py tests/test_url_fetcher_deadline.py::test_completed_child_external_cancel_race_keeps_cancel
 
   package-validation:
     name: Package Validation

@@ -296,3 +296,105 @@ def test_urlfetcherror_construction():
     err = URLFetchError("test message", code="scheme_not_allowed")
     assert str(err) == "test message"
     assert err.code == "scheme_not_allowed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("encoding", [None, "identity", " \tIdEnTiTy\t "])
+@pytest.mark.parametrize("skip_dns", [False, True])
+async def test_identity_encoding_controls_keep_request_pinning(monkeypatch, encoding, skip_dns):
+    monkeypatch.setattr("src.url_fetcher._resolve_and_check_host", lambda host: {"8.8.8.8"})
+    monkeypatch.setattr("src.url_fetcher._check_dns_rebinding", lambda host, ips: None)
+    produced = []
+
+    async def body():
+        produced.append(b"plain text")
+        yield produced[-1]
+
+    def respond(request):
+        assert request.headers["accept-encoding"] == "identity"
+        assert request.headers["host"] == "example.com:8443"
+        assert request.url.host == ("example.com" if skip_dns else "8.8.8.8")
+        if not skip_dns:
+            assert request.extensions["sni_hostname"] == "example.com"
+        headers = {"content-type": "text/plain"}
+        if encoding is not None:
+            headers["cOnTeNt-EnCoDiNg"] = encoding
+        return httpx.Response(200, headers=headers, content=body())
+
+    result = await fetch_url(
+        "https://example.com:8443/doc", _transport=httpx.MockTransport(respond), _skip_dns=skip_dns
+    )
+    assert result == "plain text"
+    assert produced == [b"plain text"], "positive control must consume the response stream"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "encodings",
+    [
+        ["gzip"],
+        [" \tGZiP\t "],
+        ["deflate"],
+        ["br"],
+        [""],
+        ["identity, gzip"],
+        ["gzip, identity"],
+        ["identity, identity"],
+        ["identity", "gzip"],
+    ],
+)
+async def test_encoded_response_rejected_before_iteration_or_decoder(monkeypatch, encodings):
+    produced = []
+
+    async def body():
+        produced.append(True)
+        yield b"unread"
+
+    def decoder(response):
+        pytest.fail("encoded response reached HTTPX decoder selection")
+
+    monkeypatch.setattr(httpx.Response, "_get_content_decoder", decoder)
+    headers = [("content-type", "text/plain")]
+    headers.extend(("cOnTeNt-EnCoDiNg", value) for value in encodings)
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers=headers, content=body())
+    )
+    with pytest.raises(URLFetchError) as error:
+        await fetch_url("https://example.com/doc", _transport=transport)
+    assert error.value.code == "too_large"
+    assert "Content-Encoding" in str(error.value)
+    assert produced == [], "no body iteration; consumption is proven by the identity control"
+
+
+@pytest.mark.asyncio
+async def test_gzip_expansion_rejected_before_decompression(monkeypatch):
+    import gzip
+    from httpx._decoders import GZipDecoder
+    from src.url_fetcher import _MAX_BYTES
+
+    expanded = b"x" * (_MAX_BYTES + 1024 * 1024)
+    compressed = gzip.compress(expanded)
+    assert len(compressed) < _MAX_BYTES < len(expanded)
+    measured = {"wire_bytes": 0, "decoded_bytes": 0}
+    original_decode = GZipDecoder.decode
+
+    def decode(decoder, data):
+        result = original_decode(decoder, data)
+        measured["decoded_bytes"] += len(result)
+        return result
+
+    monkeypatch.setattr(GZipDecoder, "decode", decode)
+
+    async def body():
+        measured["wire_bytes"] += len(compressed)
+        yield compressed
+
+    headers = {"content-type": "text/plain", "content-encoding": "gzip"}
+    headers["content-length"] = str(len(compressed))
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers=headers, content=body())
+    )
+    with pytest.raises(URLFetchError) as error:
+        await fetch_url("https://example.com/expansion", _transport=transport)
+    assert error.value.code == "too_large"
+    assert measured == {"wire_bytes": 0, "decoded_bytes": 0}, measured
