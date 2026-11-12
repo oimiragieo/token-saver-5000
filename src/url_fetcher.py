@@ -295,6 +295,7 @@ async def fetch_url(
     client_kwargs: dict = {
         "follow_redirects": False,  # Mitigation 5: NO REDIRECTS
         "timeout": _TIMEOUT,  # Mitigation 7: TIMEOUT
+        "headers": {"Accept-Encoding": "identity"},
     }
     if _transport is not None:
         client_kwargs["transport"] = _transport
@@ -347,6 +348,15 @@ async def fetch_url(
                         f"({', '.join(_ALLOWED_CONTENT_TYPE_PREFIXES)}). "
                         "Only text and structured-data content types are accepted.",
                         code="content_type_not_allowed",
+                    )
+
+                # HTTPX decompresses before yielding bytes, so reject encodings before iteration.
+                content_encoding = response.headers.get("content-encoding", "identity")
+                if content_encoding.strip().lower() != "identity":
+                    raise URLFetchError(
+                        f"Content-Encoding '{content_encoding}' is not accepted under "
+                        "the response size limit. Only identity encoding is allowed.",
+                        code="too_large",
                     )
 
                 # --- Mitigation 6a: SIZE CAP — Content-Length header pre-check (fast reject) ---

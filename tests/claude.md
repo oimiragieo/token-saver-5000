@@ -4024,6 +4024,9 @@ Tests for SSRF-hardened URL fetcher (src/url_fetcher.py).
 | `async def` | `test_server_error_raises_error` |
 | `async def` | `test_urlfetcherror_has_code_attribute` |
 | `def` | `test_urlfetcherror_construction` |
+| `async def` | `test_identity_encoding_controls_keep_request_pinning` |
+| `async def` | `test_encoded_response_rejected_before_iteration_or_decoder` |
+| `async def` | `test_gzip_expansion_rejected_before_decompression` |
 
 #### `test_url_fetcher_ip_pinning.py`
 
