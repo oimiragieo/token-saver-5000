@@ -89,7 +89,9 @@ async def test_sync_connector_feed_reservation_lifecycle(connector_context):
         {
             "name": "res-feed",
             "connector_type": "web",
-            "config": {"pages": [{"url": "https://example.com/res", "content": "Reservation text"}]},
+            "config": {
+                "pages": [{"url": "https://example.com/res", "content": "Reservation text"}]
+            },
         },
     )
 

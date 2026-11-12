@@ -41,6 +41,9 @@ def platform_context():
         "resource_manager": Mock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
             check_document_size_async=AsyncMock(return_value=(True, None)),
+            reserve_document_async=AsyncMock(return_value=(object(), None)),
+            commit_document_async=AsyncMock(return_value=True),
+            release_document_async=AsyncMock(return_value=True),
             register_document_async=AsyncMock(),
         ),
         "sync_manager": Mock(register_file=Mock(), export_metadata=Mock(return_value={})),
@@ -209,6 +212,11 @@ async def test_platform_workflow_spans_memory_prompt_experiment_connector_and_mo
     assert connector_sync["ingested_documents"] == 1
     assert model_plan["status"] == "success"
     assert connector_sync["results"][0]["doc_id"].startswith("scope__w=acme")
+    platform_context["resource_manager"].reserve_document_async.assert_awaited_once()
+    platform_context["resource_manager"].commit_document_async.assert_awaited_once_with(
+        platform_context["resource_manager"].reserve_document_async.return_value[0]
+    )
+    platform_context["resource_manager"].release_document_async.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -273,4 +281,7 @@ async def test_workspace_scopes_isolate_memory_and_connector_outputs(platform_co
     assert all(result["workspace_id"] == "beta" for result in beta_search["results"])
     assert "__w=acme" in acme_sync["results"][0]["doc_id"]
     assert "__w=beta" in beta_sync["results"][0]["doc_id"]
+    assert platform_context["resource_manager"].reserve_document_async.await_count == 2
+    assert platform_context["resource_manager"].commit_document_async.await_count == 2
+    platform_context["resource_manager"].release_document_async.assert_not_awaited()
     assert acme_sync["results"][0]["doc_id"] != beta_sync["results"][0]["doc_id"]

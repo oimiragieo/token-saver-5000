@@ -187,6 +187,7 @@ def _plain_semantic_compressor(chunks: dict, graphs: dict, file_metadata: dict |
     c.file_metadata = file_metadata or {}
     c._baseline_skeleton_stats = {fid: {"skeleton_tokens": 10, "ratio": 2.0} for fid in graphs}
     c._baseline_skeleton_cache = {}
+    c._pagerank_cache = {}
     return c
 
 
@@ -300,6 +301,9 @@ async def test_connector_sync_persists_only_own_chunks_not_prefix_sibling():
         "resource_manager": MagicMock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
             check_document_size_async=AsyncMock(return_value=(True, None)),
+            reserve_document_async=AsyncMock(return_value=(object(), None)),
+            commit_document_async=AsyncMock(return_value=True),
+            release_document_async=AsyncMock(return_value=True),
             register_document_async=AsyncMock(),
         ),
         "sync_manager": MagicMock(register_file=MagicMock()),
@@ -315,6 +319,13 @@ async def test_connector_sync_persists_only_own_chunks_not_prefix_sibling():
     saved_chunks = persistence.save_document.call_args.kwargs["chunks"]
     assert "feed:doc-large_n0" not in saved_chunks
     assert set(saved_chunks) == {"feed:doc_n0"}
+    context["resource_manager"].reserve_document_async.assert_awaited_once_with(
+        "feed:doc", len(document.text.encode("utf-8"))
+    )
+    context["resource_manager"].commit_document_async.assert_awaited_once_with(
+        context["resource_manager"].reserve_document_async.return_value[0]
+    )
+    context["resource_manager"].release_document_async.assert_not_awaited()
 
 
 # =========================================================================

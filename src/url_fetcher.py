@@ -13,10 +13,8 @@ Implements 8 mitigations against Server-Side Request Forgery (SSRF):
   7. TIMEOUT — connect=10s, read=30s
   8. CONTENT-TYPE ALLOWLIST — text/*, application/json, application/xml, application/yaml, application/x-yaml
 
-Protection logic (items 2-4) is vendored from api/app/services/url_validator.py (2026-05-24,
-Phase 2 Chunk 6A).  token-saver-5000 tests run with PYTHONPATH=. from inside this directory,
-so importing from api/ at module-load time would fail.  Vendoring keeps this module
-standalone for tests and in production (where both paths are on PYTHONPATH anyway).
+Address classification is shared through the stdlib-only src.outbound_address_policy.
+Hostname rules, error contracts, DNS checks and transport behavior remain local.
 """
 
 import asyncio
@@ -25,6 +23,8 @@ import socket
 from typing import Optional
 
 import httpx
+
+from .outbound_address_policy import normalize_address, rejection_reason
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -73,7 +73,7 @@ class URLFetchError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Private helpers (vendored from api/app/services/url_validator.py)
+# Private transport adapters
 # ---------------------------------------------------------------------------
 
 
@@ -84,10 +84,7 @@ def _normalize_ip_address(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6
     Without this normalisation, ipaddress.ip_address('::ffff:127.0.0.1').is_loopback
     returns False (Python stdlib bug-by-design).
     """
-    ip = ipaddress.ip_address(ip_str)
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
-    return ip
+    return normalize_address(ipaddress.ip_address(ip_str))
 
 
 def _is_private_ip(addr: str) -> bool:
@@ -101,14 +98,7 @@ def _is_private_ip(addr: str) -> bool:
         # addr is a hostname — not expected here but treat as non-private
         return False
 
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_unspecified
-        or ip.is_multicast
-    )
+    return rejection_reason(ip) is not None
 
 
 def _is_blocked_hostname(host: str) -> bool:
