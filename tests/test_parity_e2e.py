@@ -40,8 +40,9 @@ def platform_context():
         "compressor": compressor,
         "resource_manager": Mock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
-            check_document_size_async=AsyncMock(return_value=(True, None)),
-            register_document_async=AsyncMock(),
+            reserve_document_async=AsyncMock(return_value=(object(), None)),
+            commit_document_async=AsyncMock(return_value=True),
+            release_document_async=AsyncMock(return_value=True),
         ),
         "sync_manager": Mock(register_file=Mock(), export_metadata=Mock(return_value={})),
         "version_manager": Mock(add_version_async=AsyncMock()),

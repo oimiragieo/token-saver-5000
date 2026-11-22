@@ -1,6 +1,5 @@
 """MCP schema setup generated from the typed engine tool registry."""
 
-
 from mcp.types import Tool
 
 from .registry import registered_tools
