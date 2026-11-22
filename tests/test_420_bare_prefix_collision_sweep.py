@@ -73,6 +73,7 @@ async def test_handle_ingest_persists_only_own_chunks_not_prefix_sibling():
     compressor = AsyncMock()
     compressor.ingest_file_async = AsyncMock(return_value=mock_skeleton)
     compressor.generate_skeleton = MagicMock(return_value=mock_skeleton)
+    compressor.set_file_skeleton_ratio = MagicMock()
     compressor.chunks = {
         "doc_n0": _Node("own chunk 0"),
         "doc_n1": _Node("own chunk 1"),
@@ -187,6 +188,7 @@ def _plain_semantic_compressor(chunks: dict, graphs: dict, file_metadata: dict |
     c.file_metadata = file_metadata or {}
     c._baseline_skeleton_stats = {fid: {"skeleton_tokens": 10, "ratio": 2.0} for fid in graphs}
     c._baseline_skeleton_cache = {}
+    c._pagerank_cache = {f"pagerank_{fid}_hash": {} for fid in graphs}
     return c
 
 
@@ -258,6 +260,7 @@ async def test_delete_document_removes_only_own_chunks_from_plain_compressor():
     assert "doc-large_n0" in compressor.chunks, "sibling document's chunk must survive"
     assert "doc" not in compressor.graphs
     assert "doc-large" in compressor.graphs, "sibling document's graph must survive"
+    assert set(compressor._pagerank_cache) == {"pagerank_doc-large_hash"}
 
 
 # =========================================================================
@@ -299,8 +302,9 @@ async def test_connector_sync_persists_only_own_chunks_not_prefix_sibling():
         "compressor": compressor,
         "resource_manager": MagicMock(
             check_connector_batch_async=AsyncMock(return_value=(True, None)),
-            check_document_size_async=AsyncMock(return_value=(True, None)),
-            register_document_async=AsyncMock(),
+            reserve_document_async=AsyncMock(return_value=(object(), None)),
+            commit_document_async=AsyncMock(return_value=True),
+            release_document_async=AsyncMock(return_value=True),
         ),
         "sync_manager": MagicMock(register_file=MagicMock()),
         "version_manager": MagicMock(add_version_async=AsyncMock()),
