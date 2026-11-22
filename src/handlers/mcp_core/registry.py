@@ -98,6 +98,7 @@ class RegisteredTool:
         if not callable(self.handler):
             raise TypeError("RegisteredTool.handler must be callable")
         import inspect
+
         if not inspect.iscoroutinefunction(self.handler):
             raise TypeError("RegisteredTool.handler must be a coroutine function")
         if self.read_only and self.destructive:

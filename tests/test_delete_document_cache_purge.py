@@ -1,5 +1,3 @@
-import pytest
-from unittest.mock import MagicMock
 from src.semantic_compressor import SemanticCompressor
 from src.code_compression_adapter import CodeCompressionAdapter
 
@@ -18,7 +16,9 @@ def test_semantic_compressor_purge_document_caches():
     }
 
     # Call purge_document_caches
-    assert hasattr(compressor, "purge_document_caches"), "purge_document_caches missing on SemanticCompressor"
+    assert hasattr(
+        compressor, "purge_document_caches"
+    ), "purge_document_caches missing on SemanticCompressor"
     compressor.purge_document_caches("doc_1")
 
     assert "doc_1" not in compressor._baseline_skeleton_cache
