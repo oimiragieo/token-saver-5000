@@ -14,7 +14,13 @@ import networkx as nx
 from .similarity import cosine_similarity
 import tiktoken
 
-from .constants import DEFAULT_TEXT_MODEL, F11_RANKER_PATH, RERANK_ENABLED, RERANK_POOL_SIZE
+from .constants import (
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_TEXT_MODEL,
+    F11_RANKER_PATH,
+    RERANK_ENABLED,
+    RERANK_POOL_SIZE,
+)
 from .embeddings import EmbeddingManager, _EmbeddingManagerAdapter
 from .node_identity import extract_file_id_from_node
 from .reranker_gate import RerankConfig, rerank_candidates
@@ -365,7 +371,14 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
             "chunking_strategy_resolved": "markdown_section_v1",
         }
 
-    def _prepare_raw_chunks(self, text: str, structured_kind, strategy: str = "auto") -> List[str]:
+    def _prepare_raw_chunks(
+        self,
+        text: str,
+        structured_kind,
+        strategy: str = "auto",
+        *,
+        max_chunk_size: int = DEFAULT_CHUNK_SIZE,
+    ) -> List[str]:
         """Choose raw chunks for ingest.
 
         For a detected JSON array, JSONL, or CSV document, chunk on RECORD
@@ -376,18 +389,19 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
         chunker on any embedded-newline / multiline-quote quirk rather than
         corrupt a row). All other content uses the semantic/fixed text chunker.
         """
+        record_group_size = min(max_chunk_size, DEFAULT_CHUNK_SIZE)
         if structured_kind == "json_array":
             from .structured_content import group_records_by_size, split_json_records
 
             records = split_json_records(text)
             if records:
-                return group_records_by_size(records, 512, self._count_tokens)
+                return group_records_by_size(records, record_group_size, self._count_tokens)
         elif structured_kind == "jsonl":
             from .structured_content import group_records_by_size, split_jsonl_records
 
             records = split_jsonl_records(text)
             if records:
-                return group_records_by_size(records, 512, self._count_tokens)
+                return group_records_by_size(records, record_group_size, self._count_tokens)
         elif structured_kind == "csv":
             from .structured_content import group_records_by_size, split_csv_records
 
@@ -400,12 +414,12 @@ class SemanticCompressor(SemanticCompressorIngestMixin, SemanticCompressorRetrie
                 # budget blowout (codex #280 HIGH-2) and the false-positive header
                 # duplication (droid MED-4). The header node labels the columns
                 # once for the table; row values stay searchable in the row groups.
-                groups = group_records_by_size(rows, 512, self._count_tokens)
+                groups = group_records_by_size(rows, record_group_size, self._count_tokens)
                 return [header, *groups]
-        return self._chunk_text(text, strategy=strategy)
+        return self._chunk_text(text, max_chunk_size=max_chunk_size, strategy=strategy)
 
     def _chunk_text(
-        self, text: str, max_chunk_size: int = 512, strategy: str = "auto"
+        self, text: str, max_chunk_size: int = DEFAULT_CHUNK_SIZE, strategy: str = "auto"
     ) -> List[str]:
         """
         Intelligent text chunking that preserves semantic boundaries.
