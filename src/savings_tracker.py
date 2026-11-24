@@ -30,6 +30,11 @@ class SavingsEvent:
     cost_with_compression: float  # what it actually costs
     dollars_saved: float  # the difference
     compression_ratio: float
+    event_type: str = "compress"
+    cached_tokens: int = 0
+    uncached_tokens: int = 0
+    net_billed_dollars_saved: float = 0.0
+    file_id: str | None = None
 
 
 @dataclass
@@ -69,9 +74,15 @@ class SavingsTracker:
 
     PRO_PLAN_PRICE = 29.0  # $/month
 
-    def __init__(self, session_id: str = "default", model: str = "claude-sonnet-4-6"):
+    def __init__(
+        self,
+        session_id: str = "default",
+        model: str = "claude-sonnet-4-6",
+        storage_dir: Any = None,
+    ):
         self._session_id = session_id
         self._model = model
+        self._storage_dir = storage_dir
         self._events: list[SavingsEvent] = []
         self._journal: Any = None
         self._init_journal()
@@ -82,18 +93,42 @@ class SavingsTracker:
         try:
             from .session_journal import SessionJournal
 
-            self._journal = SessionJournal(self._session_id)
+            self._journal = SessionJournal(self._session_id, storage_dir=self._storage_dir)
         except Exception as exc:
             logger.warning(f"SavingsTracker: could not initialize SessionJournal: {exc}")
             self._journal = None
 
     def _load_from_journal(self) -> None:
-        """Load prior savings events from the session journal."""
+        """Load prior savings events and expansion debits from the session journal."""
         if self._journal is None:
             return
         try:
+            from collections import Counter
+
             summary = self._journal.recover()
-            for f in summary.ingested_files:
+            # Reconcile explicit ingest-tool "savings" events with legacy "ingest"
+            # events so mixed journals preserve all unique events without
+            # double-counting, and non-ingest tools (e.g. read_skeleton) never
+            # suppress legacy ingest savings.
+            _ingest_tools = {
+                "ingest_context",
+                "ingest_directory",
+                "batch_ingest_documents",
+                "ingest_file",
+            }
+            savings_file_counts = Counter(
+                ev["file_id"]
+                for ev in summary.savings_events
+                if ev.get("file_id") and ev.get("tool_name") in _ingest_tools
+            )
+            compress_records = list(summary.savings_events)
+            for inf in summary.ingested_files:
+                fid = inf.get("file_id") or inf.get("doc_id")
+                if fid and savings_file_counts[fid] > 0:
+                    savings_file_counts[fid] -= 1
+                else:
+                    compress_records.append(inf)
+            for f in compress_records:
                 orig = f.get("original_tokens")
                 comp = f.get("compressed_tokens")
                 if orig is None or comp is None:
@@ -102,9 +137,11 @@ class SavingsTracker:
                 comp = int(comp)
                 saved = orig - comp
                 if saved > 0:
-                    rates = get_model_rates(self._model)
+                    ev_model = f.get("model") or self._model
+                    rates = get_model_rates(ev_model)
                     cost_without = orig * rates["input"] / 1_000_000
                     cost_with = comp * rates["input"] / 1_000_000
+                    dollars_saved = max(0.0, cost_without - cost_with)
                     self._events.append(
                         SavingsEvent(
                             timestamp=f.get("timestamp", 0),
@@ -112,13 +149,41 @@ class SavingsTracker:
                             original_tokens=orig,
                             compressed_tokens=comp,
                             tokens_saved=saved,
-                            model=self._model,
+                            model=ev_model,
                             cost_without_compression=round(cost_without, 6),
                             cost_with_compression=round(cost_with, 6),
-                            dollars_saved=round(max(0.0, cost_without - cost_with), 6),
+                            dollars_saved=round(dollars_saved, 6),
                             compression_ratio=round(orig / max(1, comp), 1),
+                            event_type="compress",
+                            uncached_tokens=comp,
+                            net_billed_dollars_saved=round(dollars_saved, 6),
+                            file_id=f.get("file_id") or f.get("doc_id") or None,
                         )
                     )
+
+            for d in getattr(summary, "expansion_debits", []):
+                tokens = max(0, int(d.get("expanded_tokens", 0)))
+                ev_model = d.get("model") or self._model
+                rates = get_model_rates(ev_model)
+                debit_dollars = round(tokens * rates["input"] / 1_000_000, 6)
+                self._events.append(
+                    SavingsEvent(
+                        timestamp=d.get("timestamp", 0),
+                        tool_name=d.get("tool_name", "expansion"),
+                        original_tokens=0,
+                        compressed_tokens=tokens,
+                        tokens_saved=-tokens,
+                        model=ev_model,
+                        cost_without_compression=0.0,
+                        cost_with_compression=debit_dollars,
+                        dollars_saved=-debit_dollars,
+                        compression_ratio=0.0,
+                        event_type="expansion_debit",
+                        cached_tokens=0,
+                        uncached_tokens=tokens,
+                        net_billed_dollars_saved=-debit_dollars,
+                    )
+                )
         except Exception as exc:
             logger.warning(f"SavingsTracker: could not load events from journal: {exc}")
 
@@ -128,6 +193,7 @@ class SavingsTracker:
         original_tokens: int,
         compressed_tokens: int,
         model: str | None = None,
+        file_id: str | None = None,
     ) -> SavingsEvent:
         """Record a compression savings event.
 
@@ -154,26 +220,81 @@ class SavingsTracker:
             cost_with_compression=round(cost_with, 6),
             dollars_saved=round(dollars_saved, 6),
             compression_ratio=ratio,
+            event_type="compress",
+            uncached_tokens=compressed_tokens,
+            net_billed_dollars_saved=round(dollars_saved, 6),
+            file_id=file_id,
         )
         self._events.append(event)
 
         # Persist to journal, degrading gracefully on failure
         if self._journal is not None:
             try:
+                payload: dict[str, Any] = {
+                    "event_type": "compress",
+                    "tool_name": tool_name,
+                    "original_tokens": original_tokens,
+                    "compressed_tokens": compressed_tokens,
+                    "tokens_saved": saved,
+                    "dollars_saved": round(dollars_saved, 6),
+                    "model": model,
+                    "compression_ratio": ratio,
+                }
+                if file_id is not None:
+                    payload["file_id"] = file_id
+                self._journal.write_event("savings", payload)
+            except Exception as exc:
+                logger.warning(f"SavingsTracker: failed to persist savings event: {exc}")
+
+        return event
+
+    def record_expansion_debit(
+        self,
+        tool_name: str,
+        expanded_tokens: int,
+        reason: str = "expansion",
+        model: str | None = None,
+    ) -> SavingsEvent:
+        """Record an honest expansion debit when compressed content is re-expanded."""
+        model = model or self._model
+        tokens = max(0, int(expanded_tokens))
+        rates = get_model_rates(model)
+        debit_dollars = round(tokens * rates["input"] / 1_000_000, 6)
+
+        event = SavingsEvent(
+            timestamp=time.time(),
+            tool_name=tool_name,
+            original_tokens=0,
+            compressed_tokens=tokens,
+            tokens_saved=-tokens,
+            model=model,
+            cost_without_compression=0.0,
+            cost_with_compression=debit_dollars,
+            dollars_saved=-debit_dollars,
+            compression_ratio=0.0,
+            event_type="expansion_debit",
+            cached_tokens=0,
+            uncached_tokens=tokens,
+            net_billed_dollars_saved=-debit_dollars,
+        )
+        self._events.append(event)
+
+        if self._journal is not None:
+            try:
                 self._journal.write_event(
-                    "savings",
+                    "expansion_debit",
                     {
+                        "event_type": "expansion_debit",
                         "tool_name": tool_name,
-                        "original_tokens": original_tokens,
-                        "compressed_tokens": compressed_tokens,
-                        "tokens_saved": saved,
-                        "dollars_saved": round(dollars_saved, 6),
+                        "expanded_tokens": tokens,
+                        "tokens_saved": -tokens,
+                        "dollars_saved": -debit_dollars,
+                        "reason": reason,
                         "model": model,
-                        "compression_ratio": ratio,
                     },
                 )
             except Exception as exc:
-                logger.warning(f"SavingsTracker: failed to persist savings event: {exc}")
+                logger.warning(f"SavingsTracker: failed to persist expansion debit: {exc}")
 
         return event
 

@@ -279,7 +279,30 @@ COMPRESSION_BATCH_TOOLS: list = [
         ),
         inputSchema={
             "type": "object",
-            "properties": {},
+            "properties": {
+                "explain": {
+                    "type": "boolean",
+                    "description": (
+                        "When true, include cache-aware ExplainAnalyzeTrace economics "
+                        "in the response."
+                    ),
+                    "default": False,
+                },
+                "model": {
+                    "type": "string",
+                    "description": (
+                        "Target model or provider cache profile name "
+                        "(e.g. 'claude-sonnet-4-6', 'gpt-5.1-codex', 'deepseek-v3', 'gemini-flash')."
+                    ),
+                },
+                "expected_hit_rate": {
+                    "type": "number",
+                    "description": "Expected prompt-cache hit rate in [0.0, 1.0] (default: 0.5).",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.5,
+                },
+            },
         },
     ),
     Tool(

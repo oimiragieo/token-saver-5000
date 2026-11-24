@@ -190,7 +190,7 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
         from .token_optimization_handlers import _get_tracker
 
         _sid = args.get("session_id") or "default"
-        _model = args.get("model") or "claude-sonnet-4-6"
+        _model = args.get("model") or None
         _tracker = _get_tracker(_sid, _model)
         for _r in results:
             if _r.success and _r.result is not None:
@@ -199,6 +199,7 @@ async def handle_batch_ingest(context: HandlerContext, args: Dict[str, Any]) -> 
                     original_tokens=getattr(_r.result, "total_tokens", 0),
                     compressed_tokens=getattr(_r.result, "skeleton_tokens", 0),
                     model=_model,
+                    file_id=getattr(_r, "file_id", None),
                 )
     except Exception as exc:
         logger.warning(f"SavingsTracker.record failed for batch_ingest: {exc}")
@@ -475,7 +476,7 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
         from .token_optimization_handlers import _get_tracker
 
         _sid = args.get("session_id") or "default"
-        _model = args.get("model") or "claude-sonnet-4-6"
+        _model = args.get("model") or None
         _tracker = _get_tracker(_sid, _model)
         for _r in results:
             if _r.success and _r.result is not None:
@@ -484,6 +485,7 @@ async def handle_ingest_directory(context: HandlerContext, args: Dict[str, Any])
                     original_tokens=getattr(_r.result, "total_tokens", 0),
                     compressed_tokens=getattr(_r.result, "skeleton_tokens", 0),
                     model=_model,
+                    file_id=getattr(_r, "file_id", None),
                 )
     except Exception as exc:
         logger.warning(f"SavingsTracker.record failed for ingest_directory: {exc}")
@@ -769,6 +771,25 @@ async def handle_advise_context(context: HandlerContext, args: Dict[str, Any]) -
         )
 
     advice = advise_context(doc_stats)
+    if args.get("explain"):
+        from dataclasses import asdict
+
+        from ..compression_advisor import CompressionAdvisor
+
+        combined_text = " ".join(
+            compressor.chunks[nid].text
+            for graph in compressor.graphs.values()
+            for nid in graph.nodes
+            if nid in compressor.chunks
+        )
+        profile = args.get("model", "anthropic_sonnet_4_6")
+        expected_hit_rate = float(args.get("expected_hit_rate", 0.5))
+        trace = CompressionAdvisor().advise_with_cache_economics(
+            combined_text,
+            profile=profile,
+            expected_hit_rate=expected_hit_rate,
+        )
+        advice["explain_analyze_trace"] = asdict(trace)
     return json.dumps(advice, indent=2)
 
 

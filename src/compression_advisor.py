@@ -30,6 +30,13 @@ from dataclasses import dataclass
 
 import tiktoken
 
+from .cache_economics import (
+    ExplainAnalyzeTrace,
+    ProviderCacheProfile,
+    compute_crossover_hit_rate,
+    compute_tier_preserving_max_ratio,
+    get_provider_cache_profile,
+)
 from .metrics import compute_cost_savings
 
 
@@ -367,6 +374,131 @@ class CompressionAdvisor:
             )
 
         return "\n".join(lines)
+
+    def advise_with_cache_economics(
+        self,
+        text: str,
+        profile: ProviderCacheProfile | str = "anthropic_sonnet_4_6",
+        expected_hit_rate: float = 0.5,
+        skeleton_ratio: float = 0.2,
+    ) -> ExplainAnalyzeTrace:
+        """Advise compression ratio with CAPC crossover and persistent-tier guards."""
+        prof = (
+            profile
+            if isinstance(profile, ProviderCacheProfile)
+            else get_provider_cache_profile(profile)
+        )
+        if not text or not text.strip():
+            return ExplainAnalyzeTrace(
+                decision="abstain",
+                reason="Empty document (0 tokens) is too small for net-positive compression.",
+                recommended_ratio=1.0,
+                crossover_hit_rate=1.0,
+                tier_preserving_max_ratio=1,
+                estimated_net_savings_pct=0.0,
+            )
+        estimate = self.estimate_compression(text, skeleton_ratio=skeleton_ratio)
+        doc_tokens = estimate.original_tokens
+        r_est = max(1.0, estimate.compression_ratio)
+        tier_tokens = prof.persistent_tier_tokens
+        r_max_safe = compute_tier_preserving_max_ratio(doc_tokens, tier_tokens)
+
+        if doc_tokens < 200 or r_est <= 1.0:
+            return ExplainAnalyzeTrace(
+                decision="abstain",
+                reason=f"Document ({doc_tokens} tokens) is too small for net-positive compression.",
+                recommended_ratio=1.0,
+                crossover_hit_rate=1.0,
+                tier_preserving_max_ratio=r_max_safe,
+                estimated_net_savings_pct=0.0,
+            )
+
+        in_persistent_tier = doc_tokens >= tier_tokens
+        if in_persistent_tier and (doc_tokens / r_est) < tier_tokens:
+            if r_max_safe <= 1:
+                crossover = compute_crossover_hit_rate(
+                    r_est, prof.cache_write_mult, prof.cache_read_mult
+                )
+                return ExplainAnalyzeTrace(
+                    decision="abstain",
+                    reason=(
+                        f"Compressing {doc_tokens} tokens at {r_est:.2f}x would drop prefix below "
+                        f"persistent cache tier ({tier_tokens} tokens)."
+                    ),
+                    recommended_ratio=1.0,
+                    crossover_hit_rate=round(crossover, 4),
+                    tier_preserving_max_ratio=r_max_safe,
+                    estimated_net_savings_pct=0.0,
+                )
+            recommended_ratio = float(r_max_safe)
+            crossover = compute_crossover_hit_rate(
+                recommended_ratio, prof.cache_write_mult, prof.cache_read_mult
+            )
+            if expected_hit_rate >= crossover:
+                return ExplainAnalyzeTrace(
+                    decision="abstain",
+                    reason=(
+                        f"Expected cache hit rate ({expected_hit_rate:.2f}) >= CAPC crossover "
+                        f"({crossover:.2f}); keeping raw cached prefix is cheaper."
+                    ),
+                    recommended_ratio=1.0,
+                    crossover_hit_rate=round(crossover, 4),
+                    tier_preserving_max_ratio=r_max_safe,
+                    estimated_net_savings_pct=0.0,
+                )
+            net_savings = self._compute_cache_adjusted_savings_pct(
+                recommended_ratio,
+                prof.cache_write_mult,
+                prof.cache_read_mult,
+                expected_hit_rate,
+            )
+            return ExplainAnalyzeTrace(
+                decision="cap",
+                reason=(
+                    f"Capped ratio from {r_est:.2f}x to {recommended_ratio:.1f}x to keep prefix "
+                    f">= persistent tier ({tier_tokens} tokens)."
+                ),
+                recommended_ratio=recommended_ratio,
+                crossover_hit_rate=round(crossover, 4),
+                tier_preserving_max_ratio=r_max_safe,
+                estimated_net_savings_pct=net_savings,
+            )
+
+        crossover = compute_crossover_hit_rate(r_est, prof.cache_write_mult, prof.cache_read_mult)
+        if in_persistent_tier and expected_hit_rate >= crossover:
+            return ExplainAnalyzeTrace(
+                decision="abstain",
+                reason=(
+                    f"Expected cache hit rate ({expected_hit_rate:.2f}) >= CAPC crossover "
+                    f"({crossover:.2f}); keeping raw cached prefix is cheaper."
+                ),
+                recommended_ratio=1.0,
+                crossover_hit_rate=round(crossover, 4),
+                tier_preserving_max_ratio=r_max_safe,
+                estimated_net_savings_pct=0.0,
+            )
+
+        net_savings = self._compute_cache_adjusted_savings_pct(
+            r_est, prof.cache_write_mult, prof.cache_read_mult, expected_hit_rate
+        )
+        return ExplainAnalyzeTrace(
+            decision="compress",
+            reason=(
+                f"Compression at {r_est:.2f}x is cache-safe (tier max {r_max_safe}x, "
+                f"crossover hit rate {crossover:.2f})."
+            ),
+            recommended_ratio=round(r_est, 4),
+            crossover_hit_rate=round(crossover, 4),
+            tier_preserving_max_ratio=r_max_safe,
+            estimated_net_savings_pct=net_savings,
+        )
+
+    @staticmethod
+    def _compute_cache_adjusted_savings_pct(
+        ratio: float, alpha: float, beta: float, hit_rate: float
+    ) -> float:
+        denom = max(1e-9, alpha * (1.0 - hit_rate) + beta * hit_rate)
+        return round(100.0 * (1.0 - (1.0 / ratio) / denom), 2)
 
 
 # Convenience function for backward compatibility

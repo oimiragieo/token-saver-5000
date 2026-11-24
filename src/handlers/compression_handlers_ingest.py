@@ -320,12 +320,13 @@ async def handle_ingest(context: HandlerContext, args: Dict[str, Any]) -> str:
         from .token_optimization_handlers import _get_tracker
 
         _sid = args.get("session_id") or "default"
-        _model_for_savings = args.get("model") or "claude-sonnet-4-6"
+        _model_for_savings = args.get("model") or None
         _get_tracker(_sid, _model_for_savings).record(
             tool_name="ingest_context",
             original_tokens=skeleton.total_tokens,
             compressed_tokens=skeleton.skeleton_tokens,
             model=_model_for_savings,
+            file_id=file_id,
         )
     except Exception as exc:
         logger.warning(f"SavingsTracker.record failed for '{file_id}': {exc}")
@@ -685,12 +686,13 @@ async def handle_read_skeleton(context: HandlerContext, args: Dict[str, Any]) ->
             from .token_optimization_handlers import _get_tracker
 
             _sid = args.get("session_id") or "default"
-            _model = args.get("model") or "claude-sonnet-4-6"
+            _model = args.get("model") or None
             _get_tracker(_sid, _model).record(
                 tool_name="read_skeleton",
                 original_tokens=skeleton_response.total_tokens,
                 compressed_tokens=skeleton_response.skeleton_tokens,
                 model=_model,
+                file_id=file_id,
             )
         except Exception as exc:
             logger.warning(f"SavingsTracker.record failed for read_skeleton '{file_id}': {exc}")
@@ -781,6 +783,22 @@ Proceeding with cached version...
 
     try:
         result = context["compressor"].modulate_region(node_ids, fidelity)
+        try:
+            from ..token_estimation import TokenEstimator
+            from .token_optimization_handlers import _get_tracker
+
+            _sid = args.get("session_id") or "default"
+            _model_for_savings = args.get("model") or None
+            _expanded_tokens = TokenEstimator().count_tokens(result) if result else 0
+            if _expanded_tokens > 0:
+                _get_tracker(_sid, _model_for_savings).record_expansion_debit(
+                    tool_name="modulate_region",
+                    expanded_tokens=_expanded_tokens,
+                    reason=f"fidelity={fidelity_str}",
+                    model=_model_for_savings,
+                )
+        except Exception as exc:
+            logger.warning(f"SavingsTracker.record_expansion_debit failed: {exc}")
         return warning + result
     except Exception as e:
         raise RuntimeError(

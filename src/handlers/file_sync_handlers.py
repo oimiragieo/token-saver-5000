@@ -87,6 +87,23 @@ async def handle_check_file_sync(context: HandlerContext, args: Dict[str, Any]) 
             "%Y-%m-%d %H:%M:%S"
         )
 
+    if args.get("diff_on_reread"):
+        metadata = sync_manager.file_metadata.get(scoped_file_id)
+        file_path = status.get("file_path") or (metadata.file_path if metadata else None)
+        if file_path:
+            read_path = file_path
+            path_validator = context.get("path_validator")
+            if path_validator is not None:
+                read_path = path_validator.validate(read_path)
+            with open(read_path, "r", encoding="utf-8", newline="") as f:
+                content = f.read()
+            response["reread"] = sync_manager.track_or_diff_reread(
+                session_id=args.get("session_id") or "default",
+                file_path=file_path,
+                content=content,
+                force_full=bool(args.get("force_full", False)),
+            )
+
     return json.dumps(response, indent=2)
 
 

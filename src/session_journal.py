@@ -12,6 +12,7 @@ Supports:
 
 from __future__ import annotations
 
+from collections import Counter
 import json
 import sqlite3
 import time
@@ -45,6 +46,8 @@ class SessionSummary:
     active_profile: str | None = None
     tool_call_stats: dict[str, int] = field(default_factory=dict)
     total_tokens_saved: int = 0
+    savings_events: list[dict[str, Any]] = field(default_factory=list)
+    expansion_debits: list[dict[str, Any]] = field(default_factory=list)
 
 
 class SessionJournal:
@@ -134,6 +137,8 @@ class SessionJournal:
         active_profile: str | None = None
         tool_call_stats: dict[str, int] = {}
         total_tokens_saved: int = 0
+        savings_events: list[dict[str, Any]] = []
+        expansion_debits: list[dict[str, Any]] = []
         timestamps: list[float] = []
 
         for _row_id, event_type, timestamp, data_json in rows:
@@ -144,7 +149,7 @@ class SessionJournal:
                 data = {}
 
             if event_type == "ingest":
-                file_id = data.get("file_id", "")
+                file_id = data.get("file_id") or data.get("doc_id") or ""
                 original = int(data.get("original_tokens", 0))
                 compressed = int(data.get("compressed_tokens", 0))
                 ingested_files.append(
@@ -154,7 +159,32 @@ class SessionJournal:
                         "compressed_tokens": compressed,
                     }
                 )
-                total_tokens_saved += max(0, original - compressed)
+
+            elif event_type == "expansion_debit" or (
+                event_type == "savings" and data.get("event_type") == "expansion_debit"
+            ):
+                expanded = max(0, int(data.get("expanded_tokens", 0)))
+                expansion_debits.append(
+                    {
+                        "tool_name": data.get("tool_name", "expansion"),
+                        "expanded_tokens": expanded,
+                        "reason": data.get("reason", "expansion"),
+                        "model": data.get("model"),
+                        "timestamp": timestamp,
+                    }
+                )
+
+            elif event_type == "savings":
+                savings_events.append(
+                    {
+                        "tool_name": data.get("tool_name", "ingest_context"),
+                        "original_tokens": int(data.get("original_tokens", 0)),
+                        "compressed_tokens": int(data.get("compressed_tokens", 0)),
+                        "model": data.get("model"),
+                        "file_id": data.get("file_id") or data.get("doc_id") or None,
+                        "timestamp": timestamp,
+                    }
+                )
 
             elif event_type == "configure":
                 client_config = data
@@ -166,6 +196,35 @@ class SessionJournal:
                 tool_name = data.get("tool_name", "unknown")
                 tool_call_stats[tool_name] = tool_call_stats.get(tool_name, 0) + 1
 
+        # Reconcile explicit ingest-tool savings events with legacy ingest-only events
+        # so neither savings-only nor legacy ingest-only journals lose tokens,
+        # non-ingest tools (e.g. read_skeleton) never suppress legacy ingest savings,
+        # and matching non-empty file_id/doc_id pairs are never double-counted.
+        _ingest_tools = {
+            "ingest_context",
+            "ingest_directory",
+            "batch_ingest_documents",
+            "ingest_file",
+        }
+        savings_file_counts = Counter(
+            ev["file_id"]
+            for ev in savings_events
+            if ev.get("file_id") and ev.get("tool_name") in _ingest_tools
+        )
+        legacy_ingest_saved = 0
+        for inf in ingested_files:
+            fid = inf.get("file_id") or inf.get("doc_id")
+            if fid and savings_file_counts[fid] > 0:
+                savings_file_counts[fid] -= 1
+            else:
+                legacy_ingest_saved += max(0, inf["original_tokens"] - inf["compressed_tokens"])
+
+        savings_total_saved = sum(
+            max(0, ev["original_tokens"] - ev["compressed_tokens"]) for ev in savings_events
+        )
+        debit_total = sum(d["expanded_tokens"] for d in expansion_debits)
+        total_tokens_saved = savings_total_saved + legacy_ingest_saved - debit_total
+
         return SessionSummary(
             session_id=self._session_id,
             event_count=len(rows),
@@ -176,6 +235,8 @@ class SessionJournal:
             active_profile=active_profile,
             tool_call_stats=tool_call_stats,
             total_tokens_saved=total_tokens_saved,
+            savings_events=savings_events,
+            expansion_debits=expansion_debits,
         )
 
     def event_count(self) -> int:

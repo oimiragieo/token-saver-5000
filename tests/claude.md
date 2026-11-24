@@ -4050,6 +4050,93 @@ Tests for Graph Visualization (v0.6.0)
 | `class` | `TestCompressionDecisionExplanation` |
 | `class` | `TestMCPToolIntegration` |
 
+#### `test_w1_cache_alignment.py`
+
+Unit tests for cache_align_sections and advise_with_cache_economics (CL 3a).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_cache_align_sections_sorts_by_volatility_and_pins_anchors` |
+| `def` | `test_cache_align_sections_respects_max_reorder_moves` |
+| `def` | `test_advise_with_cache_economics_abstains_when_tier_would_break` |
+| `def` | `test_advise_with_cache_economics_caps_ratio_to_preserve_tier` |
+| `def` | `test_advise_with_cache_economics_abstains_above_crossover_hit_rate` |
+| `def` | `test_advise_with_cache_economics_uses_capc_net_savings_formula` |
+| `def` | `test_cache_align_sections_detects_volatile_prefix_leak_and_suppresses_breakpoints` |
+
+#### `test_w1_cache_economics.py`
+
+Unit tests for src/cache_economics.py (CL 1).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_presets_have_expected_parameters` |
+| `def` | `test_compute_crossover_hit_rate_capc_formula` |
+| `def` | `test_compute_tier_preserving_max_ratio` |
+| `def` | `test_bill_prefix_turn_lcp_reads_and_writes` |
+| `def` | `test_bill_prefix_turn_enforces_persistent_tier_and_token_lcp` |
+| `def` | `test_bill_prefix_turn_full_miss` |
+| `def` | `test_explain_analyze_trace_dataclass` |
+
+#### `test_w1_cache_economics_char.py`
+
+Baseline characterization tests for Wave 1 modules.
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_isolated_tracker` |
+| `def` | `test_savings_tracker_baseline_record_and_report` |
+| `def` | `test_compression_advisor_baseline_estimate` |
+| `def` | `test_evaluate_prompt_stability_baseline` |
+
+#### `test_w1_diff_reread.py`
+
+Unit tests for SessionDiffTracker (CL 3b).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_first_read_returns_full_and_reread_unchanged_returns_marker` |
+| `def` | `test_small_edit_returns_unified_diff` |
+| `def` | `test_large_edit_returns_full_content` |
+| `def` | `test_force_full_bypasses_unchanged_and_diff` |
+| `def` | `test_lru_eviction_at_max_entries` |
+| `def` | `test_adding_final_newline_reconstructs_byte_exact` |
+| `def` | `test_lf_to_crlf_conversion_preserves_exact_sha256` |
+| `def` | `test_long_single_line_patch_falls_back_to_full` |
+| `def` | `test_diff_mode_reconstruction_matches_bytes_and_sha256` |
+
+#### `test_w1_savings_debit.py`
+
+Unit tests for honest expansion debits in SavingsTracker (CL 2).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_tracker` |
+| `def` | `test_savings_event_backward_compatible_defaults` |
+| `def` | `test_record_expansion_debit_reduces_cumulative_savings` |
+| `def` | `test_record_expansion_debit_clamps_negative_input` |
+| `def` | `test_expansion_debit_persists_across_journal_recovery` |
+| `def` | `test_savings_only_journal_recovers_net_tokens_without_ingest` |
+| `def` | `test_mixed_legacy_ingest_savings_and_debit_recovery` |
+| `def` | `test_savings_dashboard_includes_expansion_debits` |
+| `def` | `test_distinct_file_ids_with_identical_tokens_do_not_collide` |
+
+#### `test_w1_wiring.py`
+
+Wiring tests for Wave 1 handlers (CL 4).
+
+| Kind | Name |
+|------|------|
+| `async def` | `test_modulate_region_records_expansion_debit` |
+| `async def` | `test_get_original_output_records_expansion_debit` |
+| `async def` | `test_handle_advise_context_with_explain_true` |
+| `def` | `test_get_tracker_does_not_overwrite_existing_model_when_omitted` |
+| `def` | `test_prompt_registry_wires_cache_align_sections` |
+| `def` | `test_file_sync_manager_wires_session_diff_tracker` |
+| `def` | `test_advise_context_schema_declares_explain_properties` |
+| `async def` | `test_check_file_sync_wires_track_or_diff_reread` |
+| `async def` | `test_check_file_sync_preserves_crlf_on_reread` |
+
 #### `test_web_connector.py`
 
 Tests for web connector normalization.

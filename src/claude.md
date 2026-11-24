@@ -205,6 +205,21 @@ Root-cause diagnostics for prompt cache misses.
 | `def` | `detect_section_interleaving` |
 | `def` | `diagnose_cache_miss` |
 
+#### `cache_economics.py`
+
+Prompt-cache economics contracts and CAPC (Cache-Aware Prompt Compression) math.
+
+| Kind | Name |
+|------|------|
+| `class` | `ProviderCacheProfile` |
+| `def` | `get_provider_cache_profile` |
+| `class` | `ExplainAnalyzeTrace` |
+| `def` | `_get_encoder` |
+| `def` | `_count_tokens` |
+| `def` | `compute_crossover_hit_rate` |
+| `def` | `compute_tier_preserving_max_ratio` |
+| `def` | `bill_prefix_turn` |
+
 #### `cache_strategy_advisor.py`
 
 Provider-aware cache strategy advisor.
@@ -431,6 +446,16 @@ Dead code detection via import graph analysis.
 | `def` | `_is_entry_point` |
 | `def` | `_is_never_dead` |
 | `def` | `detect_dead_files` |
+
+#### `diff_reread.py`
+
+Session-scoped diff-on-reread tracker for avoiding redundant full-file reloads.
+
+| Kind | Name |
+|------|------|
+| `def` | `reconstruct_from_diff` |
+| `def` | `_format_unified_diff` |
+| `class` | `SessionDiffTracker` |
 
 #### `embedding_cache.py`
 
@@ -915,6 +940,8 @@ Preventive stable-prefix guard for cache-friendly prompt assembly.
 
 | Kind | Name |
 |------|------|
+| `def` | `_resolve_volatility` |
+| `def` | `cache_align_sections` |
 | `def` | `evaluate_prompt_stability` |
 
 #### `prompt_registry.py`

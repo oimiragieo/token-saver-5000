@@ -62,18 +62,21 @@ class SavingsDashboard:
         return sorted(self._storage_dir.glob("*.db"))
 
     def _read_savings_events(self, db_path: Path) -> list[dict[str, Any]]:
-        """Read savings events from a single session journal."""
+        """Read savings and expansion_debit events from a single session journal."""
         events: list[dict[str, Any]] = []
         try:
             conn = sqlite3.connect(str(db_path), check_same_thread=False)
             rows = conn.execute(
-                "SELECT timestamp, data_json FROM events WHERE event_type = 'savings' "
+                "SELECT event_type, timestamp, data_json FROM events "
+                "WHERE event_type IN ('savings', 'expansion_debit') "
                 "ORDER BY id ASC"
             ).fetchall()
-            for ts, data_json in rows:
+            for ev_type, ts, data_json in rows:
                 try:
                     data = json.loads(data_json)
                     data["timestamp"] = ts
+                    if ev_type == "expansion_debit" and "event_type" not in data:
+                        data["event_type"] = "expansion_debit"
                     events.append(data)
                 except json.JSONDecodeError:
                     pass
@@ -107,13 +110,23 @@ class SavingsDashboard:
             if cutoff and ts < cutoff:
                 continue
 
-            orig = int(ev.get("original_tokens", 0))
-            comp = int(ev.get("compressed_tokens", 0))
-            saved = int(ev.get("tokens_saved", max(0, orig - comp)))
-            tool = ev.get("tool_name", "unknown")
+            is_debit = ev.get("event_type") == "expansion_debit"
+            if is_debit:
+                expanded = max(
+                    0, int(ev.get("expanded_tokens", abs(int(ev.get("tokens_saved", 0)))))
+                )
+                orig = 0
+                comp = expanded
+                saved = int(ev.get("tokens_saved", -expanded))
+            else:
+                orig = int(ev.get("original_tokens", 0))
+                comp = int(ev.get("compressed_tokens", 0))
+                saved = int(ev.get("tokens_saved", max(0, orig - comp)))
+
+            tool = ev.get("tool_name", "expansion" if is_debit else "unknown")
             dollars = float(ev.get("dollars_saved", 0.0))
 
-            if dollars == 0.0 and saved > 0:
+            if dollars == 0.0 and saved != 0:
                 dollars = saved * rates["input"] / 1_000_000
 
             report.total_events += 1

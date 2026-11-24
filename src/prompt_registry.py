@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from .compression_presets import list_presets
 from .prompt_cache_audit import audit_prompt_cacheability
-from .prompt_cache_stability_guard import evaluate_prompt_stability
+from .prompt_cache_stability_guard import cache_align_sections, evaluate_prompt_stability
 from .bounded_registry import BoundedDict
 from .constants import MAX_PROMPT_TEMPLATES
 
@@ -437,21 +437,24 @@ class PromptRegistry:
                 )
             sections.append({"name": "user_query", "content": rendered_user_prompt})
 
-            audit = audit_prompt_cacheability(sections)
+            cache_alignment = cache_align_sections(sections)
+            aligned_sections = cache_alignment["aligned_sections"]
+            audit = audit_prompt_cacheability(aligned_sections)
             stability_guard = evaluate_prompt_stability(
-                sections,
+                aligned_sections,
                 max_stable_prefix_chars=max_stable_prefix_chars,
             )
             rendered_prompt = "\n\n".join(
-                f"[{section['name']}]\n{section['content']}" for section in sections
+                f"[{section['name']}]\n{section['content']}" for section in aligned_sections
             )
             return {
                 "template": record.to_dict(include_versions=False),
                 "resolved_version": resolved.to_dict(),
                 "resolved_labels": record.labels_for_version(resolved.version),
-                "sections": sections,
+                "sections": aligned_sections,
                 "rendered_variables": provided_variables,
                 "audit": audit,
+                "cache_alignment": cache_alignment,
                 "stability_guard": stability_guard,
                 "cacheable_prefix": audit["cacheable_prefix"],
                 "volatile_suffix": audit["volatile_suffix"],

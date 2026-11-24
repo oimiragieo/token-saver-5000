@@ -327,10 +327,10 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
     # /v1/usage/by-model REST surface). Same lazy-import + swallow pattern
     # as handle_ingest / handle_read_skeleton.
     try:
-        _orig_tokens = max(1, len(text) // 4)
-        _comp_tokens = max(1, len(result.filtered_text) // 4)
+        _orig_tokens = _token_estimator.count_tokens(text)
+        _comp_tokens = _token_estimator.count_tokens(result.filtered_text)
         _sid = args.get("session_id") or "default"
-        _model = args.get("model") or "claude-sonnet-4-6"
+        _model = args.get("model") or None
         _get_tracker(_sid, _model).record(
             tool_name="filter_cli_output",
             original_tokens=_orig_tokens,
@@ -358,12 +358,12 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def _get_tracker(session_id: str, model: str = "claude-sonnet-4-6") -> SavingsTracker:
+def _get_tracker(session_id: str, model: str | None = None) -> SavingsTracker:
     """Return (or create) the SavingsTracker for *session_id*."""
     if session_id not in _savings_trackers:
-        _savings_trackers[session_id] = SavingsTracker(session_id, model)
+        _savings_trackers[session_id] = SavingsTracker(session_id, model or "claude-sonnet-4-6")
     tracker = _savings_trackers[session_id]
-    if model and model != tracker.model:
+    if model is not None and model != tracker.model:
         tracker.model = model
     return tracker
 
@@ -539,6 +539,19 @@ async def handle_get_original_output(context: Dict[str, Any], args: Dict[str, An
                 "error": f"No tee entry found with id '{entry_id}'",
             }
         )
+
+    try:
+        _expanded_tokens = (
+            _token_estimator.count_tokens(entry.original_text) if entry.original_text else 0
+        )
+        if _expanded_tokens > 0:
+            _get_tracker(session_id).record_expansion_debit(
+                tool_name="get_original_output",
+                expanded_tokens=_expanded_tokens,
+                reason=f"tee_recovery:{entry_id}",
+            )
+    except Exception as exc:
+        logger.warning(f"SavingsTracker.record_expansion_debit failed for tee recovery: {exc}")
 
     return json.dumps(
         {

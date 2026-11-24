@@ -19,9 +19,10 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 
 from .constants import MAX_FILE_SYNC_ENTRIES
+from .diff_reread import SessionDiffTracker
 
 logger = logging.getLogger("file_sync")
 
@@ -67,6 +68,7 @@ class FileSyncManager:
         self.file_metadata: Dict[str, FileMetadata] = {}  # doc_id -> metadata
         self._lock = threading.Lock()  # Thread safety for concurrent access
         self.max_entries = max_entries  # LRU eviction limit
+        self._diff_tracker = SessionDiffTracker(max_entries=max_entries if max_entries > 0 else 256)
         logger.info(
             f"FileSyncManager initialized "
             f"(max_entries={max_entries if max_entries > 0 else 'unlimited'})"
@@ -322,6 +324,17 @@ class FileSyncManager:
         except Exception as e:
             logger.error(f"Error generating diff for {doc_id}: {e}")
             return None
+
+    def track_or_diff_reread(
+        self,
+        session_id: str,
+        file_path: str,
+        content: str,
+        force_full: bool = False,
+    ) -> Dict[str, Any]:
+        """Return compact marker, unified diff, or full content for a session file reread."""
+        with self._lock:
+            return self._diff_tracker.read(session_id, file_path, content, force_full=force_full)
 
     def get_stale_documents(self) -> List[str]:
         """

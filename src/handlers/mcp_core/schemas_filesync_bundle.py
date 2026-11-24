@@ -24,6 +24,21 @@ FILESYNC_TOOLS: list = [
                     "type": "string",
                     "description": "Document ID to check sync status",
                 },
+                "diff_on_reread": {
+                    "type": "boolean",
+                    "description": (
+                        "When true, track reads per session and return only a unified diff "
+                        "when the file changed since the previous read"
+                    ),
+                    "default": False,
+                },
+                "force_full": {
+                    "type": "boolean",
+                    "description": (
+                        "When true with diff_on_reread, force returning full content instead of diff"
+                    ),
+                    "default": False,
+                },
                 **SCOPE_PROPERTIES,
             },
             "required": ["file_id"],
