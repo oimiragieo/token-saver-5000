@@ -12,6 +12,16 @@ Token Saver MCP Proxy: transparent compression for any MCP server.
 
 _No top-level classes or functions (may re-export only)._
 
+#### `cache_router.py`
+
+Dual-Path CacheRouter with 4-stage filtering, ISO/BM25 relevance, and state gating.
+
+| Kind | Name |
+|------|------|
+| `def` | `_tokenize` |
+| `def` | `_tool_document_tokens` |
+| `class` | `CacheRouter` |
+
 #### `proxy_server.py`
 
 MCP proxy server: wraps an upstream MCP server with transparent compression.
@@ -33,13 +43,36 @@ Applies Token Saver compression pipeline to MCP tool responses.
 
 #### `schema_compressor.py`
 
-Meta-tool pattern: replaces N upstream tools with 3 search/inspect/invoke meta-tools.
+Schema compression (L0-L3) and <0.5ms pre-binding argument validation.
 
 | Kind | Name |
 |------|------|
+| `def` | `_normalize_ws` |
+| `def` | `_is_redundant_title` |
+| `def` | `_clean_schema_node` |
+| `def` | `compact_schema_l0` |
+| `def` | `summarize_description_l1` |
+| `def` | `compact_schema_l1` |
+| `def` | `_estimate_tool_tokens` |
+| `def` | `_matches_json_type` |
+| `def` | `_enum_contains` |
+| `class` | `_ValidationState` |
+| `def` | `_validate_node` |
+| `def` | `validate_tool_arguments` |
 | `class` | `ToolEntry` |
 | `class` | `ToolIndex` |
 | `class` | `SchemaCompressor` |
+
+#### `schema_levels.py`
+
+Schema compression levels and routing policy contracts for the MCP proxy.
+
+| Kind | Name |
+|------|------|
+| `class` | `SchemaCompressionLevel` |
+| `def` | `parse_schema_level` |
+| `def` | `normalize_tool_name` |
+| `class` | `RouterPolicy` |
 
 #### `upstream_client.py`
 

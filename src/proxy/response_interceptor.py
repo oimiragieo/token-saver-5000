@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, Iterable
 
 from ..token_refiner import TokenRefiner
 from ..meta_tokens import MetaTokenCompressor
 from ..cli_output_optimizer import CLIOutputOptimizer
 from ..identifier_preservation import apply_identifier_guard, extract_critical_identifiers
+from .schema_levels import DEFAULT_BYTE_EXACT_READ_TOOLS, normalize_tool_name
 
 # Minimum text length (characters) before compression is attempted.
 # Texts shorter than this pass through unchanged to avoid skeleton overhead
@@ -71,6 +73,7 @@ class ResponseInterceptor:
         enable_meta_tokens: bool = True,
         enable_cli_filters: bool = False,
         preserve_identifiers: bool = False,
+        byte_exact_read_tools: Iterable[str] | None = None,
     ) -> None:
         self._refiner = TokenRefiner()
         self._meta: MetaTokenCompressor | None = (
@@ -85,31 +88,59 @@ class ResponseInterceptor:
         # that compression dropped, so an agent reading a compressed tool result
         # never loses the token it needs. Off by default for backward compat.
         self._preserve_identifiers = preserve_identifiers
+        if byte_exact_read_tools is None:
+            self._byte_exact_read_tools = DEFAULT_BYTE_EXACT_READ_TOOLS
+        else:
+            self._byte_exact_read_tools = frozenset(
+                str(t).strip().lower() for t in byte_exact_read_tools if str(t).strip()
+            )
+
+    def is_byte_exact_read_tool(self, tool_name: str | None) -> bool:
+        """Return ``True`` if *tool_name* is protected by the byte-exact read guard."""
+        if not tool_name:
+            return False
+        lower = tool_name.strip().lower()
+        norm = normalize_tool_name(tool_name)
+        return lower in self._byte_exact_read_tools or norm in self._byte_exact_read_tools
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def intercept_text(
-        self, text: str, tool_name: str | None = None
+        self,
+        text: str,
+        tool_name: str | None = None,
+        *,
+        is_error: bool = False,
+        structured_content: Any = None,
+        force_compress: bool = False,
     ) -> tuple[str, InterceptionStats]:
-        """Compress *text* through the pipeline.
+        """Compress *text* through the pipeline unless guarded.
 
-        Texts shorter than ``_MIN_COMPRESS_CHARS`` pass through unchanged.
-
-        Args:
-            text:      The tool-response text to compress.
-            tool_name: Optional MCP tool name used as a command hint for
-                       Stage 0 CLI filtering (e.g. ``"filter_cli_output"``).
-
-        Returns:
-            Tuple of ``(compressed_text, stats)``.  When the text is too short
-            to benefit from compression ``compressed_text == text``.
+        Never compresses errors (``is_error=True``), ``structuredContent``
+        responses, or byte-exact file-read tools unless ``force_compress=True``.
+        Texts shorter than ``_MIN_COMPRESS_CHARS`` also pass through unchanged.
         """
         if not text:
             return text, InterceptionStats(0, 0, 0, [])
 
         original_len = len(text)
+
+        if is_error:
+            return text, InterceptionStats(
+                original_len, original_len, 0, ["passthrough:error_guard"]
+            )
+
+        if structured_content is not None:
+            return text, InterceptionStats(
+                original_len, original_len, 0, ["passthrough:structured_guard"]
+            )
+
+        if not force_compress and self.is_byte_exact_read_tool(tool_name):
+            return text, InterceptionStats(
+                original_len, original_len, 0, ["passthrough:read_guard"]
+            )
 
         if original_len < _MIN_COMPRESS_CHARS:
             return text, InterceptionStats(original_len, original_len, 0, [])
@@ -155,6 +186,65 @@ class ResponseInterceptor:
         return current, InterceptionStats(
             original_chars=original_len,
             compressed_chars=compressed_len,
+            tokens_saved_estimate=tokens_saved,
+            pipeline_stages=stages,
+        )
+
+    def intercept_mcp_result(
+        self,
+        result: dict[str, Any],
+        tool_name: str | None = None,
+        *,
+        force_compress: bool = False,
+    ) -> tuple[dict[str, Any], InterceptionStats]:
+        """Intercept a structured MCP ``CallToolResult`` dict.
+
+        Never compresses ``isError=True``, ``structuredContent``, non-text items,
+        or byte-exact read tools unless ``force_compress=True``.
+        """
+        if result.get("isError") is True:
+            return dict(result), InterceptionStats(0, 0, 0, ["passthrough:error_guard"])
+        if result.get("structuredContent") is not None:
+            return dict(result), InterceptionStats(0, 0, 0, ["passthrough:structured_guard"])
+        if not force_compress and self.is_byte_exact_read_tool(tool_name):
+            return dict(result), InterceptionStats(0, 0, 0, ["passthrough:read_guard"])
+
+        items = result.get("content")
+        if not isinstance(items, list):
+            return dict(result), InterceptionStats(0, 0, 0, [])
+
+        new_items: list[Any] = []
+        total_orig = 0
+        total_comp = 0
+        stages: list[str] = []
+        for item in items:
+            if (
+                isinstance(item, dict)
+                and item.get("type") == "text"
+                and isinstance(item.get("text"), str)
+            ):
+                comp_text, item_stats = self.intercept_text(
+                    item["text"], tool_name=tool_name, force_compress=force_compress
+                )
+                total_orig += item_stats.original_chars
+                total_comp += item_stats.compressed_chars
+                for st in item_stats.pipeline_stages:
+                    if st not in stages:
+                        stages.append(st)
+                new_item = dict(item)
+                new_item["text"] = comp_text
+                new_items.append(new_item)
+            else:
+                if "passthrough:non_text_guard" not in stages:
+                    stages.append("passthrough:non_text_guard")
+                new_items.append(item)
+
+        new_result = dict(result)
+        new_result["content"] = new_items
+        tokens_saved = max(0, (total_orig - total_comp) // 4)
+        return new_result, InterceptionStats(
+            original_chars=total_orig,
+            compressed_chars=total_comp,
             tokens_saved_estimate=tokens_saved,
             pipeline_stages=stages,
         )

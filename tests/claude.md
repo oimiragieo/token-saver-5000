@@ -4138,6 +4138,72 @@ Wiring tests for Wave 1 handlers (CL 4).
 | `async def` | `test_check_file_sync_wires_track_or_diff_reread` |
 | `async def` | `test_check_file_sync_preserves_crlf_on_reread` |
 
+#### `test_w2_audit_blockers.py`
+
+Regression tests for Wave 2 Daybreak Blue & Sol audit blockers.
+
+| Kind | Name |
+|------|------|
+| `def` | `_sample_tools` |
+| `class` | `TestSymmetricPolicyNormalization` |
+| `class` | `TestSearchToolsTopKBounds` |
+| `class` | `TestInactiveMetaToolsAndMalformedRouterArgs` |
+| `class` | `TestLosslessL0LiteralPreservation` |
+| `class` | `TestCallToolResultAndPreconditionTransport` |
+| `class` | `TestSol62RemainingFixes` |
+
+#### `test_w2_cache_router.py`
+
+Tests for CacheRouter 4-stage filtering, state gating, and prefix stability (Wave 2 CL 3b).
+
+| Kind | Name |
+|------|------|
+| `def` | `_make_80_tools` |
+| `class` | `TestCacheRouterFourStageFilter` |
+| `class` | `TestStatePreconditionsAndHallucinationGate` |
+| `class` | `TestResidentPrefixStability20Turns` |
+| `class` | `TestSecurityHardeningCacheRouter` |
+
+#### `test_w2_proxy_char.py`
+
+Characterization tests capturing baseline behavior of proxy components (Wave 2 CL 0).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestBaselineSchemaCompressor` |
+| `class` | `TestBaselineResponseInterceptor` |
+| `class` | `TestBaselineProxyServer` |
+
+#### `test_w2_read_guard.py`
+
+Tests for Byte-Exact File-Read Guard and ProxyServer Wave 2 wiring (CL 3c & CL 4).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestByteExactReadGuard` |
+| `class` | `TestProxyServerWave2Wiring` |
+| `class` | `TestProxyCLIWave2Flags` |
+| `class` | `TestDualPathBoundaryAndCallToolResult` |
+
+#### `test_w2_schema_compactor.py`
+
+Tests for L0-L3 Schema Compactor and <0.5ms Pre-Binding Validator (Wave 2 CL 3a).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestL0AndL1Compaction` |
+| `class` | `TestL3AdaptivePinned` |
+| `class` | `TestPreBindingValidator` |
+
+#### `test_w2_schema_levels.py`
+
+Tests for SchemaCompressionLevel and RouterPolicy contracts (Wave 2 CL 1).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestSchemaCompressionLevel` |
+| `class` | `TestRouterPolicy` |
+
 #### `test_web_connector.py`
 
 Tests for web connector normalization.

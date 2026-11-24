@@ -983,6 +983,9 @@ Entry point for token-saver-proxy CLI command.
 
 | Kind | Name |
 |------|------|
+| `def` | `_tool_to_dict` |
+| `def` | `_dict_to_tool` |
+| `async def` | `_dispatch_tool_call` |
 | `def` | `main` |
 
 #### `quality_gate.py`

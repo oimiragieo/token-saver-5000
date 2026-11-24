@@ -15,7 +15,6 @@ Examples::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -23,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.proxy.proxy_server import ProxyConfig, ProxyServer
+from src.proxy_cli import _dict_to_tool, _dispatch_tool_call, _tool_to_dict
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -109,7 +109,7 @@ def main() -> int:
         from mcp.client.stdio import stdio_client
         from mcp.server import Server
         from mcp.server.stdio import stdio_server
-        from mcp.types import TextContent, Tool
+        from mcp.types import Tool
 
         proxy = ProxyServer(config)
 
@@ -127,14 +127,7 @@ def main() -> int:
 
                     # Fetch upstream tool list once at startup.
                     tools_result = await session.list_tools()
-                    upstream_tools = [
-                        {
-                            "name": t.name,
-                            "description": t.description or "",
-                            "inputSchema": t.inputSchema or {},
-                        }
-                        for t in tools_result.tools
-                    ]
+                    upstream_tools = [_tool_to_dict(t) for t in tools_result.tools]
 
                     # Initialise schema compression (no-op if disabled).
                     proxy.setup_schema_compression(upstream_tools)
@@ -145,47 +138,16 @@ def main() -> int:
                     @mcp_server.list_tools()
                     async def handle_list_tools() -> list[Tool]:
                         processed = proxy.get_tools(upstream_tools)
-                        return [
-                            Tool(
-                                name=t["name"],
-                                description=t.get("description", ""),
-                                inputSchema=t.get("inputSchema", {}),
-                            )
-                            for t in processed
-                        ]
+                        return [_dict_to_tool(t, Tool) for t in processed]
 
                     @mcp_server.call_tool()
-                    async def handle_call_tool(
-                        name: str, arguments: dict | None
-                    ) -> list[TextContent]:
-                        arguments = arguments or {}
-
-                        # Check for meta-tool call first.
-                        meta_result = proxy.handle_meta_tool_call(name, arguments)
-                        if meta_result is not None:
-                            parsed = json.loads(meta_result)
-                            if parsed.get("_invoke_upstream"):
-                                # Forward to upstream with new name/args.
-                                name = parsed["tool_name"]
-                                arguments = parsed.get("arguments", {})
-                            else:
-                                return [TextContent(type="text", text=meta_result)]
-
-                        # Forward call to upstream server.
-                        result = await session.call_tool(name, arguments)
-
-                        # Compress text content items.
-                        compressed_content: list[TextContent] = []
-                        for item in result.content:
-                            if hasattr(item, "text") and item.text:
-                                compressed_text, _ = proxy.process_tool_result(name, item.text)
-                                compressed_content.append(
-                                    TextContent(type="text", text=compressed_text)
-                                )
-                            else:
-                                compressed_content.append(item)
-
-                        return compressed_content
+                    async def handle_call_tool(name: str, arguments: dict | None):
+                        return await _dispatch_tool_call(
+                            proxy,
+                            session,
+                            name,
+                            arguments or {},
+                        )
 
                     # Serve the proxy on stdio.
                     async with stdio_server() as (srv_read, srv_write):
