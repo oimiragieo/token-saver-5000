@@ -404,7 +404,13 @@ class ServerFactoryService:
         logger,
     ) -> CoreRuntimeArtifacts:
         """Build foundational runtime collaborators outside the service layer."""
-        focus_manager = focus_manager_cls(afm_config)
+        from ...handlers.token_optimization_handlers import get_context_visibility_manager
+
+        context_visibility = get_context_visibility_manager()
+        try:
+            focus_manager = focus_manager_cls(afm_config, context_visibility=context_visibility)
+        except TypeError:
+            focus_manager = focus_manager_cls(afm_config)
 
         persistence = persistence_cls()
         resource_manager = resource_manager_cls(resource_limits_cls(**cls.resource_limits_kwargs()))

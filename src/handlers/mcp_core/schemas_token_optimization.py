@@ -501,4 +501,42 @@ TOKEN_OPTIMIZATION_TOOLS: list = [
             },
         },
     ),
+    Tool(
+        name="manage_context",
+        description=(
+            "Dynamic Tool Output Control (DTOC): hide verbose tool outputs behind compact "
+            "[CTX_HIDDEN ...] handles or restore exact SHA-256-verified originals with "
+            "honest SavingsTracker expansion debits."
+        ),
+        inputSchema={
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "enable": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {"type": "string", "minLength": 1, "maxLength": 256},
+                    "description": "Context keys to restore to full visibility",
+                },
+                "disable": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {"type": "string", "minLength": 1, "maxLength": 256},
+                    "description": "Context keys to hide behind compact handles",
+                },
+                "workspace_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "description": "Optional workspace scope for multi-tenant isolation",
+                },
+                "session_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "description": "Optional session scope for multi-tenant isolation",
+                },
+            },
+        },
+    ),
 ]

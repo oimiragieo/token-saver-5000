@@ -4204,6 +4204,49 @@ Tests for SchemaCompressionLevel and RouterPolicy contracts (Wave 2 CL 1).
 | `class` | `TestSchemaCompressionLevel` |
 | `class` | `TestRouterPolicy` |
 
+#### `test_w3_acon_optimizer.py`
+
+Tests for Wave 3 Acon failure-driven rule optimizer with omega-verified-rsi gate.
+
+| Kind | Name |
+|------|------|
+| `def` | `_sample_fixtures` |
+| `class` | `TestAconRuleOptimizer` |
+
+#### `test_w3_context_char.py`
+
+Baseline characterization tests for Wave 3 dependencies (CL 0).
+
+| Kind | Name |
+|------|------|
+| `class` | `TestTeeStoreBaseline` |
+| `class` | `TestFocusManagerBaseline` |
+| `class` | `TestCompressionReplayAndACEBaseline` |
+| `class` | `TestAFMMessagePositionalAndPersistence` |
+
+#### `test_w3_dtoc.py`
+
+Tests for Wave 3 DTOC manage_context, TeeStore redaction & scope isolation.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestTeeStoreSecurityAndTokens` |
+| `class` | `TestContextVisibilityManager` |
+| `class` | `TestManageContextMCPTool` |
+| `class` | `TestW3AuditRegressions` |
+| `def` | `test_mixed_manage_rollback_on_tee_persist_failure` |
+
+#### `test_w3_extractive_lora.py`
+
+Tests for Wave 3 local loopback Extractive LoRA tier.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestLoopbackUrlValidation` |
+| `class` | `TestIntentBudgetAndExtractiveness` |
+| `class` | `TestExtractiveLoRAAdapter` |
+| `class` | `TestExtractiveLoraSecurityAndTokenEstimator` |
+
 #### `test_web_connector.py`
 
 Tests for web connector normalization.

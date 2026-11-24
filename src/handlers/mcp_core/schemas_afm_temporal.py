@@ -30,6 +30,18 @@ AFM_TOOLS: list = [
                     "type": "string",
                     "description": "Message content",
                 },
+                "tool_key": {
+                    "type": "string",
+                    "description": "Optional DTOC context visibility key associated with this message",
+                },
+                "workspace_id": {
+                    "type": "string",
+                    "description": "Optional workspace scope for multi-tenant isolation",
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Optional session scope for multi-tenant isolation",
+                },
             },
             "required": ["role", "content"],
         },

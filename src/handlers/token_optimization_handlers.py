@@ -326,10 +326,11 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
     # accuracy is fine for tracker aggregation, exact bills go through the
     # /v1/usage/by-model REST surface). Same lazy-import + swallow pattern
     # as handle_ingest / handle_read_skeleton.
+    _sid = args.get("session_id") or "default"
+    _ws = args.get("workspace_id") or "default"
     try:
         _orig_tokens = _token_estimator.count_tokens(text)
         _comp_tokens = _token_estimator.count_tokens(result.filtered_text)
-        _sid = args.get("session_id") or "default"
         _model = args.get("model") or None
         _get_tracker(_sid, _model).record(
             tool_name="filter_cli_output",
@@ -340,17 +341,41 @@ async def handle_filter_cli_output(context: Dict[str, Any], args: Dict[str, Any]
     except Exception as exc:
         logger.warning(f"SavingsTracker.record failed for filter_cli_output: {exc}")
 
-    return json.dumps(
-        {
-            "status": "success",
-            "filtered_text": result.filtered_text,
-            "command_detected": result.command_detected,
-            "strategy_applied": result.strategy_applied,
-            "original_lines": result.original_lines,
-            "filtered_lines": result.filtered_lines,
-            "compression_pct": round(result.compression_pct, 1),
-        }
-    )
+    tool_key: str | None = None
+    if text:
+        try:
+            import hashlib
+
+            raw_key = args.get("tool_key")
+            if isinstance(raw_key, str) and raw_key.strip():
+                tool_key = raw_key.strip()
+            else:
+                digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+                tool_key = f"cli_output:{result.command_detected}:{digest}"
+            cvm = context.get("context_visibility") or get_context_visibility_manager()
+            cvm.register(
+                tool_key=tool_key,
+                original_text=text,
+                summary=f"{result.command_detected} ({result.original_lines} lines)",
+                workspace_id=_ws,
+                session_id=_sid,
+                visible=True,
+            )
+        except Exception as exc:
+            logger.warning(f"ContextVisibilityManager.register failed for filter_cli_output: {exc}")
+
+    payload = {
+        "status": "success",
+        "filtered_text": result.filtered_text,
+        "command_detected": result.command_detected,
+        "strategy_applied": result.strategy_applied,
+        "original_lines": result.original_lines,
+        "filtered_lines": result.filtered_lines,
+        "compression_pct": round(result.compression_pct, 1),
+    }
+    if tool_key is not None:
+        payload["tool_key"] = tool_key
+    return json.dumps(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -529,9 +554,13 @@ async def handle_get_original_output(context: Dict[str, Any], args: Dict[str, An
     if not entry_id:
         return json.dumps({"status": "error", "error": "entry_id is required"})
 
-    session_id = args.get("session_id", "default")
+    workspace_id = args.get("workspace_id") or "default"
+    session_id = args.get("session_id") or "default"
     store = _get_tee_store(session_id)
-    entry = store.get(entry_id)
+    try:
+        entry = store.get(entry_id, workspace_id=workspace_id, session_id=session_id)
+    except PermissionError as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
     if entry is None:
         return json.dumps(
             {
@@ -562,6 +591,7 @@ async def handle_get_original_output(context: Dict[str, Any], args: Dict[str, An
             "command_hint": entry.command_hint,
             "compression_pct": round(entry.compression_pct, 1),
             "timestamp": entry.timestamp,
+            "redacted_on_disk": entry.redacted_on_disk,
         }
     )
 
@@ -571,18 +601,21 @@ async def handle_list_tee_entries(context: Dict[str, Any], args: Dict[str, Any])
 
     Lists recent tee entries with metadata (no full text).
     """
-    session_id = args.get("session_id", "default")
+    workspace_id = args.get("workspace_id") or "default"
+    session_id = args.get("session_id") or "default"
     limit = args.get("limit", 20)
     source = args.get("source")
 
     store = _get_tee_store(session_id)
-    entries = store.list_entries(limit=limit, source=source)
+    entries = store.list_entries(
+        limit=limit, source=source, workspace_id=workspace_id, session_id=session_id
+    )
 
     return json.dumps(
         {
             "status": "success",
             "entries": entries,
-            "stats": store.stats(),
+            "stats": store.stats(workspace_id=workspace_id, session_id=session_id),
         }
     )
 
@@ -592,9 +625,12 @@ async def handle_tee_store_stats(context: Dict[str, Any], args: Dict[str, Any]) 
 
     Returns tee store statistics.
     """
-    session_id = args.get("session_id", "default")
+    workspace_id = args.get("workspace_id") or "default"
+    session_id = args.get("session_id") or "default"
     store = _get_tee_store(session_id)
-    return json.dumps({"status": "success", **store.stats()})
+    return json.dumps(
+        {"status": "success", **store.stats(workspace_id=workspace_id, session_id=session_id)}
+    )
 
 
 async def handle_discover_savings(context: Dict[str, Any], args: Dict[str, Any]) -> str:
@@ -786,3 +822,85 @@ async def handle_export_team_data(context: Dict[str, Any], args: Dict[str, Any])
             "summary": report.to_dict(),
         }
     )
+
+
+_context_visibility_manager: Any = None
+
+
+def get_context_visibility_manager() -> Any:
+    """Return the shared ContextVisibilityManager singleton."""
+    global _context_visibility_manager
+    if _context_visibility_manager is None:
+        from ..context_visibility import ContextVisibilityManager
+
+        _context_visibility_manager = ContextVisibilityManager(
+            token_estimator=_token_estimator,
+            savings_tracker_factory=lambda sid: _get_tracker(sid),
+        )
+    return _context_visibility_manager
+
+
+def _validate_manage_context_keys(value: Any, field_name: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    if len(value) > 100:
+        raise ValueError(f"{field_name} length must be <= 100")
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{field_name} items must be non-empty strings")
+        if len(item) > 256:
+            raise ValueError(f"{field_name} key exceeds max length of 256")
+        out.append(item)
+    return list(dict.fromkeys(out))
+
+
+def _validate_scope_id(value: Any, field_name: str) -> str:
+    if value is None:
+        return "default"
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    if len(value) > 256:
+        raise ValueError(f"{field_name} exceeds max length of 256")
+    return value
+
+
+_ALLOWED_MANAGE_CONTEXT_KEYS = frozenset({"enable", "disable", "workspace_id", "session_id"})
+
+
+async def handle_manage_context(context: Dict[str, Any], args: Dict[str, Any]) -> str:
+    """Handle manage_context (DTOC) tool call."""
+    from ..context_visibility import ManageContextRequest
+
+    try:
+        if not isinstance(args, dict):
+            raise ValueError("manage_context arguments must be an object")
+        unknown_keys = sorted(set(args.keys()) - _ALLOWED_MANAGE_CONTEXT_KEYS)
+        if unknown_keys:
+            raise ValueError(f"Unknown argument(s) for manage_context: {', '.join(unknown_keys)}")
+        enable = _validate_manage_context_keys(args.get("enable"), "enable")
+        disable = _validate_manage_context_keys(args.get("disable"), "disable")
+        overlap = sorted(set(enable) & set(disable))
+        if overlap:
+            raise ValueError(f"Keys cannot appear in both enable and disable: {overlap}")
+        workspace_id = _validate_scope_id(args.get("workspace_id"), "workspace_id")
+        session_id = _validate_scope_id(args.get("session_id"), "session_id")
+    except ValueError as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
+
+    manager = context.get("context_visibility") or get_context_visibility_manager()
+
+    req = ManageContextRequest(
+        enable=enable,
+        disable=disable,
+        workspace_id=workspace_id,
+        session_id=session_id,
+    )
+    try:
+        result = manager.manage(req)
+    except (PermissionError, KeyError, ValueError) as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
+
+    return json.dumps({"status": "success", **result})

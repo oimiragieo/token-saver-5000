@@ -103,6 +103,11 @@ class Message:
     # Timestamps
     timestamp: float = field(default_factory=time.time)
 
+    # Optional DTOC visibility handle metadata (Wave 3)
+    tool_key: Optional[str] = None
+    workspace_id: str = "default"
+    session_id: str = "default"
+
     def __post_init__(self):
         if self.message_id is None:
             self.message_id = f"msg_{self.turn_index}"
@@ -603,8 +608,13 @@ class FocusManager:
         )
     """
 
-    def __init__(self, config: Optional[AFMConfig] = None):
+    def __init__(
+        self,
+        config: Optional[AFMConfig] = None,
+        context_visibility: Optional[Any] = None,
+    ):
         self.config = config or AFMConfig()
+        self.context_visibility = context_visibility
 
         # Initialize components
         self.token_counter = TokenCounter(model_name="gpt-4o-mini")
@@ -637,7 +647,15 @@ class FocusManager:
 
         logger.info(f"FocusManager initialized with config: {self.config}")
 
-    def add_message(self, role: str, content: str, metadata: Optional[Dict] = None) -> Message:
+    def add_message(
+        self,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None,
+        tool_key: Optional[str] = None,
+        workspace_id: str = "default",
+        session_id: str = "default",
+    ) -> Message:
         """
         Add a new message to dialogue history
 
@@ -663,6 +681,9 @@ class FocusManager:
                 content=content,
                 turn_index=self.turn_counter,
                 message_id=f"{role}_{self.turn_counter}",
+                tool_key=tool_key,
+                workspace_id=workspace_id,
+                session_id=session_id,
             )
 
             # Classify importance (done eagerly)
@@ -882,8 +903,26 @@ class FocusManager:
             packed_message: (role, content) tuple or None
             tokens_used: Number of tokens consumed (0 if message didn't fit)
         """
-        # Generate content at requested fidelity
-        if fidelity == FidelityLevel.FULL:
+        # Generate content at requested fidelity (respecting DTOC hidden handles)
+        if self.context_visibility is not None and message.tool_key:
+            handle = self.context_visibility.get_handle(
+                message.tool_key,
+                workspace_id=message.workspace_id,
+                session_id=message.session_id,
+            )
+            if not handle.visible:
+                content = self.context_visibility.render(
+                    message.tool_key,
+                    workspace_id=message.workspace_id,
+                    session_id=message.session_id,
+                )
+            elif fidelity == FidelityLevel.FULL:
+                content = message.content
+            elif fidelity == FidelityLevel.COMPRESSED:
+                content = self._create_compressed(message)
+            else:
+                content = self._create_placeholder(message)
+        elif fidelity == FidelityLevel.FULL:
             content = message.content
         elif fidelity == FidelityLevel.COMPRESSED:
             content = self._create_compressed(message)

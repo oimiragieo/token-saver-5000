@@ -419,6 +419,10 @@ Token Optimization Handlers (v0.11.0)
 | `async def` | `handle_calculate_roi` |
 | `async def` | `handle_check_budget` |
 | `async def` | `handle_export_team_data` |
+| `def` | `get_context_visibility_manager` |
+| `def` | `_validate_manage_context_keys` |
+| `def` | `_validate_scope_id` |
+| `async def` | `handle_manage_context` |
 
 #### `visualization_handlers.py`
 

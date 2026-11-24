@@ -60,10 +60,20 @@ async def handle_afm_add_message(context: HandlerContext, args: Dict[str, Any]) 
     if role not in ["user", "assistant", "system"]:
         raise ValueError(f"Invalid role: {role}. Must be 'user', 'assistant', or 'system'")
 
+    tool_key = args.get("tool_key")
+    workspace_id = args.get("workspace_id") or "default"
+    session_id = args.get("session_id") or "default"
+
     logger.info(f"AFM: Adding {role} message (turn {focus_manager.turn_counter})")
 
     # Add message
-    msg = focus_manager.add_message(role, content)
+    msg = focus_manager.add_message(
+        role,
+        content,
+        tool_key=tool_key,
+        workspace_id=workspace_id,
+        session_id=session_id,
+    )
 
     # Return confirmation with importance classification
     return f"""

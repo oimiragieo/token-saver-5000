@@ -32,6 +32,20 @@ ACE Framework for Token Saver 5000
 | `class` | `ACECurator` |
 | `class` | `ACEFramework` |
 
+#### `acon_rule_optimizer.py`
+
+Acon failure-driven rule optimizer with omega-verified-rsi gate (Wave 3).
+
+| Kind | Name |
+|------|------|
+| `class` | `CandidateRuleDiff` |
+| `class` | `HeldOutFixture` |
+| `class` | `OptimizationResult` |
+| `def` | `_hint_keywords` |
+| `def` | `_apply_rules_to_fixture` |
+| `def` | `default_fixture_evaluator` |
+| `class` | `AconRuleOptimizer` |
+
 #### `adaptive_rate_allocator.py`
 
 Adaptive Rate Allocator
@@ -413,6 +427,17 @@ Context decay and eviction for stale document management.
 | `class` | `AccessTracker` |
 | `def` | `compute_decay_score` |
 
+#### `context_visibility.py`
+
+Dynamic Tool Output Control (DTOC) visibility management (Wave 3).
+
+| Kind | Name |
+|------|------|
+| `class` | `ContextHandle` |
+| `class` | `ManageContextRequest` |
+| `def` | `format_hidden_handle` |
+| `class` | `ContextVisibilityManager` |
+
 #### `cross_encoder_scorer.py`
 
 ONNX cross-encoder relevance scorer for the recall-gated rerank stage (#187).
@@ -568,6 +593,21 @@ Query-aware extractive compression baseline.
 | Kind | Name |
 |------|------|
 | `class` | `ExtractiveCompressor` |
+
+#### `extractive_lora_adapter.py`
+
+Optional local loopback extractive LoRA pruner adapter (Wave 3).
+
+| Kind | Name |
+|------|------|
+| `class` | `_NoRedirectHandler` |
+| `def` | `_verify_resolved_loopback` |
+| `def` | `validate_loopback_url` |
+| `class` | `ExtractivePrunerConfig` |
+| `def` | `_intent_budget` |
+| `def` | `check_extractiveness` |
+| `class` | `ExtractivePruneResult` |
+| `class` | `ExtractiveLoRAAdapter` |
 
 #### `fidelity_advisor.py`
 
@@ -1299,6 +1339,11 @@ Tee/Recovery system for preserving original content before compression.
 
 | Kind | Name |
 |------|------|
+| `def` | `_get_token_estimator` |
+| `def` | `redact_secrets` |
+| `def` | `_validate_entry_id` |
+| `def` | `_is_sensitive_key` |
+| `def` | `_redact_value` |
 | `class` | `TeeEntry` |
 | `class` | `TeeStore` |
 | `def` | `get_default_tee_dir` |

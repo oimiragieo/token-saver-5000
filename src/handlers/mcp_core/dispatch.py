@@ -232,6 +232,8 @@ async def route_tool_call(
         "check_budget": toh.handle_check_budget,
         # Team Export (v0.16.0)
         "export_team_data": toh.handle_export_team_data,
+        # Wave 3 DTOC Context Visibility
+        "manage_context": toh.handle_manage_context,
     }
 
     enabled_tools = _enabled_tool_names(set(router.keys()), tool_profile)

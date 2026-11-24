@@ -588,8 +588,13 @@ class CLIOutputOptimizer:
         print(f"{result.compression_pct:.1f}% compression")
     """
 
-    def __init__(self, tee_store: Optional[object] = None):
+    def __init__(
+        self,
+        tee_store: Optional[object] = None,
+        extractive_adapter: Optional[object] = None,
+    ):
         self._tee_store = tee_store
+        self._extractive_adapter = extractive_adapter
         self._rule_engine = self._load_rule_engine()
 
     @staticmethod
@@ -713,7 +718,20 @@ class CLIOutputOptimizer:
         # (truthful; detection still found no real pattern match).
         if command_type == "unknown" and fallback_strategy and fallback_strategy in STRATEGY_MAP:
             strategy_name = STRATEGY_MAP[fallback_strategy]
-        if strategy_name and strategy_name != "_strip_ansi":
+        extra_metadata: dict = {}
+        if (
+            command_type == "unknown"
+            and self._extractive_adapter is not None
+            and (fallback_strategy in (None, "extractive"))
+        ):
+            lora_res = self._extractive_adapter.prune(working_text)
+            filtered_text = lora_res.text
+            applied = "extractive_lora" if lora_res.used_lora else "extractive_fallback"
+            extra_metadata["extractiveness_ratio"] = lora_res.extractiveness_ratio
+            extra_metadata["lora_cache_hit"] = lora_res.cache_hit
+            if lora_res.fallback_reason:
+                extra_metadata["lora_fallback_reason"] = lora_res.fallback_reason
+        elif strategy_name and strategy_name != "_strip_ansi":
             strategy_fn = getattr(self, strategy_name)
             filtered_text = strategy_fn(working_text)
             applied = strategy_name
@@ -766,6 +784,7 @@ class CLIOutputOptimizer:
             filtered_lines=filtered_lines,
             command_detected=command_type,
             strategy_applied=applied,
+            metadata=extra_metadata,
         )
 
         # Tee original if compression is significant

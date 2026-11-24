@@ -849,6 +849,9 @@ class PersistenceManager:
             "intended_fidelity": fidelity_val,
             "compressed_summary": getattr(msg, "compressed_summary", None),
             "placeholder_stub": getattr(msg, "placeholder_stub", None),
+            "tool_key": getattr(msg, "tool_key", None),
+            "workspace_id": getattr(msg, "workspace_id", "default"),
+            "session_id": getattr(msg, "session_id", "default"),
         }
         # Handle embedding
         if hasattr(msg, "embedding") and msg.embedding is not None:
@@ -899,6 +902,9 @@ class PersistenceManager:
             intended_fidelity=fidelity_val,
             compressed_summary=msg_data.get("compressed_summary"),
             placeholder_stub=msg_data.get("placeholder_stub"),
+            tool_key=msg_data.get("tool_key"),
+            workspace_id=msg_data.get("workspace_id", "default"),
+            session_id=msg_data.get("session_id", "default"),
         )
 
     def save_afm_history(
