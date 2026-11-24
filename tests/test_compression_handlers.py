@@ -510,11 +510,12 @@ class TestHandleIngestF12SavingsTrackerWired:
         Pre-fix the tracker registry stayed empty forever; this test would
         find zero events. Post-fix the recorded event has the ingest scalars.
         """
+        import uuid
         from src.handlers import token_optimization_handlers as toh
 
         # Snapshot the tracker registry BEFORE ingest. Use a unique session
         # so we don't pollute or get polluted by other tests' "default" session.
-        unique_session = "f12-regression-2026-05-24"
+        unique_session = f"f12-regression-{uuid.uuid4().hex[:8]}"
         # Drop any prior state for this session (test isolation):
         toh._savings_trackers.pop(unique_session, None)
 
@@ -809,9 +810,10 @@ class TestHandleReadSkeletonF12ClassCompletion:
 
     @pytest.mark.asyncio
     async def test_read_skeleton_records_to_savings_tracker(self, mock_validate_file):
+        import uuid
         from src.handlers import token_optimization_handlers as toh
 
-        sid = "v1_34_28-read-skeleton-verify"
+        sid = f"v1_34_28-read-skeleton-{uuid.uuid4().hex[:8]}"
         toh._savings_trackers.pop(sid, None)
 
         compressor = Mock()

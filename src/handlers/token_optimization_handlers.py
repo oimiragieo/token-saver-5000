@@ -591,7 +591,7 @@ async def handle_get_original_output(context: Dict[str, Any], args: Dict[str, An
             "command_hint": entry.command_hint,
             "compression_pct": round(entry.compression_pct, 1),
             "timestamp": entry.timestamp,
-            "redacted_on_disk": entry.redacted_on_disk,
+            "redacted_on_disk": bool(getattr(entry, "redacted_on_disk", False)),
         }
     )
 

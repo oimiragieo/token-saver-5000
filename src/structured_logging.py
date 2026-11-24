@@ -276,8 +276,8 @@ class StructuredLogger:
         # Remove existing handlers
         self.logger.handlers.clear()
 
-        # Add formatter based on format type
-        handler = logging.StreamHandler(sys.stdout)
+        # Log to stderr so MCP JSON-RPC stdout remains uncorrupted.
+        handler = logging.StreamHandler(sys.stderr)
         if format == "json":
             formatter = JSONFormatter(service, version, environment)
         else:

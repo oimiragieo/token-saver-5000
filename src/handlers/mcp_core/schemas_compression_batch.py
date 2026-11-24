@@ -364,8 +364,10 @@ COMPRESSION_BATCH_TOOLS: list = [
                 },
                 "max_files": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
                     "default": 50,
-                    "description": "Maximum files to include",
+                    "description": "Maximum files to include (default: 50, range: 1-100)",
                 },
                 "budget_tokens": {
                     "type": "integer",

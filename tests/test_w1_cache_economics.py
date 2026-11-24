@@ -10,8 +10,10 @@ from src.cache_economics import (
     GEMINI_FLASH,
     OPENAI_GPT5,
     PROVIDER_CACHE_PROFILES,
+    TOKENIZER_NAME,
     ExplainAnalyzeTrace,
     ProviderCacheProfile,
+    _get_encoder,
     bill_prefix_turn,
     compute_crossover_hit_rate,
     compute_tier_preserving_max_ratio,
@@ -126,3 +128,25 @@ def test_explain_analyze_trace_dataclass():
     )
     assert trace.decision == "compress"
     assert trace.tier_preserving_max_ratio == 4
+
+
+def test_cache_economics_requires_tiktoken_and_exposes_tokenizer_name(monkeypatch):
+    import builtins
+    import sys
+
+    assert TOKENIZER_NAME == "tiktoken:cl100k_base"
+    _get_encoder.cache_clear()
+    real_import = builtins.__import__
+
+    def _blocking_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tiktoken":
+            raise ImportError("simulated missing tiktoken")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.delitem(sys.modules, "tiktoken", raising=False)
+    monkeypatch.setattr(builtins, "__import__", _blocking_import)
+    try:
+        with pytest.raises(ImportError, match="tiktoken is required"):
+            _get_encoder()
+    finally:
+        _get_encoder.cache_clear()

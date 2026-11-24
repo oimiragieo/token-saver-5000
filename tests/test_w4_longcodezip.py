@@ -191,3 +191,17 @@ def test_solve_knapsack_exact_unit_blocks_budget_5():
     res = solve_knapsack_exact(items, budget_tokens=5)
     assert len(res.selected_blocks) == 5
     assert res.total_value == pytest.approx(5.0, abs=1e-12)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_max_files", [True, False, 0, -3, 101, "10", 5.5])
+async def test_mcp_compress_codebase_rejects_invalid_max_files(tmp_path: Path, bad_max_files):
+    validator = PathValidator(allowed_base_dirs=[str(tmp_path)])
+    raw = await route_tool_call(
+        "compress_codebase",
+        {"directory": str(tmp_path), "max_files": bad_max_files},
+        context={"path_validator": validator},
+    )
+    payload = json.loads(raw)
+    assert payload["status"] == "error"
+    assert "max_files" in payload["error"]

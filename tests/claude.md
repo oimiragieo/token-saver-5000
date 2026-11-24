@@ -4077,6 +4077,7 @@ Unit tests for src/cache_economics.py (CL 1).
 | `def` | `test_bill_prefix_turn_enforces_persistent_tier_and_token_lcp` |
 | `def` | `test_bill_prefix_turn_full_miss` |
 | `def` | `test_explain_analyze_trace_dataclass` |
+| `def` | `test_cache_economics_requires_tiktoken_and_exposes_tokenizer_name` |
 
 #### `test_w1_cache_economics_char.py`
 
@@ -4302,6 +4303,16 @@ CL 1 & CL 3a tests for LongCodeZip exact 0/1 knapsack code compression.
 | `async def` | `test_mcp_compress_codebase_respects_budget_tokens` |
 | `def` | `test_code_compressor_wires_optional_budget_tokens` |
 | `def` | `test_solve_knapsack_exact_unit_blocks_budget_5` |
+| `async def` | `test_mcp_compress_codebase_rejects_invalid_max_files` |
+
+#### `test_w5_dogfood.py`
+
+Wave 5 in-process smoke test for scripts/benchmarks/dogfood_2026_sota.py.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_offline_dogfood_suite_passes_all_invariants` |
+| `def` | `test_live_mode_fails_closed_without_budget_or_provider` |
 
 #### `test_web_connector.py`
 

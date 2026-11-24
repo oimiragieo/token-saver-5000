@@ -605,6 +605,33 @@ The model-optimization layer now also exposes:
 For usage guidance, see `docs/guides/PROMPT_CACHING.md`.
 For Gemini CLI, Claude, and Codex compatibility guidance, see `docs/guides/PROVIDER_CACHE_COMPATIBILITY.md`.
 
+## 2026 Context & Cache Engineering Capabilities
+
+Token Saver 5000 includes four integrated optimization waves:
+
+1. **Wave 1 — Cache-Aware Economics & Lossless Diff Rereads:**
+   - `src/cache_economics.py` & `src/compression_advisor.py`: CAPC (`advise_with_cache_economics` / `ExplainAnalyzeTrace`) abstains or caps compression ratios when provider prefix caching (`cache_read_mult`, `persistent_tier_tokens`) makes raw prefix reuse cheaper.
+   - `src/prompt_cache_stability_guard.py`: `cache_align_sections` reorders prompt sections by volatility (`global` -> `session` -> `none`) while pinning anchors and suppressing unsafe post-leak breakpoints.
+   - `src/savings_tracker.py` & `src/session_journal.py`: `record_expansion_debit` persists honest expansion debits across SQLite journal recovery.
+   - `src/file_sync_manager.py` & `src/diff_reread.py`: `track_or_diff_reread` returns compact unchanged markers or lossless unified diffs with exact CRLF/LF SHA-256 verification.
+2. **Wave 2 — Dual-Path Tool Router & Byte-Exact Read Guard:**
+   - `src/proxy/cache_router.py`, `src/proxy/proxy_server.py`, `src/proxy/schema_compressor.py`, `src/proxy/response_interceptor.py`: `DUAL_PATH_ROUTER` freezes a byte-identical resident `tools[]` prefix across turns, discovers long-tail tools via `internal_router`, defers state-effect commits (`commit_tool_effects`) until upstream success, enforces `<0.5ms` `validate_tool_arguments`, and preserves byte-exact `read_file` passthrough.
+   - Proxy CLI flags (`token-saver-proxy` / `gotcontext-proxy`): `--schema-level`, `--max-schema-tokens`, `--pin-tools`, `--blacklist`, `--whitelist`.
+3. **Wave 3 — Dynamic Context Visibility (DTOC), Loopback LoRA Pruning & ACON Gate:**
+   - `src/context_visibility.py`, `src/tee_recovery.py`, `src/afm.py`: `manage_context` MCP tool (`ContextVisibilityManager` + `TeeStore` + `FocusManager`) hides/restores tool outputs with SHA-256 verification and `SavingsTracker` debits.
+   - `src/extractive_lora_adapter.py`: `ExtractivePrunerConfig` enforces loopback-only URLs and falls back gracefully when local loopback inference is offline.
+   - `src/acon_rule_optimizer.py`: `AconRuleOptimizer` gates candidate compression rule diffs on held-out recall and net token non-inflation.
+4. **Wave 4 — AST Knapsack Compression, FlowPlan Delta & Tabular Quantization:**
+   - `src/code_budget_knapsack.py`: `compress_code_with_knapsack` solves exact 0/1 AST-block knapsack packing under `budget_tokens`.
+   - `src/code_flow_graph.py`: `verify_code_flow_delta` MCP tool detects missing branches, dropped calls, removed returns, and unreachable edits in `<5ms`.
+   - `src/toon_serializer.py`: `quantize_numeric_columns` / `dequantize_numeric_columns` pack numeric columns within `eps_max`.
+
+Run the offline Wave 1-4 E2E dogfood harness:
+
+```bash
+python scripts/benchmarks/dogfood_2026_sota.py --mode offline --out artifacts/benchmarks/dogfood_receipt.json
+```
+
 ## Skill Scripts (No MCP Required)
 
 Path: `skills/token-saver-context-compression/scripts/`

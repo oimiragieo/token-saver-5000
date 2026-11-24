@@ -77,6 +77,16 @@ Compression MCP handlers (re-export facade).
 
 _No top-level classes or functions (may re-export only)._
 
+#### `compression_handlers_code_flow.py`
+
+Compression handlers for codebase search, budget knapsack, and code-flow delta verification.
+
+| Kind | Name |
+|------|------|
+| `def` | `_apply_codebase_budget` |
+| `async def` | `handle_compress_codebase` |
+| `async def` | `handle_verify_code_flow_delta` |
+
 #### `compression_handlers_common.py`
 
 Compression-related MCP tool handlers.
@@ -130,8 +140,6 @@ Compression handlers: batch, directory, codebase, and extended ops.
 | `async def` | `handle_advise_context` |
 | `async def` | `handle_get_compression_insights` |
 | `async def` | `handle_generate_rewrite_prompt` |
-| `async def` | `handle_compress_codebase` |
-| `async def` | `handle_verify_code_flow_delta` |
 | `async def` | `handle_search_code` |
 
 #### `compression_handlers_ingest.py`

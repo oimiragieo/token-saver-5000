@@ -10,8 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-
-import tiktoken
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -94,9 +93,19 @@ class ExplainAnalyzeTrace:
     estimated_net_savings_pct: float
 
 
+TOKENIZER_NAME = "tiktoken:cl100k_base"
+
+
 @lru_cache(maxsize=1)
-def _get_encoder() -> tiktoken.Encoding:
-    return tiktoken.get_encoding("cl100k_base")
+def _get_encoder() -> Any:
+    try:
+        import tiktoken
+    except ImportError as exc:
+        raise ImportError("tiktoken is required for cache_economics token/cost accounting") from exc
+    try:
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load {TOKENIZER_NAME} encoder for cache_economics") from exc
 
 
 def _count_tokens(text: str) -> int:
