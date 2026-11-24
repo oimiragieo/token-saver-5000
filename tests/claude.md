@@ -4247,6 +4247,62 @@ Tests for Wave 3 local loopback Extractive LoRA tier.
 | `class` | `TestExtractiveLoRAAdapter` |
 | `class` | `TestExtractiveLoraSecurityAndTokenEstimator` |
 
+#### `test_w4_code_char.py`
+
+CL 0 characterization tests for baseline CodeSemanticCompressor and TOONSerializer.
+
+| Kind | Name |
+|------|------|
+| `def` | `_mock_code_compressor` |
+| `def` | `test_code_compressor_baseline_language_and_chunking` |
+| `def` | `test_code_compressor_baseline_ingest_and_skeleton` |
+| `def` | `test_toon_serializer_baseline_roundtrip_and_savings` |
+
+#### `test_w4_compact_prompt.py`
+
+CL 3c tests for CompactPrompt tabular quantization in TOONSerializer.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_quantize_dequantize_within_eps_max_across_bit_widths` |
+| `def` | `test_quantize_handles_constant_none_bool_and_empty_rows` |
+| `def` | `test_quantize_rejects_non_finite_and_invalid_bits` |
+| `def` | `test_quantize_preserves_53_bit_integer_precision_and_extreme_floats` |
+| `def` | `test_quantize_mixed_large_int_and_float_preserves_precision` |
+
+#### `test_w4_flowplan.py`
+
+CL 3b tests for FlowPlan CFG/DFG summary and delta verifier.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_extract_code_flow_captures_cfg_dfg_and_latency` |
+| `def` | `test_verify_code_flow_delta_detects_missing_branch_removed_return_dropped_call` |
+| `def` | `test_verify_code_flow_delta_detects_unreached_edits` |
+| `def` | `test_verify_code_flow_delta_with_expected_changes_and_syntax_error` |
+| `async def` | `test_mcp_verify_code_flow_delta_and_budget_tokens_wiring` |
+| `def` | `test_extract_code_flow_does_not_recurse_into_nested_scopes` |
+| `def` | `test_exhaustive_branch_termination_and_preexisting_unreachable_lines` |
+| `def` | `test_branch_swap_and_dfg_expression_swap_detected_within_latency_budget` |
+| `def` | `test_verify_code_flow_delta_strict_expected_changes_validation` |
+| `def` | `test_multiline_unreachable_edit_and_unknown_constraint_key` |
+
+#### `test_w4_longcodezip.py`
+
+CL 1 & CL 3a tests for LongCodeZip exact 0/1 knapsack code compression.
+
+| Kind | Name |
+|------|------|
+| `def` | `_brute_force_best_value` |
+| `def` | `test_knapsack_exact_matches_brute_force` |
+| `def` | `test_knapsack_handles_zero_budget_negative_budget_and_zero_cost_items` |
+| `def` | `test_partition_ast_blocks_covers_kinds_and_query_boost` |
+| `def` | `test_compress_code_with_knapsack_respects_budget` |
+| `def` | `test_knapsack_trims_when_joined_tokens_exceed_budget` |
+| `async def` | `test_mcp_compress_codebase_respects_budget_tokens` |
+| `def` | `test_code_compressor_wires_optional_budget_tokens` |
+| `def` | `test_solve_knapsack_exact_unit_blocks_budget_5` |
+
 #### `test_web_connector.py`
 
 Tests for web connector normalization.

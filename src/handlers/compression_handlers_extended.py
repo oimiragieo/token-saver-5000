@@ -841,6 +841,19 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
     directory = args.get("directory", ".")
     query = args.get("query")
     max_files = int(args.get("max_files", 50))
+    budget_tokens = args.get("budget_tokens")
+    if budget_tokens is not None:
+        if (
+            isinstance(budget_tokens, bool)
+            or not isinstance(budget_tokens, int)
+            or budget_tokens < 1
+        ):
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": "budget_tokens must be a positive integer",
+                }
+            )
 
     # CWE-22 (2026-08-26 audit HIGH): confine `directory` to cwd+home before it
     # reaches the tg subprocess or glob — mirrors handle_ingest_directory. Without
@@ -914,11 +927,149 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
         result["files_found"] = len(files)
         result["selected_files"] = files
 
+    if budget_tokens is not None:
+        from ..code_budget_knapsack import compress_code_with_knapsack
+        from ..token_estimation import TokenEstimator
+
+        estimator = TokenEstimator()
+        dir_root = _Path(directory)
+        selected_files = result.get("selected_files", [])
+        readable_entries: List[Dict[str, Any]] = []
+
+        per_file_budget = max(1, budget_tokens // max(1, len(selected_files)))
+        for raw_file in selected_files:
+            candidate = _Path(raw_file)
+            if not candidate.is_absolute():
+                candidate = dir_root / candidate
+            try:
+                validated_file = _Path(path_validator.validate(str(candidate)))
+            except ValueError:
+                continue
+            if not validated_file.is_file():
+                continue
+            try:
+                source_text = validated_file.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            try:
+                rel_label = str(validated_file.relative_to(dir_root)).replace("\\", "/")
+            except ValueError:
+                rel_label = validated_file.name
+
+            knapsack_res = compress_code_with_knapsack(
+                source_text,
+                budget_tokens=per_file_budget,
+                query=query or "",
+            )
+            if knapsack_res.reconstructed_code.strip():
+                readable_entries.append(
+                    {
+                        "file": rel_label,
+                        "code": knapsack_res.reconstructed_code,
+                        "value": knapsack_res.total_value,
+                        "tokens": knapsack_res.total_tokens,
+                    }
+                )
+
+        # Keep highest-value files first, then restore deterministic order once trimmed.
+        def _render_entries(items: List[Dict[str, Any]]) -> str:
+            return "\n\n".join(f"# {item['file']}\n{item['code']}" for item in items)
+
+        compressed_code = _render_entries(readable_entries)
+        actual_tokens = estimator.count_tokens(compressed_code) if compressed_code else 0
+        while readable_entries and actual_tokens > budget_tokens:
+            if len(readable_entries) > 1:
+                drop_idx = min(
+                    range(len(readable_entries)),
+                    key=lambda i: (
+                        readable_entries[i]["value"],
+                        -readable_entries[i]["tokens"],
+                        -i,
+                    ),
+                )
+                readable_entries.pop(drop_idx)
+                compressed_code = _render_entries(readable_entries)
+                actual_tokens = estimator.count_tokens(compressed_code) if compressed_code else 0
+            else:
+                only_entry = readable_entries[0]
+                trimmed = compress_code_with_knapsack(
+                    only_entry["code"],
+                    budget_tokens=budget_tokens,
+                    query=query or "",
+                )
+                compressed_code = trimmed.reconstructed_code
+                actual_tokens = estimator.count_tokens(compressed_code) if compressed_code else 0
+                if actual_tokens > budget_tokens:
+                    readable_entries.clear()
+                    compressed_code = ""
+                    actual_tokens = 0
+                else:
+                    only_entry["code"] = compressed_code
+                    only_entry["tokens"] = actual_tokens
+                break
+
+        result["budget_tokens"] = budget_tokens
+        result["compressed_tokens"] = actual_tokens
+        result["compressed_code"] = compressed_code
+        result["compressed_files"] = [
+            {"file": item["file"], "tokens": item["tokens"]} for item in readable_entries
+        ]
+        result["selected_files"] = [item["file"] for item in readable_entries]
+
     result["message"] = (
         f"Found {len(result.get('selected_files', []))} files. "
         "Use ingest_context on individual files to compress them."
     )
     return json.dumps(result, default=str)
+
+
+async def handle_verify_code_flow_delta(context: HandlerContext, args: Dict[str, Any]) -> str:
+    """Handle verify_code_flow_delta tool call (FlowPlan CFG/DFG delta verifier)."""
+    from ..code_flow_graph import verify_code_flow_delta
+    from .mcp_core._constants import SCOPE_PROPERTIES
+
+    if not isinstance(args, dict):
+        return json.dumps({"status": "error", "error": "Arguments must be an object"})
+
+    allowed_keys = {"before_code", "after_code", "expected_changes"} | set(SCOPE_PROPERTIES.keys())
+    unknown_keys = sorted(set(args.keys()) - allowed_keys)
+    if unknown_keys:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": f"Unknown argument(s) for verify_code_flow_delta: {', '.join(unknown_keys)}",
+            }
+        )
+
+    before_code = args.get("before_code")
+    after_code = args.get("after_code")
+    if not isinstance(before_code, str) or not isinstance(after_code, str):
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "before_code and after_code must be strings",
+            }
+        )
+
+    expected_changes = args.get("expected_changes")
+    if expected_changes is not None and not isinstance(expected_changes, (list, dict)):
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "expected_changes must be a list or object when provided",
+            }
+        )
+
+    try:
+        report = verify_code_flow_delta(
+            before_code,
+            after_code,
+            expected_changes=expected_changes,
+        )
+    except ValueError as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
+
+    return json.dumps({"status": "success", **report.to_dict()})
 
 
 async def handle_search_code(context: HandlerContext, args: Dict[str, Any]) -> str:

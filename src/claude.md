@@ -279,6 +279,26 @@ Client and model configuration for context-window-aware compression.
 | `class` | `ClientConfig` |
 | `class` | `SessionConfigStore` |
 
+#### `code_budget_knapsack.py`
+
+LongCodeZip two-stage adaptive code compression via exact 0/1 knapsack.
+
+| Kind | Name |
+|------|------|
+| `def` | `_get_estimator` |
+| `def` | `estimate_code_tokens` |
+| `class` | `CodeBlockItem` |
+| `class` | `KnapsackResult` |
+| `def` | `solve_knapsack_exact` |
+| `def` | `_classify_stmt` |
+| `def` | `_tokenize_terms` |
+| `def` | `_score_block` |
+| `def` | `_slice_lines` |
+| `def` | `_emit_block` |
+| `def` | `_partition_function` |
+| `def` | `partition_ast_blocks` |
+| `def` | `compress_code_with_knapsack` |
+
 #### `code_compression_adapter.py`
 
 Code Compression Adapter - Unified Interface for Text and Code Compression
@@ -298,6 +318,27 @@ Code-Specific Semantic Compressor
 | `class` | `CodeLanguage` |
 | `class` | `CodeChunk` |
 | `class` | `CodeSemanticCompressor` |
+
+#### `code_flow_graph.py`
+
+FlowPlan per-function CFG/DFG summary and delta verifier.
+
+| Kind | Name |
+|------|------|
+| `class` | `FunctionFlowSummary` |
+| `class` | `FlowDeltaReport` |
+| `def` | `_call_name` |
+| `def` | `_iter_enclosing_nodes` |
+| `def` | `_collect_expr_names` |
+| `def` | `_find_unreachable_in_stmts` |
+| `def` | `_summarize_function` |
+| `def` | `_walk_functions` |
+| `def` | `extract_code_flow` |
+| `def` | `_validate_non_negative_int` |
+| `def` | `_validate_str_collection` |
+| `def` | `_validate_expected_changes` |
+| `def` | `_line_text_at` |
+| `def` | `verify_code_flow_delta` |
 
 #### `compression_advisor.py`
 
@@ -1418,6 +1459,12 @@ TOON Serializer for Token Saver 5000
 | `class` | `OutputFormat` |
 | `class` | `TOONSerializer` |
 | `def` | `format_response` |
+| `def` | `_decimal_ctx` |
+| `def` | `_is_numeric_value` |
+| `def` | `_to_decimal` |
+| `def` | `_export_bound` |
+| `def` | `quantize_numeric_columns` |
+| `def` | `dequantize_numeric_columns` |
 | `def` | `estimate_token_savings` |
 
 #### `training_utils.py`

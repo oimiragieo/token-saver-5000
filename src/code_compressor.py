@@ -720,7 +720,13 @@ class CodeSemanticCompressor:
 
         return stats
 
-    def generate_code_skeleton(self, file_id: str, show_top_n: int = None) -> str:
+    def generate_code_skeleton(
+        self,
+        file_id: str,
+        show_top_n: int = None,
+        budget_tokens: Optional[int] = None,
+        query: str = "",
+    ) -> str:
         """
         Generate code skeleton showing high-importance functions/classes.
 
@@ -733,6 +739,33 @@ class CodeSemanticCompressor:
         graph = self.graphs.get(file_id)
         if not graph:
             raise ValueError(f"File {file_id} not found")
+
+        if budget_tokens is not None:
+            from .code_budget_knapsack import (
+                CodeBlockItem,
+                _score_block,
+                _tokenize_terms,
+                estimate_code_tokens,
+                solve_knapsack_exact,
+            )
+
+            query_terms = _tokenize_terms(query) if query else set()
+            file_chunks = [self.chunks[cid] for cid in graph.nodes() if cid in self.chunks]
+            items = [
+                CodeBlockItem(
+                    block_id=chunk.chunk_id,
+                    kind=chunk.chunk_type,
+                    name=chunk.name,
+                    start_line=chunk.start_line,
+                    end_line=chunk.end_line,
+                    code=chunk.code,
+                    token_cost=estimate_code_tokens(chunk.code),
+                    importance_score=chunk.importance
+                    + _score_block(chunk.code, chunk.name, chunk.chunk_type, None, query_terms),
+                )
+                for chunk in file_chunks
+            ]
+            return solve_knapsack_exact(items, budget_tokens).reconstructed_code
 
         # Get chunks sorted by importance
         file_chunks = [(cid, self.chunks[cid]) for cid in graph.nodes() if cid.startswith(file_id)]

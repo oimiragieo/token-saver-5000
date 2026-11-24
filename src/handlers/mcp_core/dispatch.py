@@ -210,6 +210,7 @@ async def route_tool_call(
         # Tensor-Grep Integration (v0.13.0)
         "compress_codebase": ch.handle_compress_codebase,
         "search_code": ch.handle_search_code,
+        "verify_code_flow_delta": ch.handle_verify_code_flow_delta,
         # CLI Output Optimizer
         "filter_cli_output": toh.handle_filter_cli_output,
         # Savings Tracker (v0.14.0)

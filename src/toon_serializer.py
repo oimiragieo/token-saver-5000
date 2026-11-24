@@ -34,8 +34,12 @@ References:
 - Paper: Token-Oriented Object Notation (arXiv)
 """
 
+from contextlib import contextmanager
+from decimal import Decimal, ROUND_HALF_EVEN
+import decimal
 from typing import Any, Dict, List, Optional
 import json
+import math
 from enum import Enum
 
 
@@ -460,6 +464,155 @@ def format_response(
     else:  # TEXT format (default)
         # Return as-is for existing text formatting
         return str(data)
+
+
+@contextmanager
+def _decimal_ctx():
+    ctx = decimal.getcontext().copy()
+    ctx.prec = max(ctx.prec, 64)
+    ctx.traps.update(decimal.DefaultContext.traps)
+    with decimal.localcontext(ctx) as local_ctx:
+        yield local_ctx
+
+
+def _is_numeric_value(value: Any) -> bool:
+    return isinstance(value, (int, float, Decimal)) and not isinstance(value, bool)
+
+
+def _to_decimal(value: Any) -> Decimal:
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError(f"Non-finite Decimal: {value!r}")
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"Non-finite float: {value!r}")
+        return Decimal(str(value))
+    return Decimal(value)
+
+
+def _export_bound(dval: Decimal, prefer_int: bool) -> Any:
+    if prefer_int and dval == dval.to_integral_value():
+        return int(dval)
+    if abs(dval) > Decimal(1 << 53):
+        return int(dval) if dval == dval.to_integral_value() else dval
+    return float(dval)
+
+
+def quantize_numeric_columns(rows: List[Dict[str, Any]], bits: int = 8) -> Dict[str, Any]:
+    """Uniformly quantize numeric columns in tabular rows (CompactPrompt).
+
+    Args:
+        rows: List of row dictionaries.
+        bits: Quantization bit-width in [2, 16].
+
+    Returns:
+        Dictionary with ``bits``, per-column ``columns`` metadata
+        ``(min, max, bits, eps_max)``, and quantized ``rows``.
+    """
+    if not isinstance(bits, int) or isinstance(bits, bool) or bits < 2 or bits > 16:
+        raise ValueError(f"bits must be an integer in [2, 16], got {bits!r}")
+
+    if not rows:
+        return {"bits": bits, "columns": {}, "rows": []}
+
+    col_names: List[str] = []
+    seen_cols: set[str] = set()
+    for row in rows:
+        for key in row:
+            if key not in seen_cols:
+                seen_cols.add(key)
+                col_names.append(key)
+
+    q_max = (1 << bits) - 1
+    columns_meta: Dict[str, Dict[str, Any]] = {}
+    col_bounds: Dict[str, tuple[Decimal, Decimal, bool]] = {}
+
+    with _decimal_ctx():
+        q_max_dec = Decimal(q_max)
+        for col in col_names:
+            numeric_vals: List[Decimal] = []
+            all_ints = True
+            for row in rows:
+                if col not in row:
+                    continue
+                val = row[col]
+                if _is_numeric_value(val):
+                    try:
+                        dval = _to_decimal(val)
+                    except ValueError as exc:
+                        raise ValueError(f"Non-finite value in column '{col}': {val!r}") from exc
+                    if not isinstance(val, int):
+                        all_ints = False
+                    numeric_vals.append(dval)
+
+            if not numeric_vals:
+                continue
+
+            col_min = min(numeric_vals)
+            col_max = max(numeric_vals)
+            span = col_max - col_min
+            eps_max = Decimal(0) if span == 0 else span / q_max_dec
+            col_bounds[col] = (col_min, col_max, all_ints)
+            columns_meta[col] = {
+                "min": _export_bound(col_min, all_ints),
+                "max": _export_bound(col_max, all_ints),
+                "bits": bits,
+                "eps_max": float(eps_max),
+            }
+
+        quantized_rows: List[Dict[str, Any]] = []
+        for row in rows:
+            new_row: Dict[str, Any] = {}
+            for key, val in row.items():
+                bounds = col_bounds.get(key)
+                if bounds is not None and _is_numeric_value(val):
+                    col_min, col_max, _ = bounds
+                    span = col_max - col_min
+                    if span == 0:
+                        new_row[key] = 0
+                    else:
+                        dval = _to_decimal(val)
+                        scaled = ((dval - col_min) / span) * q_max_dec
+                        q_int = int(scaled.to_integral_value(rounding=ROUND_HALF_EVEN))
+                        new_row[key] = max(0, min(q_max, q_int))
+                else:
+                    new_row[key] = val
+            quantized_rows.append(new_row)
+
+    return {"bits": bits, "columns": columns_meta, "rows": quantized_rows}
+
+
+def dequantize_numeric_columns(quantized_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Reconstruct tabular rows from ``quantize_numeric_columns`` output."""
+    columns_meta = quantized_payload.get("columns", {})
+    rows = quantized_payload.get("rows", [])
+    restored: List[Dict[str, Any]] = []
+
+    with _decimal_ctx():
+        for row in rows:
+            new_row: Dict[str, Any] = {}
+            for key, val in row.items():
+                meta = columns_meta.get(key)
+                if meta is not None and isinstance(val, int) and not isinstance(val, bool):
+                    bits = int(meta["bits"])
+                    q_max = Decimal((1 << bits) - 1)
+                    raw_min = meta["min"]
+                    raw_max = meta["max"]
+                    prefer_int = isinstance(raw_min, int) and isinstance(raw_max, int)
+                    col_min = _to_decimal(raw_min)
+                    col_max = _to_decimal(raw_max)
+                    span = col_max - col_min
+                    if span == 0:
+                        new_row[key] = _export_bound(col_min, prefer_int)
+                    else:
+                        d_val = col_min + (Decimal(val) / q_max) * span
+                        new_row[key] = _export_bound(d_val, prefer_int)
+                else:
+                    new_row[key] = val
+            restored.append(new_row)
+
+    return restored
 
 
 # ============================================================================

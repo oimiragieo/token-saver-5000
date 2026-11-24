@@ -131,6 +131,7 @@ Compression handlers: batch, directory, codebase, and extended ops.
 | `async def` | `handle_get_compression_insights` |
 | `async def` | `handle_generate_rewrite_prompt` |
 | `async def` | `handle_compress_codebase` |
+| `async def` | `handle_verify_code_flow_delta` |
 | `async def` | `handle_search_code` |
 
 #### `compression_handlers_ingest.py`

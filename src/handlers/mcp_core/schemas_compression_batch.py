@@ -367,9 +367,41 @@ COMPRESSION_BATCH_TOOLS: list = [
                     "default": 50,
                     "description": "Maximum files to include",
                 },
+                "budget_tokens": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional token budget for LongCodeZip knapsack compression",
+                },
                 **SCOPE_PROPERTIES,
             },
             "required": ["directory"],
+        },
+    ),
+    Tool(
+        name="verify_code_flow_delta",
+        description=(
+            "Verify per-function CFG/DFG delta between before_code and after_code. "
+            "Detects missing branches, removed returns, dropped calls, and unreachable edits."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "before_code": {
+                    "type": "string",
+                    "description": "Python source code before the edit",
+                },
+                "after_code": {
+                    "type": "string",
+                    "description": "Python source code after the edit",
+                },
+                "expected_changes": {
+                    "type": ["array", "object"],
+                    "description": "Optional list of expected changed functions or per-function constraint dict",
+                },
+                **SCOPE_PROPERTIES,
+            },
+            "required": ["before_code", "after_code"],
+            "additionalProperties": False,
         },
     ),
     Tool(
