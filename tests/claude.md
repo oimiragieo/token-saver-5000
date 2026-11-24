@@ -4120,6 +4120,7 @@ Unit tests for honest expansion debits in SavingsTracker (CL 2).
 | `def` | `test_mixed_legacy_ingest_savings_and_debit_recovery` |
 | `def` | `test_savings_dashboard_includes_expansion_debits` |
 | `def` | `test_distinct_file_ids_with_identical_tokens_do_not_collide` |
+| `def` | `test_read_skeleton_and_doc_id_alias_do_not_suppress_legacy_ingest` |
 
 #### `test_w1_wiring.py`
 
