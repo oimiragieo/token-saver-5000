@@ -151,17 +151,18 @@ def test_gpt_5_6_family_registered():
         assert p.cache_read_field == "cached_tokens"
         assert p.context_window == 1_050_000
         assert p.supports_prompt_cache_key is True
-    # Corrected short-context rates (OpenRouter 2026-08-08 — #486; prior terra/luna
+    # Corrected short-context rates (OpenRouter 2026-09-14 — #486/a953dba; prior terra/luna
     # 2.5x/10x inflated, cache rates included — they feed model_optimizer cost math).
-    assert (sol.input_cost_per_million, sol.output_cost_per_million) == (5.0, 30.0)
-    assert (terra.input_cost_per_million, terra.output_cost_per_million) == (1.0, 6.0)
-    assert (luna.input_cost_per_million, luna.output_cost_per_million) == (0.1, 0.6)
-    assert terra.cached_input_cost_per_million == 0.1
-    assert luna.cached_input_cost_per_million == 0.01
-    # Tier ordering: Sol > Terra > Luna on both input and output price.
-    assert luna.input_cost_per_million < terra.input_cost_per_million < sol.input_cost_per_million
+    assert (sol.input_cost_per_million, sol.output_cost_per_million) == (2.0, 10.0)
+    assert (terra.input_cost_per_million, terra.output_cost_per_million) == (2.0, 12.0)
+    assert (luna.input_cost_per_million, luna.output_cost_per_million) == (0.2, 1.2)
+    assert terra.cached_input_cost_per_million == 0.20
+    assert luna.cached_input_cost_per_million == 0.02
+    # Tier ordering: Sol/Terra > Luna on input and output price.
+    assert luna.input_cost_per_million < sol.input_cost_per_million
+    assert luna.input_cost_per_million < terra.input_cost_per_million
     assert (
-        luna.output_cost_per_million < terra.output_cost_per_million < sol.output_cost_per_million
+        luna.output_cost_per_million < sol.output_cost_per_million < terra.output_cost_per_million
     )
 
 
@@ -222,3 +223,17 @@ def test_claude_mythos_5_minimum_cacheable_tokens_is_unverified_placeholder():
     # `notes` field).
     profile = get_provider_profile("claude-mythos-5")
     assert profile.minimum_cacheable_tokens == 1024
+
+
+def test_gpt_5_5_instant_profile():
+    profile = get_provider_profile("gpt-5.5-instant")
+    assert profile.provider == "openai"
+    assert profile.model == "gpt-5.5-instant"
+    assert profile.context_window == 1_000_000
+    assert profile.input_cost_per_million == 2.50
+    assert profile.output_cost_per_million == 15.0
+    assert profile.cached_input_cost_per_million == 0.25
+
+    # Check aliases
+    assert get_provider_profile("instant").model == "gpt-5.5-instant"
+    assert get_provider_profile("chatgpt-instant").model == "gpt-5.5-instant"

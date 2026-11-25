@@ -9,6 +9,9 @@ stub the two collaborators the method touches (_count_tokens, _chunk_text).
 from __future__ import annotations
 
 import json
+from threading import Lock
+
+import pytest
 
 from src.semantic_compressor import SemanticCompressor
 
@@ -17,7 +20,7 @@ def _bare_compressor():
     c = object.__new__(SemanticCompressor)
     # Instance attrs shadow the class methods for this stubbed instance.
     c._count_tokens = lambda t: len(t.split())
-    c._chunk_text = lambda text, strategy="auto": ["<TEXT_CHUNKER>"]
+    c._chunk_text = lambda text, **kwargs: ["<TEXT_CHUNKER>"]
     return c
 
 
@@ -79,3 +82,38 @@ def test_csv_multiline_quoted_falls_through():
     c = _bare_compressor()
     text = 'a,b\n1,"x\ny"\n3,4'
     assert c._prepare_raw_chunks(text, "csv") == ["<TEXT_CHUNKER>"]
+
+
+def test_ingest_applies_chunk_target_before_embedding(monkeypatch):
+    class ReachedEmbedding(Exception):
+        pass
+
+    c = object.__new__(SemanticCompressor)
+    c._sync_lock = Lock()
+    c._count_tokens = lambda text: len(text.split())
+    c._clear_cache_for_doc = lambda file_id: None
+    paragraphs = [" ".join(f"word{i}_{j}" for j in range(30)) for i in range(4)]
+    text = "\n\n".join(paragraphs)
+    batches = []
+
+    async def capture_chunks(chunks):
+        batches.append(chunks)
+        raise ReachedEmbedding
+
+    monkeypatch.setattr(c, "_encode_async", capture_chunks)
+
+    with pytest.raises(ReachedEmbedding):
+        c.ingest_file(text, "default")
+    with pytest.raises(ReachedEmbedding):
+        c.ingest_file(text, "profile", max_chunk_size=50)
+
+    assert batches == [[text], paragraphs]
+
+
+def test_custom_jsonl_group_budget_keeps_oversized_records_atomic():
+    c = _bare_compressor()
+    records = ['{"id": 1}', '{"id": 2, "notes": "many words in a long record"}', '{"id": 3}']
+    text = "\n".join(records)
+
+    assert c._prepare_raw_chunks(text, "jsonl") == [text]
+    assert c._prepare_raw_chunks(text, "jsonl", max_chunk_size=4) == records

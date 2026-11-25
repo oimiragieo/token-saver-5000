@@ -1083,6 +1083,7 @@ Tests for managed connector feed handlers.
 |------|------|
 | `def` | `connector_context` |
 | `async def` | `test_create_list_get_and_sync_connector_feed` |
+| `async def` | `test_sync_connector_feed_reservation_lifecycle` |
 
 #### `test_connector_registry.py`
 
@@ -1256,6 +1257,15 @@ Tests for dead_code_detector.py -- import-graph-based dead file detection.
 | `def` | `test_resolve_calls_do_not_grow_quadratically` |
 | `def` | `test_the_import_graph_is_still_correct` |
 | `def` | `test_a_broken_symlink_does_not_abort_the_scan` |
+
+#### `test_delete_document_cache_purge.py`
+
+(no module docstring — see symbols below)
+
+| Kind | Name |
+|------|------|
+| `def` | `test_semantic_compressor_purge_document_caches` |
+| `def` | `test_code_compression_adapter_deletes_document_caches` |
 
 #### `test_dependency_major_caps.py`
 
@@ -2177,6 +2187,23 @@ Phase 0 MCP contract tests for core stable runtime surfaces.
 | `def` | `test_recommend_setup_target_defaults_to_desktop_for_plain_directory` |
 | `def` | `test_build_status_report_recommends_follow_up_command` |
 
+#### `test_mcp_registry.py`
+
+Parity and characterization tests for the typed MCP engine registry.
+
+| Kind | Name |
+|------|------|
+| `def` | `test_registry_is_the_schema_and_handler_join` |
+| `def` | `test_setup_is_a_projection_of_registry_and_profiles_are_unchanged` |
+| `def` | `test_execution_metadata_has_typed_policy_homes_and_independent_flags` |
+| `def` | `test_every_handler_proxy_resolves_to_a_real_module_attribute` |
+| `def` | `test_registry_build_rejects_an_unresolved_handler` |
+| `async def` | `test_registry_handler_proxy_observes_runtime_handler_patches` |
+| `async def` | `test_get_multi_level_skeleton_routes_to_the_live_handler` |
+| `def` | `test_registry_build_rejects_non_coroutine_handler` |
+| `def` | `test_registered_tool_rejects_non_callable_handler` |
+| `def` | `test_registered_tool_rejects_non_coroutine_handler` |
+
 #### `test_mcp_routing.py`
 
 Unit tests for MCP Core Routing (mcp_core package)
@@ -2627,6 +2654,19 @@ Phase 10 cross-surface launch-readiness tests.
 | `async def` | `test_platform_workflow_spans_memory_prompt_experiment_connector_and_model` |
 | `async def` | `test_workspace_scopes_isolate_memory_and_connector_outputs` |
 
+#### `test_path_escape_hardening_508.py`
+
+Regression lock: file_id / session_id must not escape their storage dir.
+
+| Kind | Name |
+|------|------|
+| `class` | `TestValidateSafeStorageId` |
+| `class` | `TestIngestFileIdEscapeRejected` |
+| `class` | `TestDeleteDocumentFileIdEscapeRejected` |
+| `class` | `TestBatchIngestDocumentsFileIdEscapeRejected` |
+| `class` | `TestPersistenceManagerRejectsEscapingFileId` |
+| `class` | `TestSessionJournalRejectsUnsafeSessionId` |
+
 #### `test_path_validator.py`
 
 Comprehensive tests for PathValidator (path traversal prevention).
@@ -2794,6 +2834,8 @@ Tests for Phase 5 features - 11 new capabilities based on 2025 research papers.
 | `def` | `test_jsonl_kind_but_unsplittable_falls_back` |
 | `def` | `test_csv_uses_record_chunking_header_as_own_node` |
 | `def` | `test_csv_multiline_quoted_falls_through` |
+| `def` | `test_ingest_applies_chunk_target_before_embedding` |
+| `def` | `test_custom_jsonl_group_budget_keeps_oversized_records_atomic` |
 
 #### `test_progress_service.py`
 
@@ -2952,6 +2994,7 @@ Golden-ish regression tests for prompt version comparison output.
 | `def` | `test_gpt_5_6_alias_resolves_to_sol` |
 | `def` | `test_minimum_cacheable_tokens_matches_verified_provider_docs` |
 | `def` | `test_claude_mythos_5_minimum_cacheable_tokens_is_unverified_placeholder` |
+| `def` | `test_gpt_5_5_instant_profile` |
 
 #### `test_proxy_cli.py`
 
@@ -3162,6 +3205,16 @@ resource manager — consolidated from coverage_boost1-4/4b (backlog N10 re-fili
 | `class` | `TestResourceManager` |
 | `class` | `TestResourceHandlers` |
 | `class` | `TestResourceHandlersDiagnostics` |
+
+#### `test_resource_reservation_contract.py`
+
+Tests for atomic resource reservation in token-saver-5000 (ARCH-AUDIT-07).
+
+| Kind | Name |
+|------|------|
+| `def` | `test_reserve_commit_release_lifecycle` |
+| `def` | `test_reserve_release_lifecycle` |
+| `def` | `test_concurrent_reservations_cannot_exceed_capacity` |
 
 #### `test_response_formatter.py`
 
@@ -3556,6 +3609,7 @@ Tests for SessionJournal (src/session_journal.py).
 | `class` | `TestSessionIsolation` |
 | `class` | `TestPersistence` |
 | `class` | `TestWALMode` |
+| `class` | `TestContextDigest` |
 
 #### `test_skeleton_ratio_knob.py`
 

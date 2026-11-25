@@ -5,8 +5,9 @@ Pre-execute validation that catches common errors before
 they reach handlers, providing clearer error messages.
 """
 
-import re
 from typing import Any, Dict, List
+
+from .safe_identifier import validate_safe_storage_id
 
 # Validation rules per tool
 _VALIDATORS = {}
@@ -63,13 +64,9 @@ def _validate_ingest(args: Dict[str, Any]) -> List[str]:
         errors.append("text cannot be empty or whitespace-only")
     file_id = args.get("file_id", "")
     if file_id:
-        if ".." in file_id:
-            errors.append("file_id must not contain '..' (parent-directory reference)")
-        elif not re.match(r"^[a-zA-Z0-9_\-./]+$", file_id):
-            errors.append(
-                "file_id must contain only alphanumeric characters, underscores, "
-                "hyphens, dots, or forward slashes"
-            )
+        error = validate_safe_storage_id(file_id, "file_id", allow_subdirs=True)
+        if error:
+            errors.append(error)
     return errors
 
 
@@ -93,6 +90,10 @@ def _validate_delete(args: Dict[str, Any]) -> List[str]:
     file_id = args.get("file_id", "")
     if not file_id or len(file_id.strip()) == 0:
         errors.append("file_id is required for deletion")
+    else:
+        error = validate_safe_storage_id(file_id, "file_id", allow_subdirs=True)
+        if error:
+            errors.append(error)
     return errors
 
 
@@ -104,4 +105,12 @@ def _validate_batch_ingest(args: Dict[str, Any]) -> List[str]:
         errors.append("documents list cannot be empty")
     if len(documents) > 100:
         errors.append("batch size must not exceed 100 documents")
+    for doc in documents:
+        if not isinstance(doc, dict):
+            continue
+        doc_file_id = doc.get("file_id", "")
+        if doc_file_id:
+            error = validate_safe_storage_id(doc_file_id, "file_id", allow_subdirs=True)
+            if error:
+                errors.append(f"documents[].{error}")
     return errors

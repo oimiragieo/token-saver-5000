@@ -1140,6 +1140,7 @@ Resource Management for Semantic Modulator
 
 | Kind | Name |
 |------|------|
+| `class` | `ReservationToken` |
 | `class` | `ResourceLimits` |
 | `class` | `ResourceManager` |
 
@@ -1154,6 +1155,14 @@ Response formatter for MCP tool results.
 | `def` | `_make_continuation_token` |
 | `def` | `_is_more_compact_fidelity` |
 | `class` | `ResponseFormatter` |
+
+#### `safe_identifier.py`
+
+Shared allowlist validation for caller-supplied storage identifiers.
+
+| Kind | Name |
+|------|------|
+| `def` | `validate_safe_storage_id` |
 
 #### `savings_dashboard.py`
 
@@ -1408,6 +1417,8 @@ Optional tensor-grep integration for AST-aware code compression and search.
 
 | Kind | Name |
 |------|------|
+| `class` | `TgInputError` |
+| `def` | `sanitize_tg_positional` |
 | `class` | `RepoMapResult` |
 | `class` | `CodeSearchResult` |
 | `class` | `ASTSearchResult` |

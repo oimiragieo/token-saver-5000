@@ -29,6 +29,37 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+_TG_ARG_MAX_LEN = 512
+_MAX_STREAM_BYTES = 10 * 1024 * 1024  # 10MB limit on subprocess output stream
+_MAX_STREAM_MATCHES = 5000  # Cap maximum match objects accumulated
+
+
+class TgInputError(ValueError):
+    """Caller-side validation failure for tensor-grep arguments."""
+
+
+def sanitize_tg_positional(value: str | None, *, field_name: str = "argument") -> str:
+    """Validate a user-controlled positional before it reaches the tg argv.
+
+    Prevents argument-injection (CWE-88) where leading dashes can be parsed as CLI flags.
+    """
+    if value is None:
+        raise TgInputError(f"{field_name}: required")
+    v = value.strip()
+    if not v:
+        raise TgInputError(f"{field_name}: must not be empty")
+    if len(v) > _TG_ARG_MAX_LEN:
+        raise TgInputError(f"{field_name}: too long ({len(v)} > {_TG_ARG_MAX_LEN} chars)")
+    if "\x00" in v:
+        raise TgInputError(f"{field_name}: null byte not allowed")
+    if any(ord(ch) < 0x20 for ch in v):
+        raise TgInputError(f"{field_name}: control characters not allowed")
+    if v.startswith("-"):
+        raise TgInputError(
+            f"{field_name}: must not start with '-' — rejected to prevent argument injection"
+        )
+    return v
+
 
 @dataclass
 class RepoMapResult:
@@ -49,6 +80,7 @@ class CodeSearchResult:
     matches: list[dict[str, Any]] = field(default_factory=list)
     total_matches: int = 0
     available: bool = True
+    overflow: bool = False
 
 
 @dataclass
@@ -59,6 +91,7 @@ class ASTSearchResult:
     matches: list[dict[str, Any]] = field(default_factory=list)
     total_matches: int = 0
     available: bool = True
+    overflow: bool = False
 
 
 @dataclass
@@ -156,18 +189,12 @@ def code_search(
     directory: str | Path,
     use_index: bool = True,
     timeout: float = 30.0,
+    max_bytes: int = _MAX_STREAM_BYTES,
+    max_matches: int = _MAX_STREAM_MATCHES,
 ) -> CodeSearchResult:
     """
     Search for *pattern* under *directory* using tensor-grep's streaming NDJSON
-    output (``--ndjson``), accumulating all match objects.
-
-    **Why ``--ndjson`` instead of ``--json``?**
-
-    ``tg <pattern> <dir> --json`` collects the entire result set and emits a
-    single aggregate JSON object. On large repos the subprocess stdout pipe
-    fills before the parent process reads any bytes, causing a deadlock (B2 in
-    the 2026-04-19 stress-test report). ``--ndjson`` emits one JSON object per
-    line so the pipe drains continuously regardless of output volume.
+    output (``--ndjson``), accumulating match objects up to bounded memory limits.
 
     Returns a ``CodeSearchResult`` with ``available=False`` if tensor-grep is
     not installed, or a result with empty matches on any subprocess/parse failure.
@@ -176,19 +203,22 @@ def code_search(
         return CodeSearchResult(pattern=pattern, available=False)
 
     try:
-        # Multi-word queries: convert "auth token JWT" to "auth|token|JWT" regex
-        # alternation so tg matches files containing ANY keyword (not the exact phrase).
-        terms = pattern.split()
+        sanitized_pattern = sanitize_tg_positional(pattern, field_name="pattern")
+        sanitized_dir = sanitize_tg_positional(str(directory), field_name="directory")
+
+        terms = sanitized_pattern.split()
         if len(terms) > 1:
             tg_pattern = "|".join(re.escape(t) for t in terms)
         else:
-            tg_pattern = pattern
+            tg_pattern = sanitized_pattern
 
-        cmd = ["tg", tg_pattern, str(directory), "--ndjson"]
+        cmd = ["tg", tg_pattern, sanitized_dir, "--ndjson"]
         if use_index:
             cmd.append("--index")
 
         matches: list[dict[str, Any]] = []
+        total_bytes_read = 0
+        overflow = False
 
         # Stream NDJSON line-by-line so the pipe never fills.
         proc = subprocess.Popen(
@@ -202,14 +232,21 @@ def code_search(
         try:
             assert proc.stdout is not None  # always true when stdout=PIPE
             for line in proc.stdout:
-                line = line.strip()
-                if not line:
+                line_bytes = len(line.encode("utf-8", errors="replace"))
+                total_bytes_read += line_bytes
+                if total_bytes_read > max_bytes or len(matches) >= max_matches:
+                    overflow = True
+                    proc.kill()
+                    break
+
+                line_str = line.strip()
+                if not line_str:
                     continue
                 try:
-                    obj = json.loads(line)
+                    obj = json.loads(line_str)
                 except json.JSONDecodeError:
                     continue
-                # Each NDJSON line is a match object; accumulate them.
+
                 if isinstance(obj, dict):
                     matches.append(obj)
                 elif isinstance(obj, list):
@@ -221,9 +258,15 @@ def code_search(
             proc.wait()
             return CodeSearchResult(pattern=pattern, available=True)
         finally:
-            proc.stdout.close()
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
 
-        if proc.returncode != 0:
+        if proc.returncode != 0 and not overflow:
             return CodeSearchResult(pattern=pattern, available=True)
 
         return CodeSearchResult(
@@ -231,8 +274,9 @@ def code_search(
             matches=matches,
             total_matches=len(matches),
             available=True,
+            overflow=overflow,
         )
-    except (OSError,):
+    except (OSError, TgInputError):
         return CodeSearchResult(pattern=pattern, available=True)
 
 
@@ -241,6 +285,7 @@ def ast_search(
     directory: str | Path,
     lang: str | None = None,
     timeout: float = 30.0,
+    max_bytes: int = _MAX_STREAM_BYTES,
 ) -> ASTSearchResult:
     """
     Invoke ``tg run <pattern> <directory> --json [--lang <lang>]`` and parse matches.
@@ -252,9 +297,13 @@ def ast_search(
         return ASTSearchResult(pattern=pattern, available=False)
 
     try:
-        cmd = ["tg", "run", pattern, str(directory), "--json"]
+        sanitized_pattern = sanitize_tg_positional(pattern, field_name="pattern")
+        sanitized_dir = sanitize_tg_positional(str(directory), field_name="directory")
+
+        cmd = ["tg", "run", sanitized_pattern, sanitized_dir, "--json"]
         if lang:
-            cmd.extend(["--lang", lang])
+            sanitized_lang = sanitize_tg_positional(lang, field_name="lang")
+            cmd.extend(["--lang", sanitized_lang])
 
         result = subprocess.run(
             cmd,
@@ -263,7 +312,11 @@ def ast_search(
             timeout=timeout,
             encoding="utf-8",
             errors="replace",
+            check=False,
         )
+        if len(result.stdout.encode("utf-8", errors="replace")) > max_bytes:
+            return ASTSearchResult(pattern=pattern, available=True, overflow=True)
+
         if result.returncode != 0:
             return ASTSearchResult(pattern=pattern, available=True)
 
@@ -275,7 +328,7 @@ def ast_search(
             total_matches=data.get("total_matches", len(matches)),
             available=True,
         )
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError, TgInputError):
         return ASTSearchResult(pattern=pattern, available=True)
 
 

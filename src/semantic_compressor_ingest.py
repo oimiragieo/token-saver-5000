@@ -8,6 +8,7 @@ from typing import Dict, List, Literal, Optional, Set, Tuple
 import numpy as np
 import networkx as nx
 
+from .constants import DEFAULT_CHUNK_SIZE
 from .semantic_compressor_types import (
     SemanticNode,
     SkeletonResponse,
@@ -36,11 +37,18 @@ class SemanticCompressorIngestMixin:
         )
 
     def ingest_file(
-        self, text: str, file_id: str, metadata: Optional[Dict] = None
+        self,
+        text: str,
+        file_id: str,
+        metadata: Optional[Dict] = None,
+        *,
+        max_chunk_size: Optional[int] = None,
     ) -> SkeletonResponse:
         """
         Synchronous wrapper for backward compatibility with existing tests.
         For async MCP server use, call ingest_file_async() instead.
+        max_chunk_size sets a positive token target for grouping text or records.
+        The default uses the engine's standard chunk size.
 
         CONCURRENCY NOTE (v0.8.0 audit fix - CORRECTED):
         - Uses threading.Lock to protect the entire operation
@@ -66,7 +74,9 @@ class SemanticCompressorIngestMixin:
         # making asyncio.Lock useless for cross-call protection
         with self._sync_lock:
             return asyncio.run(
-                self._ingest_file_impl(text, file_id, metadata, use_async_lock=False)
+                self._ingest_file_impl(
+                    text, file_id, metadata, use_async_lock=False, max_chunk_size=max_chunk_size
+                )
             )
 
     async def _ingest_file_impl(
@@ -76,6 +86,8 @@ class SemanticCompressorIngestMixin:
         metadata: Optional[Dict] = None,
         use_async_lock: bool = True,
         chunking_strategy: str = "auto",
+        *,
+        max_chunk_size: Optional[int] = None,
     ) -> SkeletonResponse:
         """
         Step 1: Fidelity-Preserving Encoding
@@ -102,6 +114,8 @@ class SemanticCompressorIngestMixin:
             raise ValueError("Cannot ingest empty or whitespace-only text")
         if not file_id or not file_id.strip():
             raise ValueError("file_id cannot be empty or whitespace-only")
+        if max_chunk_size is not None and max_chunk_size < 1:
+            raise ValueError("max_chunk_size must be positive")
 
         # Concurrency protection (v0.8.0 audit fix - CORRECTED)
         #
@@ -184,7 +198,10 @@ class SemanticCompressorIngestMixin:
             # 1. Chunk the text — record-level for a structured JSON array (#190,
             # so records survive as rankable nodes), else the semantic/fixed chunker.
             raw_chunks = self._prepare_raw_chunks(
-                text, _structured_kind, strategy=chunking_strategy
+                text,
+                _structured_kind,
+                strategy=chunking_strategy,
+                max_chunk_size=DEFAULT_CHUNK_SIZE if max_chunk_size is None else max_chunk_size,
             )
             logger.info(f"  Created {len(raw_chunks)} semantic chunks")
 

@@ -10,10 +10,9 @@ Functions:
 - route_tool_call: Dispatches tool calls to appropriate handlers
 
 Architecture:
-- All tool schemas centralized here for maintainability, split across
-  schemas_*.py modules grouped by the handler module they route to
-- Router (dispatch.py) delegates to handler modules (compression, AFM, file
-  sync, visualization, etc.)
+- The typed registry owns each schema/handler pair; schema literals remain
+  split across schemas_*.py modules for maintainability
+- setup.py projects schemas and dispatch.py invokes registry handlers
 - Handlers receive context dict with all necessary server components
 
 Split from a single 3670-line mcp_core.py into this package (N2 slice 2,
@@ -25,22 +24,34 @@ otherwise -- cheap insurance).
 """
 
 from ._constants import (
+    CORE_STABLE_TOOL_NAMES,
     SCOPE_PROPERTIES,
     SUPPORTED_TOOL_PROFILES,
-    CORE_STABLE_TOOL_NAMES,
 )
 from ._profile import (
-    _normalize_tool_profile,  # noqa: F401 - intentional re-export, not in __all__
     _enabled_tool_names,  # noqa: F401 - intentional re-export, not in __all__
+    _normalize_tool_profile,  # noqa: F401 - intentional re-export, not in __all__
     _tools_for_profile,  # noqa: F401 - intentional re-export, not in __all__
 )
-from .setup import setup_mcp_tools
 from .dispatch import route_tool_call
+from .registry import (
+    REGISTERED_TOOLS,
+    RegisteredTool,
+    get_registered_tool,
+    registered_tool_names,
+    registered_tools,
+)
+from .setup import setup_mcp_tools
 
 __all__ = [
+    "CORE_STABLE_TOOL_NAMES",
+    "REGISTERED_TOOLS",
     "SCOPE_PROPERTIES",
     "SUPPORTED_TOOL_PROFILES",
-    "CORE_STABLE_TOOL_NAMES",
-    "setup_mcp_tools",
+    "RegisteredTool",
+    "get_registered_tool",
+    "registered_tool_names",
+    "registered_tools",
     "route_tool_call",
+    "setup_mcp_tools",
 ]

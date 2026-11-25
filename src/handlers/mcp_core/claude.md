@@ -30,11 +30,24 @@ Tool-profile filtering helpers. Moved verbatim from mcp_core.py.
 
 #### `dispatch.py`
 
-route_tool_call: dispatch table + validation/logging wrapper.
+Dispatch MCP calls through the typed engine tool registry.
 
 | Kind | Name |
 |------|------|
 | `async def` | `route_tool_call` |
+
+#### `registry.py`
+
+Typed source of truth for the engine MCP tool catalogue.
+
+| Kind | Name |
+|------|------|
+| `class` | `RegisteredTool` |
+| `def` | `_live_handler` |
+| `def` | `_build_registry` |
+| `def` | `registered_tools` |
+| `def` | `registered_tool_names` |
+| `def` | `get_registered_tool` |
 
 #### `schemas_afm_temporal.py`
 
@@ -110,7 +123,7 @@ _No top-level classes or functions (may re-export only)._
 
 #### `setup.py`
 
-setup_mcp_tools: concatenate every schema-list module, sort, filter by profile.
+MCP schema setup generated from the typed engine tool registry.
 
 | Kind | Name |
 |------|------|
