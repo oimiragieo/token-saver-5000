@@ -9,6 +9,8 @@ Inspired by JSCCM paper (arXiv:2511.15699v1):
 This replaces fixed skeleton_ratio with learned adaptive allocation.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 # torch is OPTIONAL here, and that is load-bearing for the runtime image.
@@ -23,18 +25,34 @@ import numpy as np
 # Measured in the torch-free image before this change:
 #   mcp_core -> compression_handlers -> types -> here
 #   ModuleNotFoundError: No module named 'torch'
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-except ImportError:  # pragma: no cover - exercised only in torch-free images
-    torch = None
-    nn = None
-    F = None
 import networkx as nx
-from typing import Tuple, Dict
+from typing import TYPE_CHECKING, Tuple, Dict
 
 from .pagerank_numpy import compute_pagerank
+
+if TYPE_CHECKING:
+    import torch
+
+
+def _load_torch():
+    """Lazily import torch, torch.nn, and torch.nn.functional, caching in globals."""
+    g = globals()
+    if "torch" in g and "nn" in g and "F" in g:
+        return g["torch"], g["nn"], g["F"]
+    if ("nn" in g and g["nn"] is None) or ("torch" in g and g["torch"] is None):
+        return g.get("torch"), None, g.get("F")
+    try:
+        import torch as _torch
+        import torch.nn as _nn
+        import torch.nn.functional as _F
+    except ImportError:  # pragma: no cover - exercised only in torch-free images
+        _torch = None
+        _nn = None
+        _F = None
+    g.setdefault("torch", _torch)
+    g.setdefault("nn", _nn)
+    g.setdefault("F", _F)
+    return g["torch"], g["nn"], g["F"]
 
 
 class _NumpyRateAllocator:
@@ -126,10 +144,11 @@ def _build_adaptive_rate_allocator_cls():
     `class AdaptiveRateAllocator(nn.Module)` is evaluated at import time, so it
     cannot live at module scope in a build where torch may be absent.
     """
-    if nn is None:
+    _torch, _nn, _F = _load_torch()
+    if _nn is None or _torch is None or _F is None:
         return _NumpyRateAllocator
 
-    class AdaptiveRateAllocator(nn.Module):
+    class AdaptiveRateAllocator(_nn.Module):
         """
         Adaptively determine skeleton ratio based on:
         1. Document semantic complexity
@@ -156,18 +175,18 @@ def _build_adaptive_rate_allocator_cls():
 
             # Possible skeleton ratios (like JSCCM's rate levels)
             # [0.10, 0.15, 0.20, 0.25, 0.30]
-            self.rate_levels = nn.Parameter(
-                torch.linspace(0.10, 0.30, num_rate_levels), requires_grad=False
+            self.rate_levels = _nn.Parameter(
+                _torch.linspace(0.10, 0.30, num_rate_levels), requires_grad=False
             )
 
             # MLP to predict optimal rate level
             # Input: [complexity_score, context_window_availability, ...]
-            self.rate_predictor = nn.Sequential(
-                nn.Linear(3, 64),
-                nn.ReLU(),
-                nn.Linear(64, 64),
-                nn.ReLU(),
-                nn.Linear(64, num_rate_levels),  # Logits for each rate level
+            self.rate_predictor = _nn.Sequential(
+                _nn.Linear(3, 64),
+                _nn.ReLU(),
+                _nn.Linear(64, 64),
+                _nn.ReLU(),
+                _nn.Linear(64, num_rate_levels),  # Logits for each rate level
             )
 
         def calculate_complexity_score(self, graph: nx.Graph) -> float:
@@ -223,28 +242,28 @@ def _build_adaptive_rate_allocator_cls():
                 selected_level: Integer index of selected level
             """
             # Sample Gumbel noise
-            gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits) + 1e-10) + 1e-10)
+            gumbel_noise = -_torch.log(-_torch.log(_torch.rand_like(logits) + 1e-10) + 1e-10)
 
             # Add noise to logits
             noisy_logits = (logits + gumbel_noise) / self.temperature
 
             # Soft selection (differentiable)
-            soft_selection = F.softmax(noisy_logits, dim=-1)
+            soft_selection = _F.softmax(noisy_logits, dim=-1)
 
             if hard:
                 # Hard selection in forward pass (argmax)
                 # Soft selection in backward pass (for gradients)
-                selected_level = torch.argmax(soft_selection).item()
+                selected_level = _torch.argmax(soft_selection).item()
 
                 # One-hot encoding
-                hard_selection = torch.zeros_like(soft_selection)
+                hard_selection = _torch.zeros_like(soft_selection)
                 hard_selection[selected_level] = 1.0
 
                 # Straight-through estimator
                 # Forward: hard, Backward: soft
                 selection = hard_selection - soft_selection.detach() + soft_selection
             else:
-                selected_level = torch.argmax(soft_selection).item()
+                selected_level = _torch.argmax(soft_selection).item()
                 selection = soft_selection
 
             return selection, selected_level
@@ -276,8 +295,8 @@ def _build_adaptive_rate_allocator_cls():
             context_availability = available_context_tokens / max_context_tokens
 
             # 3. Create feature vector
-            features = torch.tensor(
-                [complexity, context_availability, query_priority], dtype=torch.float32
+            features = _torch.tensor(
+                [complexity, context_availability, query_priority], dtype=_torch.float32
             )
 
             # 4. Predict rate level
@@ -295,7 +314,7 @@ def _build_adaptive_rate_allocator_cls():
                 "selected_level": selected_level,
                 "skeleton_ratio": skeleton_ratio,
                 "logits": logits.detach().numpy(),
-                "selection_probs": F.softmax(logits, dim=-1).detach().numpy(),
+                "selection_probs": _F.softmax(logits, dim=-1).detach().numpy(),
             }
 
             return skeleton_ratio, diagnostics
@@ -573,7 +592,7 @@ if __name__ == "__main__":
 
 
 def __getattr__(name):
-    """PEP 562 lazy attribute access for the torch-dependent class.
+    """PEP 562 lazy attribute access for torch and the torch-dependent class.
 
     Caches into module globals rather than a private variable so that a test
     doing `monkeypatch.setattr(mod, "AdaptiveRateAllocator", X)` actually takes
@@ -584,4 +603,7 @@ def __getattr__(name):
         cls = _build_adaptive_rate_allocator_cls()
         globals()["AdaptiveRateAllocator"] = cls
         return cls
+    if name in ("torch", "nn", "F"):
+        _torch, _nn, _F = _load_torch()
+        return {"torch": _torch, "nn": _nn, "F": _F}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

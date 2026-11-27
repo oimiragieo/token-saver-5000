@@ -128,6 +128,7 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
             }
         )
     max_files = raw_max_files
+    max_budget_tokens = 200_000
     budget_tokens = args.get("budget_tokens")
     if budget_tokens is not None:
         if (
@@ -139,6 +140,13 @@ async def handle_compress_codebase(context: HandlerContext, args: Dict[str, Any]
                 {
                     "status": "error",
                     "error": "budget_tokens must be a positive integer",
+                }
+            )
+        if budget_tokens > max_budget_tokens:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"budget_tokens must be <= {max_budget_tokens}",
                 }
             )
 

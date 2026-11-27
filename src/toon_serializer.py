@@ -516,44 +516,52 @@ def quantize_numeric_columns(rows: List[Dict[str, Any]], bits: int = 8) -> Dict[
     if not rows:
         return {"bits": bits, "columns": {}, "rows": []}
 
-    col_names: List[str] = []
-    seen_cols: set[str] = set()
-    for row in rows:
-        for key in row:
-            if key not in seen_cols:
-                seen_cols.add(key)
-                col_names.append(key)
-
     q_max = (1 << bits) - 1
     columns_meta: Dict[str, Dict[str, Any]] = {}
-    col_bounds: Dict[str, tuple[Decimal, Decimal, bool]] = {}
+    col_bounds: Dict[str, tuple[Decimal, Decimal]] = {}
+    col_order: List[str] = []
+    seen_cols: set[str] = set()
+    col_min_map: Dict[str, Decimal] = {}
+    col_max_map: Dict[str, Decimal] = {}
+    col_all_ints: Dict[str, bool] = {}
+    row_decimals: List[Dict[str, Decimal]] = []
 
     with _decimal_ctx():
         q_max_dec = Decimal(q_max)
-        for col in col_names:
-            numeric_vals: List[Decimal] = []
-            all_ints = True
-            for row in rows:
-                if col not in row:
-                    continue
-                val = row[col]
+        for row in rows:
+            dec_map: Dict[str, Decimal] = {}
+            for key, val in row.items():
+                if key not in seen_cols:
+                    seen_cols.add(key)
+                    col_order.append(key)
                 if _is_numeric_value(val):
                     try:
                         dval = _to_decimal(val)
                     except ValueError as exc:
-                        raise ValueError(f"Non-finite value in column '{col}': {val!r}") from exc
-                    if not isinstance(val, int):
-                        all_ints = False
-                    numeric_vals.append(dval)
+                        raise ValueError(f"Non-finite value in column '{key}': {val!r}") from exc
+                    dec_map[key] = dval
+                    if key not in col_min_map:
+                        col_min_map[key] = dval
+                        col_max_map[key] = dval
+                        col_all_ints[key] = isinstance(val, int)
+                    else:
+                        if dval < col_min_map[key]:
+                            col_min_map[key] = dval
+                        if dval > col_max_map[key]:
+                            col_max_map[key] = dval
+                        if not isinstance(val, int):
+                            col_all_ints[key] = False
+            row_decimals.append(dec_map)
 
-            if not numeric_vals:
+        for col in col_order:
+            if col not in col_min_map:
                 continue
-
-            col_min = min(numeric_vals)
-            col_max = max(numeric_vals)
+            all_ints = col_all_ints[col]
+            col_min = col_min_map[col]
+            col_max = col_max_map[col]
             span = col_max - col_min
             eps_max = Decimal(0) if span == 0 else span / q_max_dec
-            col_bounds[col] = (col_min, col_max, all_ints)
+            col_bounds[col] = (col_min, span)
             columns_meta[col] = {
                 "min": _export_bound(col_min, all_ints),
                 "max": _export_bound(col_max, all_ints),
@@ -562,17 +570,15 @@ def quantize_numeric_columns(rows: List[Dict[str, Any]], bits: int = 8) -> Dict[
             }
 
         quantized_rows: List[Dict[str, Any]] = []
-        for row in rows:
+        for row, dec_map in zip(rows, row_decimals):
             new_row: Dict[str, Any] = {}
             for key, val in row.items():
-                bounds = col_bounds.get(key)
-                if bounds is not None and _is_numeric_value(val):
-                    col_min, col_max, _ = bounds
-                    span = col_max - col_min
+                dval = dec_map.get(key)
+                if dval is not None:
+                    col_min, span = col_bounds[key]
                     if span == 0:
                         new_row[key] = 0
                     else:
-                        dval = _to_decimal(val)
                         scaled = ((dval - col_min) / span) * q_max_dec
                         q_int = int(scaled.to_integral_value(rounding=ROUND_HALF_EVEN))
                         new_row[key] = max(0, min(q_max, q_int))
@@ -590,24 +596,35 @@ def dequantize_numeric_columns(quantized_payload: Dict[str, Any]) -> List[Dict[s
     restored: List[Dict[str, Any]] = []
 
     with _decimal_ctx():
+        col_specs: Dict[str, tuple[Decimal, Decimal, Decimal, bool, Dict[int, Any]]] = {}
         for row in rows:
             new_row: Dict[str, Any] = {}
             for key, val in row.items():
-                meta = columns_meta.get(key)
-                if meta is not None and isinstance(val, int) and not isinstance(val, bool):
-                    bits = int(meta["bits"])
-                    q_max = Decimal((1 << bits) - 1)
-                    raw_min = meta["min"]
-                    raw_max = meta["max"]
-                    prefer_int = isinstance(raw_min, int) and isinstance(raw_max, int)
-                    col_min = _to_decimal(raw_min)
-                    col_max = _to_decimal(raw_max)
-                    span = col_max - col_min
-                    if span == 0:
-                        new_row[key] = _export_bound(col_min, prefer_int)
+                if key in columns_meta and isinstance(val, int) and not isinstance(val, bool):
+                    spec = col_specs.get(key)
+                    if spec is None:
+                        meta = columns_meta[key]
+                        bits = int(meta["bits"])
+                        q_max = Decimal((1 << bits) - 1)
+                        raw_min = meta["min"]
+                        raw_max = meta["max"]
+                        prefer_int = isinstance(raw_min, int) and isinstance(raw_max, int)
+                        col_min = _to_decimal(raw_min)
+                        col_max = _to_decimal(raw_max)
+                        span = col_max - col_min
+                        spec = (col_min, span, q_max, prefer_int, {})
+                        col_specs[key] = spec
+                    col_min, span, q_max, prefer_int, lut = spec
+                    if val in lut:
+                        new_row[key] = lut[val]
                     else:
-                        d_val = col_min + (Decimal(val) / q_max) * span
-                        new_row[key] = _export_bound(d_val, prefer_int)
+                        if span == 0:
+                            out = _export_bound(col_min, prefer_int)
+                        else:
+                            d_val = col_min + (Decimal(val) / q_max) * span
+                            out = _export_bound(d_val, prefer_int)
+                        lut[val] = out
+                        new_row[key] = out
                 else:
                     new_row[key] = val
             restored.append(new_row)

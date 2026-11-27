@@ -7,9 +7,13 @@ from dataclasses import dataclass
 import re
 from typing import List, Sequence, Set
 
+import numpy as np
+
 from .token_estimation import TokenEstimator
 
 _TOKEN_ESTIMATOR: TokenEstimator | None = None
+_IDENT_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
+_MAX_DP_CELLS = 16_000_000
 
 _ROLE_WEIGHTS: dict[str, float] = {
     "import": 0.35,
@@ -39,6 +43,10 @@ def estimate_code_tokens(code: str) -> int:
     if not code or not code.strip():
         return 0
     return max(1, _get_estimator().count_tokens(code))
+
+
+_DEFAULT_ESTIMATE_CODE_TOKENS = estimate_code_tokens
+_DEFAULT_TOKEN_ESTIMATOR_COUNT_TOKENS = TokenEstimator.count_tokens
 
 
 @dataclass(frozen=True)
@@ -98,23 +106,34 @@ def solve_knapsack_exact(items: Sequence[CodeBlockItem], budget_tokens: int) -> 
 
     chosen_pos: List[CodeBlockItem] = []
     if budget_tokens > 0 and pos_items:
-        dp = [0.0] * (budget_tokens + 1)
-        chosen_mask = [0] * (budget_tokens + 1)
-
-        for idx, item in enumerate(pos_items):
-            cost = item.token_cost
-            val = float(item.importance_score)
-            bit = 1 << idx
-            for w in range(budget_tokens, cost - 1, -1):
-                cand = dp[w - cost] + val
-                if cand > dp[w]:
-                    dp[w] = cand
-                    chosen_mask[w] = chosen_mask[w - cost] | bit
-
-        mask = chosen_mask[budget_tokens]
-        for idx, item in enumerate(pos_items):
-            if mask & (1 << idx):
-                chosen_pos.append(item)
+        total_pos_cost = sum(item.token_cost for item in pos_items)
+        if total_pos_cost <= budget_tokens:
+            chosen_pos = list(pos_items)
+        else:
+            n_pos = len(pos_items)
+            dp_cells = n_pos * (budget_tokens + 1)
+            if dp_cells > _MAX_DP_CELLS:
+                raise ValueError(
+                    f"Knapsack DP grid ({n_pos} items x {budget_tokens + 1} budget) "
+                    f"exceeds safety cap of {_MAX_DP_CELLS} cells"
+                )
+            dp = np.zeros(budget_tokens + 1, dtype=np.float64)
+            take = np.zeros((n_pos, budget_tokens + 1), dtype=np.bool_)
+            for idx, item in enumerate(pos_items):
+                cost = item.token_cost
+                val = float(item.importance_score)
+                cand = dp[: budget_tokens + 1 - cost] + val
+                dest = dp[cost:]
+                improved = cand > dest
+                if np.any(improved):
+                    dest[improved] = cand[improved]
+                    take[idx, cost:] = improved
+            w = budget_tokens
+            for idx in range(n_pos - 1, -1, -1):
+                if take[idx, w]:
+                    chosen_pos.append(pos_items[idx])
+                    w -= pos_items[idx].token_cost
+            chosen_pos.reverse()
 
     selected = sorted(
         free_items + chosen_pos,
@@ -149,7 +168,7 @@ def _classify_stmt(node: ast.AST) -> str:
 
 
 def _tokenize_terms(text: str) -> Set[str]:
-    raw = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", text)
+    raw = _IDENT_RE.findall(text)
     terms: Set[str] = set()
     for tok in raw:
         lower = tok.lower()
@@ -174,7 +193,7 @@ def _score_block(
             1 for sub in ast.walk(node) if isinstance(sub, (ast.Name, ast.Attribute, ast.arg))
         )
     else:
-        id_count = len(re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", code))
+        id_count = len(_IDENT_RE.findall(code))
 
     line_count = max(1, len(code.splitlines()))
     id_density = min(1.0, id_count / (line_count * 4.0)) * 0.25
@@ -194,40 +213,72 @@ def _slice_lines(lines: List[str], start_line: int, end_line: int) -> str:
     return "\n".join(lines[start_idx:end_idx])
 
 
-def _emit_block(
-    blocks: List[CodeBlockItem],
+def _collect_block(
+    pending: List[tuple[str, str, int, int, str, ast.AST | None]],
     lines: List[str],
     kind: str,
     name: str,
     start_line: int,
     end_line: int,
     node: ast.AST | None,
-    query_terms: Set[str],
 ) -> None:
     code = _slice_lines(lines, start_line, end_line)
     if not code.strip():
         return
-    idx = len(blocks)
-    blocks.append(
-        CodeBlockItem(
-            block_id=f"{kind}:{name}:{start_line}-{end_line}:{idx}",
-            kind=kind,
-            name=name,
-            start_line=start_line,
-            end_line=end_line,
-            code=code,
-            token_cost=estimate_code_tokens(code),
-            importance_score=_score_block(code, name, kind, node, query_terms),
-        )
+    pending.append((kind, name, start_line, end_line, code, node))
+
+
+def _finalize_blocks(
+    pending: List[tuple[str, str, int, int, str, ast.AST | None]],
+    query_terms: Set[str],
+) -> List[CodeBlockItem]:
+    if not pending:
+        return []
+
+    codes = [item[4] for item in pending]
+    estimator = _get_estimator()
+    count_fn = getattr(estimator, "count_tokens", None)
+    count_func = getattr(count_fn, "__func__", None)
+    use_direct_encode = (
+        estimate_code_tokens is _DEFAULT_ESTIMATE_CODE_TOKENS
+        and count_func is _DEFAULT_TOKEN_ESTIMATOR_COUNT_TOKENS
+        and TokenEstimator.count_tokens is _DEFAULT_TOKEN_ESTIMATOR_COUNT_TOKENS
     )
+    enc = getattr(estimator, "_encoder", None) if use_direct_encode else None
+    token_costs: List[int] | None = None
+    encode = getattr(enc, "encode", None) if enc is not None else None
+    if encode is not None:
+        try:
+            token_costs = [max(1, len(encode(code))) for code in codes]
+        except Exception:
+            token_costs = None
+    if token_costs is None:
+        token_costs = [estimate_code_tokens(c) for c in codes]
+
+    blocks: List[CodeBlockItem] = []
+    for idx, ((kind, name, start_line, end_line, code, node), token_cost) in enumerate(
+        zip(pending, token_costs)
+    ):
+        blocks.append(
+            CodeBlockItem(
+                block_id=f"{kind}:{name}:{start_line}-{end_line}:{idx}",
+                kind=kind,
+                name=name,
+                start_line=start_line,
+                end_line=end_line,
+                code=code,
+                token_cost=token_cost,
+                importance_score=_score_block(code, name, kind, node, query_terms),
+            )
+        )
+    return blocks
 
 
 def _partition_function(
-    blocks: List[CodeBlockItem],
+    pending: List[tuple[str, str, int, int, str, ast.AST | None]],
     lines: List[str],
     fn_node: ast.FunctionDef | ast.AsyncFunctionDef,
     qualname: str,
-    query_terms: Set[str],
 ) -> None:
     fn_start = fn_node.lineno
     if fn_node.body:
@@ -236,16 +287,16 @@ def _partition_function(
     else:
         sig_end = fn_node.end_lineno or fn_start
 
-    _emit_block(blocks, lines, "signature", qualname, fn_start, sig_end, None, query_terms)
+    _collect_block(pending, lines, "signature", qualname, fn_start, sig_end, None)
 
     for stmt in fn_node.body:
         if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _partition_function(blocks, lines, stmt, f"{qualname}.{stmt.name}", query_terms)
+            _partition_function(pending, lines, stmt, f"{qualname}.{stmt.name}")
             continue
         kind = _classify_stmt(stmt)
         s_line = stmt.lineno
         e_line = stmt.end_lineno or s_line
-        _emit_block(blocks, lines, kind, qualname, s_line, e_line, stmt, query_terms)
+        _collect_block(pending, lines, kind, qualname, s_line, e_line, stmt)
 
 
 def partition_ast_blocks(source_code: str, query: str = "") -> List[CodeBlockItem]:
@@ -255,49 +306,42 @@ def partition_ast_blocks(source_code: str, query: str = "") -> List[CodeBlockIte
 
     lines = source_code.splitlines()
     query_terms = _tokenize_terms(query) if query else set()
+    pending: List[tuple[str, str, int, int, str, ast.AST | None]] = []
 
     try:
         tree = ast.parse(source_code)
     except SyntaxError:
-        blocks: List[CodeBlockItem] = []
         chunk_size = 10
         for start in range(1, len(lines) + 1, chunk_size):
             end = min(len(lines), start + chunk_size - 1)
-            _emit_block(
-                blocks, lines, "block", f"lines_{start}_{end}", start, end, None, query_terms
-            )
-        return blocks
+            _collect_block(pending, lines, "block", f"lines_{start}_{end}", start, end, None)
+        return _finalize_blocks(pending, query_terms)
 
-    blocks = []
     for stmt in tree.body:
         if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _partition_function(blocks, lines, stmt, stmt.name, query_terms)
+            _partition_function(pending, lines, stmt, stmt.name)
         elif isinstance(stmt, ast.ClassDef):
             cls_start = stmt.lineno
             if stmt.body:
                 cls_sig_end = max(cls_start, stmt.body[0].lineno - 1)
             else:
                 cls_sig_end = stmt.end_lineno or cls_start
-            _emit_block(
-                blocks, lines, "signature", stmt.name, cls_start, cls_sig_end, None, query_terms
-            )
+            _collect_block(pending, lines, "signature", stmt.name, cls_start, cls_sig_end, None)
             for member in stmt.body:
                 if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    _partition_function(
-                        blocks, lines, member, f"{stmt.name}.{member.name}", query_terms
-                    )
+                    _partition_function(pending, lines, member, f"{stmt.name}.{member.name}")
                 else:
                     kind = _classify_stmt(member)
                     s_line = member.lineno
                     e_line = member.end_lineno or s_line
-                    _emit_block(blocks, lines, kind, stmt.name, s_line, e_line, member, query_terms)
+                    _collect_block(pending, lines, kind, stmt.name, s_line, e_line, member)
         else:
             kind = _classify_stmt(stmt)
             s_line = stmt.lineno
             e_line = stmt.end_lineno or s_line
-            _emit_block(blocks, lines, kind, kind, s_line, e_line, stmt, query_terms)
+            _collect_block(pending, lines, kind, kind, s_line, e_line, stmt)
 
-    return blocks
+    return _finalize_blocks(pending, query_terms)
 
 
 def compress_code_with_knapsack(

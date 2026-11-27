@@ -8,9 +8,13 @@ longest-common-prefix billing.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
+import hashlib
+import threading
 from typing import Any
+from weakref import WeakKeyDictionary
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,13 @@ class ExplainAnalyzeTrace:
 
 
 TOKENIZER_NAME = "tiktoken:cl100k_base"
+_SEGMENT_CACHE_MAX_CHARS = 65_536
+_SEGMENT_CACHE_MAX_SIZE = 256
+
+_SEGMENT_CACHE_LOCK = threading.Lock()
+_SEGMENT_COUNT_CACHES: WeakKeyDictionary[Any, OrderedDict[tuple[bytes, int], int]] = (
+    WeakKeyDictionary()
+)
 
 
 @lru_cache(maxsize=1)
@@ -108,10 +119,55 @@ def _get_encoder() -> Any:
         raise RuntimeError(f"Failed to load {TOKENIZER_NAME} encoder for cache_economics") from exc
 
 
+def _segment_cache_key(seg: str) -> tuple[bytes, int]:
+    digest = hashlib.blake2b(seg.encode("utf-8", errors="surrogatepass"), digest_size=32).digest()
+    return (digest, len(seg))
+
+
+def _count_segment_tokens(enc: Any, seg: str) -> int:
+    if not seg:
+        return 0
+    if len(seg) > _SEGMENT_CACHE_MAX_CHARS:
+        return len(enc.encode(seg))
+
+    key = _segment_cache_key(seg)
+    with _SEGMENT_CACHE_LOCK:
+        try:
+            cache = _SEGMENT_COUNT_CACHES.get(enc)
+            if cache is None:
+                cache = OrderedDict()
+                _SEGMENT_COUNT_CACHES[enc] = cache
+        except TypeError:
+            cache = None
+        if cache is not None:
+            cached = cache.get(key)
+            if cached is not None:
+                cache.move_to_end(key)
+                return cached
+
+    count = len(enc.encode(seg))
+    with _SEGMENT_CACHE_LOCK:
+        try:
+            cache = _SEGMENT_COUNT_CACHES.get(enc)
+            if cache is None:
+                cache = OrderedDict()
+                _SEGMENT_COUNT_CACHES[enc] = cache
+        except TypeError:
+            cache = None
+        if cache is not None:
+            if key in cache:
+                cache.move_to_end(key)
+            else:
+                cache[key] = count
+                while len(cache) > _SEGMENT_CACHE_MAX_SIZE:
+                    cache.popitem(last=False)
+    return count
+
+
 def _count_tokens(text: str) -> int:
     if not text:
         return 0
-    return len(_get_encoder().encode(text))
+    return _count_segment_tokens(_get_encoder(), text)
 
 
 def compute_crossover_hit_rate(r: float, alpha: float, beta: float) -> float:
@@ -147,23 +203,32 @@ def bill_prefix_turn(
             break
 
     enc = _get_encoder()
-    prev_toks: list[int] = []
-    for seg in prev_segments:
-        if seg:
-            prev_toks.extend(enc.encode(seg))
-    curr_toks: list[int] = []
-    for seg in curr_segments:
-        if seg:
-            curr_toks.extend(enc.encode(seg))
+    prev_ne = [seg for seg in prev_segments if seg]
+    curr_ne = [seg for seg in curr_segments if seg]
 
+    k = 0
     lcp_tokens = 0
-    for p_tok, c_tok in zip(prev_toks, curr_toks):
+    total_tokens = 0
+    limit = min(len(prev_ne), len(curr_ne))
+    while k < limit and prev_ne[k] == curr_ne[k]:
+        seg_len = _count_segment_tokens(enc, prev_ne[k])
+        lcp_tokens += seg_len
+        total_tokens += seg_len
+        k += 1
+
+    prev_rem: list[int] = []
+    for seg in prev_ne[k:]:
+        prev_rem.extend(enc.encode(seg))
+    curr_rem: list[int] = []
+    for seg in curr_ne[k:]:
+        curr_rem.extend(enc.encode(seg))
+
+    total_tokens += len(curr_rem)
+    for p_tok, c_tok in zip(prev_rem, curr_rem):
         if p_tok == c_tok:
             lcp_tokens += 1
         else:
             break
-
-    total_tokens = len(curr_toks)
     cached_tokens = lcp_tokens if lcp_tokens >= profile.persistent_tier_tokens else 0
     fresh_tokens = total_tokens - cached_tokens
 

@@ -94,7 +94,22 @@ def cache_stable_format(data: dict, provider: str) -> dict:
     return ordered
 
 
-_estimator = TokenEstimator()
+_estimator_instance: TokenEstimator | None = None
+
+
+def _get_estimator() -> TokenEstimator:
+    global _estimator_instance
+    if "_estimator" in globals():
+        return globals()["_estimator"]
+    if _estimator_instance is None:
+        _estimator_instance = TokenEstimator()
+    return _estimator_instance
+
+
+def __getattr__(name: str) -> object:
+    if name == "_estimator":
+        return _get_estimator()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _serialized_size(data: dict) -> int:
@@ -211,14 +226,14 @@ class ResponseFormatter:
         # --- hard-limit: apply truncation strategy ---
         if size > self.hard_limit:
             result: dict = self._apply_truncation(data, serialized)
-            result["_token_estimates"] = _estimator.estimate_all(serialized)
+            result["_token_estimates"] = _get_estimator().estimate_all(serialized)
             return self._prepend_header(result, tool_name, serialized)
 
         # --- under hard limit: attach metadata and return ---
         result = working
         result["_truncated"] = False
         result["_continuation_token"] = None
-        result["_token_estimates"] = _estimator.estimate_all(serialized)
+        result["_token_estimates"] = _get_estimator().estimate_all(serialized)
         return self._prepend_header(result, tool_name, serialized)
 
     def _apply_truncation(self, original_data: dict, serialized: str) -> dict:
@@ -255,7 +270,7 @@ class ResponseFormatter:
         tail_start = original_len - max(1, int(original_len * 0.80))  # 80% tail
         head = serialized[:head_end]
         tail = serialized[tail_start:]
-        original_tokens = _estimator.estimate_fast(serialized)
+        original_tokens = _get_estimator().estimate_fast(serialized)
         truncated_chars = head_end + len(tail)
         prefix = f"[Truncated by Token Saver: {original_tokens} tokens -> {truncated_chars} chars]"
         content = f"{prefix}\n{head}\n...\n{tail}"
@@ -288,7 +303,7 @@ class ResponseFormatter:
         if tool_name is None:
             return result
 
-        token_count = _estimator.estimate_fast(serialized)
+        token_count = _get_estimator().estimate_fast(serialized)
         key_stats = f"{len(result)} keys, ~{token_count} tokens"
         raw_header = f"Token Saver | {tool_name} | {key_stats}"
         header = raw_header[:199]  # Enforce < 200 chars

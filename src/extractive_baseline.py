@@ -5,10 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-import tiktoken
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 from .segment_compression_cache import SegmentCompressionCache
+from .token_estimation import _get_shared_tiktoken_encoder
 
 
 class ExtractiveCompressor:
@@ -16,7 +14,11 @@ class ExtractiveCompressor:
 
     def __init__(self, *, cache: SegmentCompressionCache | None = None) -> None:
         self._cache = cache
-        self._encoding = tiktoken.get_encoding("cl100k_base")
+        self._encoding = _get_shared_tiktoken_encoder()
+        if self._encoding is None:
+            import tiktoken
+
+            self._encoding = tiktoken.get_encoding("cl100k_base")
 
     def _count_tokens(self, text: str) -> int:
         return len(self._encoding.encode(text))
@@ -47,6 +49,8 @@ class ExtractiveCompressor:
         corpus = list(sentences)
         if query:
             corpus.append(query)
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
         matrix = TfidfVectorizer(stop_words="english").fit_transform(corpus)
         sentence_vectors = matrix[: len(sentences)]
         query_vector = matrix[-1] if query else None

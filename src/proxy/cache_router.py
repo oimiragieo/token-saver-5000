@@ -13,6 +13,7 @@ Implements:
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import math
 import re
@@ -134,6 +135,33 @@ class CacheRouter:
         self._idf: dict[str, float] = {
             term: math.log(1.0 + (n_docs - freq + 0.5) / (freq + 0.5)) for term, freq in df.items()
         }
+        self._doc_dl: dict[str, int] = {name: sum(tf.values()) for name, tf in self._doc_tf.items()}
+        k1 = 1.5
+        b = 0.75
+        avg_dl = self._avg_dl or 1.0
+        postings: dict[str, list[tuple[int, float]]] = {}
+        for tool_idx, tool in enumerate(self._tools):
+            name = tool.get("name")
+            if not name:
+                continue
+            tf = self._doc_tf.get(name)
+            if not tf:
+                continue
+            dl = self._doc_dl[name]
+            dl_norm = k1 * (1.0 - b + b * (dl / avg_dl))
+            for term, freq in tf.items():
+                if freq == 0:
+                    continue
+                idf = self._idf.get(term, 0.0)
+                weight = idf * (freq * (k1 + 1.0)) / (freq + dl_norm)
+                postings.setdefault(term, []).append((tool_idx, weight))
+        self._postings: dict[str, list[tuple[int, float]]] = postings
+
+        self._policy_cache: tuple[tuple[Any, Any, Any] | None, list[tuple[int, dict[str, Any]]]] = (
+            None,
+            [],
+        )
+        self._rebuild_policy_eligible()
 
         # Resident prefix: core pinned tools present in catalog + INTERNAL_ROUTER
         resident = [
@@ -218,13 +246,38 @@ class CacheRouter:
     # 4-stage filter: F_Y(F_K(F_W(F_B(T))))
     # ------------------------------------------------------------------
 
+    def _policy_cache_key(self, policy: RouterPolicy | None = None) -> tuple[Any, Any, Any]:
+        pol = self._policy if policy is None else policy
+        return (
+            pol.blacklist,
+            pol.whitelist,
+            pol.core_pinned_tools,
+        )
+
+    def _rebuild_policy_eligible(
+        self, policy: RouterPolicy | None = None
+    ) -> list[tuple[int, dict[str, Any]]]:
+        pol = self._policy if policy is None else policy
+        key = self._policy_cache_key(pol)
+        has_whitelist = bool(pol.whitelist)
+        eligible: list[tuple[int, dict[str, Any]]] = []
+        for idx, tool in enumerate(self._tools):
+            name = tool["name"]
+            if pol.is_blacklisted(name):
+                continue
+            if has_whitelist and not pol.is_whitelisted(name):
+                continue
+            eligible.append((idx, tool))
+        self._policy_cache = (key, eligible)
+        return eligible
+
     def _bm25_score(self, tool_name: str, query_terms: list[str]) -> float:
         if not query_terms:
             return 0.0
         tf = self._doc_tf.get(tool_name)
         if not tf:
             return 0.0
-        dl = sum(tf.values())
+        dl = self._doc_dl.get(tool_name, 0)
         k1 = 1.5
         b = 0.75
         avg_dl = self._avg_dl or 1.0
@@ -246,30 +299,50 @@ class CacheRouter:
         respect_preconditions: bool = True,
     ) -> list[dict[str, Any]]:
         """Execute 4-stage filter ``F_Y(F_K(F_W(F_B(T))))`` over the tool catalog."""
-        # Stage 1: F_B — Blacklist (core execution tools protected by RouterPolicy)
-        stage_b = [t for t in self._tools if not self._policy.is_blacklisted(t["name"])]
-
-        # Stage 2: F_W — Whitelist (if non-empty, keep whitelist + core pinned)
-        if self._policy.whitelist:
-            stage_w = [t for t in stage_b if self._policy.is_whitelisted(t["name"])]
-        else:
-            stage_w = stage_b
+        # Stage 1 & 2: F_B (Blacklist) + F_W (Whitelist) cached until RouterPolicy changes
+        policy = self._policy
+        cached_key, policy_eligible = self._policy_cache
+        if self._policy_cache_key(policy) != cached_key:
+            policy_eligible = self._rebuild_policy_eligible(policy)
 
         # Precondition ISO gating
         if respect_preconditions:
-            eligible = [t for t in stage_w if self.is_precondition_satisfied(t["name"])]
+            eligible = [
+                (tool_idx, t)
+                for tool_idx, t in policy_eligible
+                if self.is_precondition_satisfied(t["name"])
+            ]
         else:
-            eligible = stage_w
+            eligible = policy_eligible
 
         if not eligible:
             return []
 
-        # Stage 3: F_K — Top-K BM25 relevance
+        # Stage 3: F_K — Top-K BM25 relevance via inverted posting index
+        k = max(1, top_k)
         q_terms = _tokenize(query)
-        scored = [(self._bm25_score(t["name"], q_terms), idx, t) for idx, t in enumerate(eligible)]
-        if q_terms:
-            scored.sort(key=lambda item: (-item[0], item[1]))
-        stage_k = [item[2] for item in scored[: max(1, top_k)]]
+        if not q_terms:
+            stage_k = [t for _, t in eligible[:k]]
+        else:
+            eligible_idx_set = {tool_idx for tool_idx, _ in eligible}
+            scores: dict[int, float] = {}
+            postings = self._postings
+            for term in q_terms:
+                hits = postings.get(term)
+                if not hits:
+                    continue
+                for tool_idx, weight in hits:
+                    if tool_idx in eligible_idx_set:
+                        scores[tool_idx] = scores.get(tool_idx, 0.0) + weight
+            if not scores:
+                stage_k = [t for _, t in eligible[:k]]
+            else:
+                scored = [
+                    (-scores.get(tool_idx, 0.0), pos, t)
+                    for pos, (tool_idx, t) in enumerate(eligible)
+                ]
+                top_items = heapq.nsmallest(k, scored) if k < len(scored) else sorted(scored)
+                stage_k = [item[2] for item in top_items]
 
         # Stage 4: F_Y — Yellowlist soft-avoidance with top-1 fallback
         yl = self._default_yellowlist if yellowlist is None else frozenset(yellowlist)

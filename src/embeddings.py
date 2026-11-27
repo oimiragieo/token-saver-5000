@@ -27,6 +27,7 @@ Version: 0.6.0
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import threading
@@ -61,8 +62,8 @@ except ImportError:
 try:
     from .embeddings_tfidf import TFIDFEmbeddingManager
 
-    TFIDF_AVAILABLE = True
-except ImportError:
+    TFIDF_AVAILABLE = importlib.util.find_spec("sklearn") is not None
+except (ImportError, ValueError):
     TFIDF_AVAILABLE = False
 
 try:
@@ -421,7 +422,13 @@ class EmbeddingManager:
             raise ImportError("TF-IDF tier unavailable (missing sklearn)")
 
         if not self._tfidf_manager:
-            self._tfidf_manager = TFIDFEmbeddingManager()
+            try:
+                self._tfidf_manager = TFIDFEmbeddingManager()
+            except (ImportError, OSError) as exc:
+                self._tfidf_manager = None
+                raise ImportError(
+                    f"TF-IDF tier unavailable (failed to load sklearn): {exc}"
+                ) from exc
 
         return self._tfidf_manager.encode(texts, normalize=normalize)
 
@@ -478,8 +485,12 @@ class EmbeddingManager:
         # For a neural-tier request whose neural fallbacks failed, returning
         # TF-IDF vectors would be silently-wrong, so we raise instead.
         if tier == EmbeddingTier.TFIDF and TFIDF_AVAILABLE:
-            logger.info("Using TF-IDF tier (explicitly requested)...")
-            return self._encode_tfidf(texts, normalize)
+            try:
+                logger.info("Using TF-IDF tier (explicitly requested)...")
+                return self._encode_tfidf(texts, normalize)
+            except (ImportError, OSError) as e:
+                last_exc = e
+                logger.warning(f"TF-IDF tier fallback failed: {e}")
 
         # Neural tier requested but SBERT + ONNX both failed: refuse to return
         # garbage TF-IDF vectors. Surface the original failure at error level so

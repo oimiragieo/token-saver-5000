@@ -372,6 +372,7 @@ COMPRESSION_BATCH_TOOLS: list = [
                 "budget_tokens": {
                     "type": "integer",
                     "minimum": 1,
+                    "maximum": 200000,
                     "description": "Optional token budget for LongCodeZip knapsack compression",
                 },
                 **SCOPE_PROPERTIES,

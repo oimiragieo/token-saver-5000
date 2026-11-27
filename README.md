@@ -622,9 +622,16 @@ Token Saver 5000 includes four integrated optimization waves:
    - `src/extractive_lora_adapter.py`: `ExtractivePrunerConfig` enforces loopback-only URLs and falls back gracefully when local loopback inference is offline.
    - `src/acon_rule_optimizer.py`: `AconRuleOptimizer` gates candidate compression rule diffs on held-out recall and net token non-inflation.
 4. **Wave 4 — AST Knapsack Compression, FlowPlan Delta & Tabular Quantization:**
-   - `src/code_budget_knapsack.py`: `compress_code_with_knapsack` solves exact 0/1 AST-block knapsack packing under `budget_tokens`.
+   - `src/code_budget_knapsack.py`: `compress_code_with_knapsack` solves exact 0/1 AST-block knapsack packing under `budget_tokens` (capped at `200,000` tokens / `16M` DP cells with an $O(N)$ all-fit fast path).
    - `src/code_flow_graph.py`: `verify_code_flow_delta` MCP tool detects missing branches, dropped calls, removed returns, and unreachable edits in `<5ms`.
    - `src/toon_serializer.py`: `quantize_numeric_columns` / `dequantize_numeric_columns` pack numeric columns within `eps_max`.
+5. **Performance & Cold-Boot Optimization Wave (Profile-Guided, Byte-Identical):**
+   - **Cold MCP Server Boot (`5.25x` faster; `10.1x` faster `importtime`):** Eliminated eager top-level `sklearn`, `scipy`, `torch`, and `sentence_transformers` imports from `src.server` via overflow-safe pure-NumPy `src/similarity.py`, PEP 562 lazy loaders in `src/afm.py` / `src/adaptive_rate_allocator.py` / `src/response_formatter.py`, and lazy `TfidfVectorizer` imports in `src/embeddings_tfidf.py` / `src/extractive_baseline.py`.
+   - **Runtime Hot Paths (`4.99x` aggregate speedup across 8 Dyno-ratcheted hotspots, 0 differential mismatches):**
+     - `src/cache_economics.py` & `src/token_estimation.py`: `17.45x` faster via digest-keyed (`blake2b`), lock-protected, zero-raw-text bounded per-encoder token-count caches and IEEE-754 interval-guarded `estimate_gemini`.
+     - `src/cli_output_optimizer.py`: `14.72x` faster via thread-safe TTL-cached pinned `rtk` binary resolution, module-level precompiled regexes, and Unicode-exact substring pre-guards.
+     - `src/proxy/cache_router.py`: `2.73x` faster via atomic policy-snapshot caching and an inverted BM25 posting index.
+     - `src/code_budget_knapsack.py`, `src/semantic_compressor_retrieval.py`, `src/toon_serializer.py`: vectorized NumPy 0/1 DP, hard-clamped `<=256`-row dtype-preserving dense retrieval blocks, and streaming min/max + LUT dequantization.
 
 Run the offline Wave 1-4 E2E dogfood harness:
 

@@ -28,7 +28,6 @@ import logging
 from typing import List, Optional, Union
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,8 @@ class TFIDFEmbeddingManager:
         self.ngram_range = ngram_range
         self.min_df = min_df
         self.max_df = max_df
+
+        from sklearn.feature_extraction.text import TfidfVectorizer
 
         # Initialize vectorizer
         self.vectorizer = TfidfVectorizer(

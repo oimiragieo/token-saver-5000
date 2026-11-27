@@ -3257,6 +3257,45 @@ Contract tests for app-layer MCP router binding helper.
 | `def` | `test_router_binding_request_contract_declared` |
 | `def` | `test_router_binding_validate_bind_request_map_rejects_extra_key` |
 
+#### `test_rsi2_core_perf.py`
+
+Round 1 RSI-2 performance & byte-identical / <1e-12 equivalence tests.
+
+| Kind | Name |
+|------|------|
+| `def` | `_ref_sequential_gemini` |
+| `def` | `_ref_bill_prefix_turn` |
+| `def` | `_make_node` |
+| `def` | `test_cold_boot_server_skips_heavy_ml_imports` |
+| `def` | `test_similarity_matches_sklearn_within_1e12` |
+| `def` | `test_similarity_sparse_delegates_to_sklearn` |
+| `def` | `test_estimate_gemini_matches_sequential_reference` |
+| `def` | `test_token_estimator_shared_encoder_and_bounded_cache` |
+| `def` | `test_bill_prefix_turn_matches_direct_concatenation_lcp` |
+| `def` | `test_batched_retrieval_matches_per_node_reference_including_nan_and_ragged` |
+| `def` | `test_chunked_retrieval_multiblock_exact_ties_and_nan_row` |
+| `def` | `test_afm_and_embeddings_broken_optional_package_fallback` |
+
+#### `test_rsi2_runtime_perf.py`
+
+Differential and regression tests for Round 1 runtime optimizations.
+
+| Kind | Name |
+|------|------|
+| `def` | `_scalar_knapsack_reference` |
+| `def` | `_naive_filter_tools_reference` |
+| `def` | `_ref_decimal_ctx` |
+| `def` | `_ref_is_numeric` |
+| `def` | `_ref_to_decimal` |
+| `def` | `_ref_export_bound` |
+| `def` | `_ref_quantize` |
+| `def` | `_ref_dequantize` |
+| `def` | `_assert_exact_value_and_type` |
+| `class` | `TestCLIOutputOptimizerPerfAndParity` |
+| `class` | `TestCodeBudgetKnapsackPerfAndParity` |
+| `class` | `TestCacheRouterPerfAndParity` |
+| `class` | `TestToonQuantizationPerfAndParity` |
+
 #### `test_runtime_service.py`
 
 Contract tests for app-layer runtime execution service.

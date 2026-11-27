@@ -32,10 +32,13 @@ If RTK fails or is absent, the pure-Python implementation is used.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
-from collections import Counter
+import threading
+import time
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -105,6 +108,85 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 # Spinner characters used by many CLI progress bars
 _SPINNER_CHARS = set("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
+# Precompiled hot-path regexes for command detection and strategy filters
+_DETECT_DOCKER_RE = re.compile(r"CONTAINER\s+ID|IMAGE\s+.*COMMAND|REPOSITORY\s+TAG")
+_DETECT_TEST_PAIR_RE = re.compile(r"\b(PASSED|FAILED)\b.*\b(PASSED|FAILED)\b")
+_DETECT_TEST_COUNT_RE = re.compile(r"\d+\s+(?:passed|failed)", re.IGNORECASE)
+_DETECT_TEST_SUMMARY_RE = re.compile(r"(?:passed|failed).*(?:passed|failed)", re.IGNORECASE)
+_DETECT_LINT_RE = re.compile(
+    r"^\S+:\d+:\d+:(?:.*(?:error|warning)|[ \t]+[A-Z]\d+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+_DETECT_PROGRESS_RE = re.compile(r"\d+%|\r|⠋|⠙|⠹")
+
+_TEST_FAILURES_HEADER_RE = re.compile(r"^=+\s*FAILURES\s*=+$")
+_TEST_FAILURES_END_RE = re.compile(r"^=+\s*(?:short test summary|warnings)")
+_TEST_BANNER_SUMMARY_RE = re.compile(r"={5,}.*(?:passed|failed)", re.IGNORECASE)
+_TEST_NAME_DELIM_RE = re.compile(r"^_+\s+(.+?)\s+_+$")
+
+_INSTALL_SUMMARY_RES = (
+    re.compile(r"\badded\b.*\bpackages?\b", re.IGNORECASE),
+    re.compile(r"Successfully installed", re.IGNORECASE),
+    re.compile(r"up to date", re.IGNORECASE),
+    re.compile(r"already satisfied", re.IGNORECASE),
+    re.compile(r"found \d+ vulnerabilit", re.IGNORECASE),
+)
+_INSTALL_WARNING_RES = (
+    re.compile(r"\bwarn\b", re.IGNORECASE),
+    re.compile(r"\bwarning\b", re.IGNORECASE),
+    re.compile(r"\bdeprecated\b", re.IGNORECASE),
+)
+_INSTALL_SKIP_RES = (
+    re.compile(r"⸨", re.IGNORECASE),
+    re.compile(r"^\s*\u280b", re.IGNORECASE),
+    re.compile(r"timing\s", re.IGNORECASE),
+    re.compile(r"^npm timing", re.IGNORECASE),
+    re.compile(r"idealTree", re.IGNORECASE),
+)
+
+_LINT_LINE_RE = re.compile(r"^(\S+):(\d+):(\d+):\s+([A-Z]\d+)\s+(.*)", re.MULTILINE)
+_PROGRESS_PCT_LINE_RE = re.compile(r"^\s*\d+%\s*$")
+_PROGRESS_DOTS_LINE_RE = re.compile(r"^\s*[.·]+\s*$")
+
+# Bounded, thread-safe TTL cache for shutil.which("rtk")
+_RTK_WHICH_LOCK = threading.Lock()
+_RTK_WHICH_CACHE: OrderedDict[tuple[str, str, int], tuple[object, Optional[str], float]] = (
+    OrderedDict()
+)
+_RTK_WHICH_CACHE_MAX = 8
+_RTK_WHICH_NEGATIVE_TTL_S = 60.0
+_RTK_WHICH_POSITIVE_TTL_S = 300.0
+_REAL_SHUTIL_WHICH = shutil.which
+
+
+def _cached_which_rtk() -> Optional[str]:
+    """Resolve ``rtk`` binary path with thread-safe TTL + PATH/PATHEXT/monkeypatch invalidation."""
+    which_fn = shutil.which
+    key = (os.environ.get("PATH", ""), os.environ.get("PATHEXT", ""), id(which_fn))
+    now = time.monotonic()
+    with _RTK_WHICH_LOCK:
+        entry = _RTK_WHICH_CACHE.get(key)
+        if entry is not None:
+            cached_fn, resolved, expires_at = entry
+            still_valid = cached_fn is which_fn and now < expires_at
+            if still_valid and resolved is not None and which_fn is _REAL_SHUTIL_WHICH:
+                still_valid = os.path.isfile(resolved)
+            if still_valid:
+                _RTK_WHICH_CACHE.move_to_end(key)
+                return resolved
+            del _RTK_WHICH_CACHE[key]
+
+    resolved = which_fn("rtk")
+    ttl = _RTK_WHICH_POSITIVE_TTL_S if resolved is not None else _RTK_WHICH_NEGATIVE_TTL_S
+    expires_at = time.monotonic() + ttl
+    with _RTK_WHICH_LOCK:
+        _RTK_WHICH_CACHE[key] = (which_fn, resolved, expires_at)
+        _RTK_WHICH_CACHE.move_to_end(key)
+        while len(_RTK_WHICH_CACHE) > _RTK_WHICH_CACHE_MAX:
+            _RTK_WHICH_CACHE.popitem(last=False)
+    return resolved
+
 
 # ---------------------------------------------------------------------------
 # #137 — generic conservative fallback (unclassified "unknown" output).
@@ -812,24 +894,24 @@ class CLIOutputOptimizer:
         if any(p in text for p in ["modified:", "new file:", "deleted:", "Untracked files:"]):
             return "git_status"
         # Docker output: ps, images, logs patterns
-        if re.search(r"CONTAINER\s+ID|IMAGE\s+.*COMMAND|REPOSITORY\s+TAG", text):
+        if (
+            "CONTAINER" in text or "IMAGE" in text or "REPOSITORY" in text
+        ) and _DETECT_DOCKER_RE.search(text):
             return "docker_output"
-        if re.search(r"\b(PASSED|FAILED)\b.*\b(PASSED|FAILED)\b", text):
+        if ("PASSED" in text or "FAILED" in text) and _DETECT_TEST_PAIR_RE.search(text):
             return "test_output"
         # Summary line: "N passed, M failed" or "N passed" + "M failed" in a summary
-        if re.search(r"\d+\s+(?:passed|failed)", text, re.IGNORECASE) and re.search(
-            r"(?:passed|failed).*(?:passed|failed)", text, re.IGNORECASE
+        if (
+            (not text.isascii() or "passed" in text.lower() or "failed" in text.lower())
+            and _DETECT_TEST_COUNT_RE.search(text)
+            and _DETECT_TEST_SUMMARY_RE.search(text)
         ):
             return "test_output"
         if any(p in text for p in ["added", "packages in", "Successfully installed", "up to date"]):
             return "install_output"
         # Lint check before tree/json so that "file:line:col: CODE" lines are handled correctly.
         # Match both "file:line:col: error/warning message" and "file:line:col: E501 message" (ruff/flake8).
-        if re.search(
-            r"^\S+:\d+:\d+:(?:.*(?:error|warning)|[ \t]+[A-Z]\d+)",
-            text,
-            re.MULTILINE | re.IGNORECASE,
-        ):
+        if ":" in text and _DETECT_LINT_RE.search(text):
             return "lint_output"
         # Log dedup: check before json_output because repeated lines may start with [
         lines = text.splitlines()
@@ -839,7 +921,9 @@ class CLIOutputOptimizer:
             return "json_output"
         if "\x1b[" in text:
             return "ansi_output"
-        if re.search(r"\d+%|\r|⠋|⠙|⠹", text):
+        if (
+            "%" in text or "\r" in text or "⠋" in text or "⠙" in text or "⠹" in text
+        ) and _DETECT_PROGRESS_RE.search(text):
             return "progress_output"
         if any(c in text for c in ["├──", "└──"]) or (
             text.count("/") > 3 and text.count("/") > text.count("\n") * 0.8
@@ -957,24 +1041,24 @@ class CLIOutputOptimizer:
         for line in lines:
             stripped = line.strip()
             # Detect failures section header
-            if re.match(r"^=+\s*FAILURES\s*=+$", stripped):
+            if _TEST_FAILURES_HEADER_RE.match(stripped):
                 in_failures = True
                 continue
             # Detect end of failures
-            if in_failures and re.match(r"^=+\s*(?:short test summary|warnings)", stripped):
+            if in_failures and _TEST_FAILURES_END_RE.match(stripped):
                 in_failures = False
                 continue
             # Summary line
-            if re.search(r"={5,}.*(?:passed|failed)", stripped, re.IGNORECASE):
+            if _TEST_BANNER_SUMMARY_RE.search(stripped):
                 summary_line = line
                 continue
-            if re.search(r"\d+\s+(?:passed|failed)", stripped, re.IGNORECASE):
+            if _DETECT_TEST_COUNT_RE.search(stripped):
                 summary_line = line
                 continue
 
             if in_failures:
                 # Test name delimiter: ___ test_name ___
-                m = re.match(r"^_+\s+(.+?)\s+_+$", stripped)
+                m = _TEST_NAME_DELIM_RE.match(stripped)
                 if m:
                     current_failure = {"name": m.group(1), "assertions": []}
                     failures.append(current_failure)
@@ -1031,32 +1115,17 @@ class CLIOutputOptimizer:
         """
         lines = text.splitlines()
         kept: list[str] = []
-        summary_patterns = [
-            r"\badded\b.*\bpackages?\b",
-            r"Successfully installed",
-            r"up to date",
-            r"already satisfied",
-            r"found \d+ vulnerabilit",
-        ]
-        warning_patterns = [r"\bwarn\b", r"\bwarning\b", r"\bdeprecated\b"]
-        skip_patterns = [
-            r"⸨",
-            r"^\s*\u280b",  # spinner
-            r"timing\s",
-            r"^npm timing",
-            r"idealTree",
-        ]
 
         for line in lines:
             stripped = line.strip()
             if not stripped:
                 continue
-            if any(re.search(p, stripped, re.IGNORECASE) for p in skip_patterns):
+            if any(p.search(stripped) for p in _INSTALL_SKIP_RES):
                 continue
-            if any(re.search(p, stripped, re.IGNORECASE) for p in summary_patterns):
+            if any(p.search(stripped) for p in _INSTALL_SUMMARY_RES):
                 kept.append(line)
                 continue
-            if any(re.search(p, stripped, re.IGNORECASE) for p in warning_patterns):
+            if any(p.search(stripped) for p in _INSTALL_WARNING_RES):
                 kept.append(line)
                 continue
 
@@ -1106,8 +1175,7 @@ class CLIOutputOptimizer:
             pass
 
         # --- Tier 2: Regex parsing of file:line:col: CODE message ---
-        lint_re = re.compile(r"^(\S+):(\d+):(\d+):\s+([A-Z]\d+)\s+(.*)", re.MULTILINE)
-        matches = lint_re.findall(text)
+        matches = _LINT_LINE_RE.findall(text)
 
         if not matches:
             return text
@@ -1136,7 +1204,7 @@ class CLIOutputOptimizer:
 
         # Keep non-lint summary lines
         for line in text.splitlines():
-            if not lint_re.match(line) and line.strip():
+            if not _LINT_LINE_RE.match(line) and line.strip():
                 if not any(line.strip().startswith(p) for p in ["Found ", "All checks"]):
                     continue
                 output_lines.append(line)
@@ -1327,7 +1395,7 @@ class CLIOutputOptimizer:
                 continue
             stripped = line.strip()
             # Skip bare percentage lines
-            if re.match(r"^\s*\d+%\s*$", line):
+            if _PROGRESS_PCT_LINE_RE.match(line):
                 continue
             # Skip spinner-only lines
             if stripped and all(c in _SPINNER_CHARS or c.isspace() for c in stripped):
@@ -1336,7 +1404,7 @@ class CLIOutputOptimizer:
             if stripped and stripped[0] in _SPINNER_CHARS:
                 continue
             # Skip lines that are only dots / ellipsis
-            if re.match(r"^\s*[.·]+\s*$", line):
+            if _PROGRESS_DOTS_LINE_RE.match(line):
                 continue
             result_lines.append(line)
 
@@ -1404,11 +1472,12 @@ class CLIOutputOptimizer:
         """
         if len(text) <= _RTK_MIN_CHARS:
             return None
-        if not shutil.which("rtk"):
-            return None
         try:
+            rtk_path = _cached_which_rtk()
+            if not rtk_path:
+                return None
             proc = subprocess.run(
-                ["rtk", "--json"],
+                [rtk_path, "--json"],
                 input=text,
                 capture_output=True,
                 text=True,

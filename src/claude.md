@@ -52,6 +52,7 @@ Adaptive Rate Allocator
 
 | Kind | Name |
 |------|------|
+| `def` | `_load_torch` |
 | `class` | `_NumpyRateAllocator` |
 | `def` | `_build_adaptive_rate_allocator_cls` |
 | `class` | `ContextWindowAdapter` |
@@ -64,6 +65,7 @@ Adaptive Focus Memory (AFM) for Language Models
 
 | Kind | Name |
 |------|------|
+| `def` | `__getattr__` |
 | `class` | `FidelityLevel` |
 | `class` | `ImportanceLevel` |
 | `class` | `Message` |
@@ -229,6 +231,8 @@ Prompt-cache economics contracts and CAPC (Cache-Aware Prompt Compression) math.
 | `def` | `get_provider_cache_profile` |
 | `class` | `ExplainAnalyzeTrace` |
 | `def` | `_get_encoder` |
+| `def` | `_segment_cache_key` |
+| `def` | `_count_segment_tokens` |
 | `def` | `_count_tokens` |
 | `def` | `compute_crossover_hit_rate` |
 | `def` | `compute_tier_preserving_max_ratio` |
@@ -250,6 +254,7 @@ CLIOutputOptimizer — RTK-inspired CLI output filtering for Token Saver 5000.
 | Kind | Name |
 |------|------|
 | `class` | `FilterResult` |
+| `def` | `_cached_which_rtk` |
 | `def` | `_char_savings_pct` |
 | `def` | `_looks_like_json_value_shape` |
 | `def` | `_is_structured_line` |
@@ -294,7 +299,8 @@ LongCodeZip two-stage adaptive code compression via exact 0/1 knapsack.
 | `def` | `_tokenize_terms` |
 | `def` | `_score_block` |
 | `def` | `_slice_lines` |
-| `def` | `_emit_block` |
+| `def` | `_collect_block` |
+| `def` | `_finalize_blocks` |
 | `def` | `_partition_function` |
 | `def` | `partition_ast_blocks` |
 | `def` | `compress_code_with_knapsack` |
@@ -1151,6 +1157,8 @@ Response formatter for MCP tool results.
 | Kind | Name |
 |------|------|
 | `def` | `cache_stable_format` |
+| `def` | `_get_estimator` |
+| `def` | `__getattr__` |
 | `def` | `_serialized_size` |
 | `def` | `_make_continuation_token` |
 | `def` | `_is_more_compact_fidelity` |
@@ -1320,7 +1328,10 @@ Guided setup CLI for Token Saver MCP onboarding.
 
 Pairwise cosine similarity without a hard sklearn dependency.
 
-_No top-level classes or functions (may re-export only)._
+| Kind | Name |
+|------|------|
+| `def` | `_unit_normalize_rows` |
+| `def` | `cosine_similarity` |
 
 #### `structural_summary.py`
 
@@ -1439,6 +1450,9 @@ Token estimation utilities for Semantic Modulator.
 | Kind | Name |
 |------|------|
 | `def` | `_load_tiktoken_encoder` |
+| `def` | `_get_shared_tiktoken_encoder` |
+| `def` | `_text_cache_key` |
+| `def` | `_count_tokens_with_encoder` |
 | `class` | `TokenEstimator` |
 
 #### `token_refiner.py`

@@ -1,7 +1,8 @@
 """Read, search, and evidence retrieval mixin for SemanticCompressor."""
 
+import math
 import re
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -17,10 +18,13 @@ from .semantic_compressor_types import (
     FidelityLevel,
     SemanticNode,
     compute_adaptive_ratio,
+    _SIMILARITY_BLOCK_SIZE,
     _gate_should_fuse_g,
     _node_belongs_to_file,
     logger,
 )
+
+_MAX_DENSE_RETRIEVAL_BLOCK_SIZE = 256
 
 
 def _f11_ranker_path() -> str:
@@ -132,6 +136,83 @@ class SemanticCompressorRetrievalMixin:
             score_type=final_score_type,
         )
 
+    def _score_dense_block(self, q_arr: np.ndarray, block: Sequence[SemanticNode]) -> List[float]:
+        """Score a homogeneous-dtype <=256-row block with finite-row pre-filtering."""
+        block_raw = np.asarray([node.embedding for node in block])
+        if block_raw.ndim != 2 or block_raw.shape[1] != q_arr.shape[1]:
+            raise ValueError("Candidate embeddings must form a 2D array")
+        if np.issubdtype(block_raw.dtype, np.floating):
+            finite_mask = np.isfinite(block_raw).all(axis=1)
+        else:
+            finite_mask = np.isfinite(np.asarray(block_raw, dtype=np.float64)).all(axis=1)
+        if np.all(finite_mask):
+            return [float(sim) for sim in cosine_similarity(q_arr, block_raw)[0]]
+        sims_out = [float("nan")] * len(block)
+        if np.any(finite_mask):
+            finite_sims = cosine_similarity(q_arr, block_raw[finite_mask])[0]
+            for idx, sim in zip(np.flatnonzero(finite_mask), finite_sims):
+                sims_out[int(idx)] = float(sim)
+        return sims_out
+
+    def _batched_dense_cosine(
+        self, query_embedding: Any, nodes: Sequence[SemanticNode]
+    ) -> List[float]:
+        """Score nodes against query_embedding in bounded <=256-row blocks preserving input dtype."""
+        block_size = min(_MAX_DENSE_RETRIEVAL_BLOCK_SIZE, max(1, int(_SIMILARITY_BLOCK_SIZE)))
+        q_raw = np.asarray(query_embedding)
+        q_arr = q_raw.reshape(1, -1) if q_raw.ndim == 1 else q_raw
+        q_check = (
+            q_arr
+            if np.issubdtype(q_arr.dtype, np.floating)
+            else np.asarray(q_arr, dtype=np.float64)
+        )
+        if not np.isfinite(q_check).all():
+            return [float("nan")] * len(nodes)
+        scores: List[float] = []
+        for start in range(0, len(nodes), block_size):
+            block = nodes[start : start + block_size]
+            try:
+                if q_arr.dtype == np.float32:
+                    f32_idx = [
+                        i
+                        for i, n in enumerate(block)
+                        if getattr(n.embedding, "dtype", None) == np.float32
+                    ]
+                    if 0 < len(f32_idx) < len(block):
+                        other_idx = [
+                            i
+                            for i, n in enumerate(block)
+                            if getattr(n.embedding, "dtype", None) != np.float32
+                        ]
+                        block_scores = [0.0] * len(block)
+                        for idx, sim in zip(
+                            f32_idx, self._score_dense_block(q_arr, [block[i] for i in f32_idx])
+                        ):
+                            block_scores[idx] = sim
+                        for idx, sim in zip(
+                            other_idx,
+                            self._score_dense_block(q_arr, [block[i] for i in other_idx]),
+                        ):
+                            block_scores[idx] = sim
+                        scores.extend(block_scores)
+                        continue
+                scores.extend(self._score_dense_block(q_arr, block))
+            except (ValueError, TypeError):
+                for node in block:
+                    node_arr = np.asarray(node.embedding)
+                    if node_arr.ndim == 1 and node_arr.shape[0] == q_arr.shape[1]:
+                        node_check = (
+                            node_arr
+                            if np.issubdtype(node_arr.dtype, np.floating)
+                            else np.asarray(node_arr, dtype=np.float64)
+                        )
+                        if not np.isfinite(node_check).all():
+                            scores.append(float("nan"))
+                            continue
+                    similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
+                    scores.append(float(similarity))
+        return scores
+
     def _max_dense_cosine(self, query: str, file_id: Optional[str] = None) -> float:
         """Return the max dense cosine similarity of ``query`` vs candidate nodes.
 
@@ -161,12 +242,11 @@ class SemanticCompressorRetrievalMixin:
         # relevance instead of propagating NaN into the sufficiency gate. (#134)
         if not np.isfinite(query_embedding).all():
             return 0.0
-        best = -1.0
-        for node in candidate_nodes:
-            similarity = float(cosine_similarity([query_embedding], [node.embedding])[0][0])
-            if similarity > best:
-                best = similarity
-        return best
+        sims = self._batched_dense_cosine(query_embedding, candidate_nodes)
+        finite_sims = [s for s in sims if not np.isnan(s)]
+        if not finite_sims:
+            return -1.0
+        return max(-1.0, max(finite_sims))
 
     def read_skeleton_evidence_aware(
         self,
@@ -417,10 +497,10 @@ class SemanticCompressorRetrievalMixin:
 
         # --- Dense (cosine) ranking — always computed ---
         query_embedding = self.model.encode([query])[0]
-        dense_ranked: List[Tuple[str, float]] = []
-        for node_id, node in candidate_nodes:
-            similarity = cosine_similarity([query_embedding], [node.embedding])[0][0]
-            dense_ranked.append((node_id, float(similarity)))
+        sims = self._batched_dense_cosine(query_embedding, [node for _, node in candidate_nodes])
+        dense_ranked: List[Tuple[str, float]] = [
+            (node_id, sim) for (node_id, _), sim in zip(candidate_nodes, sims) if math.isfinite(sim)
+        ]
         dense_ranked.sort(key=lambda x: x[1], reverse=True)
 
         # --- Retrieval depth: pull a larger candidate POOL only when the

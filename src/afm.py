@@ -20,6 +20,7 @@ License: CC BY 4.0 (as specified in paper)
 """
 
 import enum
+import importlib.util
 import logging
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Any
@@ -36,13 +37,22 @@ from .similarity import cosine_similarity
 from .constants import DEFAULT_TEXT_MODEL
 from .embeddings import EmbeddingManager
 
-# Try to import sentence_transformers, fall back to hash-based embedder
+# Probe sentence_transformers availability without eagerly importing torch/transformers
 try:
-    from sentence_transformers import SentenceTransformer  # noqa: F401
-
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = importlib.util.find_spec("sentence_transformers") is not None
+except ValueError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562 lazy attribute access for SentenceTransformer."""
+    if name == "SentenceTransformer":
+        from sentence_transformers import SentenceTransformer as _ST
+
+        globals()["SentenceTransformer"] = _ST
+        return _ST
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Module logger — application configures logging; do not call basicConfig here
 logger = logging.getLogger("afm")
@@ -361,6 +371,8 @@ class SentenceTransformerEmbedder(Embedder):
     def __init__(self, model_name: str = DEFAULT_TEXT_MODEL):
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             raise ImportError("sentence-transformers not available")
+        if "SentenceTransformer" not in globals():
+            from sentence_transformers import SentenceTransformer as _ST  # noqa: F401
         # Use EmbeddingManager for shared model caching
         embedding_manager = EmbeddingManager()
         self.model = embedding_manager.get_text_embedder(model_name)
@@ -621,7 +633,14 @@ class FocusManager:
 
         # Embedder
         if SENTENCE_TRANSFORMERS_AVAILABLE:
-            self.embedder = SentenceTransformerEmbedder(self.config.embedding_model_name)
+            try:
+                self.embedder = SentenceTransformerEmbedder(self.config.embedding_model_name)
+            except (ImportError, OSError, RuntimeError) as exc:
+                logger.warning(
+                    "SentenceTransformer unavailable (%s); falling back to HashingEmbedder",
+                    exc,
+                )
+                self.embedder = HashingEmbedder()
         else:
             self.embedder = HashingEmbedder()
 
